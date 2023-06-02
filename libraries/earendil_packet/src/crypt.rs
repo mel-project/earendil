@@ -68,20 +68,19 @@ pub enum AeadError {
 }
 
 /// Encrypts a message, with integrity protection, so that only the owner of a particular X25519 secret key can read it.
-pub fn box_encrypt(
-    message: &[u8],
-    sender_sk: &OnionSecret,
-    recipient_public_key: &OnionPublic,
-) -> Bytes {
+///
+/// **Always** generates a fresh ephemeral keypair, returning it alongside the ciphertext.
+pub fn box_encrypt(message: &[u8], recipient_public_key: &OnionPublic) -> (Bytes, OnionSecret) {
+    let sender_sk = OnionSecret::generate();
     let sender_pk = sender_sk.public();
     let shared_secret = sender_sk.shared_secret(recipient_public_key);
     let aead_key = AeadKey::from_bytes(blake3::hash(&shared_secret).as_bytes());
-    let nonce = [0u8; 12]; // all-zero nonce
+    let nonce = [0u8; 12];
     let encrypted_message = aead_key.seal(&nonce, message);
 
     let mut result = sender_pk.as_bytes().to_vec();
     result.extend_from_slice(&encrypted_message);
-    result.into()
+    (result.into(), sender_sk)
 }
 
 /// Decrypts a message encrypted with box_encrypt, given the recipient's secret key.
@@ -137,11 +136,11 @@ mod tests {
     #[test]
     fn box_encrypt_decrypt() {
         let message = b"Super secret message";
-        let sender_sk = OnionSecret::generate();
+
         let recipient_sk = OnionSecret::generate();
         let recipient_pk = recipient_sk.public();
 
-        let encrypted_message = box_encrypt(&message[..], &sender_sk, &recipient_pk);
+        let (encrypted_message, _) = box_encrypt(&message[..], &recipient_pk);
 
         let decrypted_message = box_decrypt(&encrypted_message[..], &recipient_sk).unwrap();
         assert_eq!(message, &decrypted_message[..]);

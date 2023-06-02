@@ -8,18 +8,17 @@ fn main() {
     let recipient_sk = OnionSecret::generate();
     let recipient_pk = recipient_sk.public();
 
-    let iterations = 10_000;
+    let iterations = 100_000;
 
     let start_time_encrypt = Instant::now();
 
     for _ in 0..iterations {
-        let sender_sk = OnionSecret::generate();
-        let _encrypted_message = box_encrypt(&message[..], &sender_sk, &recipient_pk);
+        let _encrypted_message = box_encrypt(&message[..], &recipient_pk);
     }
 
     let duration_encrypt = start_time_encrypt.elapsed();
-    let sender_sk = OnionSecret::generate();
-    let encrypted_message = box_encrypt(&message[..], &sender_sk, &recipient_pk);
+
+    let (encrypted_message, _) = box_encrypt(&message[..], &recipient_pk);
     let start_time_decrypt = Instant::now();
 
     for _ in 0..iterations {
