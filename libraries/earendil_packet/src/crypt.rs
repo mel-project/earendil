@@ -1,9 +1,14 @@
 use arrayref::array_ref;
-use bytes::Bytes;
+
+use chacha20::{
+    cipher::{KeyIvInit, StreamCipher},
+    ChaCha20,
+};
 use chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit};
 use thiserror::Error;
 
 /// An onion-routing public key, based on x25519.
+#[derive(Clone, Copy)]
 pub struct OnionPublic(ed25519_compact::x25519::PublicKey);
 
 impl OnionPublic {
@@ -11,9 +16,15 @@ impl OnionPublic {
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
+
+    /// Construct an OnionPublic from bytes.
+    pub fn from_bytes(bytes: &[u8; 32]) -> Self {
+        Self(ed25519_compact::x25519::PublicKey::new(*bytes))
+    }
 }
 
 /// An onion-routing secret key, based on x25519.
+#[derive(Clone)]
 pub struct OnionSecret(ed25519_compact::x25519::KeyPair);
 
 impl OnionSecret {
@@ -47,16 +58,15 @@ impl AeadKey {
     }
 
     /// Seals a message with this key.
-    pub fn seal(&self, nonce: &[u8; 12], plain: &[u8]) -> Bytes {
-        self.inner.encrypt(nonce.into(), plain).unwrap().into()
+    pub fn seal(&self, nonce: &[u8; 12], plain: &[u8]) -> Vec<u8> {
+        self.inner.encrypt(nonce.into(), plain).unwrap()
     }
 
     /// Opens a message that was sealed with this key.
-    pub fn open(&self, nonce: &[u8; 12], ctext: &[u8]) -> Result<Bytes, AeadError> {
+    pub fn open(&self, nonce: &[u8; 12], ctext: &[u8]) -> Result<Vec<u8>, AeadError> {
         self.inner
             .decrypt(nonce.into(), ctext)
             .ok()
-            .map(|f| f.into())
             .ok_or(AeadError::DecryptionFailed)
     }
 }
@@ -70,7 +80,7 @@ pub enum AeadError {
 /// Encrypts a message, with integrity protection, so that only the owner of a particular X25519 secret key can read it.
 ///
 /// **Always** generates a fresh ephemeral keypair, returning it alongside the ciphertext.
-pub fn box_encrypt(message: &[u8], recipient_public_key: &OnionPublic) -> (Bytes, OnionSecret) {
+pub fn box_encrypt(message: &[u8], recipient_public_key: &OnionPublic) -> (Vec<u8>, OnionSecret) {
     let sender_sk = OnionSecret::generate();
     let sender_pk = sender_sk.public();
     let shared_secret = sender_sk.shared_secret(recipient_public_key);
@@ -80,27 +90,36 @@ pub fn box_encrypt(message: &[u8], recipient_public_key: &OnionPublic) -> (Bytes
 
     let mut result = sender_pk.as_bytes().to_vec();
     result.extend_from_slice(&encrypted_message);
-    (result.into(), sender_sk)
+    (result, sender_sk)
 }
 
 /// Decrypts a message encrypted with box_encrypt, given the recipient's secret key.
+///
+/// Returns the ciphertext as well as the sending ephemeral PK.
 pub fn box_decrypt(
     encrypted_message: &[u8],
     recipient_secret_key: &OnionSecret,
-) -> Result<Bytes, AeadError> {
+) -> Result<(Vec<u8>, OnionPublic), AeadError> {
     if encrypted_message.len() < 32 {
         return Err(AeadError::DecryptionFailed);
     }
 
-    let sender_public_key = OnionPublic(ed25519_compact::x25519::PublicKey::new(*array_ref![
-        encrypted_message,
-        0,
-        32
-    ]));
+    let sender_public_key = OnionPublic::from_bytes(array_ref![encrypted_message, 0, 32]);
     let shared_secret = recipient_secret_key.shared_secret(&sender_public_key);
     let aead_key = AeadKey::from_bytes(blake3::hash(&shared_secret).as_bytes());
     let nonce = [0u8; 12]; // all-zero nonce
-    aead_key.open(&nonce, &encrypted_message[32..])
+    Ok((
+        aead_key.open(&nonce, &encrypted_message[32..])?,
+        sender_public_key,
+    ))
+}
+
+/// "Dencrypts" an arbitrary byte buffer, in-place, using a stream cipher.
+///
+/// The underlying algorithm is ChaCha20 (IETF variant).
+pub fn stream_dencrypt(key: &[u8; 32], nonce: &[u8; 12], buf: &mut [u8]) {
+    let mut cipher = ChaCha20::new(key.into(), nonce.into());
+    cipher.apply_keystream(buf);
 }
 
 #[cfg(test)]
@@ -142,7 +161,7 @@ mod tests {
 
         let (encrypted_message, _) = box_encrypt(&message[..], &recipient_pk);
 
-        let decrypted_message = box_decrypt(&encrypted_message[..], &recipient_sk).unwrap();
+        let (decrypted_message, _) = box_decrypt(&encrypted_message[..], &recipient_sk).unwrap();
         assert_eq!(message, &decrypted_message[..]);
     }
 }
