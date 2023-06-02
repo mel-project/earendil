@@ -2,6 +2,7 @@ use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
 use crypt::{box_decrypt, box_encrypt, AeadError, OnionPublic, OnionSecret};
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::crypt::stream_dencrypt;
@@ -152,8 +153,20 @@ pub enum PeeledPacket {
 }
 
 /// An Earendil node fingerprint, uniquely identifying a relay or client.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct Fingerprint([u8; 20]);
+
+impl Fingerprint {
+    /// Convert from bytes representation
+    pub fn from_bytes(b: &[u8; 20]) -> Self {
+        Self(*b)
+    }
+
+    /// View as bytes representation
+    pub fn as_bytes(&self) -> &[u8; 20] {
+        &self.0
+    }
+}
 
 #[cfg(test)]
 mod tests {
