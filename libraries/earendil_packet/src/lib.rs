@@ -1,4 +1,8 @@
+use std::{fmt::Display, str::FromStr};
+
 use arrayref::array_ref;
+
+use base64::Engine;
 use bytemuck::{Pod, Zeroable};
 use crypt::{box_decrypt, box_encrypt, AeadError, OnionPublic, OnionSecret};
 use rand::RngCore;
@@ -155,6 +159,28 @@ pub enum PeeledPacket {
 /// An Earendil node fingerprint, uniquely identifying a relay or client.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct Fingerprint([u8; 20]);
+
+impl Display for Fingerprint {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(self.0);
+        write!(f, "{}", b64)
+    }
+}
+
+impl FromStr for Fingerprint {
+    type Err = Box<dyn std::error::Error>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(s)?;
+        if bytes.len() == 20 {
+            let mut arr = [0u8; 20];
+            arr.copy_from_slice(&bytes);
+            Ok(Fingerprint(arr))
+        } else {
+            Err("Invalid fingerprint length".into())
+        }
+    }
+}
 
 impl Fingerprint {
     /// Convert from bytes representation
