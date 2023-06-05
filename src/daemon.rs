@@ -98,11 +98,20 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             }
         }
 
+        // Run the forwarding loop
+        subtasks.push(smolscale::spawn(forward_loop(identity, table)));
+
         while let Some(next) = subtasks.next().await {
             next?;
         }
         Ok(())
     })
+}
+
+async fn forward_loop(identity: IdentitySecret, table: Arc<NeighTable>) -> anyhow::Result<()> {
+    loop {
+        let pkt = table.recv_raw_packet().await;
+    }
 }
 
 #[derive(Clone)]
@@ -118,6 +127,11 @@ async fn in_route_obfsudp(
     secret: String,
 ) -> anyhow::Result<()> {
     let secret = ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes());
+    log::debug!(
+        "obfsudp in_route {} listen start with cookie {}",
+        context.in_route_name,
+        hex::encode(secret.to_public().as_bytes())
+    );
     let listener = ObfsUdpListener::bind(listen, secret)?;
     let group = TaskReaper::new();
     loop {
@@ -153,10 +167,16 @@ async fn out_route_obfsudp(
     connect: SocketAddr,
     cookie: [u8; 32],
 ) -> anyhow::Result<()> {
-    let mut timer = smol::Timer::interval(Duration::from_secs(60));
+    let mut timer1 = smol::Timer::interval(Duration::from_secs(60));
+    let mut timer2 = smol::Timer::interval(Duration::from_secs(60));
     loop {
         let fallible = async {
+            log::debug!("obfsudp out_route {} trying...", context.out_route_name);
             let pipe = ObfsUdpPipe::connect(connect, ObfsUdpPublic::from_bytes(cookie), "").await?;
+            log::debug!(
+                "obfsudp out_route {} pipe connected...",
+                context.out_route_name
+            );
             let connection = Connection::connect(&context.identity, pipe).await?;
             if connection.remote_idpk().fingerprint() != context.remote_fingerprint {
                 anyhow::bail!(
@@ -179,9 +199,10 @@ async fn out_route_obfsudp(
                     err
                 );
             }
+            (&mut timer1).await;
         }
         .or(async {
-            (&mut timer).await;
+            (&mut timer2).await;
         })
         .await;
     }

@@ -28,7 +28,7 @@ fn main() -> anyhow::Result<()> {
     match Args::parse().command {
         Commands::Daemon { config } => {
             let config: ConfigFile =
-                serde_yaml::from_slice(&std::fs::read(&config).context("cannot read config file")?)
+                serde_yaml::from_slice(&std::fs::read(config).context("cannot read config file")?)
                     .context("syntax error in config file")?;
             daemon::main_daemon(config)
         }

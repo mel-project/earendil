@@ -37,8 +37,8 @@ const MAGIC_VALUE: &[u8; 32] = b"n2n_auth________________________";
 
 impl AuthResponse {
     /// Create a new AuthResponse instance.
-    pub fn new(my_identity: &IdentitySecret, peer_pk: &MuxPublic) -> Self {
-        let to_sign = blake3::keyed_hash(MAGIC_VALUE, peer_pk.as_bytes());
+    pub fn new(my_identity: &IdentitySecret, my_pk: &MuxPublic) -> Self {
+        let to_sign = blake3::keyed_hash(MAGIC_VALUE, my_pk.as_bytes());
         let binding_sig = my_identity.sign(to_sign.as_bytes());
 
         AuthResponse {

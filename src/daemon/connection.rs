@@ -154,7 +154,10 @@ async fn onion_keepalive(
         .await;
 
         if let Err(e) = res {
-            log::error!("onion_keepalive failed with error: {:?}", e);
+            // closed channels are unremarkable
+            if !e.to_string().contains("closed channel") {
+                log::error!("onion_keepalive failed with error: {:?}", e);
+            }
         }
     }
 }
@@ -240,11 +243,8 @@ struct N2nProtocolImpl {
 #[async_trait]
 impl N2nProtocol for N2nProtocolImpl {
     async fn authenticate(&self) -> AuthResponse {
-        let peer_pk = self
-            .mplex
-            .peer_pk()
-            .expect("authenticate called but still do not know peer_pk");
-        AuthResponse::new(&self.identity, &peer_pk)
+        let local_pk = self.mplex.local_pk();
+        AuthResponse::new(&self.identity, &local_pk)
     }
 
     async fn info(&self) -> InfoResponse {
