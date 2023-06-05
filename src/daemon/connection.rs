@@ -7,42 +7,51 @@ use anyhow::Context;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use earendil_packet::RawPacket;
-use earendil_topology::IdentitySecret;
+use earendil_topology::{IdentityPublic, IdentitySecret};
 use futures_util::TryFutureExt;
-use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
+use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use smol::{
     channel::{Receiver, Sender},
     future::FutureExt,
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    stream::StreamExt,
     Task,
 };
 use smolscale::reaper::TaskReaper;
 use sosistab2::{Multiplex, MuxSecret, MuxStream, Pipe};
 
-use super::n2n::N2nClient;
+use super::n2n::{AuthResponse, InfoResponse, N2nClient, N2nProtocol, N2nService};
 
 /// Encapsulates a single node-to-node connection (may be relay-relay or client-relay).
+#[derive(Clone)]
 pub struct Connection {
     mplex: Arc<Multiplex>,
     send_outgoing: Sender<RawPacket>,
     recv_incoming: Receiver<RawPacket>,
-    _task: Task<()>,
+    remote_idpk: IdentityPublic,
+    _task: Arc<Task<()>>,
 }
 
 impl Connection {
     /// Creates a new Connection, from a single Pipe. Unlike in Geph, n2n Multiplexes in earendil all contain one pipe each.
-    pub async fn connect(my_id: IdentitySecret, pipe: impl Pipe) -> anyhow::Result<Self> {
+    pub async fn connect(identity: &IdentitySecret, pipe: impl Pipe) -> anyhow::Result<Self> {
         // First, we construct the Multiplex.
         let my_mux_sk = MuxSecret::generate();
         let mplex = Arc::new(Multiplex::new(my_mux_sk, None));
         mplex.add_pipe(pipe);
         let (send_outgoing, recv_outgoing) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
-        let _task = smolscale::spawn(
-            connection_loop(mplex.clone(), send_incoming, recv_outgoing).unwrap_or_else(|e| {
+        let _task = Arc::new(smolscale::spawn(
+            connection_loop(
+                identity.clone(),
+                mplex.clone(),
+                send_incoming,
+                recv_outgoing,
+            )
+            .unwrap_or_else(|e| {
                 log::error!("connection_loop died with {:?}", e);
             }),
-        );
+        ));
         let rpc = MultiplexRpcTransport::new(mplex.clone());
         let n2n = N2nClient::from(rpc);
         let resp = n2n
@@ -57,8 +66,14 @@ impl Connection {
             mplex,
             send_outgoing,
             recv_incoming,
+            remote_idpk: resp.full_pk,
             _task,
         })
+    }
+
+    /// Returns the identity publickey presented by the other side.
+    pub fn remote_idpk(&self) -> IdentityPublic {
+        self.remote_idpk
     }
 
     /// Returns a handle to the N2N RPC.
@@ -80,6 +95,7 @@ impl Connection {
 
 /// Main loop for the connection.
 async fn connection_loop(
+    identity: IdentitySecret,
     mplex: Arc<Multiplex>,
     send_incoming: Sender<RawPacket>,
     recv_outgoing: Receiver<RawPacket>,
@@ -90,12 +106,31 @@ async fn connection_loop(
         recv_outgoing.clone(),
     ));
 
-    let group = TaskReaper::new();
+    let service = Arc::new(N2nService(N2nProtocolImpl {
+        identity,
+        mplex: mplex.clone(),
+    }));
+
+    let group: TaskReaper<anyhow::Result<()>> = TaskReaper::new();
     loop {
-        let next = mplex.accept_conn().await?;
-        match next.additional_info() {
+        let service = service.clone();
+        let mut stream = mplex.accept_conn().await?;
+
+        match stream.additional_info() {
+            "n2n_control" => group.attach(smolscale::spawn(async move {
+                let mut stream_lines = BufReader::new(stream.clone()).lines();
+                while let Some(line) = stream_lines.next().await {
+                    let line = line?;
+                    let req: JrpcRequest = serde_json::from_str(&line)?;
+                    let resp = service.respond_raw(req).await;
+                    stream
+                        .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
+                        .await?;
+                }
+                Ok(())
+            })),
             "onion_packets" => group.attach(smolscale::spawn(handle_onion_packets(
-                next,
+                stream,
                 send_incoming.clone(),
                 recv_outgoing.clone(),
             ))),
@@ -194,5 +229,27 @@ impl RpcTransport for MultiplexRpcTransport {
         conn.0.read_line(&mut b).await?;
         let resp: JrpcResponse = serde_json::from_str(&b)?;
         Ok(resp)
+    }
+}
+
+struct N2nProtocolImpl {
+    identity: IdentitySecret,
+    mplex: Arc<Multiplex>,
+}
+
+#[async_trait]
+impl N2nProtocol for N2nProtocolImpl {
+    async fn authenticate(&self) -> AuthResponse {
+        let peer_pk = self
+            .mplex
+            .peer_pk()
+            .expect("authenticate called but still do not know peer_pk");
+        AuthResponse::new(&self.identity, &peer_pk)
+    }
+
+    async fn info(&self) -> InfoResponse {
+        InfoResponse {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        }
     }
 }

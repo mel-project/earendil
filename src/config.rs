@@ -21,7 +21,7 @@ pub struct ConfigFile {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "protocol", rename_all = "kebab-case")]
 pub enum InRouteConfig {
     Obfsudp {

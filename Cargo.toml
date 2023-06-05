@@ -3,7 +3,7 @@ members = ["libraries/*"]
 
 [package]
 name = "earendil"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -33,6 +33,9 @@ bytemuck = "1.13.1"
 smolscale = "0.3.52"
 thiserror = "1.0.40"
 futures-util = "0.3.28"
+dashmap = "5.4.0"
+
+
 
 
 [profile.release-dbg]

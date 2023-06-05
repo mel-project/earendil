@@ -895,7 +895,7 @@ dependencies = [
 
 [[package]]
 name = "earendil"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -904,6 +904,7 @@ dependencies = [
  "bytes",
  "clap",
  "concurrent-queue 2.2.0",
+ "dashmap",
  "earendil_packet",
  "earendil_topology",
  "env_logger",
