@@ -1,8 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use arrayref::array_ref;
 use bytes::Bytes;
 use earendil_packet::Fingerprint;
+use indexmap::IndexMap;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
@@ -13,23 +14,118 @@ use stdcode::StdcodeSerializeExt;
 pub struct RelayGraph {
     unalloc_id: u64,
     fp_to_id: HashMap<Fingerprint, u64>,
+    id_to_fp: HashMap<u64, Fingerprint>,
     adjacency: HashMap<u64, HashSet<u64>>,
-    documents: HashMap<(u64, u64), AdjacencyDescriptor>,
+    documents: IndexMap<(u64, u64), AdjacencyDescriptor>,
 }
 
 impl RelayGraph {
-    pub fn alloc_id(&mut self, fp: &Fingerprint) -> u64 {
+    /// Inserts an adjacency descriptor. Verifies the descriptor and returns false if it's not valid.
+    /// Returns true if the descriptor was inserted successfully.
+    pub fn insert_adjacency(&mut self, adjacency: AdjacencyDescriptor) -> bool {
+        if !adjacency.verify() {
+            return false;
+        }
+
+        let left_fp = &adjacency.left;
+        let right_fp = &adjacency.right;
+        let left_id = self.alloc_id(left_fp);
+        let right_id = self.alloc_id(right_fp);
+
+        self.documents.insert((left_id, right_id), adjacency);
+
+        self.adjacency
+            .entry(left_id)
+            .or_insert_with(HashSet::new)
+            .insert(right_id);
+        self.adjacency
+            .entry(right_id)
+            .or_insert_with(HashSet::new)
+            .insert(left_id);
+
+        true
+    }
+
+    /// Returns the adjacent Fingerprints to the given Fingerprint.
+    /// None is returned if the given Fingerprint is not present in the graph.
+    pub fn neighbors(&self, fp: &Fingerprint) -> Option<impl Iterator<Item = Fingerprint> + '_> {
+        self.id(fp).map(move |id| {
+            self.adjacency[&id].iter().filter_map(move |adj_id| {
+                self.fp_to_id
+                    .iter()
+                    .find(|&(_, value)| value == adj_id)
+                    .map(|(key, _)| *key)
+            })
+        })
+    }
+
+    /// Picks a random AdjacencyDescriptor from the graph.
+    pub fn random_adjacency(&self) -> Option<AdjacencyDescriptor> {
+        if self.documents.is_empty() {
+            return None;
+        }
+        self.documents
+            .get_index(rand::thread_rng().gen_range(0..self.documents.len()))
+            .map(|v| v.1.clone())
+    }
+
+    /// Finds the shortest path between two Fingerprints.
+    /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.
+    pub fn find_shortest_path(
+        &self,
+        start_fp: &Fingerprint,
+        end_fp: &Fingerprint,
+    ) -> Option<Vec<Fingerprint>> {
+        let start_id = self.id(start_fp)?;
+        let end_id = self.id(end_fp)?;
+
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        let mut path = HashMap::new();
+
+        visited.insert(start_id);
+        queue.push_back(start_id);
+
+        while let Some(current_id) = queue.pop_front() {
+            if current_id == end_id {
+                let mut result = Vec::new();
+                let mut current_id = current_id;
+
+                while let Some(prev_id) = path.get(&current_id) {
+                    result.push(self.id_to_fp[&current_id]);
+                    current_id = *prev_id;
+                }
+
+                result.push(self.id_to_fp[&start_id]);
+                result.reverse();
+                return Some(result);
+            }
+
+            for neighbor_id in self.adjacency.get(&current_id)?.iter() {
+                if !visited.contains(neighbor_id) {
+                    visited.insert(*neighbor_id);
+                    path.insert(*neighbor_id, current_id);
+                    queue.push_back(*neighbor_id);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn alloc_id(&mut self, fp: &Fingerprint) -> u64 {
         if let Some(val) = self.fp_to_id.get(fp) {
             *val
         } else {
             let id = self.unalloc_id;
             self.unalloc_id += 1;
             self.fp_to_id.insert(*fp, id);
+            self.id_to_fp.insert(id, *fp);
             id
         }
     }
 
-    pub fn id(&self, fp: &Fingerprint) -> Option<u64> {
+    fn id(&self, fp: &Fingerprint) -> Option<u64> {
         self.fp_to_id.get(fp).copied()
     }
 }
@@ -45,6 +141,31 @@ pub struct AdjacencyDescriptor {
     pub right_idpk: IdentityPublic,
     pub left_sig: Bytes,
     pub right_sig: Bytes,
+}
+
+impl AdjacencyDescriptor {
+    /// Verifies the invariants of the adjacency descriptor. A valid adjacency descriptor must:
+    /// - Have identities that actually correspond to the fingerprints
+    /// - Have valid signatures
+    pub fn verify(&self) -> bool {
+        let left_fp = self.left_idpk.fingerprint();
+        let right_fp = self.right_idpk.fingerprint();
+
+        if left_fp >= right_fp {
+            return false;
+        }
+
+        let mut signed_descriptor = self.clone();
+        signed_descriptor.left_sig = Bytes::new();
+        signed_descriptor.right_sig = Bytes::new();
+        let signed_descriptor_bytes = signed_descriptor.stdcode();
+
+        self.left_idpk
+            .verify(&signed_descriptor_bytes, &self.left_sig)
+            && self
+                .right_idpk
+                .verify(&signed_descriptor_bytes, &self.right_sig)
+    }
 }
 
 /// Validates an adjacency descriptor. A valid adjacency descriptor must:

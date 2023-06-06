@@ -34,6 +34,7 @@ smolscale = "0.3.52"
 thiserror = "1.0.40"
 futures-util = "0.3.28"
 dashmap = "5.4.0"
+indexmap = "1.9.3"
 
 [profile.dev]
 panic='abort'
