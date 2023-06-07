@@ -20,4 +20,4 @@ blake3 = "1.3.3"
 stdcode = "0.1.14"
 arrayref = "0.3.7"
 rand = "0.8.5"
-indexmap = "1.9.3"
+indexmap = {version="1.9.3", features=["serde"]}

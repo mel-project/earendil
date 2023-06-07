@@ -73,6 +73,11 @@ impl NeighTable {
             .map(|entry| entry.value().0.clone())
     }
 
+    /// Returns all the connections.
+    pub fn all_neighs(&self) -> Vec<Connection> {
+        self.table.iter().map(|s| s.0.clone()).collect()
+    }
+
     /// Remove all expired entries from the table.
     pub fn garbage_collect(&self) {
         let now = Instant::now();

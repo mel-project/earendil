@@ -35,6 +35,9 @@ thiserror = "1.0.40"
 futures-util = "0.3.28"
 dashmap = "5.4.0"
 indexmap = "1.9.3"
+parking_lot = "0.12.1"
+rand = "0.8.5"
+
 
 [profile.dev]
 panic='abort'

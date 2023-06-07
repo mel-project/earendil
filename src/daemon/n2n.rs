@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 
-use earendil_topology::{IdentityPublic, IdentitySecret};
+use earendil_packet::Fingerprint;
+use earendil_topology::{AdjacencyDescriptor, IdentityPublic, IdentitySecret};
 use nanorpc::nanorpc_derive;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -15,6 +16,15 @@ pub trait N2nProtocol {
 
     /// A method that returns some random info. Used for keepalive and statistics.
     async fn info(&self) -> InfoResponse;
+
+    /// Asks the other end to complete an adjacency descriptor. Returns None to indicate refusal. This is called by the "left-hand" neighbor to ask the "right-hand" neighbor to sign.
+    async fn sign_adjacency(
+        &self,
+        left_incomplete: AdjacencyDescriptor,
+    ) -> Option<AdjacencyDescriptor>;
+
+    /// Gets all the adjacency-descriptors adjacent to a particular fingerprint. This is called repeatedly to eventually discover the entire graph.
+    async fn adjacencies(&self, fp: Fingerprint) -> Vec<AdjacencyDescriptor>;
 }
 
 /// Response to an authentication challenge.

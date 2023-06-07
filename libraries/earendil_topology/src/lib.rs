@@ -11,6 +11,7 @@ use stdcode::StdcodeSerializeExt;
 /// A full, indexed representation of the Earendil relay graph. Includes info about:
 /// - Which fingerprints are adjacent to which fingerprints
 /// - What signing keys and midterm keys does each fingerprint have
+#[derive(Serialize, Deserialize, Default)]
 pub struct RelayGraph {
     unalloc_id: u64,
     fp_to_id: HashMap<Fingerprint, u64>,
@@ -20,6 +21,11 @@ pub struct RelayGraph {
 }
 
 impl RelayGraph {
+    /// Creates a new RelayGraph.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Inserts an adjacency descriptor. Verifies the descriptor and returns false if it's not valid.
     /// Returns true if the descriptor was inserted successfully.
     pub fn insert_adjacency(&mut self, adjacency: AdjacencyDescriptor) -> bool {
@@ -158,6 +164,7 @@ impl AdjacencyDescriptor {
         let mut signed_descriptor = self.clone();
         signed_descriptor.left_sig = Bytes::new();
         signed_descriptor.right_sig = Bytes::new();
+
         let signed_descriptor_bytes = signed_descriptor.stdcode();
 
         self.left_idpk

@@ -5,9 +5,10 @@ use std::{
 
 use anyhow::Context;
 use async_trait::async_trait;
+use bytes::Bytes;
 use concurrent_queue::ConcurrentQueue;
-use earendil_packet::RawPacket;
-use earendil_topology::{IdentityPublic, IdentitySecret};
+use earendil_packet::{Fingerprint, RawPacket};
+use earendil_topology::{AdjacencyDescriptor, IdentityPublic, IdentitySecret};
 use futures_util::TryFutureExt;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use smol::{
@@ -19,8 +20,13 @@ use smol::{
 };
 use smolscale::reaper::TaskReaper;
 use sosistab2::{Multiplex, MuxSecret, MuxStream, Pipe};
+use stdcode::StdcodeSerializeExt;
 
-use super::n2n::{AuthResponse, InfoResponse, N2nClient, N2nProtocol, N2nService};
+use super::{
+    n2n::{AuthResponse, InfoResponse, N2nClient, N2nProtocol, N2nService},
+    neightable::NeighTable,
+    DaemonContext,
+};
 
 /// Encapsulates a single node-to-node connection (may be relay-relay or client-relay).
 #[derive(Clone)]
@@ -34,7 +40,7 @@ pub struct Connection {
 
 impl Connection {
     /// Creates a new Connection, from a single Pipe. Unlike in Geph, n2n Multiplexes in earendil all contain one pipe each.
-    pub async fn connect(identity: &IdentitySecret, pipe: impl Pipe) -> anyhow::Result<Self> {
+    pub async fn connect(ctx: DaemonContext, pipe: impl Pipe) -> anyhow::Result<Self> {
         // First, we construct the Multiplex.
         let my_mux_sk = MuxSecret::generate();
         let mplex = Arc::new(Multiplex::new(my_mux_sk, None));
@@ -42,13 +48,7 @@ impl Connection {
         let (send_outgoing, recv_outgoing) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
         let _task = Arc::new(smolscale::spawn(
-            connection_loop(
-                identity.clone(),
-                mplex.clone(),
-                send_incoming,
-                recv_outgoing,
-            )
-            .unwrap_or_else(|e| {
+            connection_loop(ctx, mplex.clone(), send_incoming, recv_outgoing).unwrap_or_else(|e| {
                 log::error!("connection_loop died with {:?}", e);
             }),
         ));
@@ -95,7 +95,7 @@ impl Connection {
 
 /// Main loop for the connection.
 async fn connection_loop(
-    identity: IdentitySecret,
+    ctx: DaemonContext,
     mplex: Arc<Multiplex>,
     send_incoming: Sender<RawPacket>,
     recv_outgoing: Receiver<RawPacket>,
@@ -107,7 +107,7 @@ async fn connection_loop(
     ));
 
     let service = Arc::new(N2nService(N2nProtocolImpl {
-        identity,
+        ctx: ctx.clone(),
         mplex: mplex.clone(),
     }));
 
@@ -236,7 +236,7 @@ impl RpcTransport for MultiplexRpcTransport {
 }
 
 struct N2nProtocolImpl {
-    identity: IdentitySecret,
+    ctx: DaemonContext,
     mplex: Arc<Multiplex>,
 }
 
@@ -244,12 +244,43 @@ struct N2nProtocolImpl {
 impl N2nProtocol for N2nProtocolImpl {
     async fn authenticate(&self) -> AuthResponse {
         let local_pk = self.mplex.local_pk();
-        AuthResponse::new(&self.identity, &local_pk)
+        AuthResponse::new(&self.ctx.identity, &local_pk)
     }
 
     async fn info(&self) -> InfoResponse {
         InfoResponse {
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
+    }
+
+    async fn sign_adjacency(
+        &self,
+        mut left_incomplete: AdjacencyDescriptor,
+    ) -> Option<AdjacencyDescriptor> {
+        // This must be a neighbor that is "left" of us
+        let valid = left_incomplete.left < left_incomplete.right
+            && left_incomplete.right == self.ctx.identity.public().fingerprint()
+            && self.ctx.table.lookup(&left_incomplete.left).is_some();
+        if !valid {
+            return None;
+        }
+        // Fill in the right-hand-side
+        let to_sign = {
+            let mut li = left_incomplete.clone();
+            li.left_sig = Bytes::new();
+            li.right_sig = Bytes::new();
+            li.stdcode()
+        };
+        let signature = self.ctx.identity.sign(&to_sign);
+        left_incomplete.right_sig = signature;
+        if !left_incomplete.verify() {
+            log::warn!("could not verify adjacency *after* it's signed");
+            return None;
+        }
+        Some(left_incomplete)
+    }
+
+    async fn adjacencies(&self, fp: Fingerprint) -> Vec<AdjacencyDescriptor> {
+        todo!()
     }
 }
