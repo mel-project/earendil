@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use arrayref::array_ref;
 use bytes::Bytes;
-use earendil_packet::Fingerprint;
+use earendil_packet::{crypt::OnionPublic, Fingerprint};
 use indexmap::IndexMap;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,7 @@ pub struct RelayGraph {
     unalloc_id: u64,
     fp_to_id: HashMap<Fingerprint, u64>,
     id_to_fp: HashMap<u64, Fingerprint>,
+    id_to_onionpk: HashMap<u64, OnionPublic>,
     adjacency: HashMap<u64, HashSet<u64>>,
     documents: IndexMap<(u64, u64), AdjacencyDescriptor>,
 }
@@ -25,6 +26,8 @@ impl RelayGraph {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Inserts a binding for the onion descriptor.
 
     /// Inserts an adjacency descriptor. Verifies the descriptor and returns false if it's not valid.
     /// Returns true if the descriptor was inserted successfully.
@@ -37,6 +40,8 @@ impl RelayGraph {
         let right_fp = &adjacency.right;
         let left_id = self.alloc_id(left_fp);
         let right_id = self.alloc_id(right_fp);
+        self.id_to_onionpk.insert(left_id, adjacency.left_onionpk);
+        self.id_to_onionpk.insert(right_id, adjacency.right_onionpk);
 
         self.documents.insert((left_id, right_id), adjacency);
 
@@ -139,12 +144,14 @@ impl RelayGraph {
 /// An adjacency descriptor, signed by both sides. "Left" is always the one with the smaller fingerprint. Also carries the IdentityPublics of everyone along.
 ///
 /// The signatures are computed with respect to the descriptor with the signature-fields zeroed out.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AdjacencyDescriptor {
     pub left: Fingerprint,
     pub right: Fingerprint,
     pub left_idpk: IdentityPublic,
     pub right_idpk: IdentityPublic,
+    pub left_onionpk: OnionPublic,
+    pub right_onionpk: OnionPublic,
     pub left_sig: Bytes,
     pub right_sig: Bytes,
 }

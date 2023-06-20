@@ -5,11 +5,32 @@ use chacha20::{
     ChaCha20,
 };
 use chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit};
+
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// An onion-routing public key, based on x25519.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OnionPublic(ed25519_compact::x25519::PublicKey);
+
+impl<'de> Deserialize<'de> for OnionPublic {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let inner = <[u8; 32]>::deserialize(deserializer)?;
+        Ok(Self::from_bytes(&inner))
+    }
+}
+
+impl Serialize for OnionPublic {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.as_bytes().serialize(serializer)
+    }
+}
 
 impl OnionPublic {
     /// Return the bytes representation.
@@ -125,6 +146,17 @@ pub fn stream_dencrypt(key: &[u8; 32], nonce: &[u8; 12], buf: &mut [u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn onion_public_serialize_deserialize() {
+        let secret_key = OnionSecret::generate();
+        let public_key = secret_key.public();
+
+        let serialized = bincode::serialize(&public_key).unwrap();
+        let deserialized: OnionPublic = bincode::deserialize(&serialized).unwrap();
+
+        assert_eq!(public_key.as_bytes(), deserialized.as_bytes());
+    }
 
     #[test]
     fn shared_secret() {
