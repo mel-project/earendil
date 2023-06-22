@@ -11,12 +11,12 @@ use stdcode::StdcodeSerializeExt;
 /// A full, indexed representation of the Earendil relay graph. Includes info about:
 /// - Which fingerprints are adjacent to which fingerprints
 /// - What signing keys and midterm keys does each fingerprint have
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Default)]
 pub struct RelayGraph {
     unalloc_id: u64,
     fp_to_id: HashMap<Fingerprint, u64>,
     id_to_fp: HashMap<u64, Fingerprint>,
-    id_to_onionpk: HashMap<u64, OnionPublic>,
+    id_to_descriptor: HashMap<u64, IdentityDescriptor>,
     adjacency: HashMap<u64, HashSet<u64>>,
     documents: IndexMap<(u64, u64), AdjacencyDescriptor>,
 }
@@ -27,12 +27,29 @@ impl RelayGraph {
         Self::default()
     }
 
-    /// Inserts a binding for the onion descriptor.
+    /// Looks up the identity descriptor of a fingerprint.
+    pub fn identity(&self, fingerprint: &Fingerprint) -> Option<IdentityDescriptor> {
+        let id = self.id(fingerprint)?;
+        self.id_to_descriptor.get(&id).cloned()
+    }
+
+    /// Inserts an identity descriptor. Verifies its self-consistency, and returns false if it's not valid.
+    pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> bool {
+        if !identity
+            .identity_pk
+            .verify(identity.to_sign().as_bytes(), &identity.sig)
+        {
+            return false;
+        }
+        let id = self.alloc_id(&identity.identity_pk.fingerprint());
+        self.id_to_descriptor.insert(id, identity);
+        true
+    }
 
     /// Inserts an adjacency descriptor. Verifies the descriptor and returns false if it's not valid.
     /// Returns true if the descriptor was inserted successfully.
     pub fn insert_adjacency(&mut self, adjacency: AdjacencyDescriptor) -> bool {
-        if !adjacency.verify() {
+        if !self.verify_adjacency(&adjacency) {
             return false;
         }
 
@@ -40,8 +57,6 @@ impl RelayGraph {
         let right_fp = &adjacency.right;
         let left_id = self.alloc_id(left_fp);
         let right_id = self.alloc_id(right_fp);
-        self.id_to_onionpk.insert(left_id, adjacency.left_onionpk);
-        self.id_to_onionpk.insert(right_id, adjacency.right_onionpk);
 
         self.documents.insert((left_id, right_id), adjacency);
 
@@ -57,17 +72,22 @@ impl RelayGraph {
         true
     }
 
-    /// Returns the adjacent Fingerprints to the given Fingerprint.
+    /// Returns the adjacencies next to the given Fingerprint.
     /// None is returned if the given Fingerprint is not present in the graph.
-    pub fn neighbors(&self, fp: &Fingerprint) -> Option<impl Iterator<Item = Fingerprint> + '_> {
-        self.id(fp).map(move |id| {
-            self.adjacency[&id].iter().filter_map(move |adj_id| {
-                self.fp_to_id
-                    .iter()
-                    .find(|&(_, value)| value == adj_id)
-                    .map(|(key, _)| *key)
-            })
-        })
+    pub fn adjacencies(
+        &self,
+        fp: &Fingerprint,
+    ) -> Option<impl Iterator<Item = AdjacencyDescriptor> + '_> {
+        let fp = *fp;
+        let id = self.id(&fp)?;
+        Some(self.adjacency[&id].iter().copied().map(move |neigh_id| {
+            let neigh = self.id_to_fp[&neigh_id];
+            if fp < neigh {
+                self.documents[&(id, neigh_id)].clone()
+            } else {
+                self.documents[&(neigh_id, id)].clone()
+            }
+        }))
     }
 
     /// Picks a random AdjacencyDescriptor from the graph.
@@ -139,6 +159,29 @@ impl RelayGraph {
     fn id(&self, fp: &Fingerprint) -> Option<u64> {
         self.fp_to_id.get(fp).copied()
     }
+
+    fn verify_adjacency(&self, adj: &AdjacencyDescriptor) -> bool {
+        if adj.left >= adj.right {
+            return false;
+        }
+
+        let left_idpk = if let Some(left) = self.identity(&adj.left) {
+            left.identity_pk
+        } else {
+            return false;
+        };
+
+        let right_idpk = if let Some(right) = self.identity(&adj.right) {
+            right.identity_pk
+        } else {
+            return false;
+        };
+
+        let to_sign = adj.to_sign();
+
+        left_idpk.verify(to_sign.as_bytes(), &adj.left_sig)
+            && right_idpk.verify(to_sign.as_bytes(), &adj.right_sig)
+    }
 }
 
 /// An adjacency descriptor, signed by both sides. "Left" is always the one with the smaller fingerprint. Also carries the IdentityPublics of everyone along.
@@ -148,37 +191,40 @@ impl RelayGraph {
 pub struct AdjacencyDescriptor {
     pub left: Fingerprint,
     pub right: Fingerprint,
-    pub left_idpk: IdentityPublic,
-    pub right_idpk: IdentityPublic,
-    pub left_onionpk: OnionPublic,
-    pub right_onionpk: OnionPublic,
+
     pub left_sig: Bytes,
     pub right_sig: Bytes,
+
+    pub unix_timestamp: u64,
 }
 
 impl AdjacencyDescriptor {
-    /// Verifies the invariants of the adjacency descriptor. A valid adjacency descriptor must:
-    /// - Have identities that actually correspond to the fingerprints
-    /// - Have valid signatures
-    pub fn verify(&self) -> bool {
-        let left_fp = self.left_idpk.fingerprint();
-        let right_fp = self.right_idpk.fingerprint();
+    /// The value that the signatures are supposed to be computed against.
+    pub fn to_sign(&self) -> blake3::Hash {
+        let mut this = self.clone();
+        this.left_sig = Bytes::new();
+        this.right_sig = Bytes::new();
+        blake3::keyed_hash(b"adjacency_descriptor____________", &this.stdcode())
+    }
+}
 
-        if left_fp >= right_fp {
-            return false;
-        }
+/// An identity descriptor, signed by the owner of an identity. Declares that the identity owns a particular onion key, as well as implicitly
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IdentityDescriptor {
+    pub identity_pk: IdentityPublic,
+    pub onion_pk: OnionPublic,
 
-        let mut signed_descriptor = self.clone();
-        signed_descriptor.left_sig = Bytes::new();
-        signed_descriptor.right_sig = Bytes::new();
+    pub sig: Bytes,
 
-        let signed_descriptor_bytes = signed_descriptor.stdcode();
+    pub unix_timestamp: u64,
+}
 
-        self.left_idpk
-            .verify(&signed_descriptor_bytes, &self.left_sig)
-            && self
-                .right_idpk
-                .verify(&signed_descriptor_bytes, &self.right_sig)
+impl IdentityDescriptor {
+    /// The value that the signatures are supposed to be computed against.
+    pub fn to_sign(&self) -> blake3::Hash {
+        let mut this = self.clone();
+        this.sig = Bytes::new();
+        blake3::keyed_hash(b"identity_descriptor_____________", &this.stdcode())
     }
 }
 

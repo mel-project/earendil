@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use concurrent_queue::ConcurrentQueue;
 use earendil_packet::{Fingerprint, RawPacket};
-use earendil_topology::{AdjacencyDescriptor, IdentityPublic, IdentitySecret};
+use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor, IdentityPublic};
 use futures_util::TryFutureExt;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use smol::{
@@ -24,7 +24,6 @@ use stdcode::StdcodeSerializeExt;
 
 use super::{
     n2n::{AuthResponse, InfoResponse, N2nClient, N2nProtocol, N2nService},
-    neightable::NeighTable,
     DaemonContext,
 };
 
@@ -273,14 +272,21 @@ impl N2nProtocol for N2nProtocolImpl {
         };
         let signature = self.ctx.identity.sign(&to_sign);
         left_incomplete.right_sig = signature;
-        if !left_incomplete.verify() {
-            log::warn!("could not verify adjacency *after* it's signed");
-            return None;
-        }
+
         Some(left_incomplete)
     }
 
+    async fn identity(&self, fp: Fingerprint) -> Option<IdentityDescriptor> {
+        self.ctx.relay_graph.read().identity(&fp)
+    }
+
     async fn adjacencies(&self, fp: Fingerprint) -> Vec<AdjacencyDescriptor> {
-        todo!()
+        self.ctx
+            .relay_graph
+            .read()
+            .adjacencies(&fp)
+            .into_iter()
+            .flatten()
+            .collect()
     }
 }

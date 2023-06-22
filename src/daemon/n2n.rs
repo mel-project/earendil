@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 
 use earendil_packet::Fingerprint;
-use earendil_topology::{AdjacencyDescriptor, IdentityPublic, IdentitySecret};
+use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor, IdentityPublic, IdentitySecret};
 use nanorpc::nanorpc_derive;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -22,6 +22,9 @@ pub trait N2nProtocol {
         &self,
         left_incomplete: AdjacencyDescriptor,
     ) -> Option<AdjacencyDescriptor>;
+
+    /// Gets the identity of a particular fingerprint. Returns None if that identity is not known to this node.
+    async fn identity(&self, fp: Fingerprint) -> Option<IdentityDescriptor>;
 
     /// Gets all the adjacency-descriptors adjacent to a particular fingerprint. This is called repeatedly to eventually discover the entire graph.
     async fn adjacencies(&self, fp: Fingerprint) -> Vec<AdjacencyDescriptor>;

@@ -1,21 +1,27 @@
 mod connection;
+mod inout_route;
 mod n2n;
 mod neightable;
 
-use std::{net::SocketAddr, path::Path, sync::Arc, time::Duration};
+use std::{path::Path, sync::Arc, time::Duration};
 
-use earendil_packet::Fingerprint;
+use anyhow::Context;
+use earendil_packet::{crypt::OnionSecret, PeeledPacket};
 use earendil_topology::{IdentitySecret, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use parking_lot::RwLock;
 use rand::Rng;
-use smol::future::FutureExt;
-use smolscale::reaper::TaskReaper;
-use sosistab2::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
+
+
+
 
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
-    daemon::{connection::Connection, neightable::NeighTable},
+    daemon::{
+        connection::Connection,
+        inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
+        neightable::NeighTable,
+    },
 };
 
 pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
@@ -57,6 +63,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
         let daemon_ctx = DaemonContext {
             table: table.clone(),
             identity: identity.into(),
+            onion_sk: OnionSecret::generate(),
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
         };
 
@@ -117,12 +124,29 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         let pkt = ctx.table.recv_raw_packet().await;
+        let fallible = async {
+            let peeled = pkt.peel(&ctx.onion_sk)?;
+            match peeled {
+                PeeledPacket::Forward(next_hop, inner) => {
+                    let conn = ctx
+                        .table
+                        .lookup(&next_hop)
+                        .context("could not find this next hop")?;
+                    conn.send_raw_packet(inner).await?;
+                }
+                PeeledPacket::Receive(_) => anyhow::bail!("could not handle receiving yet"),
+            }
+            anyhow::Ok(())
+        };
+        if let Err(err) = fallible.await {
+            log::warn!("could not forward incoming packet: {:?}", err)
+        }
     }
 }
 
 /// Loop that gossips things around
 async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    async fn gossip_once(conn: &Connection) -> anyhow::Result<()> {
+    async fn gossip_once(_conn: &Connection) -> anyhow::Result<()> {
         // Pick a random adjacency and gossip it
         anyhow::bail!("dunno how to gossip yet lol");
     }
@@ -155,98 +179,6 @@ async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 pub struct DaemonContext {
     table: Arc<NeighTable>,
     identity: Arc<IdentitySecret>,
+    onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
-}
-
-#[derive(Clone)]
-struct InRouteContext {
-    daemon_ctx: DaemonContext,
-    in_route_name: String,
-}
-
-async fn in_route_obfsudp(
-    context: InRouteContext,
-    listen: SocketAddr,
-    secret: String,
-) -> anyhow::Result<()> {
-    let secret = ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes());
-    log::debug!(
-        "obfsudp in_route {} listen start with cookie {}",
-        context.in_route_name,
-        hex::encode(secret.to_public().as_bytes())
-    );
-    let listener = ObfsUdpListener::bind(listen, secret)?;
-    let group = TaskReaper::new();
-    loop {
-        let next = listener.accept().await?;
-        let context = context.clone();
-        group.attach(smolscale::spawn(async move {
-            let connection = Connection::connect(context.daemon_ctx.clone(), next).await?;
-            log::debug!(
-                "obfsudp in_route {} accepted {}",
-                context.in_route_name,
-                connection.remote_idpk().fingerprint()
-            );
-            context.daemon_ctx.table.insert(
-                connection.remote_idpk().fingerprint(),
-                connection,
-                Duration::from_secs(300),
-            );
-            anyhow::Ok(())
-        }))
-    }
-}
-
-#[derive(Clone)]
-struct OutRouteContext {
-    daemon_ctx: DaemonContext,
-    out_route_name: String,
-    remote_fingerprint: Fingerprint,
-}
-
-async fn out_route_obfsudp(
-    context: OutRouteContext,
-    connect: SocketAddr,
-    cookie: [u8; 32],
-) -> anyhow::Result<()> {
-    let mut timer1 = smol::Timer::interval(Duration::from_secs(60));
-    let mut timer2 = smol::Timer::interval(Duration::from_secs(60));
-    loop {
-        let fallible = async {
-            log::debug!("obfsudp out_route {} trying...", context.out_route_name);
-            let pipe = ObfsUdpPipe::connect(connect, ObfsUdpPublic::from_bytes(cookie), "").await?;
-            log::debug!(
-                "obfsudp out_route {} pipe connected...",
-                context.out_route_name
-            );
-            let connection = Connection::connect(context.daemon_ctx.clone(), pipe).await?;
-            if connection.remote_idpk().fingerprint() != context.remote_fingerprint {
-                anyhow::bail!(
-                    "remote fingerprint {} different from configured {}",
-                    connection.remote_idpk().fingerprint(),
-                    context.remote_fingerprint
-                )
-            }
-            context
-                .daemon_ctx
-                .table
-                .insert_pinned(context.remote_fingerprint, connection);
-            log::debug!("obfsudp out_route {} successful", context.out_route_name);
-            anyhow::Ok(())
-        };
-        async {
-            if let Err(err) = fallible.await {
-                log::warn!(
-                    "obfs out_route {} failed: {:?}",
-                    context.out_route_name,
-                    err
-                );
-            }
-            (&mut timer1).await;
-        }
-        .or(async {
-            (&mut timer2).await;
-        })
-        .await;
-    }
 }
