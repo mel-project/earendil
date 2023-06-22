@@ -6,17 +6,16 @@ mod neightable;
 use std::{path::Path, sync::Arc, time::Duration};
 
 use anyhow::Context;
-use earendil_packet::{crypt::OnionSecret, PeeledPacket};
+use async_trait::async_trait;
+use earendil_packet::{crypt::OnionSecret, ForwardInstruction, PeeledPacket, RawPacket};
 use earendil_topology::{IdentitySecret, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use parking_lot::RwLock;
 use rand::Rng;
 
-
-
-
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
+    control_protocol::{ControlProtocol, SendMessageArgs, SendMessageError},
     daemon::{
         connection::Connection,
         inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
@@ -120,6 +119,8 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
     })
 }
 
+/// Loop that handles the control protocol
+
 /// Loop that takes incoming packets, peels them, and processes them
 async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
@@ -181,4 +182,57 @@ pub struct DaemonContext {
     identity: Arc<IdentitySecret>,
     onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
+}
+
+struct ControlProtocolImpl {
+    ctx: DaemonContext,
+}
+
+#[async_trait]
+impl ControlProtocol for ControlProtocolImpl {
+    async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError> {
+        let route = self
+            .ctx
+            .relay_graph
+            .read()
+            .find_shortest_path(&self.ctx.identity.public().fingerprint(), &args.destination)
+            .ok_or(SendMessageError::NoRoute)?;
+        let instructs: Result<Vec<_>, SendMessageError> = route
+            .windows(2)
+            .map(|wind| {
+                let this = wind[0];
+                let next = wind[1];
+                let this_pubkey = self
+                    .ctx
+                    .relay_graph
+                    .read()
+                    .identity(&this)
+                    .ok_or(SendMessageError::NoOnionPublic(this))?
+                    .onion_pk;
+                Ok(ForwardInstruction {
+                    this_pubkey,
+                    next_fingerprint: next,
+                })
+            })
+            .collect();
+        let instructs = instructs?;
+        let wrapped_onion = RawPacket::new(
+            &instructs,
+            &self
+                .ctx
+                .relay_graph
+                .read()
+                .identity(&args.destination)
+                .ok_or(SendMessageError::NoOnionPublic(args.destination))?
+                .onion_pk,
+            &args.content,
+        )
+        .ok()
+        .ok_or(SendMessageError::TooFar)?;
+        log::warn!(
+            "built wrapped onion {:?} but dunno how to send it yet",
+            wrapped_onion
+        );
+        Ok(())
+    }
 }

@@ -12,12 +12,20 @@ pub struct ConfigFile {
     /// Path to the state cache.
     pub state_cache: PathBuf,
 
+    /// Where to listen for the local control protocol.
+    #[serde(default = "default_control_listen")]
+    pub control_listen: SocketAddr,
+
     /// List of all listeners for incoming connections
     #[serde(default)]
     pub in_routes: BTreeMap<String, InRouteConfig>,
     /// List of all outgoing connections
     #[serde(default)]
     pub out_routes: BTreeMap<String, OutRouteConfig>,
+}
+
+fn default_control_listen() -> SocketAddr {
+    "127.0.0.1:18964".parse().unwrap()
 }
 
 #[serde_as]

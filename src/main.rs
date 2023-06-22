@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use config::ConfigFile;
 
 mod config;
+pub mod control_protocol;
 mod daemon;
 
 /// Official implementation of an Earendil node
