@@ -168,7 +168,7 @@ impl Display for Fingerprint {
 }
 
 impl FromStr for Fingerprint {
-    type Err = Box<dyn std::error::Error>;
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(s)?;
@@ -177,7 +177,7 @@ impl FromStr for Fingerprint {
             arr.copy_from_slice(&bytes);
             Ok(Fingerprint(arr))
         } else {
-            Err("Invalid fingerprint length".into())
+            Err(anyhow::anyhow!("Invalid fingerprint length"))
         }
     }
 }

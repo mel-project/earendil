@@ -10,12 +10,13 @@ use async_trait::async_trait;
 use earendil_packet::{crypt::OnionSecret, ForwardInstruction, PeeledPacket, RawPacket};
 use earendil_topology::{IdentitySecret, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt};
+use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
 use rand::Rng;
 
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
-    control_protocol::{ControlProtocol, SendMessageArgs, SendMessageError},
+    control_protocol::{ControlProtocol, ControlService, SendMessageArgs, SendMessageError},
     daemon::{
         connection::Connection,
         inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
@@ -60,6 +61,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
         let table = Arc::new(NeighTable::new());
 
         let daemon_ctx = DaemonContext {
+            config: Arc::new(config),
             table: table.clone(),
             identity: identity.into(),
             onion_sk: OnionSecret::generate(),
@@ -78,9 +80,10 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
         });
         subtasks.push(smolscale::spawn(peel_forward_loop(daemon_ctx.clone())));
         subtasks.push(smolscale::spawn(gossip_loop(daemon_ctx.clone())));
+        subtasks.push(smolscale::spawn(control_protocol_loop(daemon_ctx.clone())));
 
         // For every in_routes block, spawn a task to handle incoming stuff
-        for (in_route_name, config) in config.in_routes.iter() {
+        for (in_route_name, config) in daemon_ctx.config.in_routes.iter() {
             let context = InRouteContext {
                 in_route_name: in_route_name.clone(),
                 daemon_ctx: daemon_ctx.clone(),
@@ -93,7 +96,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
         }
 
         // For every out_routes block, spawn a task to handle outgoing stuff
-        for (out_route_name, config) in config.out_routes.iter() {
+        for (out_route_name, config) in daemon_ctx.config.out_routes.iter() {
             match config {
                 OutRouteConfig::Obfsudp {
                     fingerprint,
@@ -120,6 +123,12 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 }
 
 /// Loop that handles the control protocol
+async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    let http = HttpRpcServer::bind(ctx.config.control_listen).await?;
+    let service = ControlService(ControlProtocolImpl { ctx });
+    http.run(service).await?;
+    Ok(())
+}
 
 /// Loop that takes incoming packets, peels them, and processes them
 async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
@@ -178,6 +187,7 @@ async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 #[derive(Clone)]
 pub struct DaemonContext {
+    config: Arc<ConfigFile>,
     table: Arc<NeighTable>,
     identity: Arc<IdentitySecret>,
     onion_sk: OnionSecret,

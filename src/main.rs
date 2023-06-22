@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use config::ConfigFile;
+use control_protocol::{ControlClient, SendMessageArgs};
+use earendil_packet::Fingerprint;
+use nanorpc_http::client::HttpRpcTransport;
 
 mod config;
 pub mod control_protocol;
@@ -23,6 +26,23 @@ enum Commands {
         #[arg(short, long)]
         config: PathBuf,
     },
+
+    /// Runs a control-protocol verb
+    Control {
+        #[command(subcommand)]
+        control_command: ControlCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ControlCommands {
+    /// Send a message to a destination.
+    SendMessage {
+        #[arg(short, long)]
+        destination: Fingerprint,
+        #[arg(short, long)]
+        message: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -33,5 +53,22 @@ fn main() -> anyhow::Result<()> {
                     .context("syntax error in config file")?;
             daemon::main_daemon(config)
         }
+        Commands::Control { control_command } => smolscale::block_on(async move {
+            let conn =
+                ControlClient::from(HttpRpcTransport::new("127.0.0.1:18964".parse().unwrap()));
+            match control_command {
+                ControlCommands::SendMessage {
+                    destination,
+                    message,
+                } => {
+                    conn.send_message(SendMessageArgs {
+                        destination,
+                        content: [0; 8192],
+                    })
+                    .await??;
+                }
+            }
+            Ok(())
+        }),
     }
 }

@@ -37,6 +37,7 @@ dashmap = "5.4.0"
 indexmap = "1.9.3"
 parking_lot = "0.12.1"
 rand = "0.8.5"
+nanorpc-http = "0.1.2"
 
 
 [profile.dev]

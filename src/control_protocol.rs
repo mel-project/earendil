@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bytes::Bytes;
+
 use earendil_packet::Fingerprint;
 use nanorpc::nanorpc_derive;
 use serde::{Deserialize, Serialize};
