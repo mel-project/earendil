@@ -1,4 +1,5 @@
 mod connection;
+mod gossip;
 mod inout_route;
 mod n2n;
 mod neightable;
@@ -12,13 +13,12 @@ use earendil_topology::{IdentitySecret, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
-use rand::Rng;
 
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
     control_protocol::{ControlProtocol, ControlService, SendMessageArgs, SendMessageError},
     daemon::{
-        connection::Connection,
+        gossip::gossip_loop,
         inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
         neightable::NeighTable,
     },
@@ -150,37 +150,6 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         };
         if let Err(err) = fallible.await {
             log::warn!("could not forward incoming packet: {:?}", err)
-        }
-    }
-}
-
-/// Loop that gossips things around
-async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    async fn gossip_once(_conn: &Connection) -> anyhow::Result<()> {
-        // Pick a random adjacency and gossip it
-        anyhow::bail!("dunno how to gossip yet lol");
-    }
-
-    let mut timer = smol::Timer::interval(Duration::from_secs(1));
-    loop {
-        (&mut timer).await;
-        let neighs = ctx.table.all_neighs();
-        if neighs.is_empty() {
-            log::debug!("skipping gossip due to no neighs");
-            continue;
-        }
-        // pick a random neighbor and do sync stuff
-        let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
-        log::debug!(
-            "gossiping with random neighbor {}",
-            rand_neigh.remote_idpk().fingerprint()
-        );
-        if let Err(err) = gossip_once(rand_neigh).await {
-            log::warn!(
-                "gossip with {} failed: {:?}",
-                rand_neigh.remote_idpk().fingerprint(),
-                err
-            );
         }
     }
 }

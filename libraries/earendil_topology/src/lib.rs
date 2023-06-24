@@ -1,8 +1,14 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use arrayref::array_ref;
 use bytes::Bytes;
-use earendil_packet::{crypt::OnionPublic, Fingerprint};
+use earendil_packet::{
+    crypt::{OnionPublic, OnionSecret},
+    Fingerprint,
+};
 use indexmap::IndexMap;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -19,6 +25,22 @@ pub struct RelayGraph {
     id_to_descriptor: HashMap<u64, IdentityDescriptor>,
     adjacency: HashMap<u64, HashSet<u64>>,
     documents: IndexMap<(u64, u64), AdjacencyDescriptor>,
+}
+
+// Update the AdjacencyError enum with more specific cases
+#[derive(thiserror::Error, Debug)]
+pub enum AdjacencyError {
+    #[error("Left fingerprint is not smaller than the right fingerprint")]
+    LeftNotSmallerThanRight,
+
+    #[error("Left identity not found in the graph")]
+    LeftIdentityNotFound,
+
+    #[error("Right identity not found in the graph")]
+    RightIdentityNotFound,
+
+    #[error("Invalid signature(s) in the adjacency descriptor")]
+    InvalidSignatures,
 }
 
 impl RelayGraph {
@@ -48,10 +70,11 @@ impl RelayGraph {
 
     /// Inserts an adjacency descriptor. Verifies the descriptor and returns false if it's not valid.
     /// Returns true if the descriptor was inserted successfully.
-    pub fn insert_adjacency(&mut self, adjacency: AdjacencyDescriptor) -> bool {
-        if !self.verify_adjacency(&adjacency) {
-            return false;
-        }
+    pub fn insert_adjacency(
+        &mut self,
+        adjacency: AdjacencyDescriptor,
+    ) -> Result<(), AdjacencyError> {
+        self.verify_adjacency(&adjacency)?;
 
         let left_fp = &adjacency.left;
         let right_fp = &adjacency.right;
@@ -69,7 +92,7 @@ impl RelayGraph {
             .or_insert_with(HashSet::new)
             .insert(left_id);
 
-        true
+        Ok(())
     }
 
     /// Returns the adjacencies next to the given Fingerprint.
@@ -160,27 +183,33 @@ impl RelayGraph {
         self.fp_to_id.get(fp).copied()
     }
 
-    fn verify_adjacency(&self, adj: &AdjacencyDescriptor) -> bool {
+    fn verify_adjacency(&self, adj: &AdjacencyDescriptor) -> Result<(), AdjacencyError> {
         if adj.left >= adj.right {
-            return false;
+            return Err(AdjacencyError::LeftNotSmallerThanRight);
         }
 
         let left_idpk = if let Some(left) = self.identity(&adj.left) {
             left.identity_pk
         } else {
-            return false;
+            return Err(AdjacencyError::LeftIdentityNotFound);
         };
 
         let right_idpk = if let Some(right) = self.identity(&adj.right) {
             right.identity_pk
         } else {
-            return false;
+            return Err(AdjacencyError::RightIdentityNotFound);
         };
 
         let to_sign = adj.to_sign();
 
-        left_idpk.verify(to_sign.as_bytes(), &adj.left_sig)
-            && right_idpk.verify(to_sign.as_bytes(), &adj.right_sig)
+        let left_valid = left_idpk.verify(to_sign.as_bytes(), &adj.left_sig);
+        let right_valid = right_idpk.verify(to_sign.as_bytes(), &adj.right_sig);
+
+        if !left_valid || !right_valid {
+            return Err(AdjacencyError::InvalidSignatures);
+        }
+
+        Ok(())
     }
 }
 
@@ -220,6 +249,23 @@ pub struct IdentityDescriptor {
 }
 
 impl IdentityDescriptor {
+    /// Creates an IdentityDescriptor from our own IdentitySecret
+    pub fn new(my_identity: &IdentitySecret, my_onion: &OnionSecret) -> Self {
+        let identity_pk = my_identity.public();
+        let onion_pk = my_onion.public();
+        let mut descr = IdentityDescriptor {
+            identity_pk,
+            onion_pk,
+            sig: Bytes::new(),
+            unix_timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+        descr.sig = my_identity.sign(descr.to_sign().as_bytes());
+        descr
+    }
+
     /// The value that the signatures are supposed to be computed against.
     pub fn to_sign(&self) -> blake3::Hash {
         let mut this = self.clone();

@@ -264,15 +264,18 @@ impl N2nProtocol for N2nProtocolImpl {
             return None;
         }
         // Fill in the right-hand-side
-        let to_sign = {
-            let mut li = left_incomplete.clone();
-            li.left_sig = Bytes::new();
-            li.right_sig = Bytes::new();
-            li.stdcode()
-        };
-        let signature = self.ctx.identity.sign(&to_sign);
+        let signature = self.ctx.identity.sign(left_incomplete.to_sign().as_bytes());
         left_incomplete.right_sig = signature;
 
+        self.ctx
+            .relay_graph
+            .write()
+            .insert_adjacency(left_incomplete.clone())
+            .map_err(|e| {
+                log::warn!("could not insert here: {:?}", e);
+                e
+            })
+            .ok()?;
         Some(left_incomplete)
     }
 

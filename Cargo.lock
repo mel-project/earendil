@@ -979,6 +979,7 @@ dependencies = [
  "serde",
  "slab",
  "stdcode",
+ "thiserror",
 ]
 
 [[package]]
