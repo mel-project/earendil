@@ -1,2 +1,6 @@
 /target
 perf*
+
+.vscode/
+.idea/
+.DS_Store
