@@ -16,6 +16,7 @@ ed25519-compact = "2.0.4"
 rand = "0.8.5"
 thiserror = "1.0.40"
 serde = {version = "1.0.163", features=["derive"]}
-base64 = "0.21.2"
+
 bincode="1"
 anyhow="1"
+bs58 = "0.5.0"

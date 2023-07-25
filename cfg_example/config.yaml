@@ -1,5 +1,5 @@
-identity: /tmp/identity.asc
-state_cache: /tmp/state_cache.db
+identity: ./cfg_example/identity.asc
+state_cache: ./cfg_example/state_cache.db
 in_routes:
   # arbitrary names, used for diagnositics and logging
   main_udp:

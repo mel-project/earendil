@@ -144,7 +144,12 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                         .context("could not find this next hop")?;
                     conn.send_raw_packet(inner).await?;
                 }
-                PeeledPacket::Receive(_) => anyhow::bail!("could not handle receiving yet"),
+                PeeledPacket::Receive(raw) => {
+                    anyhow::bail!(
+                        "no handling of receive yet; raw inner packet {}",
+                        hex::encode(raw)
+                    )
+                }
             }
             anyhow::Ok(())
         };
@@ -208,10 +213,8 @@ impl ControlProtocol for ControlProtocolImpl {
         )
         .ok()
         .ok_or(SendMessageError::TooFar)?;
-        log::warn!(
-            "built wrapped onion {:?} but dunno how to send it yet",
-            wrapped_onion
-        );
+        // we send the onion by treating it as a message addressed to ourselves
+        self.ctx.table.inject_asif_incoming(wrapped_onion).await;
         Ok(())
     }
 }

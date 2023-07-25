@@ -33,6 +33,11 @@ impl NeighTable {
         self.recv_incoming.recv().await.unwrap()
     }
 
+    /// Inject a packet *as if* it came from another node.
+    pub async fn inject_asif_incoming(&self, pkt: RawPacket) {
+        let _ = self.send_incoming.send(pkt).await;
+    }
+
     /// Insert a fingerprint-connection mapping with a TTL.
     pub fn insert(&self, fingerprint: Fingerprint, connection: Connection, ttl: Duration) {
         self.insert_inner(fingerprint, connection, Some(ttl))

@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Context;
 use async_trait::async_trait;
-use bytes::Bytes;
+
 use concurrent_queue::ConcurrentQueue;
 use earendil_packet::{Fingerprint, RawPacket};
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor, IdentityPublic};
@@ -20,7 +20,6 @@ use smol::{
 };
 use smolscale::reaper::TaskReaper;
 use sosistab2::{Multiplex, MuxSecret, MuxStream, Pipe};
-use stdcode::StdcodeSerializeExt;
 
 use super::{
     n2n::{AuthResponse, InfoResponse, N2nClient, N2nProtocol, N2nService},

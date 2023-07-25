@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
             match control_command {
                 ControlCommands::SendMessage {
                     destination,
-                    message,
+                    message: _,
                 } => {
                     conn.send_message(SendMessageArgs {
                         destination,
