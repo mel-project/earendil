@@ -174,6 +174,20 @@ struct ControlProtocolImpl {
 
 #[async_trait]
 impl ControlProtocol for ControlProtocolImpl {
+    async fn graph_dump(&self) -> String {
+        let mut out = String::new();
+        out.push_str("graph G {\n");
+        for adj in self.ctx.relay_graph.read().all_adjacencies() {
+            out.push_str(&format!(
+                "{:?} -- {:?}\n",
+                adj.left.to_string(),
+                adj.right.to_string()
+            ));
+        }
+        out.push_str("}\n");
+        out
+    }
+
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError> {
         let route = self
             .ctx

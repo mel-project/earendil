@@ -113,6 +113,11 @@ impl RelayGraph {
         }))
     }
 
+    /// Returns all the adjacencies.
+    pub fn all_adjacencies(&self) -> impl Iterator<Item = AdjacencyDescriptor> + '_ {
+        self.documents.values().cloned()
+    }
+
     /// Picks a random AdjacencyDescriptor from the graph.
     pub fn random_adjacency(&self) -> Option<AdjacencyDescriptor> {
         if self.documents.is_empty() {
