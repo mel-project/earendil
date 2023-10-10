@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use config::ConfigFile;
-use control_protocol::{main_control, ControlClient, SendMessageArgs};
+use control_protocol::{main_control};
 use earendil_packet::Fingerprint;
-use nanorpc_http::client::HttpRpcTransport;
+
 
 mod config;
 pub mod control_protocol;
