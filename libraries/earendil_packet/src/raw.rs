@@ -71,7 +71,7 @@ impl RawPacket {
         } else {
             let next_hop = RawPacket::new(&route[1..], destination, payload)?;
             let (header_outer, our_sk) =
-                box_encrypt(&route[0].next_fingerprint.0, &route[0].this_pubkey);
+                box_encrypt(route[0].next_fingerprint.as_bytes(), &route[0].this_pubkey);
             let shared_sec = our_sk.shared_secret(&route[0].this_pubkey);
             let onion_body = {
                 let body_key = blake3::keyed_hash(b"body____________________________", &shared_sec);
@@ -105,7 +105,7 @@ impl RawPacket {
         let (fingerprint, their_pk) = box_decrypt(&self.header.outer, our_sk)?;
         assert_eq!(fingerprint.len(), 20);
         let shared_sec = our_sk.shared_secret(&their_pk);
-        let fingerprint = Fingerprint(*array_ref![fingerprint, 0, 20]);
+        let fingerprint = Fingerprint::from_bytes(array_ref![fingerprint, 0, 20]);
         // Then, peel the header
         let peeled_header = {
             let header_key = blake3::keyed_hash(b"header__________________________", &shared_sec);
@@ -121,7 +121,7 @@ impl RawPacket {
             stream_dencrypt(body_key.as_bytes(), &[0; 12], &mut new);
             new
         };
-        Ok(if fingerprint.0 == [0; 20] {
+        Ok(if fingerprint.as_bytes() == &[0; 20] {
             PeeledPacket::Receive(peeled_body)
         } else {
             PeeledPacket::Forward(
@@ -136,7 +136,7 @@ impl RawPacket {
 }
 
 /// The raw, encrypted header of an Earendil packet.
-#[derive(Pod, Clone, Copy, Zeroable, Debug, Serialize, Deserialize)]
+#[derive(Pod, Clone, Copy, Zeroable, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[repr(C)]
 pub struct RawHeader {
     /// Box-encrypted, 20-byte fingerprint

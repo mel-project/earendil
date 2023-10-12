@@ -1,12 +1,14 @@
+
+
 use bincode::Options;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
-use crate::{Fingerprint, RawHeader};
+use crate::{Address, Fingerprint, RawHeader};
 
 pub struct Source;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum InnerPacket {
     Message(Message),
     ReplyBlocks(Vec<ReplyBlock>),
@@ -30,22 +32,16 @@ impl InnerPacket {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Ord, Eq, Clone)]
 pub struct Message {
     pub source: Address,
     pub body: Bytes,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct ReplyBlock {
     pub anon_source: u128,
     pub first_return_hop: Fingerprint,
     pub header: RawHeader,
     pub random_key: [u8; 32],
-}
-
-#[derive(Serialize, Deserialize)]
-pub enum Address {
-    Clear(Fingerprint),
-    Anon(u128),
 }

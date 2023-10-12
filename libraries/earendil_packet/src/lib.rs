@@ -1,51 +1,15 @@
-use std::{fmt::Display, str::FromStr};
 
-use serde::{Deserialize, Serialize};
+
+
 
 pub mod crypt;
 
+mod address;
 mod inner;
 mod raw;
+pub use address::*;
 pub use inner::*;
 pub use raw::*;
-
-/// An Earendil node fingerprint, uniquely identifying a relay or client.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
-pub struct Fingerprint([u8; 20]);
-
-impl Display for Fingerprint {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let b64 = bs58::encode(self.0).into_string();
-        write!(f, "{}", b64)
-    }
-}
-
-impl FromStr for Fingerprint {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = bs58::decode(s).into_vec()?;
-        if bytes.len() == 20 {
-            let mut arr = [0u8; 20];
-            arr.copy_from_slice(&bytes);
-            Ok(Fingerprint(arr))
-        } else {
-            Err(anyhow::anyhow!("Invalid fingerprint length"))
-        }
-    }
-}
-
-impl Fingerprint {
-    /// Convert from bytes representation
-    pub fn from_bytes(b: &[u8; 20]) -> Self {
-        Self(*b)
-    }
-
-    /// View as bytes representation
-    pub fn as_bytes(&self) -> &[u8; 20] {
-        &self.0
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -59,7 +23,7 @@ mod tests {
                 let our_sk = OnionSecret::generate();
                 let this_pubkey = our_sk.public();
 
-                let next_fingerprint = Fingerprint([10; 20]);
+                let next_fingerprint = Fingerprint::from_bytes(&[10; 20]);
                 (
                     ForwardInstruction {
                         this_pubkey,
