@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 
+use bytes::Bytes;
 use earendil_packet::Fingerprint;
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
@@ -14,11 +15,11 @@ pub async fn main_control(control_command: ControlCommands) -> anyhow::Result<()
     match control_command {
         ControlCommands::SendMessage {
             destination,
-            message: _,
+            message,
         } => {
             conn.send_message(SendMessageArgs {
                 destination,
-                content: [0; 8192],
+                content: Bytes::copy_from_slice(message.as_bytes()),
             })
             .await??;
         }
@@ -44,6 +45,8 @@ pub enum SendMessageError {
     NoRoute,
     #[error("destination way too far")]
     TooFar,
+    #[error("message is too big")]
+    MessageTooBig,
     #[error("no onion public key for fingerprint {0}")]
     NoOnionPublic(Fingerprint),
 }
@@ -54,5 +57,5 @@ pub struct SendMessageArgs {
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub destination: Fingerprint,
     #[serde_as(as = "serde_with::base64::Base64")]
-    pub content: [u8; 8192],
+    pub content: Bytes,
 }

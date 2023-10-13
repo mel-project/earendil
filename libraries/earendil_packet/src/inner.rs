@@ -1,5 +1,3 @@
-
-
 use bincode::Options;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -8,7 +6,8 @@ use crate::{Address, Fingerprint, RawHeader};
 
 pub struct Source;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+/// Represents the actual end-to-end packet that is carried in the 8192-byte payloads. Either an application-level message, or a batch of reply blocks.
 pub enum InnerPacket {
     Message(Message),
     ReplyBlocks(Vec<ReplyBlock>),
@@ -32,13 +31,13 @@ impl InnerPacket {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Ord, Eq, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Ord, Eq, Clone, Debug)]
 pub struct Message {
     pub source: Address,
     pub body: Bytes,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct ReplyBlock {
     pub anon_source: u128,
     pub first_return_hop: Fingerprint,

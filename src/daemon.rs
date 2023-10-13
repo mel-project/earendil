@@ -8,7 +8,9 @@ use std::{path::Path, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use async_trait::async_trait;
-use earendil_packet::{crypt::OnionSecret, ForwardInstruction, PeeledPacket, RawPacket};
+use earendil_packet::{
+    crypt::OnionSecret, Address, ForwardInstruction, InnerPacket, Message, PeeledPacket, RawPacket,
+};
 use earendil_topology::{IdentitySecret, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use nanorpc_http::server::HttpRpcServer;
@@ -145,9 +147,11 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     conn.send_raw_packet(inner).await?;
                 }
                 PeeledPacket::Receive(raw) => {
-                    anyhow::bail!(
-                        "no handling of receive yet; raw inner packet {}",
-                        hex::encode(raw)
+                    let inner = InnerPacket::from_raw(&raw)
+                        .context("failed to interpret raw inner packet")?;
+                    log::warn!(
+                        "incoming message received, but handling is not yet implemented: {:?}",
+                        inner
                     )
                 }
             }
@@ -223,7 +227,13 @@ impl ControlProtocol for ControlProtocolImpl {
                 .identity(&args.destination)
                 .ok_or(SendMessageError::NoOnionPublic(args.destination))?
                 .onion_pk,
-            &args.content,
+            &InnerPacket::Message(Message {
+                source: Address::Clear(self.ctx.identity.public().fingerprint()),
+                body: args.content,
+            })
+            .as_raw()
+            .ok()
+            .ok_or(SendMessageError::MessageTooBig)?,
         )
         .ok()
         .ok_or(SendMessageError::TooFar)?;
