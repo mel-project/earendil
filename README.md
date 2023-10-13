@@ -16,3 +16,9 @@ Currently, the project is extremely early-stage and not ready to use. Stay tuned
 ## Documentation
 
 Detailed info can be found in the **[Earendil documentation](https://docs.earendil.network)**.
+
+## Quick example
+
+In one terminal window, run `./start_example.sh`.
+
+In another, run `cargo run -- control send-message --destination 2jZTg8pSZfAYEU4uPeT44tj6AP9G --message helloworld`
