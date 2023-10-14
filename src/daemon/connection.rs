@@ -7,8 +7,9 @@ use anyhow::Context;
 use async_trait::async_trait;
 
 use concurrent_queue::ConcurrentQueue;
-use earendil_packet::{Fingerprint, RawPacket};
-use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor, IdentityPublic};
+use earendil_crypt::{Fingerprint, IdentityPublic};
+use earendil_packet::RawPacket;
+use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use futures_util::TryFutureExt;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use smol::{

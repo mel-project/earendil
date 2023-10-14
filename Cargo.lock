@@ -958,6 +958,7 @@ dependencies = [
  "clap",
  "concurrent-queue 2.3.0",
  "dashmap",
+ "earendil_crypt",
  "earendil_packet",
  "earendil_topology",
  "env_logger",
@@ -982,6 +983,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "earendil_crypt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrayref",
+ "blake3",
+ "bs58",
+ "bytes",
+ "ed25519-compact",
+ "rand 0.8.5",
+ "serde",
+ "stdcode",
+]
+
+[[package]]
 name = "earendil_packet"
 version = "0.1.0"
 dependencies = [
@@ -994,6 +1010,7 @@ dependencies = [
  "bytes",
  "chacha20",
  "chacha20poly1305",
+ "earendil_crypt",
  "ed25519-compact",
  "rand 0.8.5",
  "serde",
@@ -1011,6 +1028,7 @@ dependencies = [
  "blake3",
  "bytemuck",
  "bytes",
+ "earendil_crypt",
  "earendil_packet",
  "ed25519-compact",
  "indexmap 1.9.3",

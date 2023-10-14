@@ -98,13 +98,13 @@ pub enum AeadError {
     DecryptionFailed,
 }
 
-/// Encrypts a message, with integrity protection, so that only the owner of a particular X25519 secret key can read it.
+/// Encrypts a message, with integrity protection, so that only the owner of a particular X25519 secret key can read it. Does not identify the sender.
 ///
 /// **Always** generates a fresh ephemeral keypair, returning it alongside the ciphertext.
-pub fn box_encrypt(message: &[u8], recipient_public_key: &OnionPublic) -> (Vec<u8>, OnionSecret) {
+pub fn box_encrypt(message: &[u8], recipient_pk: &OnionPublic) -> (Vec<u8>, OnionSecret) {
     let sender_sk = OnionSecret::generate();
     let sender_pk = sender_sk.public();
-    let shared_secret = sender_sk.shared_secret(recipient_public_key);
+    let shared_secret = sender_sk.shared_secret(recipient_pk);
     let aead_key = AeadKey::from_bytes(blake3::hash(&shared_secret).as_bytes());
     let nonce = [0u8; 12];
     let encrypted_message = aead_key.seal(&nonce, message);
@@ -114,19 +114,19 @@ pub fn box_encrypt(message: &[u8], recipient_public_key: &OnionPublic) -> (Vec<u
     (result, sender_sk)
 }
 
-/// Decrypts a message encrypted with box_encrypt, given the recipient's secret key.
+/// Decrypts a message encrypted with anonbox_encrypt, given the recipient's secret key.
 ///
 /// Returns the ciphertext as well as the sending ephemeral PK.
 pub fn box_decrypt(
     encrypted_message: &[u8],
-    recipient_secret_key: &OnionSecret,
+    recipient_sk: &OnionSecret,
 ) -> Result<(Vec<u8>, OnionPublic), AeadError> {
     if encrypted_message.len() < 32 {
         return Err(AeadError::DecryptionFailed);
     }
 
     let sender_public_key = OnionPublic::from_bytes(array_ref![encrypted_message, 0, 32]);
-    let shared_secret = recipient_secret_key.shared_secret(&sender_public_key);
+    let shared_secret = recipient_sk.shared_secret(&sender_public_key);
     let aead_key = AeadKey::from_bytes(blake3::hash(&shared_secret).as_bytes());
     let nonce = [0u8; 12]; // all-zero nonce
     Ok((

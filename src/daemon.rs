@@ -8,10 +8,11 @@ use std::{path::Path, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use async_trait::async_trait;
+use earendil_crypt::IdentitySecret;
 use earendil_packet::{
     crypt::OnionSecret, Address, ForwardInstruction, InnerPacket, Message, PeeledPacket, RawPacket,
 };
-use earendil_topology::{IdentitySecret, RelayGraph};
+use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;

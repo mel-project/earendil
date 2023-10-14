@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 
-use earendil_packet::Fingerprint;
-use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor, IdentityPublic, IdentitySecret};
+use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
+use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use nanorpc::nanorpc_derive;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

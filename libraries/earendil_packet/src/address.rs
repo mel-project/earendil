@@ -1,5 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
+use earendil_crypt::Fingerprint;
 use serde::{Deserialize, Serialize};
 
 /// A unique identifier of an endpoint that can be the source or destination of packets.
@@ -57,43 +58,5 @@ impl FromStr for AnonAddress {
         } else {
             Err(anyhow::anyhow!("String does not start with 'anon-'"))
         }
-    }
-}
-
-/// An Earendil node fingerprint, uniquely identifying a relay or client.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
-pub struct Fingerprint([u8; 20]);
-
-impl Display for Fingerprint {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let b64 = bs58::encode(self.0).into_string();
-        write!(f, "{}", b64)
-    }
-}
-
-impl FromStr for Fingerprint {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = bs58::decode(s).into_vec()?;
-        if bytes.len() == 20 {
-            let mut arr = [0u8; 20];
-            arr.copy_from_slice(&bytes);
-            Ok(Fingerprint(arr))
-        } else {
-            Err(anyhow::anyhow!("Invalid fingerprint length"))
-        }
-    }
-}
-
-impl Fingerprint {
-    /// Convert from bytes representation
-    pub fn from_bytes(b: &[u8; 20]) -> Self {
-        Self(*b)
-    }
-
-    /// View as bytes representation
-    pub fn as_bytes(&self) -> &[u8; 20] {
-        &self.0
     }
 }

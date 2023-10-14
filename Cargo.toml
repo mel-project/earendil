@@ -12,6 +12,7 @@ edition = "2021"
 serde = { version = "1.0.188", features = ["derive"] }
 serde_with = { version = "3.3.0", features = ["hex", "base64"] }
 earendil_packet={path="libraries/earendil_packet"}
+earendil_crypt={path="libraries/earendil_crypt"}
 earendil_topology={path="libraries/earendil_topology"}
 serde_yaml = "0.9.25"
 clap = { version = "4.4.6", features = ["derive"] }

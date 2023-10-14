@@ -1,13 +1,13 @@
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
+use earendil_crypt::Fingerprint;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 use thiserror::Error;
 
-use crate::{
-    crypt::{box_decrypt, box_encrypt, stream_dencrypt, AeadError, OnionPublic, OnionSecret},
-    Fingerprint,
+use crate::crypt::{
+    box_decrypt, box_encrypt, stream_dencrypt, AeadError, OnionPublic, OnionSecret,
 };
 
 /// A raw, on-the-wire Earendil packet.

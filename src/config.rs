@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
 
-use earendil_packet::Fingerprint;
+use earendil_crypt::Fingerprint;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 

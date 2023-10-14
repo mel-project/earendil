@@ -1,7 +1,8 @@
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
-use earendil_packet::{Fingerprint, RawPacket};
+use earendil_crypt::Fingerprint;
+use earendil_packet::RawPacket;
 use smol::{
     channel::{Receiver, Sender},
     Task,

@@ -1,7 +1,3 @@
-
-
-
-
 pub mod crypt;
 
 mod address;
@@ -13,6 +9,8 @@ pub use raw::*;
 
 #[cfg(test)]
 mod tests {
+    use earendil_crypt::Fingerprint;
+
     use crate::crypt::OnionSecret;
 
     use super::*;

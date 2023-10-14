@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 
 use bytes::Bytes;
-use earendil_packet::Fingerprint;
+
+use earendil_crypt::Fingerprint;
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
 use serde::{Deserialize, Serialize};

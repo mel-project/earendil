@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, time::Duration};
 
-use earendil_packet::Fingerprint;
+use earendil_crypt::Fingerprint;
 use smol::future::FutureExt;
 use smolscale::reaper::TaskReaper;
 use sosistab2::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
