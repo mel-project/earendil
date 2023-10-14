@@ -37,7 +37,7 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 async fn gossip_once(ctx: &DaemonContext, conn: &Connection) -> anyhow::Result<()> {
     let remote_idpk = conn.remote_idpk();
     let remote_fingerprint = remote_idpk.fingerprint();
-    log::debug!(
+    log::trace!(
         "gossiping with random neighbor {}",
         remote_idpk.fingerprint()
     );
@@ -48,7 +48,7 @@ async fn gossip_once(ctx: &DaemonContext, conn: &Connection) -> anyhow::Result<(
         .identity(&remote_fingerprint)
         .is_none()
     {
-        log::debug!("getting identity of {remote_fingerprint}");
+        log::trace!("getting identity of {remote_fingerprint}");
         let their_id = conn
             .n2n_rpc()
             .identity(remote_fingerprint)
@@ -60,7 +60,7 @@ async fn gossip_once(ctx: &DaemonContext, conn: &Connection) -> anyhow::Result<(
     }
     // sign an adjacency if we are left of them
     if ctx.identity.public().fingerprint() < remote_idpk.fingerprint() {
-        log::debug!("signing adjacency with {remote_fingerprint}");
+        log::trace!("signing adjacency with {remote_fingerprint}");
         let mut left_incomplete = AdjacencyDescriptor {
             left: ctx.identity.public().fingerprint(),
             right: remote_fingerprint,

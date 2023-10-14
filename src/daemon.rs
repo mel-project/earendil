@@ -148,10 +148,10 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     conn.send_raw_packet(inner).await?;
                 }
                 PeeledPacket::Receive(raw) => {
-                    let inner = InnerPacket::open(&raw, &ctx.onion_sk)
+                    let (inner, source) = InnerPacket::open(&raw, &ctx.onion_sk)
                         .context("failed to interpret raw inner packet")?;
                     log::warn!(
-                        "incoming message received, but handling is not yet implemented: {:?}",
+                        "incoming message {:?} from {source}, but handling is not yet implemented",
                         inner
                     )
                 }
