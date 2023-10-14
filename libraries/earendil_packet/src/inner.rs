@@ -60,6 +60,7 @@ impl InnerPacket {
         if ctext
             .source_sign_pk
             .verify(box_epk.as_bytes(), &ctext.epk_sig)
+            .is_err()
         {
             return Err(OpenError::DecryptionFailed);
         }
@@ -113,4 +114,34 @@ impl InnerPacket {
 pub struct ReplyBlock {
     pub header: RawHeader,
     pub e2e_dest: OnionPublic,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_inner_packet_roundtrip() {
+        // Step 1: Generate OnionSecret and IdentitySecret
+        let onion_secret = OnionSecret::generate();
+        let identity_secret = IdentitySecret::generate();
+
+        // Step 2: Create an InnerPacket
+        let inner_packet = InnerPacket::Message(Bytes::from("Hello, World!"));
+
+        // Step 3: Encrypt the InnerPacket
+        let encrypted_packet = inner_packet
+            .seal(&identity_secret, &onion_secret.public())
+            .expect("Can't encrypt packet");
+
+        // Step 4: Decrypt the InnerPacket
+        let (decrypted_packet, _) =
+            InnerPacket::open(&encrypted_packet, &onion_secret).expect("Can't decrypt packet");
+
+        // Step 5: Assert that the original and decrypted InnerPackets are equal
+        assert_eq!(
+            inner_packet, decrypted_packet,
+            "Decrypted packet does not match the original one"
+        );
+    }
 }

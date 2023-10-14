@@ -57,9 +57,8 @@ impl Connection {
             .authenticate()
             .await
             .context("did not respond to authenticate")?;
-        if !resp.verify(&mplex.peer_pk().context("could not obtain peer_pk")?) {
-            anyhow::bail!("did not authenticate correctly")
-        }
+        resp.verify(&mplex.peer_pk().context("could not obtain peer_pk")?)
+            .context("did not authenticated correctly")?;
 
         Ok(Self {
             mplex,

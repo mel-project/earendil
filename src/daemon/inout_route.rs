@@ -60,8 +60,8 @@ pub async fn out_route_obfsudp(
     connect: SocketAddr,
     cookie: [u8; 32],
 ) -> anyhow::Result<()> {
-    let mut timer1 = smol::Timer::interval(Duration::from_secs(60));
-    let mut timer2 = smol::Timer::interval(Duration::from_secs(60));
+    let mut timer1 = smol::Timer::interval(Duration::from_secs(5));
+    let mut timer2 = smol::Timer::interval(Duration::from_secs(5));
     loop {
         let fallible = async {
             log::debug!("obfsudp out_route {} trying...", context.out_route_name);

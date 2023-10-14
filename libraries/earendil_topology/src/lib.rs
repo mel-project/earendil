@@ -54,9 +54,10 @@ impl RelayGraph {
 
     /// Inserts an identity descriptor. Verifies its self-consistency, and returns false if it's not valid.
     pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> bool {
-        if !identity
+        if identity
             .identity_pk
             .verify(identity.to_sign().as_bytes(), &identity.sig)
+            .is_err()
         {
             return false;
         }
@@ -204,8 +205,10 @@ impl RelayGraph {
 
         let to_sign = adj.to_sign();
 
-        let left_valid = left_idpk.verify(to_sign.as_bytes(), &adj.left_sig);
-        let right_valid = right_idpk.verify(to_sign.as_bytes(), &adj.right_sig);
+        let left_valid = left_idpk.verify(to_sign.as_bytes(), &adj.left_sig).is_ok();
+        let right_valid = right_idpk
+            .verify(to_sign.as_bytes(), &adj.right_sig)
+            .is_ok();
 
         if !left_valid || !right_valid {
             return Err(AdjacencyError::InvalidSignatures);

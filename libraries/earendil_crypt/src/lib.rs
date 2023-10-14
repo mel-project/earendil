@@ -4,6 +4,7 @@ use arrayref::array_ref;
 use bytes::Bytes;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// The public half of an "identity" on the network.
 ///
@@ -25,15 +26,26 @@ impl AsRef<[u8]> for IdentityPublic {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum VerifyError {
+    #[error("The signature is corrupt")]
+    SignatureCorrupt,
+
+    #[error("The signature mismatches")]
+    SignatureMismatch,
+}
+
 impl IdentityPublic {
     /// Verifies a message supposedly signed by this key.
-    pub fn verify(&self, msg: &[u8], sig: &[u8]) -> bool {
-        if let Ok(pk) = ed25519_compact::PublicKey::from_slice(&self.0) {
-            if let Ok(sig) = ed25519_compact::Signature::from_slice(sig) {
-                return pk.verify(msg, &sig).is_ok();
-            }
-        }
-        false
+    pub fn verify(&self, msg: &[u8], sig: &[u8]) -> Result<(), VerifyError> {
+        let pk = ed25519_compact::PublicKey::from_slice(&self.0)
+            .map_err(|_| VerifyError::SignatureCorrupt)?;
+
+        let sig = ed25519_compact::Signature::from_slice(sig)
+            .map_err(|_| VerifyError::SignatureCorrupt)?;
+
+        pk.verify(msg, &sig)
+            .map_err(|_| VerifyError::SignatureMismatch)
     }
 
     /// The hash-based fingerprint of this identity.

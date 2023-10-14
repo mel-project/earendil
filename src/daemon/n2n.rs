@@ -61,7 +61,7 @@ impl AuthResponse {
     }
 
     /// Verifies against the supposed other-side sosistab2 public key.
-    pub fn verify(&self, peer_pk: &MuxPublic) -> bool {
+    pub fn verify(&self, peer_pk: &MuxPublic) -> Result<(), earendil_crypt::VerifyError> {
         let to_sign = blake3::keyed_hash(MAGIC_VALUE, peer_pk.as_bytes());
         self.full_pk.verify(to_sign.as_bytes(), &self.binding_sig)
     }
