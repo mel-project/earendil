@@ -10,7 +10,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use earendil_crypt::IdentitySecret;
 use earendil_packet::{
-    crypt::OnionSecret, Address, ForwardInstruction, InnerPacket, Message, PeeledPacket, RawPacket,
+    crypt::OnionSecret, ForwardInstruction, InnerPacket, PeeledPacket, RawPacket,
 };
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt};
@@ -148,7 +148,7 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     conn.send_raw_packet(inner).await?;
                 }
                 PeeledPacket::Receive(raw) => {
-                    let inner = InnerPacket::from_raw(&raw)
+                    let inner = InnerPacket::open(&raw, &ctx.onion_sk)
                         .context("failed to interpret raw inner packet")?;
                     log::warn!(
                         "incoming message received, but handling is not yet implemented: {:?}",
@@ -219,22 +219,20 @@ impl ControlProtocol for ControlProtocolImpl {
             })
             .collect();
         let instructs = instructs?;
+        let their_opk = self
+            .ctx
+            .relay_graph
+            .read()
+            .identity(&args.destination)
+            .ok_or(SendMessageError::NoOnionPublic(args.destination))?
+            .onion_pk;
         let wrapped_onion = RawPacket::new(
             &instructs,
-            &self
-                .ctx
-                .relay_graph
-                .read()
-                .identity(&args.destination)
-                .ok_or(SendMessageError::NoOnionPublic(args.destination))?
-                .onion_pk,
-            &InnerPacket::Message(Message {
-                source: Address::Clear(self.ctx.identity.public().fingerprint()),
-                body: args.content,
-            })
-            .as_raw()
-            .ok()
-            .ok_or(SendMessageError::MessageTooBig)?,
+            &their_opk,
+            &InnerPacket::Message(args.content)
+                .seal(&self.ctx.identity, &their_opk)
+                .ok()
+                .ok_or(SendMessageError::MessageTooBig)?,
         )
         .ok()
         .ok_or(SendMessageError::TooFar)?;
