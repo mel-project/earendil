@@ -7,6 +7,7 @@ use std::{
 use anyhow::Context;
 use async_trait::async_trait;
 
+use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentityPublic};
 use earendil_packet::RawPacket;
@@ -19,7 +20,10 @@ use smol::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     stream::StreamExt,
 };
-use smolscale::{immortal::Immortal, reaper::TaskReaper};
+use smolscale::{
+    immortal::{Immortal, RespawnStrategy},
+    reaper::TaskReaper,
+};
 use sosistab2::{Multiplex, MuxSecret, MuxStream, Pipe};
 
 use super::{
@@ -96,11 +100,12 @@ async fn connection_loop(
     send_incoming: Sender<RawPacket>,
     recv_outgoing: Receiver<RawPacket>,
 ) -> anyhow::Result<Infallible> {
-    let _onion_keepalive = smolscale::spawn(onion_keepalive(
-        mplex.clone(),
-        send_incoming.clone(),
-        recv_outgoing.clone(),
-    ));
+    let _onion_keepalive = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([mplex, send_incoming, recv_outgoing], move || {
+            onion_keepalive(mplex.clone(), send_incoming.clone(), recv_outgoing.clone())
+        }),
+    );
 
     let service = Arc::new(N2nService(N2nProtocolImpl {
         ctx: ctx.clone(),
@@ -141,20 +146,10 @@ async fn onion_keepalive(
     mplex: Arc<Multiplex>,
     send_incoming: Sender<RawPacket>,
     recv_outgoing: Receiver<RawPacket>,
-) {
+) -> anyhow::Result<()> {
     loop {
-        let res = async {
-            let stream = mplex.open_conn("onion_packets").await?;
-            handle_onion_packets(stream, send_incoming.clone(), recv_outgoing.clone()).await
-        }
-        .await;
-
-        if let Err(e) = res {
-            // closed channels are unremarkable
-            if !e.to_string().contains("closed channel") {
-                log::error!("onion_keepalive failed with error: {:?}", e);
-            }
-        }
+        let stream = mplex.open_conn("onion_packets").await?;
+        handle_onion_packets(stream, send_incoming.clone(), recv_outgoing.clone()).await?;
     }
 }
 
