@@ -30,7 +30,7 @@ use crate::{
     },
 };
 
-fn restart_warning<E>(label: &str) -> impl FnOnce(E) + '_
+fn label_error<E>(label: &str) -> impl FnOnce(E) + '_
 where
     E: std::fmt::Debug,
 {
@@ -95,19 +95,19 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
         let _peel_forward = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([daemon_ctx], move || peel_forward_loop(daemon_ctx.clone())
-                .map_err(restart_warning("peel_forward"))),
+                .map_err(label_error("peel_forward"))),
         );
         let _gossip = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([daemon_ctx], move || gossip_loop(daemon_ctx.clone())
-                .map_err(restart_warning("gossip"))),
+                .map_err(label_error("gossip"))),
         );
         let _control_protocol = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([daemon_ctx], move || control_protocol_loop(
                 daemon_ctx.clone()
             )
-            .map_err(restart_warning("control_protocol"))),
+            .map_err(label_error("control_protocol"))),
         );
 
         // For every in_routes block, spawn a task to handle incoming stuff
@@ -169,7 +169,7 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     .table
                     .lookup(&next_hop)
                     .context("could not find this next hop")?;
-                conn.send_raw_packet(inner).await?;
+                conn.send_raw_packet(inner).await;
             }
             PeeledPacket::Receive(raw) => {
                 let (inner, source) = InnerPacket::open(&raw, &ctx.onion_sk)

@@ -3,17 +3,15 @@ use std::time::{Duration, Instant};
 use dashmap::DashMap;
 use earendil_crypt::Fingerprint;
 use earendil_packet::RawPacket;
-use smol::{
-    channel::{Receiver, Sender},
-    Task,
-};
+use smol::channel::{Receiver, Sender};
+use smolscale::immortal::Immortal;
 
 use super::connection::Connection;
 
 /// A table of the neighbors of the current node
 #[allow(clippy::type_complexity)]
 pub struct NeighTable {
-    table: DashMap<Fingerprint, (Connection, Option<Instant>, Task<anyhow::Result<()>>)>,
+    table: DashMap<Fingerprint, (Connection, Option<Instant>, Immortal)>,
     send_incoming: Sender<RawPacket>,
     recv_incoming: Receiver<RawPacket>,
 }
@@ -62,10 +60,10 @@ impl NeighTable {
             (
                 connection.clone(),
                 expiry,
-                smolscale::spawn(async move {
+                Immortal::spawn(async move {
                     loop {
-                        let pkt = connection.recv_raw_packet().await?;
-                        send_incoming.send(pkt).await?;
+                        let pkt = connection.recv_raw_packet().await;
+                        let _ = send_incoming.send(pkt).await;
                     }
                 }),
             ),
