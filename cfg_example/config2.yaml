@@ -1,10 +1,10 @@
-identity: ./cfg_example/identity2.asc
-state_cache: ./cfg_example/state_cache2.db
+identity: /home/thisbefruit/earendil/cfg_example/identity2.asc
+state_cache:  /home/thisbefruit/earendil/cfg_example/state_cache2.db
 control_listen: 127.0.0.1:11111
 
 out_routes:
   neighbor:
     fingerprint: 489HfqWo5Uivgm4xdFy7s2eDMhwW
     protocol: obfsudp
-    connect: 127.0.0.1:19999
+    connect: 123.0.0.1:19999
     cookie: bb27ead798b27ec3384ac2cf2f374a17c02bfce420b19e8b2c5a8f898fd6384d

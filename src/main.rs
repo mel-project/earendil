@@ -50,10 +50,13 @@ pub enum ControlCommands {
 fn main() -> anyhow::Result<()> {
     match Args::parse().command {
         Commands::Daemon { config } => {
-            let config: ConfigFile =
-                serde_yaml::from_slice(&std::fs::read(config).context("cannot read config file")?)
+            let config_parsed: ConfigFile =
+                serde_yaml::from_slice(&std::fs::read(&config).context("cannot read config file")?)
                     .context("syntax error in config file")?;
-            daemon::main_daemon(config)
+            if let Some(parent) = config.parent() {
+                std::env::set_current_dir(parent)?;
+            }
+            daemon::main_daemon(config_parsed)
         }
         Commands::Control { control_command } => smolscale::block_on(main_control(control_command)),
     }
