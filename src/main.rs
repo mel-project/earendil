@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{net::SocketAddr, path::PathBuf};
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
@@ -28,6 +28,8 @@ enum Commands {
 
     /// Runs a control-protocol verb
     Control {
+        #[arg(short, long, default_value = "127.0.0.1:18964")]
+        connect: SocketAddr,
         #[command(subcommand)]
         control_command: ControlCommands,
     },
@@ -45,17 +47,23 @@ pub enum ControlCommands {
 
     /// Dumps the graph.
     GraphDump,
+
+    /// Blocks until a message is received.
+    RecvMessage,
 }
 
 fn main() -> anyhow::Result<()> {
     match Args::parse().command {
         Commands::Daemon { config } => {
             let config_parsed: ConfigFile =
-                serde_yaml::from_slice(&std::fs::read(&config).context("cannot read config file")?)
+                serde_yaml::from_slice(&std::fs::read(config).context("cannot read config file")?)
                     .context("syntax error in config file")?;
 
             daemon::main_daemon(config_parsed)
         }
-        Commands::Control { control_command } => smolscale::block_on(main_control(control_command)),
+        Commands::Control {
+            control_command,
+            connect,
+        } => smolscale::block_on(main_control(control_command, connect)),
     }
 }

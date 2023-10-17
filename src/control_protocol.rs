@@ -1,3 +1,5 @@
+use std::{net::SocketAddr, time::Duration};
+
 use async_trait::async_trait;
 
 use bytes::Bytes;
@@ -7,12 +9,16 @@ use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+
 use thiserror::Error;
 
 use crate::ControlCommands;
 
-pub async fn main_control(control_command: ControlCommands) -> anyhow::Result<()> {
-    let conn = ControlClient::from(HttpRpcTransport::new("127.0.0.1:18964".parse().unwrap()));
+pub async fn main_control(
+    control_command: ControlCommands,
+    connect: SocketAddr,
+) -> anyhow::Result<()> {
+    let conn = ControlClient::from(HttpRpcTransport::new(connect));
     match control_command {
         ControlCommands::SendMessage {
             destination,
@@ -28,6 +34,13 @@ pub async fn main_control(control_command: ControlCommands) -> anyhow::Result<()
             let res = conn.graph_dump().await?;
             println!("{res}");
         }
+        ControlCommands::RecvMessage => loop {
+            if let Some((msg, src)) = conn.recv_message().await? {
+                println!("{:?} from {src}", msg);
+                break;
+            }
+            smol::Timer::after(Duration::from_millis(100)).await;
+        },
     }
     Ok(())
 }
@@ -38,6 +51,8 @@ pub trait ControlProtocol {
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError>;
 
     async fn graph_dump(&self) -> String;
+
+    async fn recv_message(&self) -> Option<(Bytes, Fingerprint)>;
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]

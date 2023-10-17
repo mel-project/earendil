@@ -8,9 +8,11 @@ use std::{path::Path, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use async_trait::async_trait;
+use bytes::Bytes;
 use clone_macro::clone;
 
-use earendil_crypt::IdentitySecret;
+use concurrent_queue::ConcurrentQueue;
+use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, ForwardInstruction, InnerPacket, PeeledPacket, RawPacket,
 };
@@ -30,7 +32,7 @@ use crate::{
     },
 };
 
-fn label_error<E>(label: &str) -> impl FnOnce(E) + '_
+fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
 where
     E: std::fmt::Debug,
 {
@@ -79,35 +81,34 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             identity: identity.into(),
             onion_sk: OnionSecret::generate(),
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
+
+            incoming: Arc::new(ConcurrentQueue::unbounded()),
         };
 
         // Run the loops
-        subtasks.push({
-            let table = table.clone();
-            smolscale::spawn(async move {
-                loop {
-                    smol::Timer::after(Duration::from_secs(60)).await;
-                    table.garbage_collect();
-                }
-            })
-        });
+        let _table_gc = Immortal::spawn(clone!([table], async move {
+            loop {
+                smol::Timer::after(Duration::from_secs(60)).await;
+                table.garbage_collect();
+            }
+        }));
 
         let _peel_forward = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([daemon_ctx], move || peel_forward_loop(daemon_ctx.clone())
-                .map_err(label_error("peel_forward"))),
+                .map_err(log_error("peel_forward"))),
         );
         let _gossip = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([daemon_ctx], move || gossip_loop(daemon_ctx.clone())
-                .map_err(label_error("gossip"))),
+                .map_err(log_error("gossip"))),
         );
         let _control_protocol = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([daemon_ctx], move || control_protocol_loop(
                 daemon_ctx.clone()
             )
-            .map_err(label_error("control_protocol"))),
+            .map_err(log_error("control_protocol"))),
         );
 
         // For every in_routes block, spawn a task to handle incoming stuff
@@ -162,7 +163,9 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         let pkt = ctx.table.recv_raw_packet().await;
+        log::debug!("received raw packet");
         let peeled = pkt.peel(&ctx.onion_sk)?;
+        log::debug!("peeled packet!");
         match peeled {
             PeeledPacket::Forward(next_hop, inner) => {
                 let conn = ctx
@@ -174,10 +177,15 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             PeeledPacket::Receive(raw) => {
                 let (inner, source) = InnerPacket::open(&raw, &ctx.onion_sk)
                     .context("failed to interpret raw inner packet")?;
-                anyhow::bail!(
-                    "incoming message {:?} from {source}, but handling is not yet implemented",
-                    inner
-                )
+                match inner {
+                    InnerPacket::Message(msg) => {
+                        ctx.incoming.push((msg, source))?;
+                    }
+                    InnerPacket::ReplyBlocks(rb) => anyhow::bail!(
+                        "we don't know how to handle reply blocks yet, but got {:?}",
+                        rb
+                    ),
+                }
             }
         }
     }
@@ -190,6 +198,8 @@ pub struct DaemonContext {
     identity: Arc<IdentitySecret>,
     onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
+
+    incoming: Arc<ConcurrentQueue<(Bytes, Fingerprint)>>,
 }
 
 struct ControlProtocolImpl {
@@ -258,5 +268,9 @@ impl ControlProtocol for ControlProtocolImpl {
         // we send the onion by treating it as a message addressed to ourselves
         self.ctx.table.inject_asif_incoming(wrapped_onion).await;
         Ok(())
+    }
+
+    async fn recv_message(&self) -> Option<(Bytes, Fingerprint)> {
+        self.ctx.incoming.pop().ok()
     }
 }
