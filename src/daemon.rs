@@ -8,14 +8,17 @@ use std::{path::Path, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use async_trait::async_trait;
+use clone_macro::clone;
+
 use earendil_crypt::IdentitySecret;
 use earendil_packet::{
     crypt::OnionSecret, ForwardInstruction, InnerPacket, PeeledPacket, RawPacket,
 };
 use earendil_topology::RelayGraph;
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
+use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
@@ -26,6 +29,13 @@ use crate::{
         neightable::NeighTable,
     },
 };
+
+fn label_error<E>(label: &str) -> impl FnOnce(E) + '_
+where
+    E: std::fmt::Debug,
+{
+    move |s| log::warn!("{label} restart, error: {:?}", s)
+}
 
 pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
     fn read_identity(path: &Path) -> anyhow::Result<IdentitySecret> {
@@ -81,9 +91,24 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
                 }
             })
         });
-        subtasks.push(smolscale::spawn(peel_forward_loop(daemon_ctx.clone())));
-        subtasks.push(smolscale::spawn(gossip_loop(daemon_ctx.clone())));
-        subtasks.push(smolscale::spawn(control_protocol_loop(daemon_ctx.clone())));
+
+        let _peel_forward = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([daemon_ctx], move || peel_forward_loop(daemon_ctx.clone())
+                .map_err(label_error("peel_forward"))),
+        );
+        let _gossip = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([daemon_ctx], move || gossip_loop(daemon_ctx.clone())
+                .map_err(label_error("gossip"))),
+        );
+        let _control_protocol = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([daemon_ctx], move || control_protocol_loop(
+                daemon_ctx.clone()
+            )
+            .map_err(label_error("control_protocol"))),
+        );
 
         // For every in_routes block, spawn a task to handle incoming stuff
         for (in_route_name, config) in daemon_ctx.config.in_routes.iter() {
@@ -137,29 +162,23 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         let pkt = ctx.table.recv_raw_packet().await;
-        let fallible = async {
-            let peeled = pkt.peel(&ctx.onion_sk)?;
-            match peeled {
-                PeeledPacket::Forward(next_hop, inner) => {
-                    let conn = ctx
-                        .table
-                        .lookup(&next_hop)
-                        .context("could not find this next hop")?;
-                    conn.send_raw_packet(inner).await?;
-                }
-                PeeledPacket::Receive(raw) => {
-                    let (inner, source) = InnerPacket::open(&raw, &ctx.onion_sk)
-                        .context("failed to interpret raw inner packet")?;
-                    log::warn!(
-                        "incoming message {:?} from {source}, but handling is not yet implemented",
-                        inner
-                    )
-                }
+        let peeled = pkt.peel(&ctx.onion_sk)?;
+        match peeled {
+            PeeledPacket::Forward(next_hop, inner) => {
+                let conn = ctx
+                    .table
+                    .lookup(&next_hop)
+                    .context("could not find this next hop")?;
+                conn.send_raw_packet(inner).await;
             }
-            anyhow::Ok(())
-        };
-        if let Err(err) = fallible.await {
-            log::warn!("could not forward incoming packet: {:?}", err)
+            PeeledPacket::Receive(raw) => {
+                let (inner, source) = InnerPacket::open(&raw, &ctx.onion_sk)
+                    .context("failed to interpret raw inner packet")?;
+                anyhow::bail!(
+                    "incoming message {:?} from {source}, but handling is not yet implemented",
+                    inner
+                )
+            }
         }
     }
 }

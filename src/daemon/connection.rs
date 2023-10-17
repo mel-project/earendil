@@ -1,4 +1,5 @@
 use std::{
+    convert::Infallible,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -6,6 +7,7 @@ use std::{
 use anyhow::Context;
 use async_trait::async_trait;
 
+use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentityPublic};
 use earendil_packet::RawPacket;
@@ -17,9 +19,11 @@ use smol::{
     future::FutureExt,
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     stream::StreamExt,
-    Task,
 };
-use smolscale::reaper::TaskReaper;
+use smolscale::{
+    immortal::{Immortal, RespawnStrategy},
+    reaper::TaskReaper,
+};
 use sosistab2::{Multiplex, MuxSecret, MuxStream, Pipe};
 
 use super::{
@@ -34,7 +38,7 @@ pub struct Connection {
     send_outgoing: Sender<RawPacket>,
     recv_incoming: Receiver<RawPacket>,
     remote_idpk: IdentityPublic,
-    _task: Arc<Task<()>>,
+    _task: Arc<Immortal>,
 }
 
 impl Connection {
@@ -46,10 +50,9 @@ impl Connection {
         mplex.add_pipe(pipe);
         let (send_outgoing, recv_outgoing) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
-        let _task = Arc::new(smolscale::spawn(
-            connection_loop(ctx, mplex.clone(), send_incoming, recv_outgoing).unwrap_or_else(|e| {
-                log::error!("connection_loop died with {:?}", e);
-            }),
+        let _task = Arc::new(Immortal::spawn(
+            connection_loop(ctx, mplex.clone(), send_incoming, recv_outgoing)
+                .unwrap_or_else(|e| panic!("connection_loop died with {:?}", e)),
         ));
         let rpc = MultiplexRpcTransport::new(mplex.clone());
         let n2n = N2nClient::from(rpc);
@@ -80,14 +83,13 @@ impl Connection {
     }
 
     /// Sends an onion-routing packet down this connection.
-    pub async fn send_raw_packet(&self, pkt: RawPacket) -> anyhow::Result<()> {
-        self.send_outgoing.send(pkt).await?;
-        Ok(())
+    pub async fn send_raw_packet(&self, pkt: RawPacket) {
+        self.send_outgoing.send(pkt).await.unwrap();
     }
 
     /// Sends an onion-routing packet down this connection.
-    pub async fn recv_raw_packet(&self) -> anyhow::Result<RawPacket> {
-        Ok(self.recv_incoming.recv().await?)
+    pub async fn recv_raw_packet(&self) -> RawPacket {
+        self.recv_incoming.recv().await.unwrap()
     }
 }
 
@@ -97,12 +99,13 @@ async fn connection_loop(
     mplex: Arc<Multiplex>,
     send_incoming: Sender<RawPacket>,
     recv_outgoing: Receiver<RawPacket>,
-) -> anyhow::Result<()> {
-    let _onion_keepalive = smolscale::spawn(onion_keepalive(
-        mplex.clone(),
-        send_incoming.clone(),
-        recv_outgoing.clone(),
-    ));
+) -> anyhow::Result<Infallible> {
+    let _onion_keepalive = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([mplex, send_incoming, recv_outgoing], move || {
+            onion_keepalive(mplex.clone(), send_incoming.clone(), recv_outgoing.clone())
+        }),
+    );
 
     let service = Arc::new(N2nService(N2nProtocolImpl {
         ctx: ctx.clone(),
@@ -143,20 +146,10 @@ async fn onion_keepalive(
     mplex: Arc<Multiplex>,
     send_incoming: Sender<RawPacket>,
     recv_outgoing: Receiver<RawPacket>,
-) {
+) -> anyhow::Result<()> {
     loop {
-        let res = async {
-            let stream = mplex.open_conn("onion_packets").await?;
-            handle_onion_packets(stream, send_incoming.clone(), recv_outgoing.clone()).await
-        }
-        .await;
-
-        if let Err(e) = res {
-            // closed channels are unremarkable
-            if !e.to_string().contains("closed channel") {
-                log::error!("onion_keepalive failed with error: {:?}", e);
-            }
-        }
+        let stream = mplex.open_conn("onion_packets").await?;
+        handle_onion_packets(stream, send_incoming.clone(), recv_outgoing.clone()).await?;
     }
 }
 
