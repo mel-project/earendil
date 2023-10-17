@@ -5,6 +5,7 @@ trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 export SOSISTAB2_NO_SLEEP=1
 
 cargo install --locked --debug --path .
-
-earendil daemon --config cfg_example/config.yaml &
-earendil daemon --config cfg_example/config2.yaml
+cd cfg_example
+earendil daemon --config config.yaml &
+sleep 1
+earendil daemon --config config2.yaml
