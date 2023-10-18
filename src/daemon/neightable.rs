@@ -6,12 +6,12 @@ use earendil_packet::RawPacket;
 use smol::channel::{Receiver, Sender};
 use smolscale::immortal::Immortal;
 
-use super::connection::Connection;
+use super::n2n_connection::N2nConnection;
 
 /// A table of the neighbors of the current node
 #[allow(clippy::type_complexity)]
 pub struct NeighTable {
-    table: DashMap<Fingerprint, (Connection, Option<Instant>, Immortal)>,
+    table: DashMap<Fingerprint, (N2nConnection, Option<Instant>, Immortal)>,
     send_incoming: Sender<RawPacket>,
     recv_incoming: Receiver<RawPacket>,
 }
@@ -38,19 +38,19 @@ impl NeighTable {
     }
 
     /// Insert a fingerprint-connection mapping with a TTL.
-    pub fn insert(&self, fingerprint: Fingerprint, connection: Connection, ttl: Duration) {
+    pub fn insert(&self, fingerprint: Fingerprint, connection: N2nConnection, ttl: Duration) {
         self.insert_inner(fingerprint, connection, Some(ttl))
     }
 
     /// Insert a fingerprint-connection mapping with no expiry time.
-    pub fn insert_pinned(&self, fingerprint: Fingerprint, connection: Connection) {
+    pub fn insert_pinned(&self, fingerprint: Fingerprint, connection: N2nConnection) {
         self.insert_inner(fingerprint, connection, None)
     }
 
     fn insert_inner(
         &self,
         fingerprint: Fingerprint,
-        connection: Connection,
+        connection: N2nConnection,
         ttl: Option<Duration>,
     ) {
         let expiry = ttl.map(|ttl| Instant::now() + ttl);
@@ -71,14 +71,14 @@ impl NeighTable {
     }
 
     /// Lookup a connection by its fingerprint.
-    pub fn lookup(&self, fingerprint: &Fingerprint) -> Option<Connection> {
+    pub fn lookup(&self, fingerprint: &Fingerprint) -> Option<N2nConnection> {
         self.table
             .get(fingerprint)
             .map(|entry| entry.value().0.clone())
     }
 
     /// Returns all the connections.
-    pub fn all_neighs(&self) -> Vec<Connection> {
+    pub fn all_neighs(&self) -> Vec<N2nConnection> {
         self.table.iter().map(|s| s.0.clone()).collect()
     }
 

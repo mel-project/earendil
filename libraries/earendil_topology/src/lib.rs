@@ -4,7 +4,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
+use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret, VerifyError};
 use earendil_packet::crypt::{OnionPublic, OnionSecret};
 use indexmap::IndexMap;
 use rand::Rng;
@@ -52,18 +52,14 @@ impl RelayGraph {
         self.id_to_descriptor.get(&id).cloned()
     }
 
-    /// Inserts an identity descriptor. Verifies its self-consistency, and returns false if it's not valid.
-    pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> bool {
-        if identity
+    /// Inserts an identity descriptor. Verifies its self-consistency.
+    pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> Result<(), VerifyError> {
+        identity
             .identity_pk
-            .verify(identity.to_sign().as_bytes(), &identity.sig)
-            .is_err()
-        {
-            return false;
-        }
+            .verify(identity.to_sign().as_bytes(), &identity.sig)?;
         let id = self.alloc_id(&identity.identity_pk.fingerprint());
         self.id_to_descriptor.insert(id, identity);
-        true
+        Ok(())
     }
 
     /// Inserts an adjacency descriptor. Verifies the descriptor and returns false if it's not valid.
