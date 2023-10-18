@@ -6,6 +6,7 @@ mod raw;
 
 pub use inner::*;
 pub use raw::*;
+pub use reply_block::*;
 
 #[cfg(test)]
 mod tests {

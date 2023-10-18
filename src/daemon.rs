@@ -4,26 +4,31 @@ mod n2n_connection;
 mod n2n_protocol;
 mod neightable;
 
-use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
-
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
-
 use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_packet::RbDegarbler;
 use earendil_packet::{
-    crypt::OnionSecret, reply_block::RbDegarbler, ForwardInstruction, InnerPacket, PeeledPacket,
-    RawPacket,
+    crypt::OnionSecret, ForwardInstruction, InnerPacket, PeeledPacket, RawPacket, ReplyBlock,
 };
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
+use lru::LruCache;
 use moka::sync::Cache;
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use sosistab2::ObfsUdpSecret;
+use std::{
+    collections::{BTreeMap, VecDeque},
+    num::NonZeroUsize,
+    path::Path,
+    sync::Arc,
+    time::Duration,
+};
 
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
@@ -84,9 +89,11 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             identity: identity.into(),
             onion_sk: OnionSecret::generate(),
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
-
             incoming: Arc::new(ConcurrentQueue::unbounded()),
             my_reply_blocks: Cache::new(1_000_000),
+            reply_blocks: Arc::new(RwLock::new(ReplyBlockStore::new(
+                NonZeroUsize::new(5000).expect("reply block store can't be of size 0"),
+            ))),
         };
 
         // Run the loops
@@ -201,10 +208,67 @@ pub struct DaemonContext {
     identity: Arc<IdentitySecret>,
     onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
-
     incoming: Arc<ConcurrentQueue<(Bytes, Fingerprint)>>,
-
     my_reply_blocks: Cache<u64, RbDegarbler>,
+    reply_blocks: Arc<RwLock<ReplyBlockStore>>,
+}
+
+pub struct ReplyBlockDeque {
+    pub deque: VecDeque<ReplyBlock>,
+    pub capacity: usize,
+}
+
+impl ReplyBlockDeque {
+    fn new(capacity: usize) -> Self {
+        ReplyBlockDeque {
+            deque: VecDeque::with_capacity(capacity),
+            capacity,
+        }
+    }
+
+    fn insert(&mut self, item: ReplyBlock) {
+        if self.deque.len() == self.capacity {
+            // remove the oldest element
+            self.deque.pop_front();
+        }
+        // add the new element to the end
+        self.deque.push_back(item);
+    }
+
+    fn get(&mut self) -> Option<ReplyBlock> {
+        self.deque.pop_back()
+    }
+}
+
+pub struct ReplyBlockStore {
+    pub items: LruCache<Fingerprint, ReplyBlockDeque>,
+}
+
+impl ReplyBlockStore {
+    pub fn new(size: NonZeroUsize) -> Self {
+        let items = LruCache::new(size);
+        Self { items }
+    }
+
+    pub fn insert(&mut self, fingerprint: Fingerprint, rb: ReplyBlock) {
+        match self.items.get_mut(&fingerprint) {
+            Some(deque) => {
+                deque.insert(rb);
+            }
+            None => {
+                let mut deque = ReplyBlockDeque::new(1000);
+                deque.insert(rb);
+                self.items.put(fingerprint, deque);
+            }
+        }
+    }
+
+    pub fn get(&mut self, fingerprint: Fingerprint) -> Option<ReplyBlock> {
+        match self.items.get_mut(&fingerprint) {
+            Some(deque) => deque.get(),
+            None => None,
+        }
+    }
 }
 
 struct ControlProtocolImpl {

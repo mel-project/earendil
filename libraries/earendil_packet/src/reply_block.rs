@@ -7,6 +7,7 @@ use crate::{crypt::OnionPublic, ForwardInstruction, RawHeader, RawPacket};
 pub struct ReplyBlock {
     pub header: RawHeader,
     pub e2e_dest: OnionPublic,
+    // encrypted symmetric key
 }
 
 impl ReplyBlock {
