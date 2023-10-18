@@ -4,7 +4,7 @@ mod n2n_connection;
 mod n2n_protocol;
 mod neightable;
 
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -21,6 +21,7 @@ use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
 use smolscale::immortal::{Immortal, RespawnStrategy};
+use sosistab2::ObfsUdpSecret;
 
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
@@ -272,5 +273,29 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn recv_message(&self) -> Option<(Bytes, Fingerprint)> {
         self.ctx.incoming.pop().ok()
+    }
+
+    async fn my_routes(&self) -> serde_json::Value {
+        let lala: BTreeMap<String, OutRouteConfig> = self
+            .ctx
+            .config
+            .in_routes
+            .iter()
+            .map(|(k, v)| match v {
+                InRouteConfig::Obfsudp { listen, secret } => {
+                    let secret =
+                        ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes());
+                    (
+                        k.clone(),
+                        OutRouteConfig::Obfsudp {
+                            fingerprint: self.ctx.identity.public().fingerprint(),
+                            connect: *listen,
+                            cookie: *secret.to_public().as_bytes(),
+                        },
+                    )
+                }
+            })
+            .collect();
+        serde_json::to_value(lala).unwrap()
     }
 }

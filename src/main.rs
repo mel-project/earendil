@@ -48,6 +48,9 @@ pub enum ControlCommands {
     /// Dumps the graph.
     GraphDump,
 
+    /// Dumps my own routes
+    MyRoutes,
+
     /// Blocks until a message is received.
     RecvMessage,
 }

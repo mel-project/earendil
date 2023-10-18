@@ -41,6 +41,10 @@ pub async fn main_control(
             }
             smol::Timer::after(Duration::from_millis(100)).await;
         },
+        ControlCommands::MyRoutes => {
+            let routes = conn.my_routes().await?;
+            println!("{}", serde_yaml::to_string(&routes)?);
+        }
     }
     Ok(())
 }
@@ -51,6 +55,8 @@ pub trait ControlProtocol {
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError>;
 
     async fn graph_dump(&self) -> String;
+
+    async fn my_routes(&self) -> serde_json::Value;
 
     async fn recv_message(&self) -> Option<(Bytes, Fingerprint)>;
 }
