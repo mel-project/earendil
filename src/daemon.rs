@@ -90,8 +90,8 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             onion_sk: OnionSecret::generate(),
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
             incoming: Arc::new(ConcurrentQueue::unbounded()),
-            my_reply_blocks: Cache::new(1_000_000),
-            reply_block_store: Arc::new(RwLock::new(ReplyBlockStore::new(
+            degarblers: Cache::new(1_000_000),
+            anon_destinations: Arc::new(RwLock::new(ReplyBlockStore::new(
                 NonZeroUsize::new(5000).expect("reply block store can't be of size 0"),
             ))),
         };
@@ -209,8 +209,8 @@ pub struct DaemonContext {
     onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
     incoming: Arc<ConcurrentQueue<(Bytes, Fingerprint)>>,
-    my_reply_blocks: Cache<u64, RbDegarbler>,
-    reply_block_store: Arc<RwLock<ReplyBlockStore>>,
+    degarblers: Cache<u64, RbDegarbler>,
+    anon_destinations: Arc<RwLock<ReplyBlockStore>>,
 }
 
 pub struct ReplyBlockDeque {
