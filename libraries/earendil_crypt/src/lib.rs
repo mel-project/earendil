@@ -1,6 +1,8 @@
 use std::{fmt::Display, str::FromStr};
 
+use anyhow::Context;
 use arrayref::array_ref;
+use base32::Alphabet;
 use bytes::Bytes;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -89,7 +91,7 @@ pub struct Fingerprint([u8; 20]);
 
 impl Display for Fingerprint {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let b64 = bs58::encode(self.0).into_string();
+        let b64 = base32::encode(Alphabet::Crockford, &self.0).to_lowercase();
         write!(f, "{}", b64)
     }
 }
@@ -98,7 +100,7 @@ impl FromStr for Fingerprint {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = bs58::decode(s).into_vec()?;
+        let bytes = base32::decode(Alphabet::Crockford, s).context("could not decode base32")?;
         if bytes.len() == 20 {
             let mut arr = [0u8; 20];
             arr.copy_from_slice(&bytes);
