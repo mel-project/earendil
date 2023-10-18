@@ -192,8 +192,10 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     InnerPacket::Message(msg) => {
                         ctx.incoming.push((msg, source))?;
                     }
-                    InnerPacket::ReplyBlocks(_rb) => {
-                        // TODO: store the rb in an a moka cache
+                    InnerPacket::ReplyBlocks(reply_blocks) => {
+                        ctx.anon_destinations
+                            .write()
+                            .insert_batch(source, reply_blocks);
                     }
                 }
             }
@@ -235,7 +237,7 @@ impl ReplyBlockDeque {
         self.deque.push_back(item);
     }
 
-    fn get(&mut self) -> Option<ReplyBlock> {
+    fn pop(&mut self) -> Option<ReplyBlock> {
         self.deque.pop_back()
     }
 }
@@ -263,9 +265,15 @@ impl ReplyBlockStore {
         }
     }
 
-    pub fn get(&mut self, fingerprint: Fingerprint) -> Option<ReplyBlock> {
+    fn insert_batch(&mut self, fingerprint: Fingerprint, items: Vec<ReplyBlock>) {
+        for item in items {
+            self.insert(fingerprint, item);
+        }
+    }
+
+    pub fn pop(&mut self, fingerprint: Fingerprint) -> Option<ReplyBlock> {
         match self.items.get_mut(&fingerprint) {
-            Some(deque) => deque.get(),
+            Some(deque) => deque.pop(),
             None => None,
         }
     }
