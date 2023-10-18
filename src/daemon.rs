@@ -91,7 +91,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
             incoming: Arc::new(ConcurrentQueue::unbounded()),
             my_reply_blocks: Cache::new(1_000_000),
-            reply_blocks: Arc::new(RwLock::new(ReplyBlockStore::new(
+            reply_block_store: Arc::new(RwLock::new(ReplyBlockStore::new(
                 NonZeroUsize::new(5000).expect("reply block store can't be of size 0"),
             ))),
         };
@@ -210,7 +210,7 @@ pub struct DaemonContext {
     relay_graph: Arc<RwLock<RelayGraph>>,
     incoming: Arc<ConcurrentQueue<(Bytes, Fingerprint)>>,
     my_reply_blocks: Cache<u64, RbDegarbler>,
-    reply_blocks: Arc<RwLock<ReplyBlockStore>>,
+    reply_block_store: Arc<RwLock<ReplyBlockStore>>,
 }
 
 pub struct ReplyBlockDeque {
