@@ -1,8 +1,8 @@
 pub mod crypt;
+pub mod reply_block;
 
 mod inner;
 mod raw;
-mod reply_block;
 
 pub use inner::*;
 pub use raw::*;
@@ -41,7 +41,7 @@ mod tests {
         let payload = [0u8; 8192];
         let forward_instructions: Vec<ForwardInstruction> =
             route.iter().map(|(inst, _)| *inst).collect();
-        let packet = RawPacket::new(&forward_instructions, &destination, &payload)?;
+        let packet = RawPacket::new(&forward_instructions, &destination, &payload, &[0; 20])?;
 
         let mut peeled_packet = packet;
         for (_, our_sk) in route {

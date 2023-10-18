@@ -39,6 +39,7 @@ impl RawPacket {
         route: &[ForwardInstruction],
         destination: &OnionPublic,
         payload: &[u8; 8192],
+        metadata: &[u8; 20],
     ) -> Result<Self, PacketConstructError> {
         if route.len() >= 10 {
             return Err(PacketConstructError::TooManyHops);
@@ -46,7 +47,9 @@ impl RawPacket {
         // Use a recursive algorithm. Base case: the route is empty
         if route.is_empty() {
             // Encrypt for the destination, so that when the destination peels, it receives a PeeledPacket::Receive
-            let (header_outer, our_sk) = box_encrypt(&[0; 20], destination);
+            let mut buffer = [0; 21];
+            buffer[1..].copy_from_slice(&metadata[..]);
+            let (header_outer, our_sk) = box_encrypt(&buffer, destination);
 
             let shared_sec = our_sk.shared_secret(destination);
 
@@ -61,7 +64,7 @@ impl RawPacket {
                     outer: header_outer.try_into().unwrap(),
                     inner: {
                         // We fill with garbage, since none of this will get read
-                        let mut bts = [0; 612];
+                        let mut bts = [0; 621];
                         rand::thread_rng().fill_bytes(&mut bts);
                         bts
                     },
@@ -69,9 +72,10 @@ impl RawPacket {
                 onion_body,
             })
         } else {
-            let next_hop = RawPacket::new(&route[1..], destination, payload)?;
-            let (header_outer, our_sk) =
-                box_encrypt(route[0].next_fingerprint.as_bytes(), &route[0].this_pubkey);
+            let next_hop = RawPacket::new(&route[1..], destination, payload, metadata)?;
+            let mut buffer = [1; 21];
+            buffer[1..].copy_from_slice(route[0].next_fingerprint.as_bytes());
+            let (header_outer, our_sk) = box_encrypt(&buffer, &route[0].this_pubkey);
             let shared_sec = our_sk.shared_secret(&route[0].this_pubkey);
             let onion_body = {
                 let body_key = blake3::keyed_hash(b"body____________________________", &shared_sec);
@@ -82,10 +86,10 @@ impl RawPacket {
             let header_inner = {
                 let header_key =
                     blake3::keyed_hash(b"header__________________________", &shared_sec);
-                // Shift the first 680-68 bytes of the next-hop header backwards by 68 bytes and encrypt.
-                // This drops the last 68 bytes, but we know that that cannot possibly include any useful info because of the 10-hop limit.
+                // Shift the first 690-69 bytes of the next-hop header backwards by 69 bytes and encrypt.
+                // This drops the last 69 bytes, but we know that that cannot possibly include any useful info because of the 10-hop limit.
                 let mut new_header_inner =
-                    *array_ref![bytemuck::cast_ref::<_, [u8; 680]>(&next_hop.header), 0, 612];
+                    *array_ref![bytemuck::cast_ref::<_, [u8; 690]>(&next_hop.header), 0, 621];
                 stream_dencrypt(header_key.as_bytes(), &[0; 12], &mut new_header_inner);
                 new_header_inner
             };
@@ -103,14 +107,15 @@ impl RawPacket {
     pub fn peel(&self, our_sk: &OnionSecret) -> Result<PeeledPacket, AeadError> {
         // First, decode the header
         let (fingerprint, their_pk) = box_decrypt(&self.header.outer, our_sk)?;
-        assert_eq!(fingerprint.len(), 20);
+        assert_eq!(fingerprint.len(), 21);
+        let metadata_marker = fingerprint[0];
         let shared_sec = our_sk.shared_secret(&their_pk);
-        let fingerprint = Fingerprint::from_bytes(array_ref![fingerprint, 0, 20]);
+        let fingerprint = Fingerprint::from_bytes(array_ref![fingerprint, 1, 20]);
         // Then, peel the header
         let peeled_header = {
             let header_key = blake3::keyed_hash(b"header__________________________", &shared_sec);
-            let mut buffer = [0u8; 680];
-            buffer[..612].copy_from_slice(&self.header.inner);
+            let mut buffer = [0u8; 690];
+            buffer[..621].copy_from_slice(&self.header.inner);
             stream_dencrypt(header_key.as_bytes(), &[0; 12], &mut buffer);
             buffer
         };
@@ -122,7 +127,7 @@ impl RawPacket {
             new
         };
 
-        Ok(if fingerprint.as_bytes() == &[0; 20] {
+        Ok(if metadata_marker == 0 {
             PeeledPacket::Receive(peeled_body)
         } else {
             PeeledPacket::Forward(
@@ -140,12 +145,12 @@ impl RawPacket {
 #[derive(Pod, Clone, Copy, Zeroable, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[repr(C)]
 pub struct RawHeader {
-    /// Box-encrypted, 20-byte fingerprint
+    /// Box-encrypted, 21-byte flag (1 byte) + fingerprint OR metadata (20 bytes)
     #[serde(with = "BigArray")]
-    pub outer: [u8; 68],
+    pub outer: [u8; 69],
     /// Padding so that header is fixed-size
     #[serde(with = "BigArray")]
-    pub inner: [u8; 612],
+    pub inner: [u8; 621],
 }
 
 /// A "peeled" Earendil packet.

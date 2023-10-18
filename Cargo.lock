@@ -980,6 +980,7 @@ dependencies = [
  "hex",
  "indexmap 1.9.3",
  "log",
+ "moka 0.12.1",
  "nanorpc",
  "nanorpc-http",
  "parking_lot 0.12.1",
@@ -1768,6 +1769,27 @@ dependencies = [
  "quanta",
  "rustc_version",
  "scheduled-thread-pool",
+ "skeptic",
+ "smallvec",
+ "tagptr",
+ "thiserror",
+ "triomphe",
+ "uuid",
+]
+
+[[package]]
+name = "moka"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8017ec3548ffe7d4cef7ac0e12b044c01164a74c0f3119420faeaf13490ad8b"
+dependencies = [
+ "crossbeam-channel",
+ "crossbeam-epoch",
+ "crossbeam-utils",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "quanta",
+ "rustc_version",
  "skeptic",
  "smallvec",
  "tagptr",
@@ -2828,7 +2850,7 @@ dependencies = [
  "itertools",
  "log",
  "lru 0.8.1",
- "moka",
+ "moka 0.9.9",
  "native-tls",
  "num_cpus",
  "once_cell",

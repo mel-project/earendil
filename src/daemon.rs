@@ -14,10 +14,12 @@ use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
-    crypt::OnionSecret, ForwardInstruction, InnerPacket, PeeledPacket, RawPacket,
+    crypt::OnionSecret, reply_block::RbDegarbler, ForwardInstruction, InnerPacket, PeeledPacket,
+    RawPacket,
 };
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
+use moka::sync::Cache;
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
 use smolscale::immortal::{Immortal, RespawnStrategy};
@@ -84,6 +86,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
 
             incoming: Arc::new(ConcurrentQueue::unbounded()),
+            my_reply_blocks: Cache::new(1_000_000),
         };
 
         // Run the loops
@@ -200,6 +203,8 @@ pub struct DaemonContext {
     relay_graph: Arc<RwLock<RelayGraph>>,
 
     incoming: Arc<ConcurrentQueue<(Bytes, Fingerprint)>>,
+
+    my_reply_blocks: Cache<u64, RbDegarbler>,
 }
 
 struct ControlProtocolImpl {
@@ -262,6 +267,7 @@ impl ControlProtocol for ControlProtocolImpl {
                 .seal(&self.ctx.identity, &their_opk)
                 .ok()
                 .ok_or(SendMessageError::MessageTooBig)?,
+            &[0; 20],
         )
         .ok()
         .ok_or(SendMessageError::TooFar)?;

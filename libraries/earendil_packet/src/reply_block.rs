@@ -10,17 +10,29 @@ pub struct ReplyBlock {
 }
 
 impl ReplyBlock {
-    pub fn new(my_onion_public: OnionPublic, route: &[ForwardInstruction]) -> anyhow::Result<Self> {
+    pub fn new(
+        my_onion_public: OnionPublic,
+        route: &[ForwardInstruction],
+    ) -> anyhow::Result<(Self, (u64, RbDegarbler))> {
         let dummy_payload = [0; 8192];
-        let raw_packet = RawPacket::new(route, &my_onion_public, &dummy_payload)?;
+        let rb_id: u64 = rand::random();
+        let mut metadata = [0; 20];
+        // metadata field for reply blocks: 8 bytes of a big-endian encoded unsigned integer, followed by 12 bytes of 0's
+        metadata[0..8].copy_from_slice(&rb_id.to_be_bytes());
+        let raw_packet = RawPacket::new(route, &my_onion_public, &dummy_payload, &metadata)?;
         let header = raw_packet.header;
 
-        // TODO: return a decoder closure/de-garbler struct that lets the receiver "de-garble" the incoming reply
-        // block
-
-        Ok(Self {
-            header,
-            e2e_dest: my_onion_public,
-        })
+        // TODO: construct RbDegarbler from raw_packet.onion_body
+        let rb_degarbler = RbDegarbler {};
+        Ok((
+            Self {
+                header,
+                e2e_dest: my_onion_public,
+            },
+            (rb_id, rb_degarbler),
+        ))
     }
 }
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+pub struct RbDegarbler {}
