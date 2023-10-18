@@ -1,7 +1,7 @@
-mod connection;
 mod gossip;
 mod inout_route;
-mod n2n;
+mod n2n_connection;
+mod n2n_protocol;
 mod neightable;
 
 use std::{path::Path, sync::Arc, time::Duration};
@@ -50,7 +50,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
         Ok(())
     }
 
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=debug"))
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
         .init();
     let identity = loop {
         match read_identity(&config.identity) {

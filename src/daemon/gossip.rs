@@ -5,14 +5,14 @@ use bytes::Bytes;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use rand::Rng;
 
-use super::{connection::Connection, DaemonContext};
+use super::{n2n_connection::N2nConnection, DaemonContext};
 
 /// Loop that gossips things around
 pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     // set up the topology stuff for myself
     ctx.relay_graph
         .write()
-        .insert_identity(IdentityDescriptor::new(&ctx.identity, &ctx.onion_sk));
+        .insert_identity(IdentityDescriptor::new(&ctx.identity, &ctx.onion_sk))?;
     let mut timer = smol::Timer::interval(Duration::from_secs(1));
     loop {
         (&mut timer).await;
@@ -34,14 +34,14 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 }
 
-async fn gossip_once(ctx: &DaemonContext, conn: &Connection) -> anyhow::Result<()> {
+async fn gossip_once(ctx: &DaemonContext, conn: &N2nConnection) -> anyhow::Result<()> {
     let remote_idpk = conn.remote_idpk();
     let remote_fingerprint = remote_idpk.fingerprint();
     log::trace!(
         "gossiping with random neighbor {}",
         remote_idpk.fingerprint()
     );
-    // get their identity if we don't have if
+    // get their identity if we don't have it
     if ctx
         .relay_graph
         .read()
@@ -54,9 +54,7 @@ async fn gossip_once(ctx: &DaemonContext, conn: &Connection) -> anyhow::Result<(
             .identity(remote_fingerprint)
             .await?
             .context("they refused to give us their id descriptor")?;
-        if !ctx.relay_graph.write().insert_identity(their_id) {
-            anyhow::bail!("could not accept their identity")
-        }
+        ctx.relay_graph.write().insert_identity(their_id)?;
     }
     // sign an adjacency if we are left of them
     if ctx.identity.public().fingerprint() < remote_idpk.fingerprint() {
@@ -76,5 +74,32 @@ async fn gossip_once(ctx: &DaemonContext, conn: &Connection) -> anyhow::Result<(
             .context("remote refused to sign off")?;
         ctx.relay_graph.write().insert_adjacency(complete)?;
     }
+
+    // pick a random node somewhere in the world and ask our neighbor for all their adjacencies
+    let maybe_rand_adj = ctx.relay_graph.read().random_adjacency().clone();
+    if let Some(rand_adj) = maybe_rand_adj {
+        let rand_node = if rand::random() {
+            rand_adj.left
+        } else {
+            rand_adj.right
+        };
+        log::debug!("asking {remote_fingerprint} for neighbors of {rand_node}!");
+        let adjacencies = conn.n2n_rpc().adjacencies(rand_node).await?;
+        for adjacency in adjacencies {
+            let left_fp = adjacency.left;
+            let right_fp = adjacency.right;
+            // insert all unknown identities
+            if ctx.relay_graph.read().identity(&left_fp).is_none() {
+                if let Some(left_id) = conn.n2n_rpc().identity(left_fp).await? {
+                    ctx.relay_graph.write().insert_identity(left_id)?
+                }
+                if let Some(right_id) = conn.n2n_rpc().identity(right_fp).await? {
+                    ctx.relay_graph.write().insert_identity(right_id)?
+                }
+            }
+            // insert the adjacency
+            ctx.relay_graph.write().insert_adjacency(adjacency)?
+        }
+    };
     Ok(())
 }
