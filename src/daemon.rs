@@ -182,10 +182,9 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     InnerPacket::Message(msg) => {
                         ctx.incoming.push((msg, source))?;
                     }
-                    InnerPacket::ReplyBlocks(rb) => anyhow::bail!(
-                        "we don't know how to handle reply blocks yet, but got {:?}",
-                        rb
-                    ),
+                    InnerPacket::ReplyBlocks(_rb) => {
+                        // TODO: store the rb in an a moka cache
+                    }
                 }
             }
         }

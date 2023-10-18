@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{
     crypt::{box_decrypt, box_encrypt, OnionPublic, OnionSecret},
-    RawHeader,
+    reply_block::ReplyBlock,
 };
 
 pub struct Source;
@@ -107,13 +107,6 @@ impl InnerPacket {
 
         Ok(result)
     }
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
-/// A reply block. Reply blocks are constructed by endpoints who wish other endpoints to talk to them via an anonymous address, and are single-use, consumed when used to construct a packet going to that anonymous address.
-pub struct ReplyBlock {
-    pub header: RawHeader,
-    pub e2e_dest: OnionPublic,
 }
 
 #[cfg(test)]

@@ -121,6 +121,7 @@ impl RawPacket {
             stream_dencrypt(body_key.as_bytes(), &[0; 12], &mut new);
             new
         };
+
         Ok(if fingerprint.as_bytes() == &[0; 20] {
             PeeledPacket::Receive(peeled_body)
         } else {

@@ -2,6 +2,7 @@ pub mod crypt;
 
 mod inner;
 mod raw;
+mod reply_block;
 
 pub use inner::*;
 pub use raw::*;
