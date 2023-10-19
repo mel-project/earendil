@@ -146,7 +146,7 @@ mod tests {
         let route_with_onion_secrets = generate_forward_instructions(5);
         let route: Vec<ForwardInstruction> = route_with_onion_secrets
             .iter()
-            .map(|(inst, _)| inst.clone())
+            .map(|(inst, _)| *inst)
             .collect();
 
         // Prepare reply block

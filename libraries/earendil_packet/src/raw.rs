@@ -131,7 +131,7 @@ impl RawPacket {
         my_isk: &IdentitySecret,
     ) -> Result<Self, PacketConstructError> {
         Ok(Self {
-            header: reply_block.header.clone(),
+            header: reply_block.header,
             onion_body: payload.seal(my_isk, &reply_block.e2e_dest)?,
         })
     }

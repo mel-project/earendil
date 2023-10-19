@@ -97,14 +97,20 @@ impl RelayGraph {
     ) -> Option<impl Iterator<Item = AdjacencyDescriptor> + '_> {
         let fp = *fp;
         let id = self.id(&fp)?;
-        Some(self.adjacency[&id].iter().copied().map(move |neigh_id| {
-            let neigh = self.id_to_fp[&neigh_id];
-            if fp < neigh {
-                self.documents[&(id, neigh_id)].clone()
-            } else {
-                self.documents[&(neigh_id, id)].clone()
-            }
-        }))
+        Some(
+            self.adjacency
+                .get(&id)?
+                .iter()
+                .copied()
+                .map(move |neigh_id| {
+                    let neigh = self.id_to_fp[&neigh_id];
+                    if fp < neigh {
+                        self.documents[&(id, neigh_id)].clone()
+                    } else {
+                        self.documents[&(neigh_id, id)].clone()
+                    }
+                }),
+        )
     }
 
     /// Returns all the adjacencies.
