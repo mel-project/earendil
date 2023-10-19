@@ -10,9 +10,10 @@ pub use reply_block::*;
 
 #[cfg(test)]
 mod tests {
-    use earendil_crypt::Fingerprint;
+    use bytes::Bytes;
+    use earendil_crypt::{Fingerprint, IdentitySecret};
 
-    use crate::crypt::OnionSecret;
+    use crate::crypt::{OnionPublic, OnionSecret};
 
     use super::*;
 
@@ -34,6 +35,25 @@ mod tests {
             .collect()
     }
 
+    // fn reverse_route(
+    //     route: &[ForwardInstruction],
+    //     destination: OnionPublic,
+    // ) -> Vec<ForwardInstruction> {
+    //     let mut reverse_route = Vec::new();
+    //     let mut previous = destination;
+
+    //     for instruction in route.into_iter().rev() {
+    //         let new_instruction = ForwardInstruction {
+    //             this_pubkey: previous,
+    //             next_fingerprint: instruction.next_fingerprint,
+    //         };
+    //         reverse_route.push(new_instruction);
+    //         previous = instruction.this_pubkey;
+    //     }
+    //     eprintln!("reverse_route len: {}", reverse_route.len());
+    //     reverse_route
+    // }
+
     fn test_packet_route(
         route: &[(ForwardInstruction, OnionSecret)],
     ) -> Result<(), PacketConstructError> {
@@ -42,7 +62,7 @@ mod tests {
         let payload = [0u8; 8192];
         let forward_instructions: Vec<ForwardInstruction> =
             route.iter().map(|(inst, _)| *inst).collect();
-        let packet = RawPacket::new(&forward_instructions, &destination, &payload, &[0; 20])?;
+        let (packet, _) = RawPacket::new(&forward_instructions, &destination, &payload, &[0; 20])?;
 
         let mut peeled_packet = packet;
         for (_, our_sk) in route {
@@ -90,6 +110,70 @@ mod tests {
         match test_packet_route(&route) {
             Err(PacketConstructError::TooManyHops) => {} // expected error
             _ => panic!("Expected TooManyHops error"),
+        }
+    }
+
+    #[test]
+    fn reply_block_five_hops() {
+        use crate::crypt::OnionSecret;
+        use crate::reply_block::ReplyBlock;
+        use crate::ForwardInstruction;
+        use crate::InnerPacket;
+        use crate::RawPacket;
+
+        // Generate  identity secret
+        let bob_isk = IdentitySecret::generate();
+        let bob_sk = OnionSecret::generate();
+        let bob_op = bob_sk.public();
+
+        // Generate 5-hop route
+        let route_with_onion_secrets = generate_forward_instructions(5);
+        let route: Vec<ForwardInstruction> = route_with_onion_secrets
+            .iter()
+            .map(|(inst, _)| inst.clone())
+            .collect();
+
+        // Prepare reply block
+        let (reply_block, (_, rb_degarbler)) =
+            ReplyBlock::new(&route).expect("Failed to create reply block");
+
+        // Prepare message using header from reply block
+        let message = "hello world from reply block!";
+        let inner_pkt = InnerPacket::Message(Bytes::copy_from_slice(message.as_bytes()))
+            .seal(&bob_isk, &reply_block.e2e_dest)
+            .expect("Could not construct InnerPacket");
+        let packet = RawPacket::from_reply_block(&reply_block, &inner_pkt)
+            .expect("Failed to create reply packet");
+
+        // Send the message to alice using the reply block
+        let mut peeled_packet = packet;
+        for (_, our_sk) in &route_with_onion_secrets {
+            match peeled_packet.peel(our_sk).expect("Failed to peel packet") {
+                PeeledPacket::Forward(_, next_packet) => {
+                    peeled_packet = next_packet;
+                }
+                _ => panic!("Expected forward packet"),
+            }
+        }
+        // At the destination (alice), peel the packet
+        let peeled_reply = if let PeeledPacket::Receive(peeled_reply) = peeled_packet
+            .peel(&rb_degarbler.my_onion_secret)
+            .expect("Failed to peel packet")
+        {
+            peeled_reply
+        } else {
+            panic!("Expected receive packet")
+        };
+        // Degarble the reply block and check the message
+        let (inner_packet, _) = rb_degarbler
+            .degarble(peeled_reply)
+            .expect("Failed to degarble");
+        if let InnerPacket::Message(msg_bts) = inner_packet {
+            let msg =
+                String::from_utf8(msg_bts.to_vec()).expect("Failed to convert message to string");
+            assert_eq!(msg, message);
+        } else {
+            panic!("Expected InnerPacket::Message");
         }
     }
 }

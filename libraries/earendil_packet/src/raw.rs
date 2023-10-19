@@ -6,8 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 use thiserror::Error;
 
-use crate::crypt::{
-    box_decrypt, box_encrypt, stream_dencrypt, AeadError, OnionPublic, OnionSecret,
+use crate::{
+    crypt::{box_decrypt, box_encrypt, stream_dencrypt, AeadError, OnionPublic, OnionSecret},
+    ReplyBlock,
 };
 
 /// A raw, on-the-wire Earendil packet.
@@ -34,13 +35,13 @@ pub enum PacketConstructError {
 }
 
 impl RawPacket {
-    /// Creates a new RawPacket, given a payload and the series of relays that the packet is supposed to pass through.
+    /// Creates a new RawPacket along with a vector of the shared secrets used to encrypt each layer of the onion body, given a payload and the series of relays that the packet is supposed to pass through.
     pub fn new(
         route: &[ForwardInstruction],
         destination: &OnionPublic,
         payload: &[u8; 8192],
         metadata: &[u8; 20],
-    ) -> Result<Self, PacketConstructError> {
+    ) -> Result<(Self, Vec<[u8; 32]>), PacketConstructError> {
         if route.len() >= 10 {
             return Err(PacketConstructError::TooManyHops);
         }
@@ -59,20 +60,24 @@ impl RawPacket {
                 stream_dencrypt(body_key.as_bytes(), &[0; 12], &mut new);
                 new
             };
-            Ok(Self {
-                header: RawHeader {
-                    outer: header_outer.try_into().unwrap(),
-                    inner: {
-                        // We fill with garbage, since none of this will get read
-                        let mut bts = [0; 621];
-                        rand::thread_rng().fill_bytes(&mut bts);
-                        bts
+            Ok((
+                Self {
+                    header: RawHeader {
+                        outer: header_outer.try_into().unwrap(),
+                        inner: {
+                            // We fill with garbage, since none of this will get read
+                            let mut bts = [0; 621];
+                            rand::thread_rng().fill_bytes(&mut bts);
+                            bts
+                        },
                     },
+                    onion_body,
                 },
-                onion_body,
-            })
+                vec![shared_sec],
+            ))
         } else {
-            let next_hop = RawPacket::new(&route[1..], destination, payload, metadata)?;
+            let (next_hop, mut shared_secs) =
+                RawPacket::new(&route[1..], destination, payload, metadata)?;
             let mut buffer = [1; 21];
             buffer[1..].copy_from_slice(route[0].next_fingerprint.as_bytes());
             let (header_outer, our_sk) = box_encrypt(&buffer, &route[0].this_pubkey);
@@ -93,24 +98,39 @@ impl RawPacket {
                 stream_dencrypt(header_key.as_bytes(), &[0; 12], &mut new_header_inner);
                 new_header_inner
             };
-            Ok(Self {
-                header: RawHeader {
-                    outer: header_outer.try_into().unwrap(),
-                    inner: header_inner,
+            shared_secs.push(shared_sec);
+            Ok((
+                Self {
+                    header: RawHeader {
+                        outer: header_outer.try_into().unwrap(),
+                        inner: header_inner,
+                    },
+                    onion_body,
                 },
-                onion_body,
-            })
+                shared_secs,
+            ))
         }
+    }
+
+    /// Creates a RawPacket for a message to an anonymous identity, using a ReplyBlock
+    pub fn from_reply_block(
+        reply_block: &ReplyBlock,
+        message: &[u8; 8192],
+    ) -> Result<Self, PacketConstructError> {
+        Ok(Self {
+            header: reply_block.header.clone(),
+            onion_body: *message,
+        })
     }
 
     /// "Peels off" one layer of the onion, by decryption using the specified secret key.
     pub fn peel(&self, our_sk: &OnionSecret) -> Result<PeeledPacket, AeadError> {
         // First, decode the header
-        let (fingerprint, their_pk) = box_decrypt(&self.header.outer, our_sk)?;
-        assert_eq!(fingerprint.len(), 21);
-        let metadata_marker = fingerprint[0];
+        let (metadata, their_pk) = box_decrypt(&self.header.outer, our_sk)?;
+        assert_eq!(metadata.len(), 21);
+        let metadata_marker = metadata[0];
         let shared_sec = our_sk.shared_secret(&their_pk);
-        let fingerprint = Fingerprint::from_bytes(array_ref![fingerprint, 1, 20]);
+        let fingerprint = Fingerprint::from_bytes(array_ref![metadata, 1, 20]);
         // Then, peel the header
         let peeled_header = {
             let header_key = blake3::keyed_hash(b"header__________________________", &shared_sec);
@@ -128,6 +148,7 @@ impl RawPacket {
         };
 
         Ok(if metadata_marker == 0 {
+            // TODO: add logic to get & return the reply block id
             PeeledPacket::Receive(peeled_body)
         } else {
             PeeledPacket::Forward(
