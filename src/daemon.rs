@@ -178,27 +178,30 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         let peeled = pkt.peel(&ctx.onion_sk)?;
         log::debug!("peeled packet!");
         match peeled {
-            PeeledPacket::Forward(next_hop, inner) => {
+            PeeledPacket::Forward {
+                to: next_hop,
+                pkt: inner,
+            } => {
                 let conn = ctx
                     .table
                     .lookup(&next_hop)
                     .context("could not find this next hop")?;
                 conn.send_raw_packet(inner).await;
             }
-            PeeledPacket::Receive(raw) => {
-                let (inner, source) = InnerPacket::open(&raw, &ctx.onion_sk)
-                    .context("failed to interpret raw inner packet")?;
-                match inner {
-                    InnerPacket::Message(msg) => {
-                        ctx.incoming.push((msg, source))?;
-                    }
-                    InnerPacket::ReplyBlocks(reply_blocks) => {
-                        ctx.anon_destinations
-                            .write()
-                            .insert_batch(source, reply_blocks);
-                    }
+            PeeledPacket::Received {
+                from: source,
+                pkt: inner,
+            } => match inner {
+                InnerPacket::Message(msg) => {
+                    ctx.incoming.push((msg, source))?;
                 }
-            }
+                InnerPacket::ReplyBlocks(reply_blocks) => {
+                    ctx.anon_destinations
+                        .write()
+                        .insert_batch(source, reply_blocks);
+                }
+            },
+            PeeledPacket::Garbled { id, pkt } => todo!(),
         }
     }
 }
@@ -335,11 +338,9 @@ impl ControlProtocol for ControlProtocolImpl {
         let (wrapped_onion, _) = RawPacket::new(
             &instructs,
             &their_opk,
-            &InnerPacket::Message(args.content)
-                .seal(&self.ctx.identity, &their_opk)
-                .ok()
-                .ok_or(SendMessageError::MessageTooBig)?,
+            InnerPacket::Message(args.content),
             &[0; 20],
+            &self.ctx.identity,
         )
         .ok()
         .ok_or(SendMessageError::TooFar)?;

@@ -1,6 +1,6 @@
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
-use earendil_crypt::Fingerprint;
+use earendil_crypt::{Fingerprint, IdentitySecret};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::{
     crypt::{box_decrypt, box_encrypt, stream_dencrypt, AeadError, OnionPublic, OnionSecret},
-    ReplyBlock,
+    InnerPacket, OpenError, ReplyBlock, SealError,
 };
 
 /// A raw, on-the-wire Earendil packet.
@@ -32,6 +32,16 @@ pub struct ForwardInstruction {
 pub enum PacketConstructError {
     #[error("route contains too many hops")]
     TooManyHops,
+    #[error(transparent)]
+    InnerPacketError(#[from] SealError),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum PacketPeelError {
+    #[error(transparent)]
+    DecryptionError(#[from] AeadError),
+    #[error(transparent)]
+    InnerPacketError(#[from] OpenError),
 }
 
 impl RawPacket {
@@ -39,14 +49,16 @@ impl RawPacket {
     pub fn new(
         route: &[ForwardInstruction],
         destination: &OnionPublic,
-        payload: &[u8; 8192],
+        payload: InnerPacket,
         metadata: &[u8; 20],
+        my_isk: &IdentitySecret,
     ) -> Result<(Self, Vec<[u8; 32]>), PacketConstructError> {
         if route.len() >= 10 {
             return Err(PacketConstructError::TooManyHops);
         }
         // Use a recursive algorithm. Base case: the route is empty
         if route.is_empty() {
+            let sealed_payload = payload.seal(my_isk, destination)?;
             // Encrypt for the destination, so that when the destination peels, it receives a PeeledPacket::Receive
             let mut buffer = [0; 21];
             buffer[1..].copy_from_slice(&metadata[..]);
@@ -56,7 +68,7 @@ impl RawPacket {
 
             let onion_body = {
                 let body_key = blake3::keyed_hash(b"body____________________________", &shared_sec);
-                let mut new = *payload;
+                let mut new = sealed_payload;
                 stream_dencrypt(body_key.as_bytes(), &[0; 12], &mut new);
                 new
             };
@@ -77,7 +89,7 @@ impl RawPacket {
             ))
         } else {
             let (next_hop, mut shared_secs) =
-                RawPacket::new(&route[1..], destination, payload, metadata)?;
+                RawPacket::new(&route[1..], destination, payload, metadata, my_isk)?;
             let mut buffer = [1; 21];
             buffer[1..].copy_from_slice(route[0].next_fingerprint.as_bytes());
             let (header_outer, our_sk) = box_encrypt(&buffer, &route[0].this_pubkey);
@@ -115,16 +127,17 @@ impl RawPacket {
     /// Creates a RawPacket for a message to an anonymous identity, using a ReplyBlock
     pub fn from_reply_block(
         reply_block: &ReplyBlock,
-        message: &[u8; 8192],
+        payload: InnerPacket,
+        my_isk: &IdentitySecret,
     ) -> Result<Self, PacketConstructError> {
         Ok(Self {
             header: reply_block.header.clone(),
-            onion_body: *message,
+            onion_body: payload.seal(my_isk, &reply_block.e2e_dest)?,
         })
     }
 
     /// "Peels off" one layer of the onion, by decryption using the specified secret key.
-    pub fn peel(&self, our_sk: &OnionSecret) -> Result<PeeledPacket, AeadError> {
+    pub fn peel(&self, our_sk: &OnionSecret) -> Result<PeeledPacket, PacketPeelError> {
         // First, decode the header
         let (metadata, their_pk) = box_decrypt(&self.header.outer, our_sk)?;
         assert_eq!(metadata.len(), 21);
@@ -147,17 +160,27 @@ impl RawPacket {
             new
         };
 
-        Ok(if metadata_marker == 0 {
-            // TODO: add logic to get & return the reply block id
-            PeeledPacket::Receive(peeled_body)
+        Ok(if metadata == [0; 21] {
+            let (inner_pkt, fp) = InnerPacket::open(&peeled_body, our_sk)?;
+            PeeledPacket::Received {
+                from: fp,
+                pkt: inner_pkt,
+            }
+        } else if metadata_marker == 0 {
+            let id_bts = array_ref![metadata, 1, 8];
+            let id = u64::from_be_bytes(*id_bts);
+            PeeledPacket::Garbled {
+                id,
+                pkt: peeled_body,
+            }
         } else {
-            PeeledPacket::Forward(
-                fingerprint,
-                RawPacket {
+            PeeledPacket::Forward {
+                to: fingerprint,
+                pkt: RawPacket {
                     header: bytemuck::cast(peeled_header),
                     onion_body: peeled_body,
                 },
-            )
+            }
         })
     }
 }
@@ -178,6 +201,7 @@ pub struct RawHeader {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum PeeledPacket {
-    Forward(Fingerprint, RawPacket),
-    Receive([u8; 8192]),
+    Forward { to: Fingerprint, pkt: RawPacket },
+    Received { from: Fingerprint, pkt: InnerPacket },
+    Garbled { id: u64, pkt: [u8; 8192] },
 }

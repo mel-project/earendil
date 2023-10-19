@@ -1,4 +1,5 @@
-use earendil_crypt::Fingerprint;
+use bytes::Bytes;
+use earendil_crypt::{Fingerprint, IdentitySecret};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -15,18 +16,25 @@ pub struct ReplyBlock {
 }
 
 impl ReplyBlock {
-    pub fn new(route: &[ForwardInstruction]) -> anyhow::Result<(Self, (u64, RbDegarbler))> {
+    pub fn new(
+        route: &[ForwardInstruction],
+        isk: &IdentitySecret,
+    ) -> anyhow::Result<(Self, (u64, RbDegarbler))> {
         let my_onion_secret = OnionSecret::generate();
         let my_onion_public = my_onion_secret.public();
 
-        let dummy_payload = [0; 8192];
         let rb_id: u64 = rand::random();
         let mut metadata = [0; 20];
         // metadata field for reply blocks: 8 bytes of a big-endian encoded unsigned integer, followed by 12 bytes of 0's
         metadata[0..8].copy_from_slice(&rb_id.to_be_bytes());
 
-        let (raw_packet, shared_secs) =
-            RawPacket::new(route, &my_onion_public, &dummy_payload, &metadata)?;
+        let (raw_packet, shared_secs) = RawPacket::new(
+            route,
+            &my_onion_public,
+            InnerPacket::Message(Bytes::new()),
+            &metadata,
+            isk,
+        )?;
         let header = raw_packet.header;
 
         let rb_degarbler = RbDegarbler {
