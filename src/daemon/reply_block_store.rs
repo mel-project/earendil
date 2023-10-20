@@ -146,7 +146,7 @@ mod tests {
     fn test_reply_block_store_insert() {
         let size = NonZeroUsize::new(5).unwrap();
         let mut rb_store = ReplyBlockStore::new(size);
-        let fingerprint = Fingerprint::from_bytes(&[10; 20]); // assuming Fingerprint has a new() function
+        let fingerprint = Fingerprint::from_bytes(&[10; 20]);
         let rb = create_reply_block();
 
         // Testing insert in empty store
@@ -163,7 +163,7 @@ mod tests {
     fn test_reply_block_store_insert_batch() {
         let size = NonZeroUsize::new(5).unwrap();
         let mut rb_store = ReplyBlockStore::new(size);
-        let fingerprint = Fingerprint::from_bytes(&[10; 20]); // assuming Fingerprint has a new() function
+        let fingerprint = Fingerprint::from_bytes(&[10; 20]);
         let rb1 = create_reply_block();
         let rb2 = create_reply_block();
         let items = vec![rb1.clone(), rb2.clone()];
@@ -177,7 +177,7 @@ mod tests {
     fn test_reply_block_store_get() {
         let size = NonZeroUsize::new(5).unwrap();
         let mut rb_store = ReplyBlockStore::new(size);
-        let fingerprint = Fingerprint::from_bytes(&[10; 20]); // assuming Fingerprint has a new() function
+        let fingerprint = Fingerprint::from_bytes(&[10; 20]);
         let rb = create_reply_block();
 
         // Testing get when item exists
