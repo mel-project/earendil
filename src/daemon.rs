@@ -201,11 +201,12 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                         .insert_batch(source, reply_blocks);
                 }
             },
-            PeeledPacket::Garbled { id, pkt } => todo!(),
+            PeeledPacket::Garbled { id: _, pkt: _ } => todo!(),
         }
     }
 }
 
+#[allow(unused)]
 #[derive(Clone)]
 pub struct DaemonContext {
     config: Arc<ConfigFile>,
@@ -274,11 +275,15 @@ impl ReplyBlockStore {
         }
     }
 
-    pub fn pop(&mut self, fingerprint: Fingerprint) -> Option<ReplyBlock> {
-        match self.items.get_mut(&fingerprint) {
+    pub fn get(&mut self, fingerprint: &Fingerprint) -> Option<ReplyBlock> {
+        match self.items.get_mut(fingerprint) {
             Some(deque) => deque.pop(),
             None => None,
         }
+    }
+
+    pub fn contains(&self, fingerprint: &Fingerprint) -> bool {
+        self.items.contains(fingerprint)
     }
 }
 
@@ -303,6 +308,30 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError> {
+        let is_reply = self
+            .ctx
+            .anon_destinations
+            .read()
+            .contains(&args.destination);
+
+        if is_reply {
+            log::debug!("sending message with reply block");
+            let reply_block = self
+                .ctx
+                .anon_destinations
+                .write()
+                .get(&args.destination)
+                .unwrap();
+
+            let identity_secret = self.ctx.identity.clone();
+            let inner = InnerPacket::Message(Bytes::copy_from_slice(&args.content));
+            // TODO: handle error properly
+            let raw_packet = RawPacket::from_reply_block(&reply_block, inner, &identity_secret)
+                .expect("failed to construct reply block");
+            self.ctx.table.inject_asif_incoming(raw_packet).await;
+            return Ok(());
+        }
+
         let route = self
             .ctx
             .relay_graph
@@ -335,7 +364,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .identity(&args.destination)
             .ok_or(SendMessageError::NoOnionPublic(args.destination))?
             .onion_pk;
-        let (wrapped_onion, _) = RawPacket::new(
+        let wrapped_onion = RawPacket::new(
             &instructs,
             &their_opk,
             InnerPacket::Message(args.content),
@@ -345,7 +374,7 @@ impl ControlProtocol for ControlProtocolImpl {
         .ok()
         .ok_or(SendMessageError::TooFar)?;
         // we send the onion by treating it as a message addressed to ourselves
-        self.ctx.table.inject_asif_incoming(wrapped_onion).await;
+        self.ctx.table.inject_asif_incoming(wrapped_onion.0).await;
         Ok(())
     }
 
