@@ -380,7 +380,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .identity(&args.destination)
             .ok_or(SendMessageError::NoOnionPublic(args.destination))?
             .onion_pk;
-        let wrapped_onion = RawPacket::new(
+        let (wrapped_onion, _) = RawPacket::new(
             &instructs,
             &their_opk,
             InnerPacket::Message(args.content),
