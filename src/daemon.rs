@@ -10,10 +10,10 @@ use bytes::Bytes;
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentitySecret};
-use earendil_packet::RbDegarbler;
 use earendil_packet::{
     crypt::OnionSecret, ForwardInstruction, InnerPacket, PeeledPacket, RawPacket, ReplyBlock,
 };
+use earendil_packet::{reverse_route, RbDegarbler};
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use lru::LruCache;
@@ -172,6 +172,24 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 /// Loop that takes incoming packets, peels them, and processes them
 async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    fn process_inner_pkt(
+        ctx: &DaemonContext,
+        inner: InnerPacket,
+        source: Fingerprint,
+    ) -> anyhow::Result<()> {
+        match inner {
+            InnerPacket::Message(msg) => {
+                ctx.incoming.push((msg, source))?;
+            }
+            InnerPacket::ReplyBlocks(reply_blocks) => {
+                ctx.anon_destinations
+                    .write()
+                    .insert_batch(source, reply_blocks);
+            }
+        }
+        Ok(())
+    }
+
     loop {
         let pkt = ctx.table.recv_raw_packet().await;
         log::debug!("received raw packet");
@@ -191,17 +209,15 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             PeeledPacket::Received {
                 from: source,
                 pkt: inner,
-            } => match inner {
-                InnerPacket::Message(msg) => {
-                    ctx.incoming.push((msg, source))?;
-                }
-                InnerPacket::ReplyBlocks(reply_blocks) => {
-                    ctx.anon_destinations
-                        .write()
-                        .insert_batch(source, reply_blocks);
-                }
-            },
-            PeeledPacket::Garbled { id, pkt } => todo!(),
+            } => process_inner_pkt(&ctx, inner, source)?,
+            PeeledPacket::Garbled { id, pkt } => {
+                let degarbler = ctx
+                    .degarblers
+                    .get(&id)
+                    .context("no degarbler for this garbled pkt")?;
+                let (inner, source) = degarbler.degarble(pkt)?;
+                process_inner_pkt(&ctx, inner, source)?
+            }
         }
     }
 }
@@ -346,6 +362,30 @@ impl ControlProtocol for ControlProtocolImpl {
         .ok_or(SendMessageError::TooFar)?;
         // we send the onion by treating it as a message addressed to ourselves
         self.ctx.table.inject_asif_incoming(wrapped_onion).await;
+
+        // for every packet we send, we also send a packet containing a batch of reply blocks
+        // currently the path for every one of them is the same; will want to change this in the future
+        let n = 8;
+        let reverse_instructs = reverse_route(&instructs, their_opk);
+        let mut rbs: Vec<ReplyBlock> = vec![];
+        for _ in 0..n {
+            let (rb, (id, degarbler)) = ReplyBlock::new(&reverse_instructs, &self.ctx.identity)
+                .map_err(|_| SendMessageError::ReplyBlockFailed)?;
+            rbs.push(rb);
+            self.ctx.degarblers.insert(id, degarbler);
+        }
+        let (wrapped_rb_onion, _) = RawPacket::new(
+            &instructs,
+            &their_opk,
+            InnerPacket::ReplyBlocks(rbs),
+            &[0; 20],
+            &self.ctx.identity,
+        )
+        .ok()
+        .ok_or(SendMessageError::TooFar)?;
+        // we send the onion by treating it as a message addressed to ourselves
+        self.ctx.table.inject_asif_incoming(wrapped_rb_onion).await;
+
         Ok(())
     }
 

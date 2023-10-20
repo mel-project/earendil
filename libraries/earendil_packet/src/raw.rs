@@ -32,16 +32,16 @@ pub struct ForwardInstruction {
 pub enum PacketConstructError {
     #[error("route contains too many hops")]
     TooManyHops,
-    #[error(transparent)]
-    InnerPacketError(#[from] SealError),
+    #[error("message too big")]
+    MessageTooBig,
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum PacketPeelError {
-    #[error(transparent)]
-    DecryptionError(#[from] AeadError),
-    #[error(transparent)]
-    InnerPacketError(#[from] OpenError),
+    #[error("decrypting header failed")]
+    DecryptionError,
+    #[error("opening inner packet failed")]
+    InnerPacketOpenError,
 }
 
 impl RawPacket {
@@ -58,7 +58,9 @@ impl RawPacket {
         }
         // Use a recursive algorithm. Base case: the route is empty
         if route.is_empty() {
-            let sealed_payload = payload.seal(my_isk, destination)?;
+            let sealed_payload = payload
+                .seal(my_isk, destination)
+                .map_err(|_| PacketConstructError::MessageTooBig)?;
             // Encrypt for the destination, so that when the destination peels, it receives a PeeledPacket::Receive
             let mut buffer = [0; 21];
             buffer[1..].copy_from_slice(&metadata[..]);
@@ -132,14 +134,17 @@ impl RawPacket {
     ) -> Result<Self, PacketConstructError> {
         Ok(Self {
             header: reply_block.header,
-            onion_body: payload.seal(my_isk, &reply_block.e2e_dest)?,
+            onion_body: payload
+                .seal(my_isk, &reply_block.e2e_dest)
+                .map_err(|_| PacketConstructError::MessageTooBig)?,
         })
     }
 
     /// "Peels off" one layer of the onion, by decryption using the specified secret key.
     pub fn peel(&self, our_sk: &OnionSecret) -> Result<PeeledPacket, PacketPeelError> {
         // First, decode the header
-        let (metadata, their_pk) = box_decrypt(&self.header.outer, our_sk)?;
+        let (metadata, their_pk) = box_decrypt(&self.header.outer, our_sk)
+            .map_err(|_| PacketPeelError::DecryptionError)?;
         assert_eq!(metadata.len(), 21);
         let metadata_marker = metadata[0];
         let shared_sec = our_sk.shared_secret(&their_pk);
@@ -161,7 +166,8 @@ impl RawPacket {
         };
 
         Ok(if metadata == [0; 21] {
-            let (inner_pkt, fp) = InnerPacket::open(&peeled_body, our_sk)?;
+            let (inner_pkt, fp) = InnerPacket::open(&peeled_body, our_sk)
+                .map_err(|_| PacketPeelError::InnerPacketOpenError)?;
             PeeledPacket::Received {
                 from: fp,
                 pkt: inner_pkt,

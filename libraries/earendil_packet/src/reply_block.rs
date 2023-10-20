@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     crypt::{stream_dencrypt, OnionPublic, OnionSecret},
-    ForwardInstruction, InnerPacket, OpenError, RawHeader, RawPacket,
+    ForwardInstruction, InnerPacket, OpenError, PacketConstructError, RawHeader, RawPacket,
 };
 
 /// A reply block. Reply blocks are constructed by endpoints who wish other endpoints to talk to them via an anonymous address, and are single-use, consumed when used to construct a packet going to that anonymous address.
@@ -19,7 +19,7 @@ impl ReplyBlock {
     pub fn new(
         route: &[ForwardInstruction],
         isk: &IdentitySecret,
-    ) -> anyhow::Result<(Self, (u64, RbDegarbler))> {
+    ) -> Result<(Self, (u64, RbDegarbler)), PacketConstructError> {
         let my_onion_secret = OnionSecret::generate();
         let my_onion_public = my_onion_secret.public();
 
@@ -49,11 +49,6 @@ impl ReplyBlock {
             (rb_id, rb_degarbler),
         ))
     }
-
-    /// creates a batch of reply blocks that fits into 1 earendil packet
-    pub fn create_batch() -> InnerPacket {
-        todo!()
-    }
 }
 
 #[derive(Clone)]
@@ -71,4 +66,23 @@ impl RbDegarbler {
         }
         InnerPacket::open(&raw, &self.my_onion_secret)
     }
+}
+
+pub fn reverse_route(
+    route: &[ForwardInstruction],
+    destination: OnionPublic,
+) -> Vec<ForwardInstruction> {
+    let mut reverse_route = Vec::new();
+    let mut previous = destination;
+
+    for instruction in route.into_iter().rev() {
+        let new_instruction = ForwardInstruction {
+            this_pubkey: previous,
+            next_fingerprint: instruction.next_fingerprint,
+        };
+        reverse_route.push(new_instruction);
+        previous = instruction.this_pubkey;
+    }
+    eprintln!("reverse_route len: {}", reverse_route.len());
+    reverse_route
 }

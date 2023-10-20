@@ -71,6 +71,8 @@ pub enum SendMessageError {
     MessageTooBig,
     #[error("no onion public key for fingerprint {0}")]
     NoOnionPublic(Fingerprint),
+    #[error("failed to construct reply block")]
+    ReplyBlockFailed,
 }
 
 #[serde_as]
