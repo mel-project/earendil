@@ -20,7 +20,7 @@ pub struct RawPacket {
 }
 
 /// An instruction for forwarding one layer of the onion.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ForwardInstruction {
     /// The DH public key of this hop
     pub this_pubkey: OnionPublic,

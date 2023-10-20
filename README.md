@@ -36,4 +36,4 @@ Overall, we follow an architecture where the crates in `libraries/` avoid doing 
 
 In one terminal window, run `./start_example.sh`.
 
-In another, run `cargo run -- control send-message --destination 2jZTg8pSZfAYEU4uPeT44tj6AP9G --message helloworld`
+In another, run `earendil control send-message --destination w0pj999ezrc36spw5zz88nn79z9h7mss --message helloworld`

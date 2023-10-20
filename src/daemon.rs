@@ -10,10 +10,10 @@ use bytes::Bytes;
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_packet::RbDegarbler;
 use earendil_packet::{
     crypt::OnionSecret, ForwardInstruction, InnerPacket, PeeledPacket, RawPacket, ReplyBlock,
 };
-use earendil_packet::{reverse_route, RbDegarbler};
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use lru::LruCache;
@@ -213,11 +213,13 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 pkt: inner,
             } => process_inner_pkt(&ctx, inner, source)?,
             PeeledPacket::Garbled { id, pkt } => {
+                log::debug!("received garbled packet");
                 let degarbler = ctx
                     .degarblers
                     .get(&id)
                     .context("no degarbler for this garbled pkt")?;
                 let (inner, source) = degarbler.degarble(pkt)?;
+                log::debug!("packet has been degarbled!");
                 process_inner_pkt(&ctx, inner, source)?
             }
         }
@@ -348,6 +350,10 @@ impl ControlProtocol for ControlProtocolImpl {
         let (my_isk, anon_source) = if let Some(id) = args.id {
             // get anonymous identity
             let x = self.ctx.anon_identities.write().get(&id);
+            log::debug!(
+                "using anon identity with fingerprint {:?}",
+                x.public().fingerprint()
+            );
             (Arc::new(x), true)
         } else {
             (self.ctx.identity.clone(), false)
@@ -367,27 +373,10 @@ impl ControlProtocol for ControlProtocolImpl {
                 .ctx
                 .relay_graph
                 .read()
-                .find_shortest_path(&my_isk.public().fingerprint(), &args.destination)
+                .find_shortest_path(&self.ctx.identity.public().fingerprint(), &args.destination)
                 .ok_or(SendMessageError::NoRoute)?;
-            let instructs: Result<Vec<_>, SendMessageError> = route
-                .windows(2)
-                .map(|wind| {
-                    let this = wind[0];
-                    let next = wind[1];
-                    let this_pubkey = self
-                        .ctx
-                        .relay_graph
-                        .read()
-                        .identity(&this)
-                        .ok_or(SendMessageError::NoOnionPublic(this))?
-                        .onion_pk;
-                    Ok(ForwardInstruction {
-                        this_pubkey,
-                        next_fingerprint: next,
-                    })
-                })
-                .collect();
-            let instructs = instructs?;
+            let instructs = route_to_instructs(route, self.ctx.relay_graph.clone())?;
+            log::debug!("instructs = {:?}", instructs);
             let their_opk = self
                 .ctx
                 .relay_graph
@@ -409,7 +398,19 @@ impl ControlProtocol for ControlProtocolImpl {
             if anon_source {
                 // currently the path for every one of them is the same; will want to change this in the future
                 let n = 8;
-                let reverse_instructs = reverse_route(&instructs, their_opk);
+                let reverse_route = self
+                    .ctx
+                    .relay_graph
+                    .read()
+                    .find_shortest_path(
+                        &args.destination,
+                        &self.ctx.identity.public().fingerprint(),
+                    )
+                    .ok_or(SendMessageError::NoRoute)?;
+                let reverse_instructs =
+                    route_to_instructs(reverse_route, self.ctx.relay_graph.clone())?;
+                log::debug!("reverse_instructs = {:?}", reverse_instructs);
+
                 let mut rbs: Vec<ReplyBlock> = vec![];
                 for _ in 0..n {
                     let (rb, (id, degarbler)) = ReplyBlock::new(&reverse_instructs, &my_isk)
@@ -458,4 +459,26 @@ impl ControlProtocol for ControlProtocolImpl {
             .collect();
         serde_json::to_value(lala).unwrap()
     }
+}
+
+fn route_to_instructs(
+    route: Vec<Fingerprint>,
+    relay_graph: Arc<RwLock<RelayGraph>>,
+) -> Result<Vec<ForwardInstruction>, SendMessageError> {
+    route
+        .windows(2)
+        .map(|wind| {
+            let this = wind[0];
+            let next = wind[1];
+            let this_pubkey = relay_graph
+                .read()
+                .identity(&this)
+                .ok_or(SendMessageError::NoOnionPublic(this))?
+                .onion_pk;
+            Ok(ForwardInstruction {
+                this_pubkey,
+                next_fingerprint: next,
+            })
+        })
+        .collect()
 }

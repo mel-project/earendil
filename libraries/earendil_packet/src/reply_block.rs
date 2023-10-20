@@ -67,22 +67,3 @@ impl RbDegarbler {
         InnerPacket::open(&raw, &self.my_onion_secret)
     }
 }
-
-pub fn reverse_route(
-    route: &[ForwardInstruction],
-    destination: OnionPublic,
-) -> Vec<ForwardInstruction> {
-    let mut reverse_route = Vec::new();
-    let mut previous = destination;
-
-    for instruction in route.into_iter().rev() {
-        let new_instruction = ForwardInstruction {
-            this_pubkey: previous,
-            next_fingerprint: instruction.next_fingerprint,
-        };
-        reverse_route.push(new_instruction);
-        previous = instruction.this_pubkey;
-    }
-    eprintln!("reverse_route len: {}", reverse_route.len());
-    reverse_route
-}
