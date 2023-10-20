@@ -181,9 +181,11 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     ) -> anyhow::Result<()> {
         match inner {
             InnerPacket::Message(msg) => {
+                log::debug!("received InnerPacket::Message");
                 ctx.incoming.push((msg, source))?;
             }
             InnerPacket::ReplyBlocks(reply_blocks) => {
+                log::debug!("received a batch of ReplyBlocks");
                 ctx.anon_destinations
                     .write()
                     .insert_batch(source, reply_blocks);
@@ -413,8 +415,9 @@ impl ControlProtocol for ControlProtocolImpl {
 
                 let mut rbs: Vec<ReplyBlock> = vec![];
                 for _ in 0..n {
-                    let (rb, (id, degarbler)) = ReplyBlock::new(&reverse_instructs, &my_isk)
-                        .map_err(|_| SendMessageError::ReplyBlockFailed)?;
+                    let (rb, (id, degarbler)) =
+                        ReplyBlock::new(&reverse_instructs, &self.ctx.onion_sk.public())
+                            .map_err(|_| SendMessageError::ReplyBlockFailed)?;
                     rbs.push(rb);
                     self.ctx.degarblers.insert(id, degarbler);
                 }

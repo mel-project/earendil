@@ -18,7 +18,7 @@ pub struct ReplyBlock {
 impl ReplyBlock {
     pub fn new(
         route: &[ForwardInstruction],
-        isk: &IdentitySecret,
+        my_opk: &OnionPublic,
     ) -> Result<(Self, (u64, RbDegarbler)), PacketConstructError> {
         let my_onion_secret = OnionSecret::generate();
         let my_onion_public = my_onion_secret.public();
@@ -30,10 +30,10 @@ impl ReplyBlock {
 
         let (raw_packet, shared_secs) = RawPacket::new(
             route,
-            &my_onion_public,
+            &my_opk,
             InnerPacket::Message(Bytes::new()),
             &metadata,
-            isk,
+            &IdentitySecret::generate(),
         )?;
         let header = raw_packet.header;
 

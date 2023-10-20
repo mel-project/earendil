@@ -122,7 +122,8 @@ mod tests {
 
         // Generate  identity secrets
         let alice_isk = IdentitySecret::generate();
-
+        let alice_osk = OnionSecret::generate();
+        let alice_opk = alice_osk.public();
         // Generate 5-hop route
         let route_with_onion_secrets = generate_forward_instructions(5);
         let route: Vec<ForwardInstruction> = route_with_onion_secrets
@@ -132,7 +133,7 @@ mod tests {
 
         // Prepare reply block
         let (reply_block, (_, rb_degarbler)) =
-            ReplyBlock::new(&route, &alice_isk).expect("Failed to create reply block");
+            ReplyBlock::new(&route, &alice_opk).expect("Failed to create reply block");
 
         // Prepare message using header from reply block
         let message = "hello world from reply block!";
@@ -161,7 +162,7 @@ mod tests {
             id: _,
             pkt: peeled_reply,
         } = peeled_packet
-            .peel(&rb_degarbler.my_onion_secret)
+            .peel(&alice_osk)
             .expect("Failed to peel packet")
         {
             peeled_reply
