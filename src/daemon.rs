@@ -297,10 +297,6 @@ impl ReplyBlockStore {
             None => None,
         }
     }
-
-    pub fn contains(&self, fingerprint: &Fingerprint) -> bool {
-        self.items.contains(fingerprint)
-    }
 }
 
 struct ControlProtocolImpl {
@@ -324,26 +320,14 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError> {
-        let is_reply = self
-            .ctx
-            .anon_destinations
-            .read()
-            .contains(&args.destination);
-
-        if is_reply {
+        let maybe_reply_block = self.ctx.anon_destinations.write().get(&args.destination);
+        if let Some(reply_block) = maybe_reply_block {
             log::debug!("sending message with reply block");
-            let reply_block = self
-                .ctx
-                .anon_destinations
-                .write()
-                .get(&args.destination)
-                .unwrap();
 
             let identity_secret = self.ctx.identity.clone();
             let inner = InnerPacket::Message(Bytes::copy_from_slice(&args.content));
-            // TODO: handle error properly
             let raw_packet = RawPacket::from_reply_block(&reply_block, inner, &identity_secret)
-                .expect("failed to construct reply block");
+                .map_err(|_| SendMessageError::MessageTooBig)?;
             self.ctx.table.inject_asif_incoming(raw_packet).await;
             return Ok(());
         }
