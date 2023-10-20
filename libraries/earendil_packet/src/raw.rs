@@ -7,8 +7,8 @@ use serde_big_array::BigArray;
 use thiserror::Error;
 
 use crate::{
-    crypt::{box_decrypt, box_encrypt, stream_dencrypt, AeadError, OnionPublic, OnionSecret},
-    InnerPacket, OpenError, ReplyBlock, SealError,
+    crypt::{box_decrypt, box_encrypt, stream_dencrypt, OnionPublic, OnionSecret},
+    InnerPacket, ReplyBlock,
 };
 
 /// A raw, on-the-wire Earendil packet.
@@ -28,7 +28,7 @@ pub struct ForwardInstruction {
     pub next_fingerprint: Fingerprint,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Serialize, Deserialize, Debug)]
 pub enum PacketConstructError {
     #[error("route contains too many hops")]
     TooManyHops,

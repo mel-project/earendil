@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 
 use earendil_crypt::Fingerprint;
+use earendil_packet::PacketConstructError;
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
 use serde::{Deserialize, Serialize};
@@ -21,10 +22,12 @@ pub async fn main_control(
     let conn = ControlClient::from(HttpRpcTransport::new(connect));
     match control_command {
         ControlCommands::SendMessage {
+            id,
             destination,
             message,
         } => {
             conn.send_message(SendMessageArgs {
+                id,
                 destination,
                 content: Bytes::copy_from_slice(message.as_bytes()),
             })
@@ -65,19 +68,20 @@ pub trait ControlProtocol {
 pub enum SendMessageError {
     #[error("no route to the given destination")]
     NoRoute,
-    #[error("destination way too far")]
-    TooFar,
-    #[error("message is too big")]
-    MessageTooBig,
+    #[error(transparent)]
+    PacketConstructError(#[from] PacketConstructError),
     #[error("no onion public key for fingerprint {0}")]
     NoOnionPublic(Fingerprint),
     #[error("failed to construct reply block")]
     ReplyBlockFailed,
+    #[error("cannot use anonymous id to communicate with anonymous id")]
+    NoAnonId,
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct SendMessageArgs {
+    pub id: Option<String>,
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub destination: Fingerprint,
     #[serde_as(as = "serde_with::base64::Base64")]

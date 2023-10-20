@@ -39,6 +39,8 @@ enum Commands {
 pub enum ControlCommands {
     /// Send a message to a destination.
     SendMessage {
+        #[arg(long)]
+        id: Option<String>,
         #[arg(short, long)]
         destination: Fingerprint,
         #[arg(short, long)]

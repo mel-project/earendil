@@ -22,6 +22,7 @@ use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use sosistab2::ObfsUdpSecret;
+use std::collections::HashMap;
 use std::{
     collections::{BTreeMap, VecDeque},
     num::NonZeroUsize,
@@ -94,6 +95,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             anon_destinations: Arc::new(RwLock::new(ReplyBlockStore::new(
                 NonZeroUsize::new(5000).expect("reply block store can't be of size 0"),
             ))),
+            anon_identities: Arc::new(RwLock::new(AnonIdentities::new())),
         };
 
         // Run the loops
@@ -233,6 +235,29 @@ pub struct DaemonContext {
     incoming: Arc<ConcurrentQueue<(Bytes, Fingerprint)>>,
     degarblers: Cache<u64, RbDegarbler>,
     anon_destinations: Arc<RwLock<ReplyBlockStore>>,
+    anon_identities: Arc<RwLock<AnonIdentities>>,
+}
+
+pub struct AnonIdentities {
+    map: HashMap<String, IdentitySecret>,
+}
+
+impl AnonIdentities {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+        }
+    }
+
+    pub fn get(&mut self, id: &str) -> IdentitySecret {
+        if let Some(isk) = self.map.get(id) {
+            isk.to_owned()
+        } else {
+            let isk = IdentitySecret::generate();
+            self.map.insert(id.to_owned(), isk.clone());
+            isk
+        }
+    }
 }
 
 pub struct ReplyBlockDeque {
@@ -320,85 +345,89 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError> {
+        let (my_isk, anon_source) = if let Some(id) = args.id {
+            // get anonymous identity
+            let x = self.ctx.anon_identities.write().get(&id);
+            (Arc::new(x), true)
+        } else {
+            (self.ctx.identity.clone(), false)
+        };
+
         let maybe_reply_block = self.ctx.anon_destinations.write().get(&args.destination);
         if let Some(reply_block) = maybe_reply_block {
+            if anon_source {
+                return Err(SendMessageError::NoAnonId);
+            }
             log::debug!("sending message with reply block");
-
-            let identity_secret = self.ctx.identity.clone();
             let inner = InnerPacket::Message(Bytes::copy_from_slice(&args.content));
-            let raw_packet = RawPacket::from_reply_block(&reply_block, inner, &identity_secret)
-                .map_err(|_| SendMessageError::MessageTooBig)?;
+            let raw_packet = RawPacket::from_reply_block(&reply_block, inner, &my_isk)?;
             self.ctx.table.inject_asif_incoming(raw_packet).await;
-            return Ok(());
-        }
-
-        let route = self
-            .ctx
-            .relay_graph
-            .read()
-            .find_shortest_path(&self.ctx.identity.public().fingerprint(), &args.destination)
-            .ok_or(SendMessageError::NoRoute)?;
-        let instructs: Result<Vec<_>, SendMessageError> = route
-            .windows(2)
-            .map(|wind| {
-                let this = wind[0];
-                let next = wind[1];
-                let this_pubkey = self
-                    .ctx
-                    .relay_graph
-                    .read()
-                    .identity(&this)
-                    .ok_or(SendMessageError::NoOnionPublic(this))?
-                    .onion_pk;
-                Ok(ForwardInstruction {
-                    this_pubkey,
-                    next_fingerprint: next,
+        } else {
+            let route = self
+                .ctx
+                .relay_graph
+                .read()
+                .find_shortest_path(&my_isk.public().fingerprint(), &args.destination)
+                .ok_or(SendMessageError::NoRoute)?;
+            let instructs: Result<Vec<_>, SendMessageError> = route
+                .windows(2)
+                .map(|wind| {
+                    let this = wind[0];
+                    let next = wind[1];
+                    let this_pubkey = self
+                        .ctx
+                        .relay_graph
+                        .read()
+                        .identity(&this)
+                        .ok_or(SendMessageError::NoOnionPublic(this))?
+                        .onion_pk;
+                    Ok(ForwardInstruction {
+                        this_pubkey,
+                        next_fingerprint: next,
+                    })
                 })
-            })
-            .collect();
-        let instructs = instructs?;
-        let their_opk = self
-            .ctx
-            .relay_graph
-            .read()
-            .identity(&args.destination)
-            .ok_or(SendMessageError::NoOnionPublic(args.destination))?
-            .onion_pk;
-        let (wrapped_onion, _) = RawPacket::new(
-            &instructs,
-            &their_opk,
-            InnerPacket::Message(args.content),
-            &[0; 20],
-            &self.ctx.identity,
-        )
-        .ok()
-        .ok_or(SendMessageError::TooFar)?;
-        // we send the onion by treating it as a message addressed to ourselves
-        self.ctx.table.inject_asif_incoming(wrapped_onion).await;
+                .collect();
+            let instructs = instructs?;
+            let their_opk = self
+                .ctx
+                .relay_graph
+                .read()
+                .identity(&args.destination)
+                .ok_or(SendMessageError::NoOnionPublic(args.destination))?
+                .onion_pk;
+            let (wrapped_onion, _) = RawPacket::new(
+                &instructs,
+                &their_opk,
+                InnerPacket::Message(args.content),
+                &[0; 20],
+                &my_isk,
+            )?;
+            // we send the onion by treating it as a message addressed to ourselves
+            self.ctx.table.inject_asif_incoming(wrapped_onion).await;
 
-        // for every packet we send, we also send a packet containing a batch of reply blocks
-        // currently the path for every one of them is the same; will want to change this in the future
-        let n = 8;
-        let reverse_instructs = reverse_route(&instructs, their_opk);
-        let mut rbs: Vec<ReplyBlock> = vec![];
-        for _ in 0..n {
-            let (rb, (id, degarbler)) = ReplyBlock::new(&reverse_instructs, &self.ctx.identity)
-                .map_err(|_| SendMessageError::ReplyBlockFailed)?;
-            rbs.push(rb);
-            self.ctx.degarblers.insert(id, degarbler);
+            // if we want to use an anon source, send a batch of reply blocks
+            if anon_source {
+                // currently the path for every one of them is the same; will want to change this in the future
+                let n = 8;
+                let reverse_instructs = reverse_route(&instructs, their_opk);
+                let mut rbs: Vec<ReplyBlock> = vec![];
+                for _ in 0..n {
+                    let (rb, (id, degarbler)) = ReplyBlock::new(&reverse_instructs, &my_isk)
+                        .map_err(|_| SendMessageError::ReplyBlockFailed)?;
+                    rbs.push(rb);
+                    self.ctx.degarblers.insert(id, degarbler);
+                }
+                let (wrapped_rb_onion, _) = RawPacket::new(
+                    &instructs,
+                    &their_opk,
+                    InnerPacket::ReplyBlocks(rbs),
+                    &[0; 20],
+                    &my_isk,
+                )?;
+                // we send the onion by treating it as a message addressed to ourselves
+                self.ctx.table.inject_asif_incoming(wrapped_rb_onion).await;
+            }
         }
-        let (wrapped_rb_onion, _) = RawPacket::new(
-            &instructs,
-            &their_opk,
-            InnerPacket::ReplyBlocks(rbs),
-            &[0; 20],
-            &self.ctx.identity,
-        )
-        .ok()
-        .ok_or(SendMessageError::TooFar)?;
-        // we send the onion by treating it as a message addressed to ourselves
-        self.ctx.table.inject_asif_incoming(wrapped_rb_onion).await;
-
         Ok(())
     }
 
