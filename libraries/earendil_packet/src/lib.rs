@@ -132,12 +132,13 @@ mod tests {
             .collect();
 
         // Prepare reply block
-        let (reply_block, (_, rb_degarbler)) =
-            ReplyBlock::new(&route, &alice_opk).expect("Failed to create reply block");
+        let (reply_block, (_, reply_degarbler)) =
+            ReplyBlock::new(&route, &alice_opk, OnionSecret::generate())
+                .expect("Failed to create reply block");
 
         // Prepare message using header from reply block
         let message = "hello world from reply block!";
-        let packet = RawPacket::from_reply_block(
+        let packet = RawPacket::new_reply(
             &reply_block,
             InnerPacket::Message(Bytes::copy_from_slice(message.as_bytes())),
             &alice_isk,
@@ -158,7 +159,7 @@ mod tests {
             }
         }
         // At the destination (alice), peel the packet
-        let peeled_reply = if let PeeledPacket::Garbled {
+        let mut peeled_reply = if let PeeledPacket::GarbledReply {
             id: _,
             pkt: peeled_reply,
         } = peeled_packet
@@ -170,8 +171,8 @@ mod tests {
             panic!("Expected receive packet")
         };
         // Degarble the reply block and check the message
-        let (inner_packet, _) = rb_degarbler
-            .degarble(peeled_reply)
+        let (inner_packet, _) = reply_degarbler
+            .degarble(&mut peeled_reply)
             .expect("Failed to degarble");
         if let InnerPacket::Message(msg_bts) = inner_packet {
             let msg =

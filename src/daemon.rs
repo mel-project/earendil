@@ -1,3 +1,4 @@
+mod anon_identities;
 mod control_protocol_impl;
 mod gossip;
 mod inout_route;
@@ -11,7 +12,7 @@ use bytes::Bytes;
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentitySecret};
-use earendil_packet::RbDegarbler;
+use earendil_packet::ReplyDegarbler;
 use earendil_packet::{crypt::OnionSecret, InnerPacket, PeeledPacket};
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
@@ -20,9 +21,9 @@ use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
-use std::collections::HashMap;
 use std::{num::NonZeroUsize, path::Path, sync::Arc, time::Duration};
 
+use crate::daemon::anon_identities::AnonIdentities;
 use crate::daemon::reply_block_store::ReplyBlockStore;
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
@@ -164,7 +165,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 /// Loop that handles the control protocol
 async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let http = HttpRpcServer::bind(ctx.config.control_listen).await?;
-    let service = ControlService(ControlProtocolImpl { ctx });
+    let service = ControlService(ControlProtocolImpl::new(ctx));
     http.run(service).await?;
     Ok(())
 }
@@ -211,13 +212,13 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 from: source,
                 pkt: inner,
             } => process_inner_pkt(&ctx, inner, source)?,
-            PeeledPacket::Garbled { id, pkt } => {
+            PeeledPacket::GarbledReply { id, mut pkt } => {
                 log::debug!("received garbled packet");
-                let degarbler = ctx
+                let reply_degarbler = ctx
                     .degarblers
                     .get(&id)
                     .context("no degarbler for this garbled pkt")?;
-                let (inner, source) = degarbler.degarble(pkt)?;
+                let (inner, source) = reply_degarbler.degarble(&mut pkt)?;
                 log::debug!("packet has been degarbled!");
                 process_inner_pkt(&ctx, inner, source)?
             }
@@ -234,29 +235,7 @@ pub struct DaemonContext {
     onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
     incoming: Arc<ConcurrentQueue<(Bytes, Fingerprint)>>,
-    degarblers: Cache<u64, RbDegarbler>,
+    degarblers: Cache<u64, ReplyDegarbler>,
     anon_destinations: Arc<RwLock<ReplyBlockStore>>,
     anon_identities: Arc<RwLock<AnonIdentities>>,
-}
-
-pub struct AnonIdentities {
-    map: HashMap<String, IdentitySecret>,
-}
-
-impl AnonIdentities {
-    pub fn new() -> Self {
-        Self {
-            map: HashMap::new(),
-        }
-    }
-
-    pub fn get(&mut self, id: &str) -> IdentitySecret {
-        if let Some(isk) = self.map.get(id) {
-            isk.to_owned()
-        } else {
-            let isk = IdentitySecret::generate();
-            self.map.insert(id.to_owned(), isk.clone());
-            isk
-        }
-    }
 }

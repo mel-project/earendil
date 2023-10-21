@@ -19,9 +19,9 @@ impl ReplyBlock {
     pub fn new(
         route: &[ForwardInstruction],
         my_opk: &OnionPublic,
-    ) -> Result<(Self, (u64, RbDegarbler)), PacketConstructError> {
-        let my_onion_secret = OnionSecret::generate();
-        let my_onion_public = my_onion_secret.public();
+        my_anon_osk: OnionSecret,
+    ) -> Result<(Self, (u64, ReplyDegarbler)), PacketConstructError> {
+        let my_anon_opk = my_anon_osk.public();
 
         let rb_id: u64 = rand::random();
         let mut metadata = [0; 20];
@@ -37,14 +37,14 @@ impl ReplyBlock {
         )?;
         let header = raw_packet.header;
 
-        let rb_degarbler = RbDegarbler {
+        let rb_degarbler = ReplyDegarbler {
             shared_secs,
-            my_onion_secret,
+            my_anon_osk,
         };
         Ok((
             Self {
                 header,
-                e2e_dest: my_onion_public,
+                e2e_dest: my_anon_opk,
             },
             (rb_id, rb_degarbler),
         ))
@@ -52,18 +52,21 @@ impl ReplyBlock {
 }
 
 #[derive(Clone)]
-pub struct RbDegarbler {
+pub struct ReplyDegarbler {
     shared_secs: Vec<[u8; 32]>,
-    pub my_onion_secret: OnionSecret,
+    my_anon_osk: OnionSecret,
 }
 
-impl RbDegarbler {
-    pub fn degarble(&self, raw: [u8; 8192]) -> Result<(InnerPacket, Fingerprint), OpenError> {
-        let mut raw = raw;
+impl ReplyDegarbler {
+    pub fn degarble(&self, raw: &mut [u8; 8192]) -> Result<(InnerPacket, Fingerprint), OpenError> {
         for shared_sec in &self.shared_secs {
             let body_key = blake3::keyed_hash(b"body____________________________", shared_sec);
-            stream_dencrypt(body_key.as_bytes(), &[0; 12], &mut raw);
+            stream_dencrypt(body_key.as_bytes(), &[0; 12], raw);
         }
-        InnerPacket::open(&raw, &self.my_onion_secret)
+        InnerPacket::open(&raw, &self.my_anon_osk)
+    }
+
+    pub fn my_anon_osk(&self) -> &OnionSecret {
+        &self.my_anon_osk
     }
 }

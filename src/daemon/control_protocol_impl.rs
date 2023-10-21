@@ -15,7 +15,13 @@ use crate::{
 };
 
 pub struct ControlProtocolImpl {
-    pub ctx: DaemonContext,
+    ctx: DaemonContext,
+}
+
+impl ControlProtocolImpl {
+    pub fn new(ctx: DaemonContext) -> Self {
+        Self { ctx }
+    }
 }
 
 #[async_trait]
@@ -35,26 +41,26 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError> {
-        let (public_isk, anon_source) = if let Some(id) = args.id {
+        let (public_isk, my_anon_osk) = if let Some(id) = args.id {
             // get anonymous identity
-            let x = self.ctx.anon_identities.write().get(&id);
+            let (anon_id, anon_osk) = self.ctx.anon_identities.write().get(&id);
             log::debug!(
                 "using anon identity with fingerprint {:?}",
-                x.public().fingerprint()
+                anon_id.public().fingerprint()
             );
-            (Arc::new(x), true)
+            (Arc::new(anon_id), Some(anon_osk))
         } else {
-            (self.ctx.identity.clone(), false)
+            (self.ctx.identity.clone(), None)
         };
 
         let maybe_reply_block = self.ctx.anon_destinations.write().get(&args.destination);
         if let Some(reply_block) = maybe_reply_block {
-            if anon_source {
+            if my_anon_osk.is_some() {
                 return Err(SendMessageError::NoAnonId);
             }
             log::debug!("sending message with reply block");
             let inner = InnerPacket::Message(Bytes::copy_from_slice(&args.content));
-            let raw_packet = RawPacket::from_reply_block(&reply_block, inner, &public_isk)?;
+            let raw_packet = RawPacket::new_reply(&reply_block, inner, &public_isk)?;
             self.ctx.table.inject_asif_incoming(raw_packet).await;
         } else {
             let route = self
@@ -72,18 +78,17 @@ impl ControlProtocol for ControlProtocolImpl {
                 .identity(&args.destination)
                 .ok_or(SendMessageError::NoOnionPublic(args.destination))?
                 .onion_pk;
-            let (wrapped_onion, _) = RawPacket::new(
+            let wrapped_onion = RawPacket::new_normal(
                 &instructs,
                 &their_opk,
                 InnerPacket::Message(args.content),
-                &[0; 20],
                 &public_isk,
             )?;
             // we send the onion by treating it as a message addressed to ourselves
             self.ctx.table.inject_asif_incoming(wrapped_onion).await;
 
             // if we want to use an anon source, send a batch of reply blocks
-            if anon_source {
+            if let Some(my_anon_osk) = my_anon_osk {
                 // currently the path for every one of them is the same; will want to change this in the future
                 let n = 8;
                 let reverse_route = self
@@ -101,17 +106,19 @@ impl ControlProtocol for ControlProtocolImpl {
 
                 let mut rbs: Vec<ReplyBlock> = vec![];
                 for _ in 0..n {
-                    let (rb, (id, degarbler)) =
-                        ReplyBlock::new(&reverse_instructs, &self.ctx.onion_sk.public())
-                            .map_err(|_| SendMessageError::ReplyBlockFailed)?;
+                    let (rb, (id, degarbler)) = ReplyBlock::new(
+                        &reverse_instructs,
+                        &self.ctx.onion_sk.public(),
+                        my_anon_osk.clone(),
+                    )
+                    .map_err(|_| SendMessageError::ReplyBlockFailed)?;
                     rbs.push(rb);
                     self.ctx.degarblers.insert(id, degarbler);
                 }
-                let (wrapped_rb_onion, _) = RawPacket::new(
+                let wrapped_rb_onion = RawPacket::new_normal(
                     &instructs,
                     &their_opk,
                     InnerPacket::ReplyBlocks(rbs),
-                    &[0; 20],
                     &public_isk,
                 )?;
                 // we send the onion by treating it as a message addressed to ourselves

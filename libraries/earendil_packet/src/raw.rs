@@ -45,8 +45,31 @@ pub enum PacketPeelError {
 }
 
 impl RawPacket {
+    pub fn new_normal(
+        route: &[ForwardInstruction],
+        destination: &OnionPublic,
+        payload: InnerPacket,
+        my_isk: &IdentitySecret,
+    ) -> Result<Self, PacketConstructError> {
+        let (raw, _) = Self::new(route, destination, payload, &[0; 20], my_isk)?;
+        Ok(raw)
+    }
+
+    /// Creates a RawPacket for a message to an anonymous identity, using a ReplyBlock
+    pub fn new_reply(
+        reply_block: &ReplyBlock,
+        payload: InnerPacket,
+        my_isk: &IdentitySecret,
+    ) -> Result<Self, PacketConstructError> {
+        Ok(Self {
+            header: reply_block.header,
+            onion_body: payload
+                .seal(my_isk, &reply_block.e2e_dest)
+                .map_err(|_| PacketConstructError::MessageTooBig)?,
+        })
+    }
     /// Creates a new RawPacket along with a vector of the shared secrets used to encrypt each layer of the onion body, given a payload and the series of relays that the packet is supposed to pass through.
-    pub fn new(
+    pub(crate) fn new(
         route: &[ForwardInstruction],
         destination: &OnionPublic,
         payload: InnerPacket,
@@ -126,20 +149,6 @@ impl RawPacket {
         }
     }
 
-    /// Creates a RawPacket for a message to an anonymous identity, using a ReplyBlock
-    pub fn from_reply_block(
-        reply_block: &ReplyBlock,
-        payload: InnerPacket,
-        my_isk: &IdentitySecret,
-    ) -> Result<Self, PacketConstructError> {
-        Ok(Self {
-            header: reply_block.header,
-            onion_body: payload
-                .seal(my_isk, &reply_block.e2e_dest)
-                .map_err(|_| PacketConstructError::MessageTooBig)?,
-        })
-    }
-
     /// "Peels off" one layer of the onion, by decryption using the specified secret key.
     pub fn peel(&self, our_sk: &OnionSecret) -> Result<PeeledPacket, PacketPeelError> {
         // First, decode the header
@@ -175,7 +184,7 @@ impl RawPacket {
         } else if metadata_marker == 0 {
             let id_bts = array_ref![metadata, 1, 8];
             let id = u64::from_be_bytes(*id_bts);
-            PeeledPacket::Garbled {
+            PeeledPacket::GarbledReply {
                 id,
                 pkt: peeled_body,
             }
@@ -209,5 +218,5 @@ pub struct RawHeader {
 pub enum PeeledPacket {
     Forward { to: Fingerprint, pkt: RawPacket },
     Received { from: Fingerprint, pkt: InnerPacket },
-    Garbled { id: u64, pkt: [u8; 8192] },
+    GarbledReply { id: u64, pkt: [u8; 8192] },
 }
