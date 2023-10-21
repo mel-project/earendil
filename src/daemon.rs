@@ -76,7 +76,6 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
     );
 
     smolscale::block_on(async move {
-        let mut subtasks = FuturesUnordered::new();
         let table = Arc::new(NeighTable::new());
 
         let daemon_ctx = DaemonContext {
@@ -119,6 +118,8 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             .map_err(log_error("control_protocol"))),
         );
 
+        let mut route_tasks = FuturesUnordered::new();
+
         // For every in_routes block, spawn a task to handle incoming stuff
         for (in_route_name, config) in daemon_ctx.config.in_routes.iter() {
             let context = InRouteContext {
@@ -127,7 +128,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             };
             match config.clone() {
                 InRouteConfig::Obfsudp { listen, secret } => {
-                    subtasks.push(smolscale::spawn(in_route_obfsudp(context, listen, secret)));
+                    route_tasks.push(smolscale::spawn(in_route_obfsudp(context, listen, secret)));
                 }
             }
         }
@@ -145,14 +146,15 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
                         remote_fingerprint: *fingerprint,
                         daemon_ctx: daemon_ctx.clone(),
                     };
-                    subtasks.push(smolscale::spawn(out_route_obfsudp(
+                    route_tasks.push(smolscale::spawn(out_route_obfsudp(
                         context, *connect, *cookie,
                     )));
                 }
             }
         }
 
-        while let Some(next) = subtasks.next().await {
+        // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
+        while let Some(next) = route_tasks.next().await {
             next?;
         }
         Ok(())
