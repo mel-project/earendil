@@ -21,7 +21,7 @@ use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
-use std::{num::NonZeroUsize, path::Path, sync::Arc, time::Duration};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use crate::daemon::anon_identities::AnonIdentities;
 use crate::daemon::reply_block_store::ReplyBlockStore;
@@ -87,9 +87,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
             incoming: Arc::new(ConcurrentQueue::unbounded()),
             degarblers: Cache::new(1_000_000),
-            anon_destinations: Arc::new(RwLock::new(ReplyBlockStore::new(
-                NonZeroUsize::new(5000).expect("reply block store can't be of size 0"),
-            ))),
+            anon_destinations: Arc::new(RwLock::new(ReplyBlockStore::new())),
             anon_identities: Arc::new(RwLock::new(AnonIdentities::new())),
         };
 
@@ -184,9 +182,12 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             }
             InnerPacket::ReplyBlocks(reply_blocks) => {
                 log::debug!("received a batch of ReplyBlocks");
-                ctx.anon_destinations
-                    .write()
-                    .insert_batch(source, reply_blocks);
+
+                for reply_block in reply_blocks {
+                    ctx.anon_destinations
+                        .write()
+                        .get_or_insert_mut(source, reply_block);
+                }
             }
         }
         Ok(())

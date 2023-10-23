@@ -36,27 +36,19 @@ pub struct ReplyBlockStore {
 }
 
 impl ReplyBlockStore {
-    pub fn new(size: NonZeroUsize) -> Self {
-        let items = LruCache::new(size);
+    pub fn new() -> Self {
+        let items =
+            LruCache::new(NonZeroUsize::new(5000).expect("reply block store can't be of size 0"));
         Self { items }
     }
 
-    pub fn insert(&mut self, fingerprint: Fingerprint, rb: ReplyBlock) {
-        match self.items.get_mut(&fingerprint) {
-            Some(deque) => {
-                deque.insert(rb);
-            }
-            None => {
-                let mut deque = ReplyBlockDeque::new(1000);
-                deque.insert(rb);
-                self.items.put(fingerprint, deque);
-            }
-        }
-    }
-
-    pub fn insert_batch(&mut self, fingerprint: Fingerprint, items: Vec<ReplyBlock>) {
-        for item in items {
-            self.insert(fingerprint, item);
+    pub fn get_or_insert_mut(&mut self, fingerprint: Fingerprint, rb: ReplyBlock) {
+        if let Some(deque) = self.items.get_mut(&fingerprint) {
+            deque.insert(rb);
+        } else {
+            let mut deque = ReplyBlockDeque::new(1000);
+            deque.insert(rb);
+            self.items.put(fingerprint, deque);
         }
     }
 
@@ -73,7 +65,6 @@ mod tests {
     use super::*;
     use earendil_packet::crypt::OnionSecret;
     use earendil_packet::ForwardInstruction;
-    use std::num::NonZeroUsize;
 
     fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, OnionSecret)> {
         (0..n)
@@ -145,44 +136,28 @@ mod tests {
 
     #[test]
     fn test_reply_block_store_insert() {
-        let size = NonZeroUsize::new(5).unwrap();
-        let mut rb_store = ReplyBlockStore::new(size);
+        let mut rb_store = ReplyBlockStore::new();
         let fingerprint = Fingerprint::from_bytes(&[10; 20]);
         let rb = create_reply_block();
 
         // Testing insert in empty store
-        rb_store.insert(fingerprint, rb.clone());
+        rb_store.get_or_insert_mut(fingerprint, rb.clone());
         assert_eq!(rb_store.get(&fingerprint), Some(rb));
 
         // Testing insert when item already exists
         let rb_new = create_reply_block();
-        rb_store.insert(fingerprint, rb_new.clone());
+        rb_store.get_or_insert_mut(fingerprint, rb_new.clone());
         assert_eq!(rb_store.get(&fingerprint), Some(rb_new));
     }
 
     #[test]
-    fn test_reply_block_store_insert_batch() {
-        let size = NonZeroUsize::new(5).unwrap();
-        let mut rb_store = ReplyBlockStore::new(size);
-        let fingerprint = Fingerprint::from_bytes(&[10; 20]);
-        let rb1 = create_reply_block();
-        let rb2 = create_reply_block();
-        let items = vec![rb1.clone(), rb2.clone()];
-
-        // Testing insert batch
-        rb_store.insert_batch(fingerprint, items);
-        assert_eq!(rb_store.get(&fingerprint), Some(rb2));
-    }
-
-    #[test]
     fn test_reply_block_store_get() {
-        let size = NonZeroUsize::new(5).unwrap();
-        let mut rb_store = ReplyBlockStore::new(size);
+        let mut rb_store = ReplyBlockStore::new();
         let fingerprint = Fingerprint::from_bytes(&[10; 20]);
         let rb = create_reply_block();
 
         // Testing get when item exists
-        rb_store.insert(fingerprint, rb.clone());
+        rb_store.get_or_insert_mut(fingerprint, rb.clone());
         assert_eq!(rb_store.get(&fingerprint), Some(rb));
 
         // Testing get when item does not exist

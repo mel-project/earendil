@@ -63,7 +63,7 @@ impl ReplyDegarbler {
             let body_key = blake3::keyed_hash(b"body____________________________", shared_sec);
             stream_dencrypt(body_key.as_bytes(), &[0; 12], raw);
         }
-        InnerPacket::open(&raw, &self.my_anon_osk)
+        InnerPacket::open(raw, &self.my_anon_osk)
     }
 
     pub fn my_anon_osk(&self) -> &OnionSecret {

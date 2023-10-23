@@ -18,9 +18,7 @@ impl AnonIdentities {
     }
 
     pub fn get(&mut self, id: &str) -> (IdentitySecret, OnionSecret) {
-        let ret = self
-            .map
-            .get_with_by_ref(id, || (IdentitySecret::generate(), OnionSecret::generate()));
-        ret
+        self.map
+            .get_with_by_ref(id, || (IdentitySecret::generate(), OnionSecret::generate()))
     }
 }
