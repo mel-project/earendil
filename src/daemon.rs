@@ -184,9 +184,7 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 log::debug!("received a batch of ReplyBlocks");
 
                 for reply_block in reply_blocks {
-                    ctx.anon_destinations
-                        .write()
-                        .get_or_insert_mut(source, reply_block);
+                    ctx.anon_destinations.write().insert(source, reply_block);
                 }
             }
         }

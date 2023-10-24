@@ -53,7 +53,7 @@ impl ControlProtocol for ControlProtocolImpl {
             (self.ctx.identity.clone(), None)
         };
 
-        let maybe_reply_block = self.ctx.anon_destinations.write().get(&args.destination);
+        let maybe_reply_block = self.ctx.anon_destinations.write().pop(&args.destination);
         if let Some(reply_block) = maybe_reply_block {
             if my_anon_osk.is_some() {
                 return Err(SendMessageError::NoAnonId);

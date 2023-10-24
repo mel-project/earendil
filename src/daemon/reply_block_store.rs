@@ -42,17 +42,14 @@ impl ReplyBlockStore {
         Self { items }
     }
 
-    pub fn get_or_insert_mut(&mut self, fingerprint: Fingerprint, rb: ReplyBlock) {
-        if let Some(deque) = self.items.get_mut(&fingerprint) {
-            deque.insert(rb);
-        } else {
-            let mut deque = ReplyBlockDeque::new(1000);
-            deque.insert(rb);
-            self.items.put(fingerprint, deque);
-        }
+    pub fn insert(&mut self, fingerprint: Fingerprint, rb: ReplyBlock) {
+        let deque = self
+            .items
+            .get_or_insert_mut(fingerprint, || ReplyBlockDeque::new(1000));
+        deque.insert(rb);
     }
 
-    pub fn get(&mut self, fingerprint: &Fingerprint) -> Option<ReplyBlock> {
+    pub fn pop(&mut self, fingerprint: &Fingerprint) -> Option<ReplyBlock> {
         match self.items.get_mut(fingerprint) {
             Some(deque) => deque.pop(),
             None => None,
@@ -141,26 +138,26 @@ mod tests {
         let rb = create_reply_block();
 
         // Testing insert in empty store
-        rb_store.get_or_insert_mut(fingerprint, rb.clone());
-        assert_eq!(rb_store.get(&fingerprint), Some(rb));
+        rb_store.insert(fingerprint, rb.clone());
+        assert_eq!(rb_store.pop(&fingerprint), Some(rb));
 
         // Testing insert when item already exists
         let rb_new = create_reply_block();
-        rb_store.get_or_insert_mut(fingerprint, rb_new.clone());
-        assert_eq!(rb_store.get(&fingerprint), Some(rb_new));
+        rb_store.insert(fingerprint, rb_new.clone());
+        assert_eq!(rb_store.pop(&fingerprint), Some(rb_new));
     }
 
     #[test]
-    fn test_reply_block_store_get() {
+    fn test_reply_block_store_pop() {
         let mut rb_store = ReplyBlockStore::new();
         let fingerprint = Fingerprint::from_bytes(&[10; 20]);
         let rb = create_reply_block();
 
         // Testing get when item exists
-        rb_store.get_or_insert_mut(fingerprint, rb.clone());
-        assert_eq!(rb_store.get(&fingerprint), Some(rb));
+        rb_store.insert(fingerprint, rb.clone());
+        assert_eq!(rb_store.pop(&fingerprint), Some(rb));
 
         // Testing get when item does not exist
-        assert_eq!(rb_store.get(&fingerprint), None);
+        assert_eq!(rb_store.pop(&fingerprint), None);
     }
 }
