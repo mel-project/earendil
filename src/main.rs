@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use config::ConfigFile;
 use control_protocol::main_control;
 use earendil_crypt::Fingerprint;
+use earendil_packet::Dock;
 
 mod config;
 pub mod control_protocol;
@@ -41,6 +42,8 @@ pub enum ControlCommands {
     SendMessage {
         #[arg(long)]
         id: Option<String>,
+        source_dock: Dock,
+        dest_dock: Dock,
         #[arg(short, long)]
         destination: Fingerprint,
         #[arg(short, long)]

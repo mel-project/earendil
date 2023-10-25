@@ -13,7 +13,7 @@ use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{crypt::OnionSecret, InnerPacket, PeeledPacket};
-use earendil_packet::{ForwardInstruction, RawPacket, ReplyBlock, ReplyDegarbler};
+use earendil_packet::{ForwardInstruction, Message, RawPacket, ReplyBlock, ReplyDegarbler};
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
@@ -234,7 +234,7 @@ pub struct DaemonContext {
     identity: Arc<IdentitySecret>,
     onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
-    incoming: Arc<ConcurrentQueue<(Bytes, Fingerprint)>>,
+    incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
     degarblers: Cache<u64, ReplyDegarbler>,
     anon_destinations: Arc<RwLock<ReplyBlockStore>>,
     anon_identities: Arc<RwLock<AnonIdentities>>,
@@ -260,7 +260,11 @@ impl DaemonContext {
                 return Err(SendMessageError::NoAnonId);
             }
             log::debug!("sending message with reply block");
-            let inner = InnerPacket::Message(Bytes::copy_from_slice(&args.content));
+            let inner = InnerPacket::Message(Message::new(
+                args.source_dock,
+                args.dest_dock,
+                Bytes::copy_from_slice(&args.content),
+            ));
             let raw_packet = RawPacket::new_reply(&reply_block, inner, &public_isk)?;
             self.table.inject_asif_incoming(raw_packet).await;
         } else {
@@ -280,7 +284,7 @@ impl DaemonContext {
             let wrapped_onion = RawPacket::new_normal(
                 &instructs,
                 &their_opk,
-                InnerPacket::Message(args.content),
+                InnerPacket::Message(Message::new(args.source_dock, args.dest_dock, args.content)),
                 &public_isk,
             )?;
             // we send the onion by treating it as a message addressed to ourselves
@@ -323,7 +327,7 @@ impl DaemonContext {
         Ok(())
     }
 
-    async fn recv_message(&self) -> Option<(Bytes, Fingerprint)> {
+    async fn recv_message(&self) -> Option<(Message, Fingerprint)> {
         self.incoming.pop().ok()
     }
 }

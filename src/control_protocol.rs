@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 
 use earendil_crypt::Fingerprint;
-use earendil_packet::PacketConstructError;
+use earendil_packet::{Dock, Message, PacketConstructError};
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
 use serde::{Deserialize, Serialize};
@@ -23,11 +23,15 @@ pub async fn main_control(
     match control_command {
         ControlCommands::SendMessage {
             id,
+            source_dock,
+            dest_dock,
             destination,
             message,
         } => {
             conn.send_message(SendMessageArgs {
                 id,
+                source_dock,
+                dest_dock,
                 destination,
                 content: Bytes::copy_from_slice(message.as_bytes()),
             })
@@ -61,7 +65,7 @@ pub trait ControlProtocol {
 
     async fn my_routes(&self) -> serde_json::Value;
 
-    async fn recv_message(&self) -> Option<(Bytes, Fingerprint)>;
+    async fn recv_message(&self) -> Option<(Message, Fingerprint)>;
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
@@ -82,6 +86,8 @@ pub enum SendMessageError {
 #[derive(Serialize, Deserialize)]
 pub struct SendMessageArgs {
     pub id: Option<String>,
+    pub source_dock: Dock,
+    pub dest_dock: Dock,
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub destination: Fingerprint,
     #[serde_as(as = "serde_with::base64::Base64")]

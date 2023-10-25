@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
 use bytes::Bytes;
 use earendil_crypt::Fingerprint;
-use earendil_packet::{ForwardInstruction, InnerPacket, RawPacket, ReplyBlock};
+use earendil_packet::{ForwardInstruction, InnerPacket, Message, RawPacket, ReplyBlock};
 use earendil_topology::RelayGraph;
 use parking_lot::RwLock;
 use sosistab2::ObfsUdpSecret;
@@ -44,7 +44,7 @@ impl ControlProtocol for ControlProtocolImpl {
         self.ctx.send_message(args).await
     }
 
-    async fn recv_message(&self) -> Option<(Bytes, Fingerprint)> {
+    async fn recv_message(&self) -> Option<(Message, Fingerprint)> {
         self.ctx.recv_message().await
     }
 

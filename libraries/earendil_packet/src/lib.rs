@@ -41,7 +41,7 @@ mod tests {
         let my_isk = IdentitySecret::generate();
         let destination_sk = OnionSecret::generate();
         let destination = destination_sk.public();
-        let msg = Bytes::copy_from_slice(&[0u8; 100]);
+        let msg = Message::new(0u32, 0u32, Bytes::copy_from_slice(&[0u8; 100]));
 
         let forward_instructions: Vec<ForwardInstruction> =
             route.iter().map(|(inst, _)| *inst).collect();
@@ -137,10 +137,11 @@ mod tests {
                 .expect("Failed to create reply block");
 
         // Prepare message using header from reply block
-        let message = "hello world from reply block!";
+        let body = "hello world from reply block!";
+        let message = Message::new(0u32, 0u32, Bytes::copy_from_slice(body.as_bytes()));
         let packet = RawPacket::new_reply(
             &reply_block,
-            InnerPacket::Message(Bytes::copy_from_slice(message.as_bytes())),
+            InnerPacket::Message(message.clone()),
             &alice_isk,
         )
         .expect("Failed to create reply packet");
@@ -174,9 +175,7 @@ mod tests {
         let (inner_packet, _) = reply_degarbler
             .degarble(&mut peeled_reply)
             .expect("Failed to degarble");
-        if let InnerPacket::Message(msg_bts) = inner_packet {
-            let msg =
-                String::from_utf8(msg_bts.to_vec()).expect("Failed to convert message to string");
+        if let InnerPacket::Message(msg) = inner_packet {
             assert_eq!(msg, message);
         } else {
             panic!("Expected InnerPacket::Message");

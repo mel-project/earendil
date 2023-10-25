@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     crypt::{stream_dencrypt, OnionPublic, OnionSecret},
-    ForwardInstruction, InnerPacket, OpenError, PacketConstructError, RawHeader, RawPacket,
+    ForwardInstruction, InnerPacket, Message, OpenError, PacketConstructError, RawHeader,
+    RawPacket,
 };
 
 /// A reply block. Reply blocks are constructed by endpoints who wish other endpoints to talk to them via an anonymous address, and are single-use, consumed when used to construct a packet going to that anonymous address.
@@ -31,7 +32,7 @@ impl ReplyBlock {
         let (raw_packet, shared_secs) = RawPacket::new(
             route,
             my_opk,
-            InnerPacket::Message(Bytes::new()),
+            InnerPacket::Message(Message::new(0u32, 0u32, Bytes::new())),
             &metadata,
             &IdentitySecret::generate(),
         )?;

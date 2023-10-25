@@ -9,14 +9,22 @@ use crate::{
     reply_block::ReplyBlock,
 };
 
-pub struct Source;
-
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 /// Represents the actual end-to-end packet that is carried in the 8192-byte payloads. Either an application-level message, or a batch of reply blocks.
 pub enum InnerPacket {
-    Message(Bytes),
+    Message(Message),
     ReplyBlocks(Vec<ReplyBlock>),
 }
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+/// An inner packet message with corresponding UDP port-like source and destinaton docks
+pub struct Message {
+    source_dock: Dock,
+    dest_dock: Dock,
+    body: Bytes,
+}
+
+pub type Dock = u32;
 
 #[derive(Serialize, Deserialize)]
 struct InnerPacketCiphertext {
@@ -109,6 +117,28 @@ impl InnerPacket {
     }
 }
 
+impl Message {
+    pub fn new(source_dock: Dock, dest_dock: Dock, body: Bytes) -> Self {
+        Message {
+            source_dock,
+            dest_dock,
+            body,
+        }
+    }
+
+    pub fn get_source_dock(&self) -> &Dock {
+        &self.source_dock
+    }
+
+    pub fn get_dest_dock(&self) -> &Dock {
+        &self.dest_dock
+    }
+
+    pub fn get_body(&self) -> &Bytes {
+        &self.body
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,7 +150,8 @@ mod tests {
         let identity_secret = IdentitySecret::generate();
 
         // Step 2: Create an InnerPacket
-        let inner_packet = InnerPacket::Message(Bytes::from("Hello, World!"));
+        let inner_packet =
+            InnerPacket::Message(Message::new(42u32, 200u32, Bytes::from("Hello, World!")));
 
         // Step 3: Encrypt the InnerPacket
         let encrypted_packet = inner_packet
