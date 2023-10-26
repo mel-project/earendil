@@ -2,6 +2,7 @@ use crate::{control_protocol::SendMessageArgs, daemon::DaemonContext};
 use bytes::Bytes;
 use earendil_crypt::Fingerprint;
 use earendil_packet::{Dock, Message};
+use rand::Rng;
 use smol::channel::Receiver;
 
 pub struct Socket {
@@ -17,7 +18,19 @@ pub struct Endpoint {
 }
 
 impl Socket {
-    fn bind(ctx: DaemonContext, id: Option<String>, dock: Dock) -> Socket {
+    fn bind(ctx: DaemonContext, id: Option<String>, dock: Option<Dock>) -> Socket {
+        let dock = if let Some(dock) = dock {
+            dock
+        } else {
+            let mut rand_dock: Dock;
+            loop {
+                rand_dock = rand::thread_rng().gen();
+                if !ctx.socket_recv_queues.contains_key(&rand_dock) {
+                    break;
+                }
+            }
+            rand_dock
+        };
         let (send_outgoing, recv_incoming) = smol::channel::bounded(1000);
         ctx.socket_recv_queues.insert(dock, send_outgoing);
 
