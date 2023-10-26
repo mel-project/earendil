@@ -12,6 +12,7 @@ pub struct Socket {
     recv_incoming: Receiver<(Message, Fingerprint)>,
 }
 
+#[derive(Clone)]
 pub struct Endpoint {
     fingerprint: Fingerprint,
     dock: Dock,
