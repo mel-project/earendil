@@ -6,19 +6,22 @@ mod n2n_connection;
 mod n2n_protocol;
 mod neightable;
 mod reply_block_store;
+mod socket;
 
 use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
+use dashmap::DashMap;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{crypt::OnionSecret, InnerPacket, PeeledPacket};
-use earendil_packet::{ForwardInstruction, Message, RawPacket, ReplyBlock, ReplyDegarbler};
+use earendil_packet::{Dock, ForwardInstruction, Message, RawPacket, ReplyBlock, ReplyDegarbler};
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
+use smol::channel::Sender;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use std::{path::Path, sync::Arc, time::Duration};
@@ -90,6 +93,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             degarblers: Cache::new(1_000_000),
             anon_destinations: Arc::new(RwLock::new(ReplyBlockStore::new())),
             anon_identities: Arc::new(RwLock::new(AnonIdentities::new())),
+            socket_recv_queues: Arc::new(DashMap::new()),
         };
 
         // Run the loops
@@ -238,6 +242,7 @@ pub struct DaemonContext {
     degarblers: Cache<u64, ReplyDegarbler>,
     anon_destinations: Arc<RwLock<ReplyBlockStore>>,
     anon_identities: Arc<RwLock<AnonIdentities>>,
+    socket_recv_queues: Arc<DashMap<Dock, Sender<Message>>>,
 }
 
 impl DaemonContext {

@@ -1,11 +1,8 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use earendil_crypt::Fingerprint;
-use earendil_packet::{ForwardInstruction, InnerPacket, Message, RawPacket, ReplyBlock};
-use earendil_topology::RelayGraph;
-use parking_lot::RwLock;
+use earendil_packet::Message;
 use sosistab2::ObfsUdpSecret;
 
 use crate::{
