@@ -251,7 +251,7 @@ async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         if let Some((message, fingerprint)) = ctx.recv_message().await {
             match ctx.socket_recv_queues.get(message.get_dest_dock()) {
-                Some(sender) => sender.send((message, fingerprint)).await?,
+                Some(sender) => sender.try_send((message, fingerprint))?,
                 None => ctx.debug_queue.push((message, fingerprint))?,
             }
         }
