@@ -94,6 +94,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             anon_destinations: Arc::new(RwLock::new(ReplyBlockStore::new())),
             anon_identities: Arc::new(RwLock::new(AnonIdentities::new())),
             socket_recv_queues: Arc::new(DashMap::new()),
+            debug_queue: Arc::new(ConcurrentQueue::unbounded()),
         };
 
         // Run the loops
@@ -120,6 +121,14 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
                 daemon_ctx.clone()
             )
             .map_err(log_error("control_protocol"))),
+        );
+
+        let _dispatch_by_dock = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([daemon_ctx], move || dispatch_by_dock_loop(
+                daemon_ctx.clone()
+            )
+            .map_err(log_error("dispatch_by_dock"))),
         );
 
         let mut route_tasks = FuturesUnordered::new();
@@ -230,6 +239,21 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 }
 
+async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    loop {
+        let received = ctx.recv_message().await;
+        if let Some((message, fingerprint)) = received {
+            if let Some(sender) = ctx.socket_recv_queues.get(message.get_dest_dock()) {
+                sender.send((message, fingerprint)).await?;
+            } else {
+                ctx.debug_queue.push((message, fingerprint))?;
+            }
+        } else {
+            continue;
+        }
+    }
+}
+
 #[allow(unused)]
 #[derive(Clone)]
 pub struct DaemonContext {
@@ -242,7 +266,8 @@ pub struct DaemonContext {
     degarblers: Cache<u64, ReplyDegarbler>,
     anon_destinations: Arc<RwLock<ReplyBlockStore>>,
     anon_identities: Arc<RwLock<AnonIdentities>>,
-    socket_recv_queues: Arc<DashMap<Dock, Sender<Message>>>,
+    socket_recv_queues: Arc<DashMap<Dock, Sender<(Message, Fingerprint)>>>,
+    debug_queue: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
 }
 
 impl DaemonContext {

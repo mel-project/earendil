@@ -42,7 +42,7 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn recv_message(&self) -> Option<(Message, Fingerprint)> {
-        self.ctx.recv_message().await
+        self.ctx.debug_queue.pop().ok()
     }
 
     async fn my_routes(&self) -> serde_json::Value {

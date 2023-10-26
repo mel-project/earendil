@@ -1,5 +1,5 @@
 use crate::{control_protocol::SendMessageArgs, daemon::DaemonContext};
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use earendil_crypt::Fingerprint;
 use earendil_packet::{Dock, Message};
 use smol::channel::Receiver;
@@ -7,7 +7,7 @@ use smol::channel::Receiver;
 pub struct Socket {
     id: Option<String>,
     dock: Dock,
-    recv_incoming: Receiver<Message>,
+    recv_incoming: Receiver<(Message, Fingerprint)>,
 }
 
 pub struct Endpoint {
@@ -45,7 +45,7 @@ impl Socket {
         Ok(())
     }
 
-    async fn recv_from(&self) -> anyhow::Result<Message> {
+    async fn recv_from(&self) -> anyhow::Result<(Message, Fingerprint)> {
         let message = self.recv_incoming.recv().await?;
 
         Ok(message)
