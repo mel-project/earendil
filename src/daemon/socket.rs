@@ -18,7 +18,7 @@ pub struct Endpoint {
 }
 
 impl Socket {
-    fn bind(ctx: DaemonContext, id: Option<String>, dock: Option<Dock>) -> Socket {
+    pub fn bind(ctx: DaemonContext, id: Option<String>, dock: Option<Dock>) -> Socket {
         let dock = if let Some(dock) = dock {
             dock
         } else {
@@ -42,7 +42,7 @@ impl Socket {
         }
     }
 
-    async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
+    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
         self.ctx
             .send_message(SendMessageArgs {
                 id: self.id.clone(),
@@ -56,12 +56,9 @@ impl Socket {
         Ok(())
     }
 
-    async fn recv_from(&self) -> anyhow::Result<(Bytes, Endpoint)> {
+    pub async fn recv_from(&self) -> anyhow::Result<(Bytes, Endpoint)> {
         let (message, fingerprint) = self.recv_incoming.recv().await?;
-        let endpoint = Endpoint {
-            fingerprint,
-            dock: *message.get_source_dock(),
-        };
+        let endpoint = Endpoint::new(fingerprint, *message.get_source_dock());
 
         Ok((message.get_body().clone(), endpoint))
     }
@@ -70,5 +67,11 @@ impl Socket {
 impl Drop for Socket {
     fn drop(&mut self) {
         self.ctx.socket_recv_queues.remove(&self.dock);
+    }
+}
+
+impl Endpoint {
+    pub fn new(fingerprint: Fingerprint, dock: Dock) -> Endpoint {
+        Endpoint { fingerprint, dock }
     }
 }
