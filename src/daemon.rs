@@ -241,12 +241,10 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
-        let received = ctx.recv_message().await;
-        if let Some((message, fingerprint)) = received {
-            if let Some(sender) = ctx.socket_recv_queues.get(message.get_dest_dock()) {
-                sender.send((message, fingerprint)).await?;
-            } else {
-                ctx.debug_queue.push((message, fingerprint))?;
+        if let Some((message, fingerprint)) = ctx.recv_message().await {
+            match ctx.socket_recv_queues.get(message.get_dest_dock()) {
+                Some(sender) => sender.send((message, fingerprint)).await?,
+                None => ctx.debug_queue.push((message, fingerprint))?,
             }
         } else {
             continue;
