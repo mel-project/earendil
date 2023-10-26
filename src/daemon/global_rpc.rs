@@ -5,7 +5,7 @@ use earendil_crypt::Fingerprint;
 use earendil_packet::Dock;
 use futures_util::{future, FutureExt};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
-use smol::{lock::futures, Timer};
+use smol::Timer;
 
 use crate::daemon::socket::Endpoint;
 
@@ -41,7 +41,7 @@ impl RpcTransport for GlobalRpcClient {
                 .send_to(serde_json::to_string(&req)?.into(), endpoint.clone())
                 .await?;
 
-            timeout = Duration::from_secs(2u64.pow(retries));
+            timeout = Duration::from_secs(2u64.pow(retries + 1));
             let when = Instant::now() + timeout;
             let timer = Timer::at(when);
             let recv_future = Box::pin(socket.recv_from());
