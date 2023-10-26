@@ -53,3 +53,9 @@ impl Socket {
         Ok((message.get_body().clone(), endpoint))
     }
 }
+
+impl Drop for Socket {
+    fn drop(&mut self) {
+        self.ctx.socket_recv_queues.remove(&self.dock);
+    }
+}
