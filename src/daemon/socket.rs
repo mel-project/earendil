@@ -30,7 +30,7 @@ impl Socket {
     async fn send_to(
         &self,
         ctx: DaemonContext,
-        buf: Bytes,
+        body: Bytes,
         endpoint: Endpoint,
     ) -> anyhow::Result<()> {
         ctx.send_message(SendMessageArgs {
@@ -38,34 +38,16 @@ impl Socket {
             source_dock: self.dock,
             dest_dock: endpoint.dock,
             destination: endpoint.fingerprint,
-            content: buf,
+            content: body,
         })
         .await?;
 
         Ok(())
     }
 
-    async fn recv_from(
-        &self,
-        ctx: DaemonContext,
-        buf: &mut BytesMut,
-    ) -> anyhow::Result<(usize, Endpoint)> {
-        if let Some(sender) = ctx.socket_recv_queues.get(&self.dock) {
-            match ctx.recv_message().await {
-                Some((msg, fingerprint)) => {
-                    let _ = sender.send(msg.clone()).await;
-                    let endpoint = Endpoint {
-                        fingerprint,
-                        dock: msg.clone().get_source_dock().clone(),
-                    };
-                    buf.copy_from_slice(msg.get_body().as_ref());
+    async fn recv_from(&self) -> anyhow::Result<Message> {
+        let message = self.recv_incoming.recv().await?;
 
-                    Ok((msg.get_body().len(), endpoint))
-                }
-                None => anyhow::bail!("no messages"),
-            }
-        } else {
-            anyhow::bail!("no receiver for socket")
-        }
+        Ok(message)
     }
 }
