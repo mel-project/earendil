@@ -1,11 +1,8 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use earendil_crypt::Fingerprint;
-use earendil_packet::{ForwardInstruction, InnerPacket, Message, RawPacket, ReplyBlock};
-use earendil_topology::RelayGraph;
-use parking_lot::RwLock;
+use earendil_packet::Message;
 use sosistab2::ObfsUdpSecret;
 
 use crate::{
@@ -45,7 +42,7 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn recv_message(&self) -> Option<(Message, Fingerprint)> {
-        self.ctx.recv_message().await
+        self.ctx.debug_queue.pop().ok()
     }
 
     async fn my_routes(&self) -> serde_json::Value {
