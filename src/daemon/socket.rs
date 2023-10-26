@@ -5,6 +5,7 @@ use earendil_packet::{Dock, Message};
 use smol::channel::Receiver;
 
 pub struct Socket {
+    ctx: DaemonContext,
     id: Option<String>,
     dock: Dock,
     recv_incoming: Receiver<(Message, Fingerprint)>,
@@ -21,26 +22,23 @@ impl Socket {
         ctx.socket_recv_queues.insert(dock, send_outgoing);
 
         Socket {
+            ctx,
             id,
             dock,
             recv_incoming,
         }
     }
 
-    async fn send_to(
-        &self,
-        ctx: DaemonContext,
-        body: Bytes,
-        endpoint: Endpoint,
-    ) -> anyhow::Result<()> {
-        ctx.send_message(SendMessageArgs {
-            id: self.id.clone(),
-            source_dock: self.dock,
-            dest_dock: endpoint.dock,
-            destination: endpoint.fingerprint,
-            content: body,
-        })
-        .await?;
+    async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
+        self.ctx
+            .send_message(SendMessageArgs {
+                id: self.id.clone(),
+                source_dock: self.dock,
+                dest_dock: endpoint.dock,
+                destination: endpoint.fingerprint,
+                content: body,
+            })
+            .await?;
 
         Ok(())
     }
