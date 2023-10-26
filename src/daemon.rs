@@ -21,7 +21,7 @@ use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
-use smol::channel::Sender;
+use smol::channel::{Receiver, Sender};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use std::{path::Path, sync::Arc, time::Duration};
@@ -82,6 +82,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 
     smolscale::block_on(async move {
         let table = Arc::new(NeighTable::new());
+        let (incoming_send, incoming_recv) = smol::channel::bounded(1_000_000);
 
         let daemon_ctx = DaemonContext {
             config: Arc::new(config),
@@ -89,7 +90,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             identity: identity.into(),
             onion_sk: OnionSecret::generate(),
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
-            incoming: Arc::new(ConcurrentQueue::unbounded()),
+            incoming: Arc::new(incoming_recv),
             degarblers: Cache::new(1_000_000),
             anon_destinations: Arc::new(RwLock::new(ReplyBlockStore::new())),
             anon_identities: Arc::new(RwLock::new(AnonIdentities::new())),
@@ -107,8 +108,11 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 
         let _peel_forward = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([daemon_ctx], move || peel_forward_loop(daemon_ctx.clone())
-                .map_err(log_error("peel_forward"))),
+            clone!([daemon_ctx], move || peel_forward_loop(
+                daemon_ctx.clone(),
+                incoming_send.clone()
+            )
+            .map_err(log_error("peel_forward"))),
         );
         let _gossip = Immortal::respawn(
             RespawnStrategy::Immediate,
@@ -183,16 +187,20 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 }
 
 /// Loop that takes incoming packets, peels them, and processes them
-async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+async fn peel_forward_loop(
+    ctx: DaemonContext,
+    incoming_send: Sender<(Message, Fingerprint)>,
+) -> anyhow::Result<()> {
     fn process_inner_pkt(
         ctx: &DaemonContext,
+        incoming_send: &Sender<(Message, Fingerprint)>,
         inner: InnerPacket,
         source: Fingerprint,
     ) -> anyhow::Result<()> {
         match inner {
             InnerPacket::Message(msg) => {
                 log::debug!("received InnerPacket::Message");
-                ctx.incoming.push((msg, source))?;
+                incoming_send.try_send((msg, source))?;
             }
             InnerPacket::ReplyBlocks(reply_blocks) => {
                 log::debug!("received a batch of ReplyBlocks");
@@ -224,7 +232,7 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             PeeledPacket::Received {
                 from: source,
                 pkt: inner,
-            } => process_inner_pkt(&ctx, inner, source)?,
+            } => process_inner_pkt(&ctx, &incoming_send, inner, source)?,
             PeeledPacket::GarbledReply { id, mut pkt } => {
                 log::debug!("received garbled packet");
                 let reply_degarbler = ctx
@@ -233,7 +241,7 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     .context("no degarbler for this garbled pkt")?;
                 let (inner, source) = reply_degarbler.degarble(&mut pkt)?;
                 log::debug!("packet has been degarbled!");
-                process_inner_pkt(&ctx, inner, source)?
+                process_inner_pkt(&ctx, &incoming_send, inner, source)?
             }
         }
     }
@@ -258,7 +266,7 @@ pub struct DaemonContext {
     identity: Arc<IdentitySecret>,
     onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
-    incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
+    incoming: Arc<Receiver<(Message, Fingerprint)>>,
     degarblers: Cache<u64, ReplyDegarbler>,
     anon_destinations: Arc<RwLock<ReplyBlockStore>>,
     anon_identities: Arc<RwLock<AnonIdentities>>,
@@ -354,7 +362,7 @@ impl DaemonContext {
     }
 
     async fn recv_message(&self) -> Option<(Message, Fingerprint)> {
-        self.incoming.pop().ok()
+        self.incoming.recv().await.ok()
     }
 }
 

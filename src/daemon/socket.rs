@@ -45,9 +45,13 @@ impl Socket {
         Ok(())
     }
 
-    async fn recv_from(&self) -> anyhow::Result<(Message, Fingerprint)> {
-        let message = self.recv_incoming.recv().await?;
+    async fn recv_from(&self) -> anyhow::Result<(Bytes, Endpoint)> {
+        let (message, fingerprint) = self.recv_incoming.recv().await?;
+        let endpoint = Endpoint {
+            fingerprint,
+            dock: *message.get_source_dock(),
+        };
 
-        Ok(message)
+        Ok((message.get_body().clone(), endpoint))
     }
 }
