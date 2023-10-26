@@ -246,8 +246,6 @@ async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 Some(sender) => sender.send((message, fingerprint)).await?,
                 None => ctx.debug_queue.push((message, fingerprint))?,
             }
-        } else {
-            continue;
         }
     }
 }
