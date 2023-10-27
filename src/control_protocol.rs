@@ -41,15 +41,19 @@ pub async fn main_control(
             id,
             source_dock,
             destination,
-            request,
+            method,
+            args,
         } => {
-            conn.send_global_rpc(SendGlobalRpcArgs {
-                id,
-                source_dock,
-                destination,
-                request: serde_json::from_str(&request)?,
-            })
-            .await??;
+            let res = conn
+                .send_global_rpc(SendGlobalRpcArgs {
+                    id,
+                    source_dock,
+                    destination,
+                    method,
+                    args,
+                })
+                .await??;
+            println!("{res}");
         }
         ControlCommands::GraphDump => {
             let res = conn.graph_dump().await?;
@@ -120,7 +124,8 @@ pub struct SendGlobalRpcArgs {
     pub source_dock: Option<Dock>,
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub destination: Fingerprint,
-    pub request: JrpcRequest,
+    pub method: String,
+    pub args: Vec<String>,
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]

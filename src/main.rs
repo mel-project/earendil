@@ -58,7 +58,8 @@ pub enum ControlCommands {
         #[arg(short, long)]
         destination: Fingerprint,
         #[arg(short, long)]
-        request: String,
+        method: String,
+        args: Vec<String>,
     },
 
     /// Dumps the graph.
