@@ -56,10 +56,9 @@ impl RpcTransport for GlobalRpcTransport {
         let endpoint = Endpoint::new(self.dest, GLOBAL_RPC_DOCK);
         let socket = Socket::bind(self.ctx.clone(), None, None);
         let mut retries = 0;
-        let max_retries = 3;
         let mut timeout: Duration;
 
-        while retries <= max_retries {
+        loop {
             socket
                 .send_to(serde_json::to_string(&req)?.into(), endpoint.clone())
                 .await?;
@@ -87,10 +86,5 @@ impl RpcTransport for GlobalRpcTransport {
                 }
             }
         }
-
-        Err(anyhow::anyhow!(format!(
-            "all retransmission attempts failed for {}",
-            serde_json::to_string_pretty(&req)?
-        )))
     }
 }
