@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use earendil_crypt::Fingerprint;
 use earendil_packet::Message;
+use nanorpc::RpcTransport;
 use sosistab2::ObfsUdpSecret;
 
 use crate::{
@@ -13,6 +13,8 @@ use crate::{
     },
     daemon::DaemonContext,
 };
+
+use super::global_rpc_protocol::GlobalRpcTransport;
 
 pub struct ControlProtocolImpl {
     ctx: DaemonContext,
@@ -73,16 +75,11 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn send_global_rpc(&self, args: SendGlobalRpcArgs) -> Result<(), SendGlobalRpcError> {
-        let rpc_string = &serde_json::to_string(&args.request)
-            .map_err(|_| SendGlobalRpcError::RequestConstructError)?;
-        let message_args = SendMessageArgs {
-            id: args.id,
-            source_dock: args.source_dock,
-            dest_dock: args.dest_dock,
-            destination: args.destination,
-            content: Bytes::copy_from_slice(rpc_string.as_bytes()),
-        };
-        self.send_message(message_args);
+        let client = GlobalRpcTransport::new(self.ctx.clone(), args.destination);
+        client
+            .call_raw(args.request)
+            .await
+            .map_err(|_| SendGlobalRpcError::SendError)?;
 
         Ok(())
     }

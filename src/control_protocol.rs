@@ -40,14 +40,12 @@ pub async fn main_control(
         ControlCommands::SendGlobalRpc {
             id,
             source_dock,
-            dest_dock,
             destination,
             request,
         } => {
             conn.send_global_rpc(SendGlobalRpcArgs {
                 id,
                 source_dock,
-                dest_dock,
                 destination,
                 request: serde_json::from_str(&request)?,
             })
@@ -116,8 +114,7 @@ pub struct SendMessageArgs {
 #[derive(Serialize, Deserialize)]
 pub struct SendGlobalRpcArgs {
     pub id: Option<String>,
-    pub source_dock: Dock,
-    pub dest_dock: Dock,
+    pub source_dock: Option<Dock>,
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub destination: Fingerprint,
     pub request: JrpcRequest,
@@ -125,8 +122,6 @@ pub struct SendGlobalRpcArgs {
 
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum SendGlobalRpcError {
-    #[error("request was unable to be contructed")]
-    RequestConstructError,
-    #[error("no response was received")]
-    NoResponse,
+    #[error("error sending GlobalRpc request")]
+    SendError,
 }

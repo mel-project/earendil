@@ -1,6 +1,5 @@
 mod anon_identities;
 mod control_protocol_impl;
-mod global_rpc_client;
 mod global_rpc_protocol;
 mod gossip;
 mod inout_route;
@@ -44,8 +43,7 @@ use crate::{
 };
 
 use self::control_protocol_impl::ControlProtocolImpl;
-use self::global_rpc_client::GLOBAL_RPC_DOCK;
-use self::global_rpc_protocol::{GlobalRpcImpl, GlobalRpcService};
+use self::global_rpc_protocol::{GlobalRpcImpl, GlobalRpcService, GLOBAL_RPC_DOCK};
 use self::socket::Socket;
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_

@@ -6,11 +6,10 @@ use config::ConfigFile;
 use control_protocol::main_control;
 use earendil_crypt::Fingerprint;
 use earendil_packet::Dock;
-use nanorpc::JrpcRequest;
 
 mod config;
 pub mod control_protocol;
-mod daemon;
+pub mod daemon;
 
 /// Official implementation of an Earendil node
 #[derive(Parser)]
@@ -55,8 +54,7 @@ pub enum ControlCommands {
     SendGlobalRpc {
         #[arg(long)]
         id: Option<String>,
-        source_dock: Dock,
-        dest_dock: Dock,
+        source_dock: Option<Dock>,
         #[arg(short, long)]
         destination: Fingerprint,
         #[arg(short, long)]
