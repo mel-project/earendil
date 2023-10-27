@@ -74,13 +74,19 @@ impl ControlProtocol for ControlProtocolImpl {
         serde_json::to_value(lala).unwrap()
     }
 
-    async fn send_global_rpc(&self, args: SendGlobalRpcArgs) -> Result<(), SendGlobalRpcError> {
+    async fn send_global_rpc(
+        &self,
+        args: SendGlobalRpcArgs,
+    ) -> Result<serde_json::Value, SendGlobalRpcError> {
         let client = GlobalRpcTransport::new(self.ctx.clone(), args.destination);
-        client
+        let res = client
             .call_raw(args.request)
             .await
             .map_err(|_| SendGlobalRpcError::SendError)?;
+        let res_bytes = stdcode::serialize(&res).map_err(|_| SendGlobalRpcError::SendError)?;
+        let res_json =
+            serde_json::from_slice(&res_bytes).map_err(|_| SendGlobalRpcError::SendError)?;
 
-        Ok(())
+        Ok(res_json)
     }
 }

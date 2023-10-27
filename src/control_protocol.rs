@@ -75,7 +75,10 @@ pub async fn main_control(
 pub trait ControlProtocol {
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError>;
 
-    async fn send_global_rpc(&self, args: SendGlobalRpcArgs) -> Result<(), SendGlobalRpcError>;
+    async fn send_global_rpc(
+        &self,
+        args: SendGlobalRpcArgs,
+    ) -> Result<serde_json::Value, SendGlobalRpcError>;
 
     async fn graph_dump(&self) -> String;
 
