@@ -1,6 +1,7 @@
 mod anon_identities;
 mod control_protocol_impl;
-mod global_rpc;
+mod global_rpc_client;
+mod global_rpc_protocol;
 mod gossip;
 mod inout_route;
 mod n2n_connection;

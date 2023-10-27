@@ -3,6 +3,7 @@ use bytes::Bytes;
 use earendil_crypt::Fingerprint;
 use earendil_packet::{Dock, Message};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use smol::channel::Receiver;
 
 pub struct Socket {
@@ -12,7 +13,7 @@ pub struct Socket {
     recv_incoming: Receiver<(Message, Fingerprint)>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Endpoint {
     fingerprint: Fingerprint,
     dock: Dock,
