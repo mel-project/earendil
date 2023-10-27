@@ -1,5 +1,6 @@
 mod anon_identities;
 mod control_protocol_impl;
+mod global_rpc_protocol;
 mod gossip;
 mod inout_route;
 mod n2n_connection;
@@ -19,10 +20,12 @@ use earendil_packet::{Dock, ForwardInstruction, Message, RawPacket, ReplyBlock, 
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
+use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
 use smol::channel::{Receiver, Sender};
 use smolscale::immortal::{Immortal, RespawnStrategy};
+use smolscale::reaper::TaskReaper;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
@@ -40,6 +43,8 @@ use crate::{
 };
 
 use self::control_protocol_impl::ControlProtocolImpl;
+use self::global_rpc_protocol::{GlobalRpcImpl, GlobalRpcService, GLOBAL_RPC_DOCK};
+use self::socket::Socket;
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
 where
@@ -133,6 +138,12 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
                 daemon_ctx.clone()
             )
             .map_err(log_error("dispatch_by_dock"))),
+        );
+
+        let _global_rpc_loop = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([daemon_ctx], move || global_rpc_loop(daemon_ctx.clone())
+                .map_err(log_error("global_rpc_loop"))),
         );
 
         let mut route_tasks = FuturesUnordered::new();
@@ -247,6 +258,7 @@ async fn peel_forward_loop(
     }
 }
 
+/// Loop that dispatches received messages to their corresponding dock queue
 async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         if let Some((message, fingerprint)) = ctx.recv_message().await {
@@ -254,6 +266,32 @@ async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 Some(sender) => sender.try_send((message, fingerprint))?,
                 None => ctx.debug_queue.push((message, fingerprint))?,
             }
+        }
+    }
+}
+
+/// Loop that listens to and handles incoming GlobalRpc requests
+async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    let socket = Arc::new(Socket::bind(ctx.clone(), None, Some(GLOBAL_RPC_DOCK)));
+    let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
+    let group: TaskReaper<anyhow::Result<()>> = TaskReaper::new();
+
+    loop {
+        let socket = socket.clone();
+        if let Ok((req, endpoint)) = socket.recv_from().await {
+            let service = service.clone();
+            group.attach(smolscale::spawn(async move {
+                let req: JrpcRequest = serde_json::from_str(&String::from_utf8(req.to_vec())?)?;
+                let resp = service.respond_raw(req).await;
+                socket
+                    .send_to(
+                        Bytes::from(serde_json::to_string(&resp)?.into_bytes()),
+                        endpoint,
+                    )
+                    .await?;
+
+                Ok(())
+            }));
         }
     }
 }

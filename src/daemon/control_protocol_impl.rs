@@ -3,13 +3,18 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use earendil_crypt::Fingerprint;
 use earendil_packet::Message;
+use nanorpc::RpcTransport;
 use sosistab2::ObfsUdpSecret;
 
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
-    control_protocol::{ControlProtocol, SendMessageArgs, SendMessageError},
+    control_protocol::{
+        ControlProtocol, SendGlobalRpcArgs, SendGlobalRpcError, SendMessageArgs, SendMessageError,
+    },
     daemon::DaemonContext,
 };
+
+use super::global_rpc_protocol::GlobalRpcTransport;
 
 pub struct ControlProtocolImpl {
     ctx: DaemonContext,
@@ -67,5 +72,28 @@ impl ControlProtocol for ControlProtocolImpl {
             })
             .collect();
         serde_json::to_value(lala).unwrap()
+    }
+
+    async fn send_global_rpc(
+        &self,
+        send_args: SendGlobalRpcArgs,
+    ) -> Result<serde_json::Value, SendGlobalRpcError> {
+        let client = GlobalRpcTransport::new(self.ctx.clone(), send_args.destination);
+        let params: Vec<serde_json::Value> = send_args
+            .args
+            .iter()
+            .map(|arg| serde_json::from_str(arg).unwrap())
+            .collect();
+        let res = if let Some(res) = client
+            .call(&send_args.method, &params)
+            .await
+            .map_err(|_| SendGlobalRpcError::SendError)?
+        {
+            res.map_err(|_| SendGlobalRpcError::SendError)?
+        } else {
+            return Err(SendGlobalRpcError::SendError);
+        };
+
+        Ok(res)
     }
 }

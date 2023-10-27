@@ -9,7 +9,7 @@ use earendil_packet::Dock;
 
 mod config;
 pub mod control_protocol;
-mod daemon;
+pub mod daemon;
 
 /// Official implementation of an Earendil node
 #[derive(Parser)]
@@ -48,6 +48,18 @@ pub enum ControlCommands {
         destination: Fingerprint,
         #[arg(short, long)]
         message: String,
+    },
+
+    /// Send a GlobalRpc request to a destination
+    SendGlobalRpc {
+        #[arg(long)]
+        id: Option<String>,
+        source_dock: Option<Dock>,
+        #[arg(short, long)]
+        destination: Fingerprint,
+        #[arg(short, long)]
+        method: String,
+        args: Vec<String>,
     },
 
     /// Dumps the graph.

@@ -37,6 +37,24 @@ pub async fn main_control(
             })
             .await??;
         }
+        ControlCommands::SendGlobalRpc {
+            id,
+            source_dock,
+            destination,
+            method,
+            args,
+        } => {
+            let res = conn
+                .send_global_rpc(SendGlobalRpcArgs {
+                    id,
+                    source_dock,
+                    destination,
+                    method,
+                    args,
+                })
+                .await??;
+            println!("{res}");
+        }
         ControlCommands::GraphDump => {
             let res = conn.graph_dump().await?;
             println!("{res}");
@@ -60,6 +78,11 @@ pub async fn main_control(
 #[async_trait]
 pub trait ControlProtocol {
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError>;
+
+    async fn send_global_rpc(
+        &self,
+        args: SendGlobalRpcArgs,
+    ) -> Result<serde_json::Value, SendGlobalRpcError>;
 
     async fn graph_dump(&self) -> String;
 
@@ -92,4 +115,21 @@ pub struct SendMessageArgs {
     pub destination: Fingerprint,
     #[serde_as(as = "serde_with::base64::Base64")]
     pub content: Bytes,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct SendGlobalRpcArgs {
+    pub id: Option<String>,
+    pub source_dock: Option<Dock>,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub destination: Fingerprint,
+    pub method: String,
+    pub args: Vec<String>,
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum SendGlobalRpcError {
+    #[error("error sending GlobalRpc request")]
+    SendError,
 }
