@@ -93,6 +93,8 @@ async fn gossip_once(ctx: &DaemonContext, conn: &N2nConnection) -> anyhow::Resul
                 if let Some(left_id) = conn.n2n_rpc().identity(left_fp).await? {
                     ctx.relay_graph.write().insert_identity(left_id)?
                 }
+            }
+            if ctx.relay_graph.read().identity(&right_fp).is_none() {
                 if let Some(right_id) = conn.n2n_rpc().identity(right_fp).await? {
                     ctx.relay_graph.write().insert_identity(right_id)?
                 }

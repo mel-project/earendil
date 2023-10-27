@@ -253,6 +253,7 @@ impl N2nProtocol for N2nProtocolImpl {
             && left_incomplete.right == self.ctx.identity.public().fingerprint()
             && self.ctx.table.lookup(&left_incomplete.left).is_some();
         if !valid {
+            log::debug!("neighbor not right of us! Refusing to sign adjacency x_x");
             return None;
         }
         // Fill in the right-hand-side

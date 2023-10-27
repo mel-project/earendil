@@ -36,4 +36,6 @@ Overall, we follow an architecture where the crates in `libraries/` avoid doing 
 
 In one terminal window, run `./start_example.sh`.
 
-In another, run `earendil control send-message --destination w0pj999ezrc36spw5zz88nn79z9h7mss --message helloworld`
+In another, run `earendil control send-message --destination fhsg3742bwxmg3k14jdsbphdp22j119f 1 1 --message helloworld`
+
+Then run `earendil control --connect 127.0.0.1:11111 recv-message`
