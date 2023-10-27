@@ -6,7 +6,7 @@ use bytes::Bytes;
 
 use earendil_crypt::Fingerprint;
 use earendil_packet::{Dock, Message, PacketConstructError};
-use nanorpc::{nanorpc_derive, JrpcRequest};
+use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
