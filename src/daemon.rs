@@ -142,6 +142,12 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             .map_err(log_error("dispatch_by_dock"))),
         );
 
+        let _global_rpc_loop = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([daemon_ctx], move || global_rpc_loop(daemon_ctx.clone())
+                .map_err(log_error("global_rpc_loop"))),
+        );
+
         let mut route_tasks = FuturesUnordered::new();
 
         // For every in_routes block, spawn a task to handle incoming stuff

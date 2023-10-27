@@ -1,5 +1,7 @@
 identity: identity.asc
 state_cache: state_cache.db
+control_listen: 127.0.0.1:22222
+
 in_routes:
   # arbitrary names, used for diagnositics and logging
   main_udp:

@@ -6,7 +6,7 @@ use bytes::Bytes;
 
 use earendil_crypt::Fingerprint;
 use earendil_packet::{Dock, Message, PacketConstructError};
-use nanorpc::nanorpc_derive;
+use nanorpc::{nanorpc_derive, JrpcRequest};
 use nanorpc_http::client::HttpRpcTransport;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -37,6 +37,22 @@ pub async fn main_control(
             })
             .await??;
         }
+        ControlCommands::SendGlobalRpc {
+            id,
+            source_dock,
+            dest_dock,
+            destination,
+            request,
+        } => {
+            conn.send_global_rpc(SendGlobalRpcArgs {
+                id,
+                source_dock,
+                dest_dock,
+                destination,
+                request: serde_json::from_str(&request)?,
+            })
+            .await??;
+        }
         ControlCommands::GraphDump => {
             let res = conn.graph_dump().await?;
             println!("{res}");
@@ -60,6 +76,8 @@ pub async fn main_control(
 #[async_trait]
 pub trait ControlProtocol {
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError>;
+
+    async fn send_global_rpc(&self, args: SendGlobalRpcArgs) -> Result<(), SendGlobalRpcError>;
 
     async fn graph_dump(&self) -> String;
 
@@ -92,4 +110,23 @@ pub struct SendMessageArgs {
     pub destination: Fingerprint,
     #[serde_as(as = "serde_with::base64::Base64")]
     pub content: Bytes,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct SendGlobalRpcArgs {
+    pub id: Option<String>,
+    pub source_dock: Dock,
+    pub dest_dock: Dock,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub destination: Fingerprint,
+    pub request: JrpcRequest,
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum SendGlobalRpcError {
+    #[error("request was unable to be contructed")]
+    RequestConstructError,
+    #[error("no response was received")]
+    NoResponse,
 }

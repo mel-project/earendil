@@ -1,13 +1,16 @@
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use earendil_crypt::Fingerprint;
 use earendil_packet::Message;
 use sosistab2::ObfsUdpSecret;
 
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
-    control_protocol::{ControlProtocol, SendMessageArgs, SendMessageError},
+    control_protocol::{
+        ControlProtocol, SendGlobalRpcArgs, SendGlobalRpcError, SendMessageArgs, SendMessageError,
+    },
     daemon::DaemonContext,
 };
 
@@ -67,5 +70,20 @@ impl ControlProtocol for ControlProtocolImpl {
             })
             .collect();
         serde_json::to_value(lala).unwrap()
+    }
+
+    async fn send_global_rpc(&self, args: SendGlobalRpcArgs) -> Result<(), SendGlobalRpcError> {
+        let rpc_string = &serde_json::to_string(&args.request)
+            .map_err(|_| SendGlobalRpcError::RequestConstructError)?;
+        let message_args = SendMessageArgs {
+            id: args.id,
+            source_dock: args.source_dock,
+            dest_dock: args.dest_dock,
+            destination: args.destination,
+            content: Bytes::copy_from_slice(rpc_string.as_bytes()),
+        };
+        self.send_message(message_args);
+
+        Ok(())
     }
 }
