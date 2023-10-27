@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{control_protocol::SendMessageArgs, daemon::DaemonContext};
 use bytes::Bytes;
 use earendil_crypt::Fingerprint;
@@ -10,8 +12,13 @@ use smol::channel::Receiver;
 pub struct Socket {
     ctx: DaemonContext,
     id: Option<String>,
-    dock: Dock,
+    bound_dock: Arc<BoundDock>,
     recv_incoming: Receiver<(Message, Fingerprint)>,
+}
+
+struct BoundDock {
+    dock: Dock,
+    ctx: DaemonContext,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -34,13 +41,17 @@ impl Socket {
             }
             rand_dock
         };
+        let bound_dock = Arc::new(BoundDock {
+            dock,
+            ctx: ctx.clone(),
+        });
         let (send_outgoing, recv_incoming) = smol::channel::bounded(1000);
         ctx.socket_recv_queues.insert(dock, send_outgoing);
 
         Socket {
             ctx,
             id,
-            dock,
+            bound_dock,
             recv_incoming,
         }
     }
@@ -49,7 +60,7 @@ impl Socket {
         self.ctx
             .send_message(SendMessageArgs {
                 id: self.id.clone(),
-                source_dock: self.dock,
+                source_dock: self.bound_dock.dock,
                 dest_dock: endpoint.dock,
                 destination: endpoint.fingerprint,
                 content: body,
@@ -67,7 +78,7 @@ impl Socket {
     }
 }
 
-impl Drop for Socket {
+impl Drop for BoundDock {
     fn drop(&mut self) {
         self.ctx.socket_recv_queues.remove(&self.dock);
     }
