@@ -54,7 +54,6 @@ pub enum ControlCommands {
     SendGlobalRpc {
         #[arg(long)]
         id: Option<String>,
-        source_dock: Option<Dock>,
         #[arg(short, long)]
         destination: Fingerprint,
         #[arg(short, long)]

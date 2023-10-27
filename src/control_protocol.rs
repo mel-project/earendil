@@ -1,5 +1,6 @@
 use std::{net::SocketAddr, time::Duration};
 
+use anyhow::Context;
 use async_trait::async_trait;
 
 use bytes::Bytes;
@@ -39,15 +40,18 @@ pub async fn main_control(
         }
         ControlCommands::SendGlobalRpc {
             id,
-            source_dock,
+
             destination,
             method,
             args,
         } => {
+            let args: Result<Vec<serde_json::Value>, _> =
+                args.into_iter().map(|a| serde_yaml::from_str(&a)).collect();
+            let args = args.context("arguments not YAML")?;
             let res = conn
                 .send_global_rpc(SendGlobalRpcArgs {
                     id,
-                    source_dock,
+
                     destination,
                     method,
                     args,
@@ -121,11 +125,10 @@ pub struct SendMessageArgs {
 #[derive(Serialize, Deserialize)]
 pub struct SendGlobalRpcArgs {
     pub id: Option<String>,
-    pub source_dock: Option<Dock>,
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub destination: Fingerprint,
     pub method: String,
-    pub args: Vec<String>,
+    pub args: Vec<serde_json::Value>,
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]

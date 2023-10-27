@@ -77,14 +77,8 @@ impl RelayGraph {
 
         self.documents.insert((left_id, right_id), adjacency);
 
-        self.adjacency
-            .entry(left_id)
-            .or_insert_with(HashSet::new)
-            .insert(right_id);
-        self.adjacency
-            .entry(right_id)
-            .or_insert_with(HashSet::new)
-            .insert(left_id);
+        self.adjacency.entry(left_id).or_default().insert(right_id);
+        self.adjacency.entry(right_id).or_default().insert(left_id);
 
         Ok(())
     }
@@ -116,6 +110,11 @@ impl RelayGraph {
     /// Returns all the adjacencies.
     pub fn all_adjacencies(&self) -> impl Iterator<Item = AdjacencyDescriptor> + '_ {
         self.documents.values().cloned()
+    }
+
+    /// Returns all the nodes.
+    pub fn all_nodes(&self) -> impl Iterator<Item = Fingerprint> + '_ {
+        self.fp_to_id.keys().copied()
     }
 
     /// Picks a random AdjacencyDescriptor from the graph.

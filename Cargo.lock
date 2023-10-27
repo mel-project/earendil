@@ -998,6 +998,7 @@ dependencies = [
  "serde_with 3.4.0",
  "serde_yaml",
  "smol",
+ "smol-timeout",
  "smolscale",
  "sosistab2",
  "stdcode",
