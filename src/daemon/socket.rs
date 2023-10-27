@@ -6,6 +6,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use smol::channel::Receiver;
 
+#[derive(Clone)]
 pub struct Socket {
     ctx: DaemonContext,
     id: Option<String>,

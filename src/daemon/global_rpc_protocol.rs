@@ -1,7 +1,5 @@
 use async_trait::async_trait;
 use nanorpc::nanorpc_derive;
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 use super::DaemonContext;
 
@@ -13,6 +11,12 @@ pub trait GlobalRpcProtocol {
 
 pub struct GlobalRpcImpl {
     ctx: DaemonContext,
+}
+
+impl GlobalRpcImpl {
+    pub fn new(ctx: DaemonContext) -> GlobalRpcImpl {
+        GlobalRpcImpl { ctx }
+    }
 }
 
 #[async_trait]
