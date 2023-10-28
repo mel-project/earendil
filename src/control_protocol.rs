@@ -38,7 +38,7 @@ pub async fn main_control(
             })
             .await??;
         }
-        ControlCommands::SendGlobalRpc {
+        ControlCommands::GlobalRpc {
             id,
 
             destination,
@@ -49,7 +49,7 @@ pub async fn main_control(
                 args.into_iter().map(|a| serde_yaml::from_str(&a)).collect();
             let args = args.context("arguments not YAML")?;
             let res = conn
-                .send_global_rpc(SendGlobalRpcArgs {
+                .send_global_rpc(GlobalRpcArgs {
                     id,
 
                     destination,
@@ -85,8 +85,8 @@ pub trait ControlProtocol {
 
     async fn send_global_rpc(
         &self,
-        args: SendGlobalRpcArgs,
-    ) -> Result<serde_json::Value, SendGlobalRpcError>;
+        args: GlobalRpcArgs,
+    ) -> Result<serde_json::Value, GlobalRpcError>;
 
     async fn graph_dump(&self) -> String;
 
@@ -123,7 +123,7 @@ pub struct SendMessageArgs {
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
-pub struct SendGlobalRpcArgs {
+pub struct GlobalRpcArgs {
     pub id: Option<String>,
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub destination: Fingerprint,
@@ -132,7 +132,7 @@ pub struct SendGlobalRpcArgs {
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
-pub enum SendGlobalRpcError {
+pub enum GlobalRpcError {
     #[error("error sending GlobalRpc request")]
     SendError,
 }

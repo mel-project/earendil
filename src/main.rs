@@ -51,7 +51,7 @@ pub enum ControlCommands {
     },
 
     /// Send a GlobalRpc request to a destination
-    SendGlobalRpc {
+    GlobalRpc {
         #[arg(long)]
         id: Option<String>,
         #[arg(short, long)]
