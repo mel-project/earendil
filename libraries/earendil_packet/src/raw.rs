@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::{
     crypt::{box_decrypt, box_encrypt, stream_dencrypt, OnionPublic, OnionSecret},
-    InnerPacket, ReplyBlock,
+    inner, InnerPacket, ReplyBlock,
 };
 
 /// A raw, on-the-wire Earendil packet.
@@ -155,9 +155,8 @@ impl RawPacket {
         let (metadata, their_pk) = box_decrypt(&self.header.outer, our_sk)
             .map_err(|_| PacketPeelError::DecryptionError)?;
         assert_eq!(metadata.len(), 21);
-        let metadata_marker = metadata[0];
         let shared_sec = our_sk.shared_secret(&their_pk);
-        let fingerprint = Fingerprint::from_bytes(array_ref![metadata, 1, 20]);
+
         // Then, peel the header
         let peeled_header = {
             let header_key = blake3::keyed_hash(b"header__________________________", &shared_sec);
@@ -174,21 +173,10 @@ impl RawPacket {
             new
         };
 
-        Ok(if metadata == [0; 21] {
-            let (inner_pkt, fp) = InnerPacket::open(&peeled_body, our_sk)
-                .map_err(|_| PacketPeelError::InnerPacketOpenError)?;
-            PeeledPacket::Received {
-                from: fp,
-                pkt: inner_pkt,
-            }
-        } else if metadata_marker == 0 {
-            let id_bts = array_ref![metadata, 1, 8];
-            let id = u64::from_be_bytes(*id_bts);
-            PeeledPacket::GarbledReply {
-                id,
-                pkt: peeled_body,
-            }
-        } else {
+        Ok(if metadata[0] == 1 {
+            // otherwise, if the metadata starts with 1, then we need to forward to the next guy.
+            // the 20 remaining bytes in the metadata indicate the fingerprint of the next guy.
+            let fingerprint = Fingerprint::from_bytes(array_ref![metadata, 1, 20]);
             PeeledPacket::Forward {
                 to: fingerprint,
                 pkt: RawPacket {
@@ -196,6 +184,30 @@ impl RawPacket {
                     onion_body: peeled_body,
                 },
             }
+        } else if metadata[0] == 0 {
+            // otherwise, the packet is addressed to us!
+            // But how should we handle it? That's decided by the remainder
+            let inner_metadata = *array_ref![metadata, 1, 20];
+            // the remainder is all zeros. it means that this packet is ungarbled and a normal packet
+            if inner_metadata == [0; 20] {
+                let (inner_pkt, fp) = InnerPacket::open(&peeled_body, our_sk)
+                    .map_err(|_| PacketPeelError::InnerPacketOpenError)?;
+                PeeledPacket::Received {
+                    from: fp,
+                    pkt: inner_pkt,
+                }
+            } else {
+                // it is a "backwards" packet that is garbled through using a reply block.
+                // bytes 1..8 (inclusive!) is a 64-bit reply block identifier that we will use to pair this packet with the reply block we generated, with which the other side garbled this message.
+                let id_bts = array_ref![metadata, 1, 8];
+                let id = u64::from_be_bytes(*id_bts);
+                PeeledPacket::GarbledReply {
+                    id,
+                    pkt: peeled_body,
+                }
+            }
+        } else {
+            return Err(PacketPeelError::InnerPacketOpenError);
         })
     }
 }

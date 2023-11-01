@@ -87,7 +87,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 
     smolscale::block_on(async move {
         let table = Arc::new(NeighTable::new());
-        let (incoming_send, incoming_recv) = smol::channel::bounded(1_000_000);
+        let (send_incoming, recv_incoming) = smol::channel::bounded(1_000_000);
 
         let daemon_ctx = DaemonContext {
             config: Arc::new(config),
@@ -95,12 +95,12 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             identity: identity.into(),
             onion_sk: OnionSecret::generate(),
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
-            incoming: Arc::new(incoming_recv),
+            recv_incoming,
             degarblers: Cache::new(1_000_000),
             anon_destinations: Arc::new(RwLock::new(ReplyBlockStore::new())),
             anon_identities: Arc::new(RwLock::new(AnonIdentities::new())),
             socket_recv_queues: Arc::new(DashMap::new()),
-            debug_queue: Arc::new(ConcurrentQueue::unbounded()),
+            unhandled_incoming: Arc::new(ConcurrentQueue::unbounded()),
         };
 
         // Run the loops
@@ -115,15 +115,17 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             RespawnStrategy::Immediate,
             clone!([daemon_ctx], move || peel_forward_loop(
                 daemon_ctx.clone(),
-                incoming_send.clone()
+                send_incoming.clone()
             )
             .map_err(log_error("peel_forward"))),
         );
+
         let _gossip = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([daemon_ctx], move || gossip_loop(daemon_ctx.clone())
                 .map_err(log_error("gossip"))),
         );
+
         let _control_protocol = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([daemon_ctx], move || control_protocol_loop(
@@ -261,11 +263,11 @@ async fn peel_forward_loop(
 /// Loop that dispatches received messages to their corresponding dock queue
 async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
-        if let Some((message, fingerprint)) = ctx.recv_message().await {
-            match ctx.socket_recv_queues.get(message.get_dest_dock()) {
-                Some(sender) => sender.try_send((message, fingerprint))?,
-                None => ctx.debug_queue.push((message, fingerprint))?,
-            }
+        let (message, fingerprint) = ctx.recv_incoming.recv().await?;
+
+        match ctx.socket_recv_queues.get(message.get_dest_dock()) {
+            Some(sender) => sender.try_send((message, fingerprint))?,
+            None => ctx.unhandled_incoming.push((message, fingerprint))?,
         }
     }
 }
@@ -304,12 +306,12 @@ pub struct DaemonContext {
     identity: Arc<IdentitySecret>,
     onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
-    incoming: Arc<Receiver<(Message, Fingerprint)>>,
+    recv_incoming: Receiver<(Message, Fingerprint)>,
     degarblers: Cache<u64, ReplyDegarbler>,
     anon_destinations: Arc<RwLock<ReplyBlockStore>>,
     anon_identities: Arc<RwLock<AnonIdentities>>,
     socket_recv_queues: Arc<DashMap<Dock, Sender<(Message, Fingerprint)>>>,
-    debug_queue: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
+    unhandled_incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
 }
 
 impl DaemonContext {
@@ -397,10 +399,6 @@ impl DaemonContext {
             }
         }
         Ok(())
-    }
-
-    async fn recv_message(&self) -> Option<(Message, Fingerprint)> {
-        self.incoming.recv().await.ok()
     }
 }
 
