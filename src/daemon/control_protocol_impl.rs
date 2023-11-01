@@ -9,7 +9,7 @@ use sosistab2::ObfsUdpSecret;
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::{
-        ControlProtocol, SendGlobalRpcArgs, SendGlobalRpcError, SendMessageArgs, SendMessageError,
+        ControlProtocol, GlobalRpcArgs, GlobalRpcError, SendMessageArgs, SendMessageError,
     },
     daemon::DaemonContext,
 };
@@ -76,17 +76,17 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn send_global_rpc(
         &self,
-        send_args: SendGlobalRpcArgs,
-    ) -> Result<serde_json::Value, SendGlobalRpcError> {
+        send_args: GlobalRpcArgs,
+    ) -> Result<serde_json::Value, GlobalRpcError> {
         let client = GlobalRpcTransport::new(self.ctx.clone(), send_args.destination);
         let res = if let Some(res) = client
             .call(&send_args.method, &send_args.args)
             .await
-            .map_err(|_| SendGlobalRpcError::SendError)?
+            .map_err(|_| GlobalRpcError::SendError)?
         {
-            res.map_err(|_| SendGlobalRpcError::SendError)?
+            res.map_err(|_| GlobalRpcError::SendError)?
         } else {
-            return Err(SendGlobalRpcError::SendError);
+            return Err(GlobalRpcError::SendError);
         };
 
         Ok(res)
