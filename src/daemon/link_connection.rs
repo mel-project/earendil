@@ -27,13 +27,13 @@ use smolscale::{
 use sosistab2::{Multiplex, MuxSecret, MuxStream, Pipe};
 
 use super::{
-    n2n_protocol::{AuthResponse, InfoResponse, N2nClient, N2nProtocol, N2nService},
+    link_protocol::{AuthResponse, InfoResponse, N2nClient, N2nProtocol, N2nService},
     DaemonContext,
 };
 
 /// Encapsulates a single node-to-node connection (may be relay-relay or client-relay).
 #[derive(Clone)]
-pub struct N2nConnection {
+pub struct LinkConnection {
     mplex: Arc<Multiplex>,
     send_outgoing: Sender<RawPacket>,
     recv_incoming: Receiver<RawPacket>,
@@ -41,7 +41,7 @@ pub struct N2nConnection {
     _task: Arc<Immortal>,
 }
 
-impl N2nConnection {
+impl LinkConnection {
     /// Creates a new Connection, from a single Pipe. Unlike in Geph, n2n Multiplexes in earendil all contain one pipe each.
     pub async fn connect(ctx: DaemonContext, pipe: impl Pipe) -> anyhow::Result<Self> {
         // First, we construct the Multiplex.
@@ -78,7 +78,7 @@ impl N2nConnection {
     }
 
     /// Returns a handle to the N2N RPC.
-    pub fn n2n_rpc(&self) -> N2nClient {
+    pub fn link_rpc(&self) -> N2nClient {
         N2nClient::from(MultiplexRpcTransport::new(self.mplex.clone()))
     }
 

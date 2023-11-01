@@ -5,7 +5,7 @@ use smol::future::FutureExt;
 use smolscale::reaper::TaskReaper;
 use sosistab2::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
 
-use crate::daemon::n2n_connection::N2nConnection;
+use crate::daemon::link_connection::LinkConnection;
 
 use super::DaemonContext;
 
@@ -32,7 +32,7 @@ pub async fn in_route_obfsudp(
         let next = listener.accept().await?;
         let context = context.clone();
         group.attach(smolscale::spawn(async move {
-            let connection = N2nConnection::connect(context.daemon_ctx.clone(), next).await?;
+            let connection = LinkConnection::connect(context.daemon_ctx.clone(), next).await?;
             log::debug!(
                 "obfsudp in_route {} accepted {}",
                 context.in_route_name,
@@ -72,7 +72,7 @@ pub async fn out_route_obfsudp(
                 "obfsudp out_route {} pipe connected...",
                 context.out_route_name
             );
-            let connection = N2nConnection::connect(context.daemon_ctx.clone(), pipe).await?;
+            let connection = LinkConnection::connect(context.daemon_ctx.clone(), pipe).await?;
             if connection.remote_idpk().fingerprint() != context.remote_fingerprint {
                 anyhow::bail!(
                     "remote fingerprint {} different from configured {}",

@@ -5,7 +5,7 @@ use bytes::Bytes;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use rand::Rng;
 
-use super::{n2n_connection::N2nConnection, DaemonContext};
+use super::{link_connection::LinkConnection, DaemonContext};
 
 /// Loop that gossips things around
 pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
@@ -34,7 +34,7 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 }
 
-async fn gossip_once(ctx: &DaemonContext, conn: &N2nConnection) -> anyhow::Result<()> {
+async fn gossip_once(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
     let remote_idpk = conn.remote_idpk();
     let remote_fingerprint = remote_idpk.fingerprint();
     log::trace!(
@@ -50,7 +50,7 @@ async fn gossip_once(ctx: &DaemonContext, conn: &N2nConnection) -> anyhow::Resul
     {
         log::trace!("getting identity of {remote_fingerprint}");
         let their_id = conn
-            .n2n_rpc()
+            .link_rpc()
             .identity(remote_fingerprint)
             .await?
             .context("they refused to give us their id descriptor")?;
@@ -68,7 +68,7 @@ async fn gossip_once(ctx: &DaemonContext, conn: &N2nConnection) -> anyhow::Resul
         };
         left_incomplete.left_sig = ctx.identity.sign(left_incomplete.to_sign().as_bytes());
         let complete = conn
-            .n2n_rpc()
+            .link_rpc()
             .sign_adjacency(left_incomplete)
             .await?
             .context("remote refused to sign off")?;
@@ -84,18 +84,18 @@ async fn gossip_once(ctx: &DaemonContext, conn: &N2nConnection) -> anyhow::Resul
             rand_adj.right
         };
         log::debug!("asking {remote_fingerprint} for neighbors of {rand_node}!");
-        let adjacencies = conn.n2n_rpc().adjacencies(rand_node).await?;
+        let adjacencies = conn.link_rpc().adjacencies(rand_node).await?;
         for adjacency in adjacencies {
             let left_fp = adjacency.left;
             let right_fp = adjacency.right;
             // insert all unknown identities
             if ctx.relay_graph.read().identity(&left_fp).is_none() {
-                if let Some(left_id) = conn.n2n_rpc().identity(left_fp).await? {
+                if let Some(left_id) = conn.link_rpc().identity(left_fp).await? {
                     ctx.relay_graph.write().insert_identity(left_id)?
                 }
             }
             if ctx.relay_graph.read().identity(&right_fp).is_none() {
-                if let Some(right_id) = conn.n2n_rpc().identity(right_fp).await? {
+                if let Some(right_id) = conn.link_rpc().identity(right_fp).await? {
                     ctx.relay_graph.write().insert_identity(right_id)?
                 }
             }
