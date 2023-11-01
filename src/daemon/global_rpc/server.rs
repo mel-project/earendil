@@ -9,6 +9,7 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::daemon::{
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
+    rendezvous::ForwardRequest,
     DaemonContext,
 };
 
@@ -97,5 +98,20 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             }
         }
         None
+    }
+
+    async fn alloc_forward(&self, registration: ForwardRequest) -> bool {
+        if registration
+            .identity_pk
+            .verify(registration.to_sign().as_bytes(), &registration.sig)
+            .is_ok()
+        {
+            self.ctx
+                .forward_table
+                .insert_dest(registration.identity_pk.fingerprint());
+            true
+        } else {
+            false
+        }
     }
 }

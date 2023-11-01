@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::{
     crypt::{box_decrypt, box_encrypt, stream_dencrypt, OnionPublic, OnionSecret},
-    inner, InnerPacket, ReplyBlock,
+    InnerPacket, ReplyBlock,
 };
 
 /// A raw, on-the-wire Earendil packet.
