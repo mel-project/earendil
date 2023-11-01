@@ -24,13 +24,17 @@ use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
 use smol::channel::{Receiver, Sender};
+use smol_timeout::TimeoutExt;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
+use stdcode::StdcodeSerializeExt;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
 use crate::control_protocol::{SendMessageArgs, SendMessageError};
 use crate::daemon::anon_identities::AnonIdentities;
+use crate::daemon::global_rpc::transport::GlobalRpcTransport;
+use crate::daemon::global_rpc::GlobalRpcClient;
 use crate::daemon::reply_block_store::ReplyBlockStore;
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
@@ -298,6 +302,8 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 }
 
+const DHT_REDUNDANCY: usize = 3;
+
 #[allow(unused)]
 #[derive(Clone)]
 pub struct DaemonContext {
@@ -400,6 +406,63 @@ impl DaemonContext {
         }
         Ok(())
     }
+
+    fn dht_key_to_fps(&self, key: &str) -> Vec<Fingerprint> {
+        let mut all_nodes: Vec<Fingerprint> = self.relay_graph.read().all_nodes().collect();
+        all_nodes.sort_unstable_by_key(|fp| *blake3::hash(&(key, fp).stdcode()).as_bytes());
+        all_nodes
+    }
+
+    pub async fn dht_insert(&self, key: String, value: String) {
+        let replicas = self.dht_key_to_fps(&key);
+        for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
+            if replica == self.identity.public().fingerprint() {
+                log::debug!("skipping DHT insert, our local cache already has key: {key}");
+                continue;
+            }
+
+            log::debug!("key {key} inserting into remote replica {replica}");
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
+            match gclient
+                .dht_insert(key.clone(), value.clone(), false)
+                .timeout(Duration::from_secs(10))
+                .await
+            {
+                Some(Err(e)) => log::debug!("inserting {key} into {replica} failed: {:?}", e),
+                None => log::debug!("inserting {key} into {replica} timed out"),
+                _ => {}
+            }
+        }
+    }
+
+    pub async fn dht_get(&self, key: String) -> Option<String> {
+        let replicas = self.dht_key_to_fps(&key);
+        let mut gatherer = FuturesUnordered::new();
+        for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
+            let key = key.clone();
+            gatherer.push(async move {
+                let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
+                anyhow::Ok(
+                    gclient
+                        .dht_get(key, false)
+                        .timeout(Duration::from_secs(30))
+                        .await
+                        .context("timed out")??,
+                )
+            })
+        }
+        while let Some(result) = gatherer.next().await {
+            match result {
+                Err(err) => log::warn!("error while dht_get: {:?}", err),
+                Ok(None) => continue,
+                Ok(Some(val)) => return Some(val),
+            }
+        }
+        None
+    }
+
+    pub async fn insert_rendezvous_locator(&self) {}
+    pub async fn lookup_rendezvous_locator(&self) {}
 }
 
 fn route_to_instructs(

@@ -1,22 +1,14 @@
-use anyhow::Context;
-use async_trait::async_trait;
-use earendil_crypt::Fingerprint;
-use futures_util::{stream::FuturesUnordered, StreamExt};
-use moka::sync::{Cache, CacheBuilder};
-use smol_timeout::TimeoutExt;
 use std::time::Duration;
-use stdcode::StdcodeSerializeExt;
 
-use crate::daemon::{
-    global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
-    DaemonContext,
-};
+use async_trait::async_trait;
+use moka::sync::{Cache, CacheBuilder};
+
+use crate::daemon::DaemonContext;
 
 use super::GlobalRpcProtocol;
 
 pub struct GlobalRpcImpl {
     ctx: DaemonContext,
-
     dht_cache: Cache<String, String>,
 }
 
@@ -29,15 +21,7 @@ impl GlobalRpcImpl {
                 .build(),
         }
     }
-
-    fn dht_key_to_fps(&self, key: &str) -> Vec<Fingerprint> {
-        let mut all_nodes: Vec<Fingerprint> = self.ctx.relay_graph.read().all_nodes().collect();
-        all_nodes.sort_unstable_by_key(|fp| *blake3::hash(&(key, fp).stdcode()).as_bytes());
-        all_nodes
-    }
 }
-
-const DHT_REDUNDANCY: usize = 3;
 
 #[async_trait]
 impl GlobalRpcProtocol for GlobalRpcImpl {
@@ -46,25 +30,13 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
     }
 
     async fn dht_insert(&self, key: String, value: String, recurse: bool) {
-        let replicas = self.dht_key_to_fps(&key);
+        // insert into local cache first
+        self.dht_cache.insert(key.clone(), value.clone());
+        log::debug!("key {key} inserted into local DHT");
 
-        for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-            if replica == self.ctx.identity.public().fingerprint() {
-                log::debug!("key {key} inserting into ourselves!");
-                self.dht_cache.insert(key.clone(), value.clone());
-            } else if recurse {
-                log::debug!("key {key} inserting into remote replica {replica}");
-                let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.ctx.clone(), replica));
-                match gclient
-                    .dht_insert(key.clone(), value.clone(), false)
-                    .timeout(Duration::from_secs(10))
-                    .await
-                {
-                    Some(Err(e)) => log::debug!("inserting {key} into {replica} failed: {:?}", e),
-                    None => log::debug!("inserting {key} into {replica} timed out"),
-                    _ => {}
-                }
-            }
+        if recurse {
+            log::debug!("inserting key {key} into remote DHT");
+            self.ctx.dht_insert(key, value).await
         }
     }
 
@@ -72,29 +44,8 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         if let Some(val) = self.dht_cache.get(&key) {
             return Some(val);
         } else if recurse {
-            let replicas = self.dht_key_to_fps(&key);
-            let mut gatherer = FuturesUnordered::new();
-            for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-                let key = key.clone();
-                gatherer.push(async move {
-                    let gclient =
-                        GlobalRpcClient(GlobalRpcTransport::new(self.ctx.clone(), replica));
-                    anyhow::Ok(
-                        gclient
-                            .dht_get(key, false)
-                            .timeout(Duration::from_secs(30))
-                            .await
-                            .context("timed out")??,
-                    )
-                })
-            }
-            while let Some(result) = gatherer.next().await {
-                match result {
-                    Err(err) => log::warn!("error while dht_get: {:?}", err),
-                    Ok(None) => continue,
-                    Ok(Some(val)) => return Some(val),
-                }
-            }
+            log::debug!("no local value for {key}, searching remote DHT");
+            return self.ctx.dht_get(key).await;
         }
         None
     }
