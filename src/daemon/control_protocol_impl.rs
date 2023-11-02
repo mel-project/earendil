@@ -1,9 +1,11 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use earendil_crypt::Fingerprint;
+use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::Message;
+use moka::sync::Cache;
 use nanorpc::RpcTransport;
+use parking_lot::Mutex;
 use sosistab2::ObfsUdpSecret;
 
 use crate::{
@@ -17,12 +19,16 @@ use crate::{
 use super::global_rpc::transport::GlobalRpcTransport;
 
 pub struct ControlProtocolImpl {
+    anon_identities: Arc<Mutex<AnonIdentities>>,
     ctx: DaemonContext,
 }
 
 impl ControlProtocolImpl {
     pub fn new(ctx: DaemonContext) -> Self {
-        Self { ctx }
+        Self {
+            ctx,
+            anon_identities: Arc::new(Mutex::new(AnonIdentities::new())),
+        }
     }
 }
 
@@ -43,7 +49,16 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError> {
-        self.ctx.send_message(args).await
+        let id = args.id.map(|id| self.anon_identities.lock().get(&id));
+        self.ctx
+            .send_message(
+                id,
+                args.source_dock,
+                args.destination,
+                args.dest_dock,
+                args.content,
+            )
+            .await
     }
 
     async fn recv_message(&self) -> Option<(Message, Fingerprint)> {
@@ -90,5 +105,23 @@ impl ControlProtocol for ControlProtocolImpl {
         };
 
         Ok(res)
+    }
+}
+
+struct AnonIdentities {
+    map: Cache<String, IdentitySecret>,
+}
+
+impl AnonIdentities {
+    pub fn new() -> Self {
+        let map = Cache::builder()
+            .max_capacity(100_000)
+            .time_to_idle(Duration::from_secs(3600))
+            .build();
+        Self { map }
+    }
+
+    pub fn get(&mut self, id: &str) -> IdentitySecret {
+        self.map.get_with_by_ref(id, IdentitySecret::generate)
     }
 }

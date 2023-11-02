@@ -1,14 +1,13 @@
-mod anon_identities;
 mod control_protocol_impl;
 mod global_rpc;
 mod gossip;
 mod inout_route;
 mod link_connection;
 mod link_protocol;
+mod n2r_socket;
 mod neightable;
 mod rendezvous;
 mod reply_block_store;
-mod socket;
 
 use anyhow::Context;
 use bytes::Bytes;
@@ -23,7 +22,7 @@ use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use smol::channel::{Receiver, Sender};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
@@ -31,8 +30,8 @@ use stdcode::StdcodeSerializeExt;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
-use crate::control_protocol::{SendMessageArgs, SendMessageError};
-use crate::daemon::anon_identities::AnonIdentities;
+use crate::control_protocol::SendMessageError;
+
 use crate::daemon::reply_block_store::ReplyBlockStore;
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
@@ -45,8 +44,8 @@ use crate::{
 };
 
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
+use self::n2r_socket::{Endpoint, N2rSocket};
 use self::rendezvous::HAVEN_FORWARD_DOCK;
-use self::socket::{Endpoint, Socket};
 use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
@@ -100,8 +99,8 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
             recv_incoming,
             degarblers: Cache::new(1_000_000),
-            anon_destinations: Arc::new(RwLock::new(ReplyBlockStore::new())),
-            anon_identities: Arc::new(RwLock::new(AnonIdentities::new())),
+            anon_destinations: Arc::new(Mutex::new(ReplyBlockStore::new())),
+
             socket_recv_queues: Arc::new(DashMap::new()),
             unhandled_incoming: Arc::new(ConcurrentQueue::unbounded()),
             registered_havens: Arc::new(
@@ -236,7 +235,7 @@ async fn peel_forward_loop(
                 log::debug!("received a batch of ReplyBlocks");
 
                 for reply_block in reply_blocks {
-                    ctx.anon_destinations.write().insert(source, reply_block);
+                    ctx.anon_destinations.lock().insert(source, reply_block);
                 }
             }
         }
@@ -291,7 +290,7 @@ async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 /// Loop that listens to and handles incoming GlobalRpc requests
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let socket = Arc::new(Socket::bind(ctx.clone(), None, Some(GLOBAL_RPC_DOCK)));
+    let socket = Arc::new(N2rSocket::bind(ctx.clone(), None, Some(GLOBAL_RPC_DOCK)));
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
     let group: TaskReaper<anyhow::Result<()>> = TaskReaper::new();
 
@@ -321,7 +320,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         .max_capacity(100_000)
         .time_to_idle(Duration::from_secs(3600))
         .build();
-    let socket = Arc::new(Socket::bind(ctx.clone(), None, Some(HAVEN_FORWARD_DOCK)));
+    let socket = Arc::new(N2rSocket::bind(ctx.clone(), None, Some(HAVEN_FORWARD_DOCK)));
 
     loop {
         if let Ok((msg, src_endpoint)) = socket.recv_from().await {
@@ -357,70 +356,67 @@ pub struct DaemonContext {
     relay_graph: Arc<RwLock<RelayGraph>>,
     recv_incoming: Receiver<(Message, Fingerprint)>,
     degarblers: Cache<u64, ReplyDegarbler>,
-    anon_destinations: Arc<RwLock<ReplyBlockStore>>,
-    anon_identities: Arc<RwLock<AnonIdentities>>,
+    anon_destinations: Arc<Mutex<ReplyBlockStore>>,
     socket_recv_queues: Arc<DashMap<Dock, Sender<(Message, Fingerprint)>>>,
     unhandled_incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
     registered_havens: Arc<Cache<Fingerprint, ()>>,
 }
 
 impl DaemonContext {
-    async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError> {
-        let (public_isk, my_anon_osk) = if let Some(id) = args.id {
-            // get anonymous identity
-            let (anon_id, anon_osk) = self.anon_identities.write().get(&id);
-            log::debug!(
-                "using anon identity with fingerprint {:?}",
-                anon_id.public().fingerprint()
-            );
-            (Arc::new(anon_id), Some(anon_osk))
+    async fn send_message(
+        &self,
+        src_anon_id: Option<IdentitySecret>,
+        src_dock: Dock,
+        dst_fp: Fingerprint,
+        dst_dock: Dock,
+        content: Bytes,
+    ) -> Result<(), SendMessageError> {
+        let (public_isk, my_anon_osk) = if let Some(anon_id) = src_anon_id {
+            (Arc::new(anon_id), Some(OnionSecret::generate()))
         } else {
             (self.identity.clone(), None)
         };
 
-        let maybe_reply_block = self.anon_destinations.write().pop(&args.destination);
+        let maybe_reply_block = self.anon_destinations.lock().pop(&dst_fp);
         if let Some(reply_block) = maybe_reply_block {
             if my_anon_osk.is_some() {
                 return Err(SendMessageError::NoAnonId);
             }
             log::debug!("sending message with reply block");
-            let inner = InnerPacket::Message(Message::new(
-                args.source_dock,
-                args.dest_dock,
-                Bytes::copy_from_slice(&args.content),
-            ));
+            let inner = InnerPacket::Message(Message::new(src_dock, dst_dock, content));
             let raw_packet = RawPacket::new_reply(&reply_block, inner, &public_isk)?;
             self.table.inject_asif_incoming(raw_packet).await;
         } else {
             let route = self
                 .relay_graph
                 .read()
-                .find_shortest_path(&self.identity.public().fingerprint(), &args.destination)
+                .find_shortest_path(&self.identity.public().fingerprint(), &dst_fp)
                 .ok_or(SendMessageError::NoRoute)?;
             let instructs = route_to_instructs(route, self.relay_graph.clone())?;
             let their_opk = self
                 .relay_graph
                 .read()
-                .identity(&args.destination)
-                .ok_or(SendMessageError::NoOnionPublic(args.destination))?
+                .identity(&dst_fp)
+                .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
                 .onion_pk;
             let wrapped_onion = RawPacket::new_normal(
                 &instructs,
                 &their_opk,
-                InnerPacket::Message(Message::new(args.source_dock, args.dest_dock, args.content)),
+                InnerPacket::Message(Message::new(src_dock, dst_dock, content)),
                 &public_isk,
             )?;
             // we send the onion by treating it as a message addressed to ourselves
             self.table.inject_asif_incoming(wrapped_onion).await;
 
             // if we want to use an anon source, send a batch of reply blocks
+            // TODO this should be replaced
             if let Some(my_anon_osk) = my_anon_osk {
                 // currently the path for every one of them is the same; will want to change this in the future
                 let n = 8;
                 let reverse_route = self
                     .relay_graph
                     .read()
-                    .find_shortest_path(&args.destination, &self.identity.public().fingerprint())
+                    .find_shortest_path(&dst_fp, &self.identity.public().fingerprint())
                     .ok_or(SendMessageError::NoRoute)?;
                 let reverse_instructs =
                     route_to_instructs(reverse_route, self.relay_graph.clone())?;
