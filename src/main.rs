@@ -50,6 +50,9 @@ pub enum ControlCommands {
         message: String,
     },
 
+    /// Blocks until a message is received.
+    RecvMessage,
+
     /// Send a GlobalRpc request to a destination
     GlobalRpc {
         #[arg(long)]
@@ -61,14 +64,21 @@ pub enum ControlCommands {
         args: Vec<String>,
     },
 
+    InsertRendezvous {
+        #[arg(short, long)]
+        path: PathBuf,
+    },
+
+    GetRendezvous {
+        #[arg(short, long)]
+        key: Fingerprint,
+    },
+
     /// Dumps the graph.
     GraphDump,
 
     /// Dumps my own routes
     MyRoutes,
-
-    /// Blocks until a message is received.
-    RecvMessage,
 }
 
 fn main() -> anyhow::Result<()> {

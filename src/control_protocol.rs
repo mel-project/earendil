@@ -37,6 +37,13 @@ pub async fn main_control(
             })
             .await??;
         }
+        ControlCommands::RecvMessage => loop {
+            if let Some((msg, src)) = conn.recv_message().await? {
+                println!("{:?} from {src}", msg);
+                break;
+            }
+            smol::Timer::after(Duration::from_millis(100)).await;
+        },
         ControlCommands::GlobalRpc {
             id,
 
@@ -58,17 +65,24 @@ pub async fn main_control(
                 .await??;
             println!("{res}");
         }
+        ControlCommands::InsertRendezvous { path } => {
+            let (fingerprint, locator): (Fingerprint, HavenLocator) =
+                serde_yaml::from_slice(&std::fs::read(path).context("cannot read config file")?)
+                    .context("syntax error in config file")?;
+            conn.insert_rendezvous(fingerprint, locator).await??;
+        }
+        ControlCommands::GetRendezvous { key } => {
+            let locator = conn.get_rendezvous(key).await??;
+            if let Some(locator) = locator {
+                println!("{:?}", locator);
+            } else {
+                println!("No haven locator found for fingerprint {key}")
+            }
+        }
         ControlCommands::GraphDump => {
             let res = conn.graph_dump().await?;
             println!("{res}");
         }
-        ControlCommands::RecvMessage => loop {
-            if let Some((msg, src)) = conn.recv_message().await? {
-                println!("{:?} from {src}", msg);
-                break;
-            }
-            smol::Timer::after(Duration::from_millis(100)).await;
-        },
         ControlCommands::MyRoutes => {
             let routes = conn.my_routes().await?;
             println!("{}", serde_yaml::to_string(&routes)?);
