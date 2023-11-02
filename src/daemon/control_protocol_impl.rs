@@ -9,12 +9,12 @@ use sosistab2::ObfsUdpSecret;
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::{
-        ControlProtocol, GlobalRpcArgs, GlobalRpcError, SendMessageArgs, SendMessageError,
+        ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs, SendMessageError,
     },
     daemon::DaemonContext,
 };
 
-use super::global_rpc::transport::GlobalRpcTransport;
+use super::{global_rpc::transport::GlobalRpcTransport, haven::HavenLocator};
 
 pub struct ControlProtocolImpl {
     ctx: DaemonContext,
@@ -28,6 +28,20 @@ impl ControlProtocolImpl {
 
 #[async_trait]
 impl ControlProtocol for ControlProtocolImpl {
+    async fn lookup_haven_locator(&self, fingerprint: Fingerprint) -> Option<HavenLocator> {
+        self.ctx.lookup_haven_locator(fingerprint);
+        todo!()
+    }
+
+    async fn insert_haven_locator(
+        &self,
+        fingerprint: Fingerprint,
+        locator: HavenLocator,
+    ) -> Result<(), DhtError> {
+        self.ctx.insert_haven_locator(fingerprint, locator).await;
+        Ok(())
+    }
+
     async fn graph_dump(&self) -> String {
         let mut out = String::new();
         out.push_str("graph G {\n");

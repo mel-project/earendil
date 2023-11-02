@@ -12,9 +12,8 @@ use nanorpc_http::client::HttpRpcTransport;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::{daemon::haven::HavenLocator, ControlCommands};
 use thiserror::Error;
-
-use crate::ControlCommands;
 
 pub async fn main_control(
     control_command: ControlCommands,
@@ -93,6 +92,14 @@ pub trait ControlProtocol {
     async fn my_routes(&self) -> serde_json::Value;
 
     async fn recv_message(&self) -> Option<(Message, Fingerprint)>;
+
+    async fn lookup_haven_locator(&self, fingerprint: Fingerprint) -> Option<HavenLocator>;
+
+    async fn insert_haven_locator(
+        &self,
+        fingerprint: Fingerprint,
+        locator: HavenLocator,
+    ) -> Result<(), DhtError>;
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
@@ -107,6 +114,12 @@ pub enum SendMessageError {
     ReplyBlockFailed,
     #[error("cannot use anonymous id to communicate with anonymous id")]
     NoAnonId,
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum DhtError {
+    #[error("serialization error")]
+    Serde,
 }
 
 #[serde_as]

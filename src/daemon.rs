@@ -2,6 +2,7 @@ mod anon_identities;
 mod control_protocol_impl;
 mod global_rpc;
 mod gossip;
+pub mod haven;
 mod inout_route;
 mod link_connection;
 mod link_protocol;
@@ -31,7 +32,7 @@ use stdcode::StdcodeSerializeExt;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
-use crate::control_protocol::{SendMessageArgs, SendMessageError};
+use crate::control_protocol::{DhtError, SendMessageArgs, SendMessageError};
 use crate::daemon::anon_identities::AnonIdentities;
 use crate::daemon::global_rpc::transport::GlobalRpcTransport;
 use crate::daemon::global_rpc::GlobalRpcClient;
@@ -47,6 +48,7 @@ use crate::{
 };
 
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
+use self::haven::HavenLocator;
 use self::socket::Socket;
 use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
 
@@ -461,8 +463,17 @@ impl DaemonContext {
         None
     }
 
-    pub async fn insert_rendezvous_locator(&self) {}
-    pub async fn lookup_rendezvous_locator(&self) {}
+    pub async fn insert_haven_locator(
+        &self,
+        fingerprint: Fingerprint,
+        locator: HavenLocator,
+    ) -> Result<(), DhtError> {
+        todo!()
+    }
+
+    pub async fn lookup_haven_locator(&self, fingerprint: Fingerprint) {
+        todo!()
+    }
 }
 
 fn route_to_instructs(
