@@ -28,20 +28,6 @@ impl ControlProtocolImpl {
 
 #[async_trait]
 impl ControlProtocol for ControlProtocolImpl {
-    async fn lookup_haven_locator(&self, fingerprint: Fingerprint) -> Option<HavenLocator> {
-        self.ctx.lookup_haven_locator(fingerprint);
-        todo!()
-    }
-
-    async fn insert_haven_locator(
-        &self,
-        fingerprint: Fingerprint,
-        locator: HavenLocator,
-    ) -> Result<(), DhtError> {
-        self.ctx.insert_haven_locator(fingerprint, locator).await;
-        Ok(())
-    }
-
     async fn graph_dump(&self) -> String {
         let mut out = String::new();
         out.push_str("graph G {\n");
@@ -104,5 +90,21 @@ impl ControlProtocol for ControlProtocolImpl {
         };
 
         Ok(res)
+    }
+
+    async fn insert_rendezvous(
+        &self,
+        fingerprint: Fingerprint,
+        locator: HavenLocator,
+    ) -> Result<(), DhtError> {
+        self.ctx.insert_rendezvous(fingerprint, locator).await?;
+        Ok(())
+    }
+
+    async fn get_rendezvous(
+        &self,
+        fingerprint: Fingerprint,
+    ) -> Result<Option<HavenLocator>, DhtError> {
+        self.ctx.get_rendezvous(fingerprint).await
     }
 }

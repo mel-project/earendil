@@ -20,7 +20,7 @@ use earendil_packet::{crypt::OnionSecret, InnerPacket, PeeledPacket};
 use earendil_packet::{Dock, ForwardInstruction, Message, RawPacket, ReplyBlock, ReplyDegarbler};
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
-use moka::sync::Cache;
+use moka::sync::{Cache, CacheBuilder};
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
@@ -107,6 +107,9 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             anon_identities: Arc::new(RwLock::new(AnonIdentities::new())),
             socket_recv_queues: Arc::new(DashMap::new()),
             unhandled_incoming: Arc::new(ConcurrentQueue::unbounded()),
+            dht_cache: CacheBuilder::default()
+                .time_to_idle(Duration::from_secs(30))
+                .build(),
         };
 
         // Run the loops
@@ -320,6 +323,7 @@ pub struct DaemonContext {
     anon_identities: Arc<RwLock<AnonIdentities>>,
     socket_recv_queues: Arc<DashMap<Dock, Sender<(Message, Fingerprint)>>>,
     unhandled_incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
+    dht_cache: Cache<String, String>,
 }
 
 impl DaemonContext {
@@ -417,12 +421,8 @@ impl DaemonContext {
 
     pub async fn dht_insert(&self, key: String, value: String) {
         let replicas = self.dht_key_to_fps(&key);
-        for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-            if replica == self.identity.public().fingerprint() {
-                log::debug!("skipping DHT insert, our local cache already has key: {key}");
-                continue;
-            }
 
+        for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
             log::debug!("key {key} inserting into remote replica {replica}");
             let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
             match gclient
@@ -463,16 +463,32 @@ impl DaemonContext {
         None
     }
 
-    pub async fn insert_haven_locator(
+    pub async fn insert_rendezvous(
         &self,
         fingerprint: Fingerprint,
         locator: HavenLocator,
     ) -> Result<(), DhtError> {
-        todo!()
+        self.dht_insert(
+            fingerprint.to_string(),
+            String::from_utf8(locator.stdcode()).map_err(|_| DhtError::Serde)?,
+        )
+        .await;
+
+        Ok(())
     }
 
-    pub async fn lookup_haven_locator(&self, fingerprint: Fingerprint) {
-        todo!()
+    pub async fn get_rendezvous(
+        &self,
+        fingerprint: Fingerprint,
+    ) -> Result<Option<HavenLocator>, DhtError> {
+        if let Some(value) = self.dht_get(fingerprint.to_string()).await {
+            let locator: HavenLocator =
+                stdcode::deserialize(value.as_bytes()).map_err(|_| DhtError::Serde)?;
+
+            return Ok(Some(locator));
+        }
+
+        Ok(None)
     }
 }
 

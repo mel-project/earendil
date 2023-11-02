@@ -2,9 +2,9 @@ use earendil_crypt::{Fingerprint, IdentityPublic};
 use earendil_packet::crypt::OnionPublic;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Deserialize, Serialize)]
 pub struct HavenLocator {
-    full_pk: IdentityPublic,
+    identity_pk: IdentityPublic,
     onion_pk: OnionPublic,
-    rendezvous_relay_fingerprint: Fingerprint,
+    rendezvous_fingerprint: Fingerprint,
 }

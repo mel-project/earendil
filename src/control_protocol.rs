@@ -93,13 +93,16 @@ pub trait ControlProtocol {
 
     async fn recv_message(&self) -> Option<(Message, Fingerprint)>;
 
-    async fn lookup_haven_locator(&self, fingerprint: Fingerprint) -> Option<HavenLocator>;
-
-    async fn insert_haven_locator(
+    async fn insert_rendezvous(
         &self,
         fingerprint: Fingerprint,
         locator: HavenLocator,
     ) -> Result<(), DhtError>;
+
+    async fn get_rendezvous(
+        &self,
+        fingerprint: Fingerprint,
+    ) -> Result<Option<HavenLocator>, DhtError>;
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
