@@ -107,7 +107,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             .identity_pk
             .verify(registration.to_sign().as_bytes(), &registration.sig)?;
         self.ctx
-            .forward_dests
+            .registered_havens
             .insert(registration.identity_pk.fingerprint(), ());
         Ok(())
     }
