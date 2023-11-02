@@ -1,14 +1,18 @@
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, str::FromStr, time::Duration};
 
 use anyhow::Context;
 use async_trait::async_trait;
 
 use bytes::Bytes;
 
-use earendil_crypt::{Fingerprint, VerifyError};
-use earendil_packet::{Dock, Message, PacketConstructError};
+use earendil_crypt::{Fingerprint, IdentitySecret, VerifyError};
+use earendil_packet::{
+    crypt::{OnionPublic, OnionSecret},
+    Dock, Message, PacketConstructError,
+};
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -19,7 +23,7 @@ pub async fn main_control(
     control_command: ControlCommands,
     connect: SocketAddr,
 ) -> anyhow::Result<()> {
-    let conn = ControlClient::from(HttpRpcTransport::new(connect));
+    let client = ControlClient::from(HttpRpcTransport::new(connect));
     match control_command {
         ControlCommands::SendMessage {
             id,
@@ -28,17 +32,18 @@ pub async fn main_control(
             destination,
             message,
         } => {
-            conn.send_message(SendMessageArgs {
-                id,
-                source_dock,
-                dest_dock,
-                destination,
-                content: Bytes::copy_from_slice(message.as_bytes()),
-            })
-            .await??;
+            client
+                .send_message(SendMessageArgs {
+                    id,
+                    source_dock,
+                    dest_dock,
+                    destination,
+                    content: Bytes::copy_from_slice(message.as_bytes()),
+                })
+                .await??;
         }
         ControlCommands::RecvMessage => loop {
-            if let Some((msg, src)) = conn.recv_message().await? {
+            if let Some((msg, src)) = client.recv_message().await? {
                 println!("{:?} from {src}", msg);
                 break;
             }
@@ -54,7 +59,7 @@ pub async fn main_control(
             let args: Result<Vec<serde_json::Value>, _> =
                 args.into_iter().map(|a| serde_yaml::from_str(&a)).collect();
             let args = args.context("arguments not YAML")?;
-            let res = conn
+            let res = client
                 .send_global_rpc(GlobalRpcArgs {
                     id,
 
@@ -65,26 +70,55 @@ pub async fn main_control(
                 .await??;
             println!("{res}");
         }
-        ControlCommands::InsertRendezvous { path } => {
-            let (fingerprint, locator): (Fingerprint, HavenLocator) =
-                serde_yaml::from_slice(&std::fs::read(path).context("cannot read config file")?)
-                    .context("syntax error in config file")?;
-            conn.insert_rendezvous(locator).await??;
+        ControlCommands::InsertRendezvous {
+            identity_sk,
+            onion_pk,
+            rendezvous_fingerprint,
+        } => {
+            let locator = HavenLocator::new(
+                IdentitySecret::from_str(&identity_sk)?,
+                OnionPublic::from_str(&onion_pk)?,
+                rendezvous_fingerprint,
+            );
+            client.insert_rendezvous(locator).await??;
         }
         ControlCommands::GetRendezvous { key } => {
-            let locator = conn.get_rendezvous(key).await??;
+            let locator = client.get_rendezvous(key).await??;
             if let Some(locator) = locator {
                 println!("{:?}", locator);
             } else {
                 println!("No haven locator found for fingerprint {key}")
             }
         }
+        ControlCommands::RendezvousHavenTest => {
+            let mut fingerprint_bytes = [0; 20];
+            rand::thread_rng().fill_bytes(&mut fingerprint_bytes);
+            let fingerprint = Fingerprint::from_bytes(&fingerprint_bytes);
+            let locator = HavenLocator::new(
+                IdentitySecret::generate(),
+                OnionSecret::generate().public(),
+                fingerprint,
+            );
+            eprintln!("created haven locator: {:?}", &locator);
+
+            client.insert_rendezvous(locator.clone()).await??;
+            eprintln!("inserted haven locator... sleeping for 5s");
+
+            std::thread::sleep(Duration::from_secs(5));
+
+            if let Some(fetched_locator) = client.get_rendezvous(fingerprint).await?? {
+                eprintln!("got haven locator: {:?}", &fetched_locator);
+                assert_eq!(locator.rendezvous_fp(), fetched_locator.rendezvous_fp());
+            } else {
+                eprintln!("oh no couldn't find locator");
+            }
+        }
         ControlCommands::GraphDump => {
-            let res = conn.graph_dump().await?;
+            let res = client.graph_dump().await?;
             println!("{res}");
         }
         ControlCommands::MyRoutes => {
-            let routes = conn.my_routes().await?;
+            let routes = client.my_routes().await?;
             println!("{}", serde_yaml::to_string(&routes)?);
         }
     }

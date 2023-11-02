@@ -4,8 +4,9 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use config::ConfigFile;
 use control_protocol::main_control;
-use earendil_crypt::Fingerprint;
-use earendil_packet::Dock;
+use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_packet::{crypt::OnionPublic, Dock};
+use serde_with::serde_as;
 
 mod config;
 pub mod control_protocol;
@@ -27,7 +28,7 @@ enum Commands {
         config: PathBuf,
     },
 
-    /// Runs a control-protocol verb
+    /// Runs a control-protocol verb.
     Control {
         #[arg(short, long, default_value = "127.0.0.1:18964")]
         connect: SocketAddr,
@@ -53,7 +54,7 @@ pub enum ControlCommands {
     /// Blocks until a message is received.
     RecvMessage,
 
-    /// Send a GlobalRpc request to a destination
+    /// Send a GlobalRpc request to a destination.
     GlobalRpc {
         #[arg(long)]
         id: Option<String>,
@@ -64,20 +65,29 @@ pub enum ControlCommands {
         args: Vec<String>,
     },
 
+    /// Insert a rendezvous haven locator.
     InsertRendezvous {
         #[arg(short, long)]
-        path: PathBuf,
+        identity_sk: String,
+        #[arg(short, long)]
+        onion_pk: String,
+        #[arg(short, long)]
+        rendezvous_fingerprint: Fingerprint,
     },
 
+    /// Looks up a rendezvous haven locator.
     GetRendezvous {
         #[arg(short, long)]
         key: Fingerprint,
     },
 
+    /// Insert and get a randomly generated HavenLocator.
+    RendezvousHavenTest,
+
     /// Dumps the graph.
     GraphDump,
 
-    /// Dumps my own routes
+    /// Dumps my own routes.
     MyRoutes,
 }
 
