@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
-use crate::{control_protocol::SendMessageArgs, daemon::DaemonContext};
+use crate::{daemon::DaemonContext};
 use bytes::Bytes;
-use earendil_crypt::Fingerprint;
+use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{Dock, Message};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use smol::channel::Receiver;
 
 #[derive(Clone)]
-pub struct Socket {
+pub struct N2rSocket {
     ctx: DaemonContext,
-    id: Option<String>,
+    anon_id: Option<IdentitySecret>,
     bound_dock: Arc<BoundDock>,
     recv_incoming: Receiver<(Message, Fingerprint)>,
 }
@@ -27,8 +27,13 @@ pub struct Endpoint {
     dock: Dock,
 }
 
-impl Socket {
-    pub fn bind(ctx: DaemonContext, id: Option<String>, dock: Option<Dock>) -> Socket {
+impl N2rSocket {
+    /// Binds an N2R socket. anon_id indicates the anonymous ID to use. If this is not given, then the node's own identity will be used, which will not function properly if this is not running on a relay.
+    pub fn bind(
+        ctx: DaemonContext,
+        anon_id: Option<IdentitySecret>,
+        dock: Option<Dock>,
+    ) -> N2rSocket {
         let dock = if let Some(dock) = dock {
             dock
         } else {
@@ -48,9 +53,9 @@ impl Socket {
         let (send_outgoing, recv_incoming) = smol::channel::bounded(1000);
         ctx.socket_recv_queues.insert(dock, send_outgoing);
 
-        Socket {
+        N2rSocket {
             ctx,
-            id,
+            anon_id,
             bound_dock,
             recv_incoming,
         }
@@ -58,15 +63,14 @@ impl Socket {
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
         self.ctx
-            .send_message(SendMessageArgs {
-                id: self.id.clone(),
-                source_dock: self.bound_dock.dock,
-                dest_dock: endpoint.dock,
-                destination: endpoint.fingerprint,
-                content: body,
-            })
+            .send_message(
+                self.anon_id.clone(),
+                self.bound_dock.dock,
+                endpoint.fingerprint,
+                endpoint.dock,
+                body,
+            )
             .await?;
-
         Ok(())
     }
 
