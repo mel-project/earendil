@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use earendil_crypt::Fingerprint;
 
+use crate::daemon::rendezvous::ForwardRequest;
 use crate::daemon::{haven::HavenLocator, DaemonContext};
+use earendil_crypt::{Fingerprint, VerifyError};
 
 use super::GlobalRpcProtocol;
 
@@ -38,5 +39,15 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             return self.ctx.dht_get(key).await;
         }
         None
+    }
+
+    async fn alloc_forward(&self, registration: ForwardRequest) -> Result<(), VerifyError> {
+        registration
+            .identity_pk
+            .verify(registration.to_sign().as_bytes(), &registration.sig)?;
+        self.ctx
+            .registered_havens
+            .insert(registration.identity_pk.fingerprint(), ());
+        Ok(())
     }
 }
