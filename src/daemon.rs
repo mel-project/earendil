@@ -470,7 +470,7 @@ impl DaemonContext {
     ) -> Result<(), DhtError> {
         self.dht_insert(
             fingerprint.to_string(),
-            String::from_utf8(locator.stdcode()).map_err(|_| DhtError::Serde)?,
+            serde_json::to_string(&locator).map_err(|_| DhtError::Serde)?,
         )
         .await;
 
@@ -483,7 +483,7 @@ impl DaemonContext {
     ) -> Result<Option<HavenLocator>, DhtError> {
         if let Some(value) = self.dht_get(fingerprint.to_string()).await {
             let locator: HavenLocator =
-                stdcode::deserialize(value.as_bytes()).map_err(|_| DhtError::Serde)?;
+                serde_json::from_str(&value).map_err(|_| DhtError::Serde)?;
 
             return Ok(Some(locator));
         }
