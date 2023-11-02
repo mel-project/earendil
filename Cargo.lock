@@ -401,9 +401,9 @@ checksum = "23ce669cd6c8588f79e15cf450314f9638f967fc5770ff1c7c1deb0925ea7cfa"
 
 [[package]]
 name = "base64"
-version = "0.21.4"
+version = "0.21.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ba43ea6f343b788c8764558649e08df62f86c6ef251fdaeb1ffd010a9ae50a2"
+checksum = "35636a1494ede3b646cc98f74f8e62c773a38a659ebc777a2cf26b9b74171df9"
 
 [[package]]
 name = "bincode"
@@ -971,6 +971,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64",
  "blake3",
  "bytemuck",
  "bytes",
@@ -1012,6 +1013,7 @@ dependencies = [
  "anyhow",
  "arrayref",
  "base32",
+ "base64",
  "blake3",
  "bytes",
  "ed25519-compact",
@@ -1027,6 +1029,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrayref",
+ "base64",
  "bincode",
  "blake3",
  "bs58",

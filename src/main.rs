@@ -27,7 +27,7 @@ enum Commands {
         config: PathBuf,
     },
 
-    /// Runs a control-protocol verb
+    /// Runs a control-protocol verb.
     Control {
         #[arg(short, long, default_value = "127.0.0.1:18964")]
         connect: SocketAddr,
@@ -50,7 +50,10 @@ pub enum ControlCommands {
         message: String,
     },
 
-    /// Send a GlobalRpc request to a destination
+    /// Blocks until a message is received.
+    RecvMessage,
+
+    /// Send a GlobalRpc request to a destination.
     GlobalRpc {
         #[arg(long)]
         id: Option<String>,
@@ -61,14 +64,30 @@ pub enum ControlCommands {
         args: Vec<String>,
     },
 
+    /// Insert a rendezvous haven locator.
+    InsertRendezvous {
+        #[arg(short, long)]
+        identity_sk: String,
+        #[arg(short, long)]
+        onion_pk: String,
+        #[arg(short, long)]
+        rendezvous_fingerprint: Fingerprint,
+    },
+
+    /// Looks up a rendezvous haven locator.
+    GetRendezvous {
+        #[arg(short, long)]
+        key: Fingerprint,
+    },
+
+    /// Insert and get a randomly generated HavenLocator.
+    RendezvousHavenTest,
+
     /// Dumps the graph.
     GraphDump,
 
-    /// Dumps my own routes
+    /// Dumps my own routes.
     MyRoutes,
-
-    /// Blocks until a message is received.
-    RecvMessage,
 }
 
 fn main() -> anyhow::Result<()> {

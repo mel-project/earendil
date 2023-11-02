@@ -1,11 +1,12 @@
-use arrayref::array_ref;
+use std::str::FromStr;
 
+use arrayref::array_ref;
+use base64::{engine::general_purpose, Engine as _};
 use chacha20::{
     cipher::{KeyIvInit, StreamCipher},
     ChaCha20,
 };
 use chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit};
-
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -41,6 +42,21 @@ impl OnionPublic {
     /// Construct an OnionPublic from bytes.
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {
         Self(ed25519_compact::x25519::PublicKey::new(*bytes))
+    }
+}
+
+impl FromStr for OnionPublic {
+    type Err = base64::DecodeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let decoded = general_purpose::STANDARD.decode(s)?;
+        if decoded.len() == 32 {
+            let mut array = [0u8; 32];
+            array.copy_from_slice(&decoded);
+            Ok(OnionPublic::from_bytes(&array))
+        } else {
+            Err(base64::DecodeError::InvalidLength)
+        }
     }
 }
 

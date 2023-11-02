@@ -1,6 +1,7 @@
 mod control_protocol_impl;
 mod global_rpc;
 mod gossip;
+pub mod haven;
 mod inout_route;
 mod link_connection;
 mod link_protocol;
@@ -19,19 +20,21 @@ use earendil_packet::{crypt::OnionSecret, InnerPacket, PeeledPacket};
 use earendil_packet::{Dock, ForwardInstruction, Message, RawPacket, ReplyBlock, ReplyDegarbler};
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
-use moka::sync::Cache;
+use moka::sync::{Cache, CacheBuilder};
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::{Mutex, RwLock};
 use smol::channel::{Receiver, Sender};
+use smol_timeout::TimeoutExt;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
 use stdcode::StdcodeSerializeExt;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
-use crate::control_protocol::SendMessageError;
-
+use crate::control_protocol::{DhtError, SendMessageError};
+use crate::daemon::global_rpc::transport::GlobalRpcTransport;
+use crate::daemon::global_rpc::GlobalRpcClient;
 use crate::daemon::reply_block_store::ReplyBlockStore;
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
@@ -44,6 +47,7 @@ use crate::{
 };
 
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
+use self::haven::HavenLocator;
 use self::n2r_socket::{Endpoint, N2rSocket};
 use self::rendezvous::HAVEN_FORWARD_DOCK;
 use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
@@ -103,6 +107,9 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 
             socket_recv_queues: Arc::new(DashMap::new()),
             unhandled_incoming: Arc::new(ConcurrentQueue::unbounded()),
+            dht_cache: CacheBuilder::default()
+                .time_to_idle(Duration::from_secs(30))
+                .build(),
             registered_havens: Arc::new(
                 Cache::builder()
                     .max_capacity(100_000)
@@ -314,6 +321,7 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 }
 
+const DHT_REDUNDANCY: usize = 3;
 /// Loop that listens to and handles incoming haven forwarding requests
 async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let seen_srcs: Cache<(Fingerprint, Fingerprint), ()> = Cache::builder()
@@ -359,6 +367,7 @@ pub struct DaemonContext {
     anon_destinations: Arc<Mutex<ReplyBlockStore>>,
     socket_recv_queues: Arc<DashMap<Dock, Sender<(Message, Fingerprint)>>>,
     unhandled_incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
+    dht_cache: Cache<Fingerprint, HavenLocator>,
     registered_havens: Arc<Cache<Fingerprint, ()>>,
 }
 
@@ -444,6 +453,67 @@ impl DaemonContext {
             }
         }
         Ok(())
+    }
+
+    fn dht_key_to_fps(&self, key: &str) -> Vec<Fingerprint> {
+        let mut all_nodes: Vec<Fingerprint> = self.relay_graph.read().all_nodes().collect();
+        all_nodes.sort_unstable_by_key(|fp| *blake3::hash(&(key, fp).stdcode()).as_bytes());
+        all_nodes
+    }
+
+    pub async fn dht_insert(&self, locator: HavenLocator) {
+        let key = locator.identity_pk.fingerprint();
+        let replicas = self.dht_key_to_fps(&key.to_string());
+
+        for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
+            log::debug!("key {key} inserting into remote replica {replica}");
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
+            match gclient
+                .dht_insert(locator.clone(), false)
+                .timeout(Duration::from_secs(10))
+                .await
+            {
+                Some(Err(e)) => log::debug!("inserting {key} into {replica} failed: {:?}", e),
+                None => log::debug!("inserting {key} into {replica} timed out"),
+                _ => {}
+            }
+        }
+    }
+
+    pub async fn dht_get(
+        &self,
+        fingerprint: Fingerprint,
+    ) -> Result<Option<HavenLocator>, DhtError> {
+        let replicas = self.dht_key_to_fps(&fingerprint.to_string());
+        let mut gatherer = FuturesUnordered::new();
+        for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
+            gatherer.push(async move {
+                let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
+                anyhow::Ok(
+                    gclient
+                        .dht_get(fingerprint, false)
+                        .timeout(Duration::from_secs(30))
+                        .await
+                        .context("timed out")??,
+                )
+            })
+        }
+        while let Some(result) = gatherer.next().await {
+            match result {
+                Err(err) => log::warn!("error while dht_get: {:?}", err),
+                Ok(Err(err)) => log::warn!("error while dht_get: {:?}", err),
+                Ok(Ok(None)) => continue,
+                Ok(Ok(Some(locator))) => {
+                    let id_pk = locator.identity_pk;
+                    let payload = locator.signable();
+                    if id_pk.fingerprint() == fingerprint {
+                        id_pk.verify(&payload, &locator.signature)?;
+                        return Ok(Some(locator));
+                    }
+                }
+            }
+        }
+        Ok(None)
     }
 }
 

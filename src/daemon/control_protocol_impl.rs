@@ -11,12 +11,12 @@ use sosistab2::ObfsUdpSecret;
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::{
-        ControlProtocol, GlobalRpcArgs, GlobalRpcError, SendMessageArgs, SendMessageError,
+        ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs, SendMessageError,
     },
     daemon::DaemonContext,
 };
 
-use super::global_rpc::transport::GlobalRpcTransport;
+use super::{global_rpc::transport::GlobalRpcTransport, haven::HavenLocator};
 
 pub struct ControlProtocolImpl {
     anon_identities: Arc<Mutex<AnonIdentities>>,
@@ -105,6 +105,18 @@ impl ControlProtocol for ControlProtocolImpl {
         };
 
         Ok(res)
+    }
+
+    async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError> {
+        self.ctx.dht_insert(locator).await;
+        Ok(())
+    }
+
+    async fn get_rendezvous(
+        &self,
+        fingerprint: Fingerprint,
+    ) -> Result<Option<HavenLocator>, DhtError> {
+        self.ctx.dht_get(fingerprint).await
     }
 }
 

@@ -3,6 +3,7 @@ use std::{fmt::Display, str::FromStr};
 use anyhow::Context;
 use arrayref::array_ref;
 use base32::Alphabet;
+use base64::{engine::general_purpose, Engine as _};
 use bytes::Bytes;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -28,7 +29,7 @@ impl AsRef<[u8]> for IdentityPublic {
     }
 }
 
-#[derive(Error, Debug, Serialize, Deserialize)]
+#[derive(Error, Debug, Deserialize, Serialize)]
 pub enum VerifyError {
     #[error("The signature is corrupt")]
     SignatureCorrupt,
@@ -62,6 +63,21 @@ impl IdentityPublic {
 /// Underlying representation is a Ed25519 "seed".
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq)]
 pub struct IdentitySecret([u8; 32]);
+
+impl FromStr for IdentitySecret {
+    type Err = base64::DecodeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let decoded = general_purpose::STANDARD.decode(s)?;
+        if decoded.len() == 32 {
+            let mut array = [0u8; 32];
+            array.copy_from_slice(&decoded);
+            Ok(IdentitySecret(array))
+        } else {
+            Err(base64::DecodeError::InvalidLength)
+        }
+    }
+}
 
 impl IdentitySecret {
     /// Generates a new random secret identity.
