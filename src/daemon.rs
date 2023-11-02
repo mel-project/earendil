@@ -32,8 +32,7 @@ use stdcode::StdcodeSerializeExt;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
-use crate::control_protocol::{DhtError, SendMessageArgs, SendMessageError};
-use crate::daemon::anon_identities::AnonIdentities;
+use crate::control_protocol::{DhtError, SendMessageError};
 use crate::daemon::global_rpc::transport::GlobalRpcTransport;
 use crate::daemon::global_rpc::GlobalRpcClient;
 use crate::daemon::reply_block_store::ReplyBlockStore;
@@ -51,7 +50,6 @@ use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
 use self::haven::HavenLocator;
 use self::n2r_socket::{Endpoint, N2rSocket};
 use self::rendezvous::HAVEN_FORWARD_DOCK;
-use self::socket::Socket;
 use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
