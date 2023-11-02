@@ -45,7 +45,7 @@ use crate::{
 };
 
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
-use self::rendezvous::{ForwardTable, HAVEN_FORWARD_DOCK};
+use self::rendezvous::HAVEN_FORWARD_DOCK;
 use self::socket::{Endpoint, Socket};
 use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
 
@@ -104,7 +104,12 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             anon_identities: Arc::new(RwLock::new(AnonIdentities::new())),
             socket_recv_queues: Arc::new(DashMap::new()),
             unhandled_incoming: Arc::new(ConcurrentQueue::unbounded()),
-            forward_table: Arc::new(ForwardTable::new()),
+            forward_dests: Arc::new(
+                Cache::builder()
+                    .max_capacity(100_000)
+                    .time_to_idle(Duration::from_secs(3600))
+                    .build(),
+            ),
         };
 
         // Run the loops
@@ -312,36 +317,33 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 /// Loop that listens to and handles incoming haven forwarding requests
 async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    let seen_srcs: Cache<(Fingerprint, Fingerprint), ()> = Cache::builder()
+        .max_capacity(100_000)
+        .time_to_idle(Duration::from_secs(3600))
+        .build();
     let socket = Arc::new(Socket::bind(ctx.clone(), None, Some(HAVEN_FORWARD_DOCK)));
-    let group: TaskReaper<anyhow::Result<()>> = TaskReaper::new();
 
     loop {
-        let socket = socket.clone();
         if let Ok((msg, src_endpoint)) = socket.recv_from().await {
             let ctx = ctx.clone();
-            group.attach(smolscale::spawn(async move {
-                // deserialize msg to get (dest_haven_fingerprint, inner)
-                let (dest_fp, inner): (Fingerprint, Bytes) = stdcode::deserialize(&msg)?;
-                log::debug!("received forward msg {:?}, meant for {dest_fp}", inner);
+            let (dest_fp, inner): (Fingerprint, Bytes) = stdcode::deserialize(&msg)?;
+            log::debug!("received forward msg {:?}, meant for {dest_fp}", inner);
 
-                let is_valid_dest = ctx.forward_table.is_dest(&dest_fp);
-                let is_seen_src = ctx.forward_table.is_seen_src(&dest_fp);
+            let is_valid_dest = ctx.forward_dests.contains_key(&dest_fp);
+            let is_seen_src = seen_srcs.contains_key(&(dest_fp, src_endpoint.fingerprint()));
 
-                if is_valid_dest {
-                    ctx.forward_table
-                        .insert_src(src_endpoint.fingerprint(), dest_fp);
-                }
-                if is_valid_dest || is_seen_src {
-                    let skt = Socket::bind(ctx, None, None);
-                    let body: Bytes = (src_endpoint.fingerprint(), inner).stdcode().into();
-                    skt.send_to(body, Endpoint::new(dest_fp, HAVEN_FORWARD_DOCK))
-                        .await?;
-                } else {
-                    log::warn!("haven {dest_fp} is not registered with me!");
-                }
-                Ok(())
-            }));
-        }
+            if is_valid_dest {
+                seen_srcs.insert((src_endpoint.fingerprint(), dest_fp), ());
+            }
+            if is_valid_dest || is_seen_src {
+                let skt = Socket::bind(ctx, None, None);
+                let body: Bytes = (src_endpoint.fingerprint(), inner).stdcode().into();
+                skt.send_to(body, Endpoint::new(dest_fp, HAVEN_FORWARD_DOCK))
+                    .await?;
+            } else {
+                log::warn!("haven {dest_fp} is not registered with me!");
+            }
+        };
     }
 }
 
@@ -359,7 +361,7 @@ pub struct DaemonContext {
     anon_identities: Arc<RwLock<AnonIdentities>>,
     socket_recv_queues: Arc<DashMap<Dock, Sender<(Message, Fingerprint)>>>,
     unhandled_incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
-    forward_table: Arc<ForwardTable>,
+    forward_dests: Arc<Cache<Fingerprint, ()>>,
 }
 
 impl DaemonContext {
