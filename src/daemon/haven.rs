@@ -12,7 +12,7 @@ pub struct HavenLocator {
 }
 
 impl HavenLocator {
-    fn new(
+    pub fn new(
         identity_pk: IdentityPublic,
         onion_pk: OnionPublic,
         rendezvous_fingerprint: Fingerprint,
@@ -26,7 +26,23 @@ impl HavenLocator {
         }
     }
 
-    fn signable(&self) -> HavenLocator {
+    pub fn get_id_pk(&self) -> IdentityPublic {
+        self.identity_pk
+    }
+
+    pub fn get_onion_pk(&self) -> OnionPublic {
+        self.onion_pk
+    }
+
+    pub fn get_rendezvous_fp(&self) -> Fingerprint {
+        self.rendezvous_fingerprint
+    }
+
+    pub fn get_signature(&self) -> Bytes {
+        self.signature.clone()
+    }
+
+    pub fn signable(&self) -> HavenLocator {
         HavenLocator::new(
             self.identity_pk,
             self.onion_pk,

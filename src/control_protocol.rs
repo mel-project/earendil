@@ -5,7 +5,7 @@ use async_trait::async_trait;
 
 use bytes::Bytes;
 
-use earendil_crypt::Fingerprint;
+use earendil_crypt::{Fingerprint, VerifyError};
 use earendil_packet::{Dock, Message, PacketConstructError};
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
@@ -69,7 +69,7 @@ pub async fn main_control(
             let (fingerprint, locator): (Fingerprint, HavenLocator) =
                 serde_yaml::from_slice(&std::fs::read(path).context("cannot read config file")?)
                     .context("syntax error in config file")?;
-            conn.insert_rendezvous(fingerprint, locator).await??;
+            conn.insert_rendezvous(locator).await??;
         }
         ControlCommands::GetRendezvous { key } => {
             let locator = conn.get_rendezvous(key).await??;
@@ -107,11 +107,7 @@ pub trait ControlProtocol {
 
     async fn recv_message(&self) -> Option<(Message, Fingerprint)>;
 
-    async fn insert_rendezvous(
-        &self,
-        fingerprint: Fingerprint,
-        locator: HavenLocator,
-    ) -> Result<(), DhtError>;
+    async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError>;
 
     async fn get_rendezvous(
         &self,
@@ -135,8 +131,8 @@ pub enum SendMessageError {
 
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum DhtError {
-    #[error("serialization error")]
-    Serde,
+    #[error(transparent)]
+    Verification(#[from] VerifyError),
 }
 
 #[serde_as]

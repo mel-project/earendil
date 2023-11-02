@@ -323,7 +323,7 @@ pub struct DaemonContext {
     anon_identities: Arc<RwLock<AnonIdentities>>,
     socket_recv_queues: Arc<DashMap<Dock, Sender<(Message, Fingerprint)>>>,
     unhandled_incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
-    dht_cache: Cache<String, String>,
+    dht_cache: Cache<Fingerprint, HavenLocator>,
 }
 
 impl DaemonContext {
@@ -419,14 +419,14 @@ impl DaemonContext {
         all_nodes
     }
 
-    pub async fn dht_insert(&self, key: String, value: String) {
-        let replicas = self.dht_key_to_fps(&key);
+    pub async fn dht_insert(&self, key: Fingerprint, value: HavenLocator) {
+        let replicas = self.dht_key_to_fps(&key.to_string());
 
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
             log::debug!("key {key} inserting into remote replica {replica}");
             let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
             match gclient
-                .dht_insert(key.clone(), value.clone(), false)
+                .dht_insert(key, value.clone(), false)
                 .timeout(Duration::from_secs(10))
                 .await
             {
@@ -437,11 +437,10 @@ impl DaemonContext {
         }
     }
 
-    pub async fn dht_get(&self, key: String) -> Option<String> {
-        let replicas = self.dht_key_to_fps(&key);
+    pub async fn dht_get(&self, key: Fingerprint) -> Option<HavenLocator> {
+        let replicas = self.dht_key_to_fps(&key.to_string());
         let mut gatherer = FuturesUnordered::new();
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-            let key = key.clone();
             gatherer.push(async move {
                 let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
                 anyhow::Ok(
@@ -463,17 +462,11 @@ impl DaemonContext {
         None
     }
 
-    pub async fn insert_rendezvous(
-        &self,
-        fingerprint: Fingerprint,
-        locator: HavenLocator,
-    ) -> Result<(), DhtError> {
-        self.dht_insert(
-            fingerprint.to_string(),
-            serde_json::to_string(&locator).map_err(|_| DhtError::Serde)?,
-        )
-        .await;
-
+    pub async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError> {
+        let id_pk = locator.get_id_pk();
+        let payload = locator.signable().stdcode();
+        id_pk.verify(&payload, &locator.get_signature())?;
+        self.dht_insert(id_pk.fingerprint(), locator).await;
         Ok(())
     }
 
@@ -481,13 +474,15 @@ impl DaemonContext {
         &self,
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        if let Some(value) = self.dht_get(fingerprint.to_string()).await {
-            let locator: HavenLocator =
-                serde_json::from_str(&value).map_err(|_| DhtError::Serde)?;
+        if let Some(locator) = self.dht_get(fingerprint).await {
+            let id_pk = locator.get_id_pk();
+            let payload = locator.signable().stdcode();
+            if id_pk.fingerprint() == fingerprint {
+                id_pk.verify(&payload, &locator.get_signature())?;
 
-            return Ok(Some(locator));
+                return Ok(Some(locator));
+            }
         }
-
         Ok(None)
     }
 }

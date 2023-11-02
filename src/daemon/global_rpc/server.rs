@@ -1,6 +1,7 @@
 use async_trait::async_trait;
+use earendil_crypt::Fingerprint;
 
-use crate::daemon::DaemonContext;
+use crate::daemon::{haven::HavenLocator, DaemonContext};
 
 use super::GlobalRpcProtocol;
 
@@ -20,16 +21,16 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         i
     }
 
-    async fn dht_insert(&self, key: String, value: String, recurse: bool) {
+    async fn dht_insert(&self, key: Fingerprint, value: HavenLocator, recurse: bool) {
         if recurse {
             self.ctx.dht_insert(key, value).await
         } else {
             log::debug!("inserting key {key} locally");
-            self.ctx.dht_cache.insert(key.clone(), value.clone());
+            self.ctx.dht_cache.insert(key, value.clone());
         }
     }
 
-    async fn dht_get(&self, key: String, recurse: bool) -> Option<String> {
+    async fn dht_get(&self, key: Fingerprint, recurse: bool) -> Option<HavenLocator> {
         if let Some(val) = self.ctx.dht_cache.get(&key) {
             return Some(val);
         } else if recurse {

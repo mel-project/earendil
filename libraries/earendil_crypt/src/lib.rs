@@ -28,7 +28,7 @@ impl AsRef<[u8]> for IdentityPublic {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Deserialize, Serialize)]
 pub enum VerifyError {
     #[error("The signature is corrupt")]
     SignatureCorrupt,
