@@ -6,10 +6,10 @@ use stdcode::StdcodeSerializeExt;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HavenLocator {
-    identity_pk: IdentityPublic,
-    onion_pk: OnionPublic,
-    rendezvous_fingerprint: Fingerprint,
-    signature: Bytes,
+    pub identity_pk: IdentityPublic,
+    pub onion_pk: OnionPublic,
+    pub rendezvous_fingerprint: Fingerprint,
+    pub signature: Bytes,
 }
 
 impl HavenLocator {
@@ -19,14 +19,13 @@ impl HavenLocator {
         rendezvous_fingerprint: Fingerprint,
     ) -> HavenLocator {
         let identity_pk = identity_sk.public();
-        let signable = HavenLocator {
+        let locator = HavenLocator {
             identity_pk,
             onion_pk,
             rendezvous_fingerprint,
             signature: Bytes::new(),
         };
-
-        let signature = identity_sk.sign(&signable.stdcode());
+        let signature = identity_sk.sign(&locator.signable());
 
         HavenLocator {
             identity_pk,
@@ -36,28 +35,15 @@ impl HavenLocator {
         }
     }
 
-    pub fn id_pk(&self) -> IdentityPublic {
-        self.identity_pk
-    }
-
-    pub fn onion_pk(&self) -> OnionPublic {
-        self.onion_pk
-    }
-
-    pub fn rendezvous_fp(&self) -> Fingerprint {
-        self.rendezvous_fingerprint
-    }
-
-    pub fn signature(&self) -> Bytes {
-        self.signature.clone()
-    }
-
-    pub fn signable(&self) -> HavenLocator {
-        HavenLocator {
+    pub fn signable(&self) -> [u8; 32] {
+        let locator = HavenLocator {
             identity_pk: self.identity_pk,
             onion_pk: self.onion_pk,
             rendezvous_fingerprint: self.rendezvous_fingerprint,
             signature: Bytes::new(),
-        }
+        };
+        let hash = blake3::keyed_hash(b"haven_locator___________________", &locator.stdcode());
+
+        *hash.as_bytes()
     }
 }

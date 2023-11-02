@@ -104,7 +104,10 @@ pub async fn main_control(
 
             if let Some(fetched_locator) = client.get_rendezvous(id_pk.fingerprint()).await?? {
                 eprintln!("got haven locator: {:?}", &fetched_locator);
-                assert_eq!(locator.rendezvous_fp(), fetched_locator.rendezvous_fp());
+                assert_eq!(
+                    locator.rendezvous_fingerprint,
+                    fetched_locator.rendezvous_fingerprint
+                );
             } else {
                 eprintln!("oh no couldn't find locator");
             }

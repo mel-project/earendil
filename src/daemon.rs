@@ -505,9 +505,9 @@ impl DaemonContext {
     }
 
     pub async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError> {
-        let id_pk = locator.id_pk();
-        let payload = locator.signable().stdcode();
-        id_pk.verify(&payload, &locator.signature())?;
+        let id_pk = locator.identity_pk;
+        let payload = locator.signable();
+        id_pk.verify(&payload, &locator.signature)?;
         self.dht_insert(id_pk.fingerprint(), locator).await;
         Ok(())
     }
@@ -517,10 +517,10 @@ impl DaemonContext {
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
         if let Some(locator) = self.dht_get(fingerprint).await {
-            let id_pk = locator.id_pk();
-            let payload = locator.signable().stdcode();
+            let id_pk = locator.identity_pk;
+            let payload = locator.signable();
             if id_pk.fingerprint() == fingerprint {
-                id_pk.verify(&payload, &locator.signature())?;
+                id_pk.verify(&payload, &locator.signature)?;
 
                 return Ok(Some(locator));
             }
