@@ -94,19 +94,15 @@ pub async fn main_control(
             let mut fingerprint_bytes = [0; 20];
             rand::thread_rng().fill_bytes(&mut fingerprint_bytes);
             let fingerprint = Fingerprint::from_bytes(&fingerprint_bytes);
-            let locator = HavenLocator::new(
-                IdentitySecret::generate(),
-                OnionSecret::generate().public(),
-                fingerprint,
-            );
+            let id_sk = IdentitySecret::generate();
+            let id_pk = id_sk.public();
+            let locator = HavenLocator::new(id_sk, OnionSecret::generate().public(), fingerprint);
             eprintln!("created haven locator: {:?}", &locator);
 
             client.insert_rendezvous(locator.clone()).await??;
             eprintln!("inserted haven locator... sleeping for 5s");
 
-            std::thread::sleep(Duration::from_secs(5));
-
-            if let Some(fetched_locator) = client.get_rendezvous(fingerprint).await?? {
+            if let Some(fetched_locator) = client.get_rendezvous(id_pk.fingerprint()).await?? {
                 eprintln!("got haven locator: {:?}", &fetched_locator);
                 assert_eq!(locator.rendezvous_fp(), fetched_locator.rendezvous_fp());
             } else {
