@@ -1,14 +1,17 @@
 use anyhow::Context;
 use async_trait::async_trait;
-use earendil_crypt::Fingerprint;
+use earendil_crypt::{Fingerprint, VerifyError};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use moka::sync::{Cache, CacheBuilder};
+use serde::{Deserialize, Serialize};
 use smol_timeout::TimeoutExt;
 use std::time::Duration;
 use stdcode::StdcodeSerializeExt;
+use thiserror::Error;
 
 use crate::daemon::{
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
+    rendezvous::ForwardRequest,
     DaemonContext,
 };
 
@@ -97,5 +100,15 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             }
         }
         None
+    }
+
+    async fn alloc_forward(&self, registration: ForwardRequest) -> Result<(), VerifyError> {
+        registration
+            .identity_pk
+            .verify(registration.to_sign().as_bytes(), &registration.sig)?;
+        self.ctx
+            .registered_havens
+            .insert(registration.identity_pk.fingerprint(), ());
+        Ok(())
     }
 }

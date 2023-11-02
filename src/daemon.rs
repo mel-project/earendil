@@ -6,6 +6,7 @@ mod inout_route;
 mod link_connection;
 mod link_protocol;
 mod neightable;
+mod rendezvous;
 mod reply_block_store;
 mod socket;
 
@@ -26,6 +27,7 @@ use parking_lot::RwLock;
 use smol::channel::{Receiver, Sender};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
+use stdcode::StdcodeSerializeExt;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
@@ -43,7 +45,8 @@ use crate::{
 };
 
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
-use self::socket::Socket;
+use self::rendezvous::HAVEN_FORWARD_DOCK;
+use self::socket::{Endpoint, Socket};
 use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
@@ -101,6 +104,12 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             anon_identities: Arc::new(RwLock::new(AnonIdentities::new())),
             socket_recv_queues: Arc::new(DashMap::new()),
             unhandled_incoming: Arc::new(ConcurrentQueue::unbounded()),
+            registered_havens: Arc::new(
+                Cache::builder()
+                    .max_capacity(100_000)
+                    .time_to_idle(Duration::from_secs(3600))
+                    .build(),
+            ),
         };
 
         // Run the loops
@@ -146,6 +155,14 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             RespawnStrategy::Immediate,
             clone!([daemon_ctx], move || global_rpc_loop(daemon_ctx.clone())
                 .map_err(log_error("global_rpc_loop"))),
+        );
+
+        let _rendezvous_forward_loop = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([daemon_ctx], move || rendezvous_forward_loop(
+                daemon_ctx.clone()
+            )
+            .map_err(log_error("haven_forward_loop"))),
         );
 
         let mut route_tasks = FuturesUnordered::new();
@@ -298,6 +315,38 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 }
 
+/// Loop that listens to and handles incoming haven forwarding requests
+async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    let seen_srcs: Cache<(Fingerprint, Fingerprint), ()> = Cache::builder()
+        .max_capacity(100_000)
+        .time_to_idle(Duration::from_secs(3600))
+        .build();
+    let socket = Arc::new(Socket::bind(ctx.clone(), None, Some(HAVEN_FORWARD_DOCK)));
+
+    loop {
+        if let Ok((msg, src_endpoint)) = socket.recv_from().await {
+            let ctx = ctx.clone();
+            let (dest_fp, inner): (Fingerprint, Bytes) = stdcode::deserialize(&msg)?;
+            log::debug!("received forward msg {:?}, meant for {dest_fp}", inner);
+
+            let is_valid_dest = ctx.registered_havens.contains_key(&dest_fp);
+            let is_seen_src = seen_srcs.contains_key(&(dest_fp, src_endpoint.fingerprint()));
+
+            if is_valid_dest {
+                seen_srcs.insert((src_endpoint.fingerprint(), dest_fp), ());
+            }
+            if is_valid_dest || is_seen_src {
+                let body: Bytes = (src_endpoint.fingerprint(), inner).stdcode().into();
+                socket
+                    .send_to(body, Endpoint::new(dest_fp, HAVEN_FORWARD_DOCK))
+                    .await?;
+            } else {
+                log::warn!("haven {dest_fp} is not registered with me!");
+            }
+        };
+    }
+}
+
 #[allow(unused)]
 #[derive(Clone)]
 pub struct DaemonContext {
@@ -312,6 +361,7 @@ pub struct DaemonContext {
     anon_identities: Arc<RwLock<AnonIdentities>>,
     socket_recv_queues: Arc<DashMap<Dock, Sender<(Message, Fingerprint)>>>,
     unhandled_incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
+    registered_havens: Arc<Cache<Fingerprint, ()>>,
 }
 
 impl DaemonContext {
@@ -348,7 +398,6 @@ impl DaemonContext {
                 .find_shortest_path(&self.identity.public().fingerprint(), &args.destination)
                 .ok_or(SendMessageError::NoRoute)?;
             let instructs = route_to_instructs(route, self.relay_graph.clone())?;
-            log::debug!("instructs = {:?}", instructs);
             let their_opk = self
                 .relay_graph
                 .read()

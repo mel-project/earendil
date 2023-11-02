@@ -88,4 +88,7 @@ impl Endpoint {
     pub fn new(fingerprint: Fingerprint, dock: Dock) -> Endpoint {
         Endpoint { fingerprint, dock }
     }
+    pub fn fingerprint(&self) -> Fingerprint {
+        self.fingerprint
+    }
 }
