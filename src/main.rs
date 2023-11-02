@@ -4,9 +4,8 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use config::ConfigFile;
 use control_protocol::main_control;
-use earendil_crypt::{Fingerprint, IdentitySecret};
-use earendil_packet::{crypt::OnionPublic, Dock};
-use serde_with::serde_as;
+use earendil_crypt::Fingerprint;
+use earendil_packet::Dock;
 
 mod config;
 pub mod control_protocol;

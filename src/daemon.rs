@@ -461,14 +461,15 @@ impl DaemonContext {
         all_nodes
     }
 
-    pub async fn dht_insert(&self, key: Fingerprint, value: HavenLocator) {
+    pub async fn dht_insert(&self, locator: HavenLocator) {
+        let key = locator.identity_pk.fingerprint();
         let replicas = self.dht_key_to_fps(&key.to_string());
 
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
             log::debug!("key {key} inserting into remote replica {replica}");
             let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
             match gclient
-                .dht_insert(key, value.clone(), false)
+                .dht_insert(locator.clone(), false)
                 .timeout(Duration::from_secs(10))
                 .await
             {
@@ -479,15 +480,18 @@ impl DaemonContext {
         }
     }
 
-    pub async fn dht_get(&self, key: Fingerprint) -> Option<HavenLocator> {
-        let replicas = self.dht_key_to_fps(&key.to_string());
+    pub async fn dht_get(
+        &self,
+        fingerprint: Fingerprint,
+    ) -> Result<Option<HavenLocator>, DhtError> {
+        let replicas = self.dht_key_to_fps(&fingerprint.to_string());
         let mut gatherer = FuturesUnordered::new();
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
             gatherer.push(async move {
                 let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
                 anyhow::Ok(
                     gclient
-                        .dht_get(key, false)
+                        .dht_get(fingerprint, false)
                         .timeout(Duration::from_secs(30))
                         .await
                         .context("timed out")??,
@@ -497,32 +501,16 @@ impl DaemonContext {
         while let Some(result) = gatherer.next().await {
             match result {
                 Err(err) => log::warn!("error while dht_get: {:?}", err),
-                Ok(None) => continue,
-                Ok(Some(val)) => return Some(val),
-            }
-        }
-        None
-    }
-
-    pub async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError> {
-        let id_pk = locator.identity_pk;
-        let payload = locator.signable();
-        id_pk.verify(&payload, &locator.signature)?;
-        self.dht_insert(id_pk.fingerprint(), locator).await;
-        Ok(())
-    }
-
-    pub async fn get_rendezvous(
-        &self,
-        fingerprint: Fingerprint,
-    ) -> Result<Option<HavenLocator>, DhtError> {
-        if let Some(locator) = self.dht_get(fingerprint).await {
-            let id_pk = locator.identity_pk;
-            let payload = locator.signable();
-            if id_pk.fingerprint() == fingerprint {
-                id_pk.verify(&payload, &locator.signature)?;
-
-                return Ok(Some(locator));
+                Ok(Err(err)) => log::warn!("error while dht_get: {:?}", err),
+                Ok(Ok(None)) => continue,
+                Ok(Ok(Some(locator))) => {
+                    let id_pk = locator.identity_pk;
+                    let payload = locator.signable();
+                    if id_pk.fingerprint() == fingerprint {
+                        id_pk.verify(&payload, &locator.signature)?;
+                        return Ok(Some(locator));
+                    }
+                }
             }
         }
         Ok(None)

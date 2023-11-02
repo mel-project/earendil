@@ -108,7 +108,7 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError> {
-        self.ctx.insert_rendezvous(locator).await?;
+        self.ctx.dht_insert(locator).await;
         Ok(())
     }
 
@@ -116,7 +116,7 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        self.ctx.get_rendezvous(fingerprint).await
+        self.ctx.dht_get(fingerprint).await
     }
 }
 

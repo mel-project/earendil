@@ -9,6 +9,8 @@ use earendil_packet::Dock;
 
 use nanorpc::nanorpc_derive;
 
+use crate::control_protocol::DhtError;
+
 use super::haven::HavenLocator;
 use super::rendezvous::ForwardRequest;
 
@@ -19,9 +21,13 @@ pub const GLOBAL_RPC_DOCK: Dock = 100001;
 pub trait GlobalRpcProtocol {
     async fn ping(&self, i: u64) -> u64;
 
-    async fn dht_insert(&self, key: Fingerprint, value: HavenLocator, recurse: bool);
+    async fn dht_insert(&self, locator: HavenLocator, recurse: bool) -> Result<(), DhtError>;
 
-    async fn dht_get(&self, key: Fingerprint, recurse: bool) -> Option<HavenLocator>;
+    async fn dht_get(
+        &self,
+        key: Fingerprint,
+        recurse: bool,
+    ) -> Result<Option<HavenLocator>, DhtError>;
 
     async fn alloc_forward(&self, forward_req: ForwardRequest) -> Result<(), VerifyError>;
 }
