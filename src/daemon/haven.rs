@@ -2,8 +2,10 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
-use earendil_packet::{crypt::OnionPublic, Dock};
-use rand::RngCore;
+use earendil_packet::{
+    crypt::{box_decrypt, OnionPublic, OnionSecret},
+    Dock,
+};
 use serde::{Deserialize, Serialize};
 use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
@@ -59,10 +61,17 @@ impl HavenLocator {
     }
 }
 
+#[derive(Clone, Deserialize, Serialize)]
+pub struct HavenMessage {
+    sender: Fingerprint,
+    inner: Bytes,
+}
+
 #[derive(Clone)]
 pub struct HavenSocket {
     ctx: DaemonContext,
     n2r_socket: N2rSocket,
+    host_descriptor: HavenHostDescriptor,
 }
 
 impl HavenSocket {
@@ -86,22 +95,23 @@ impl HavenSocket {
 
             HavenHostDescriptor {
                 identity_sk: IdentitySecret::generate(),
+                onion_sk: OnionSecret::generate(),
                 rendezvous_fingerprint: rendezvous_relay_fp,
             }
         };
 
         // spawn a task that keeps telling our rendezvous relay node to remember us every few
         // minutes
+        let ctx_clone = ctx.clone();
+        let descriptor_clone = descriptor.clone();
         smolscale::spawn(async move {
-            let ctx = ctx.clone();
             loop {
-                let descriptor = descriptor.clone();
                 // register forwarding with the rendezvous relay node
                 let gclient = GlobalRpcClient(GlobalRpcTransport::new(
-                    ctx.clone(),
-                    descriptor.rendezvous_fingerprint,
+                    ctx_clone.clone(),
+                    descriptor_clone.rendezvous_fingerprint,
                 ));
-                let forward_req = ForwardRequest::new(descriptor.identity_sk);
+                let forward_req = ForwardRequest::new(descriptor_clone.clone().identity_sk);
                 match gclient
                     .alloc_forward(forward_req)
                     .timeout(Duration::from_secs(10))
@@ -109,7 +119,7 @@ impl HavenSocket {
                 {
                     Some(Err(e)) => log::debug!(
                         "registering haven rendezvous {} failed: {:?}",
-                        descriptor.rendezvous_fingerprint.to_string(),
+                        descriptor_clone.rendezvous_fingerprint.to_string(),
                         e
                     ),
                     None => log::debug!("registering haven rendezvous relay timed out"),
@@ -121,20 +131,29 @@ impl HavenSocket {
         })
         .detach();
 
-        HavenSocket { ctx, n2r_socket }
+        HavenSocket {
+            ctx,
+            n2r_socket,
+            host_descriptor: descriptor,
+        }
     }
 
     pub fn send(&self, fingerprint: Fingerprint, dock: Dock) {
         todo!()
     }
 
-    pub fn recv(&self) {
-        todo!()
+    pub async fn recv(&self) -> anyhow::Result<HavenMessage> {
+        let (n2r_msg, _endpoint) = self.n2r_socket.recv_from().await?;
+        let (decrypted_msg, _) = box_decrypt(&n2r_msg, &self.host_descriptor.onion_sk)?;
+        let haven_msg: HavenMessage = stdcode::deserialize(&decrypted_msg)?;
+
+        Ok(haven_msg)
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone)]
 pub struct HavenHostDescriptor {
     identity_sk: IdentitySecret,
+    onion_sk: OnionSecret,
     rendezvous_fingerprint: Fingerprint,
 }

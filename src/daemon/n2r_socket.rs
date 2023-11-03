@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{daemon::DaemonContext};
+use crate::daemon::DaemonContext;
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{Dock, Message};
