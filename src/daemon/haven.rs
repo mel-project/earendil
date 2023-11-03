@@ -12,7 +12,7 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::daemon::{
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
-    rendezvous::ForwardRequest,
+    rendezvous::{ForwardRequest, HAVEN_FORWARD_DOCK},
 };
 
 use super::{
@@ -143,18 +143,32 @@ impl HavenSocket {
         }
     }
 
-    pub fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
+    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
         match self.rendezvous_point {
-            Some(_) => {
+            Some(rob) => {
                 // We're Bob:
-                // use or N2rSocket to send (endpoint, msg) to Rob
-                todo!()
+                // TODO: encrypt body
+                // use our N2rSocket to send (endpoint, msg) to Rob
+                let fwd_body = (endpoint, body).stdcode();
+                self.n2r_socket
+                    .send_to(fwd_body.into(), Endpoint::new(rob, HAVEN_FORWARD_DOCK));
+                Ok(())
             }
             None => {
                 // We're Alice:
                 // look up Rob's addr in rendezvous dht
-                // use or N2rSocket to send (endpoint, msg) to Rob
-                todo!()
+                match self.ctx.dht_get(endpoint.fingerprint).await? {
+                    Some(bob_locator) => {
+                        let rob = bob_locator.rendezvous_fingerprint;
+                        // TODO: encrypt body
+                        // use our N2rSocket to send (endpoint, msg) to Rob
+                        let fwd_body = (endpoint, body).stdcode();
+                        self.n2r_socket
+                            .send_to(fwd_body.into(), Endpoint::new(rob, HAVEN_FORWARD_DOCK));
+                        Ok(())
+                    }
+                    None => anyhow::bail!("could not find rendezvous point for haven"),
+                }
             }
         }
     }

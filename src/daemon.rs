@@ -340,17 +340,17 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             let (dest_ep, inner): (Endpoint, Bytes) = stdcode::deserialize(&msg)?;
             log::debug!("received forward msg {:?}, meant for {:?}", inner, dest_ep);
 
-            let is_valid_dest = ctx.registered_havens.contains_key(&dest_ep.fingerprint());
+            let is_valid_dest = ctx.registered_havens.contains_key(&dest_ep.fingerprint);
             let is_seen_src = seen_srcs.contains_key(&(dest_ep, src_endpoint));
 
             if is_valid_dest {
                 seen_srcs.insert((src_endpoint, dest_ep), ());
             }
             if is_valid_dest || is_seen_src {
-                let body: Bytes = (src_endpoint.fingerprint(), inner).stdcode().into();
+                let body: Bytes = (src_endpoint.fingerprint, inner).stdcode().into();
                 socket.send_to(body, dest_ep).await?;
             } else {
-                log::warn!("haven {} is not registered with me!", dest_ep.fingerprint());
+                log::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
             }
         };
     }

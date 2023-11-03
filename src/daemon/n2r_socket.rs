@@ -24,8 +24,8 @@ struct BoundDock {
 
 #[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct Endpoint {
-    fingerprint: Fingerprint,
-    dock: Dock,
+    pub fingerprint: Fingerprint,
+    pub dock: Dock,
 }
 
 impl N2rSocket {
@@ -108,8 +108,5 @@ impl Drop for BoundDock {
 impl Endpoint {
     pub fn new(fingerprint: Fingerprint, dock: Dock) -> Endpoint {
         Endpoint { fingerprint, dock }
-    }
-    pub fn fingerprint(&self) -> Fingerprint {
-        self.fingerprint
     }
 }
