@@ -71,14 +71,14 @@ pub struct HavenMessage {
 pub struct HavenSocket {
     ctx: DaemonContext,
     n2r_socket: N2rSocket,
-    host_descriptor: HavenHostDescriptor,
+    host_descriptor: HostDescriptor,
 }
 
 impl HavenSocket {
-    pub async fn bind(
+    pub fn bind(
         ctx: DaemonContext,
         dock: Option<Dock>,
-        host_descriptor: Option<HavenHostDescriptor>,
+        host_descriptor: Option<HostDescriptor>,
     ) -> HavenSocket {
         let n2r_socket = N2rSocket::bind(ctx.clone(), None, dock);
 
@@ -93,24 +93,23 @@ impl HavenSocket {
                 .expect("empty relay graph")
                 .left;
 
-            HavenHostDescriptor {
+            HostDescriptor {
                 identity_sk: IdentitySecret::generate(),
                 onion_sk: OnionSecret::generate(),
                 rendezvous_fingerprint: rendezvous_relay_fp,
             }
         };
 
-        // spawn a task that keeps telling our rendezvous relay node to remember us every few
-        // minutes
-        let ctx_clone = ctx.clone();
-        let descriptor_clone = descriptor.clone();
+        // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
+        let context = ctx.clone();
+        let desc = descriptor.clone();
         smolscale::spawn(async move {
             // register forwarding with the rendezvous relay node
             let gclient = GlobalRpcClient(GlobalRpcTransport::new(
-                ctx_clone.clone(),
-                descriptor_clone.rendezvous_fingerprint,
+                context.clone(),
+                desc.rendezvous_fingerprint,
             ));
-            let forward_req = ForwardRequest::new(descriptor_clone.clone().identity_sk);
+            let forward_req = ForwardRequest::new(desc.clone().identity_sk);
             loop {
                 match gclient
                     .alloc_forward(forward_req.clone())
@@ -119,7 +118,7 @@ impl HavenSocket {
                 {
                     Some(Err(e)) => log::debug!(
                         "registering haven rendezvous {} failed: {:?}",
-                        descriptor_clone.rendezvous_fingerprint.to_string(),
+                        desc.rendezvous_fingerprint.to_string(),
                         e
                     ),
                     None => log::debug!("registering haven rendezvous relay timed out"),
@@ -152,7 +151,7 @@ impl HavenSocket {
 }
 
 #[derive(Clone)]
-pub struct HavenHostDescriptor {
+pub struct HostDescriptor {
     identity_sk: IdentitySecret,
     onion_sk: OnionSecret,
     rendezvous_fingerprint: Fingerprint,
