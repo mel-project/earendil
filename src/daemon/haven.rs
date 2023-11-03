@@ -125,7 +125,7 @@ impl HavenSocket {
                     _ => {}
                 }
 
-                std::thread::sleep(Duration::from_secs(60 * 60));
+                std::thread::sleep(Duration::from_secs(60 * 50));
             }
         })
         .detach();
