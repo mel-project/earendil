@@ -105,15 +105,15 @@ impl HavenSocket {
         let ctx_clone = ctx.clone();
         let descriptor_clone = descriptor.clone();
         smolscale::spawn(async move {
+            // register forwarding with the rendezvous relay node
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(
+                ctx_clone.clone(),
+                descriptor_clone.rendezvous_fingerprint,
+            ));
+            let forward_req = ForwardRequest::new(descriptor_clone.clone().identity_sk);
             loop {
-                // register forwarding with the rendezvous relay node
-                let gclient = GlobalRpcClient(GlobalRpcTransport::new(
-                    ctx_clone.clone(),
-                    descriptor_clone.rendezvous_fingerprint,
-                ));
-                let forward_req = ForwardRequest::new(descriptor_clone.clone().identity_sk);
                 match gclient
-                    .alloc_forward(forward_req)
+                    .alloc_forward(forward_req.clone())
                     .timeout(Duration::from_secs(10))
                     .await
                 {
