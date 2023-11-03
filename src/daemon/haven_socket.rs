@@ -25,16 +25,19 @@ pub struct HavenSocket {
 impl HavenSocket {
     pub fn bind(
         ctx: DaemonContext,
-        identity_sk: IdentitySecret,
+        identity_sk: Option<IdentitySecret>,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> HavenSocket {
-        let n2r_socket = N2rSocket::bind(ctx.clone(), None, dock);
+        let n2r_socket = N2rSocket::bind(ctx.clone(), identity_sk, dock);
+        let isk = match identity_sk {
+            Some(isk) => isk,
+            None => *ctx.identity,
+        };
         if let Some(rob) = rendezvous_point {
             // We're Bob:
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
             let context = ctx.clone();
-            let isk = identity_sk.clone();
             smolscale::spawn(async move {
                 // register forwarding with the rendezvous relay node
                 let gclient = GlobalRpcClient(GlobalRpcTransport::new(context.clone(), rob));
@@ -60,7 +63,7 @@ impl HavenSocket {
         HavenSocket {
             ctx,
             n2r_socket,
-            identity_sk,
+            identity_sk: isk,
             onion_sk: OnionSecret::generate(), // TODO: use this for encryption
             rendezvous_point,
         }
