@@ -22,23 +22,7 @@ struct BoundDock {
     ctx: DaemonContext,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Deserialize,
-    Serialize,
-    PartialEq,
-    PartialOrd,
-    Ord,
-    Eq,
-    Hash,
-    Debug,
-    PartialEq,
-    PartialOrd,
-    Ord,
-    Eq,
-    Hash,
-)]
+#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct Endpoint {
     fingerprint: Fingerprint,
     dock: Dock,
