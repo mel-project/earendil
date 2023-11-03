@@ -4,6 +4,8 @@ use earendil_packet::crypt::OnionPublic;
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
 
+use super::n2r_socket::N2rSocket;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HavenLocator {
     pub identity_pk: IdentityPublic,
@@ -45,5 +47,22 @@ impl HavenLocator {
         let hash = blake3::keyed_hash(b"haven_locator___________________", &locator.stdcode());
 
         *hash.as_bytes()
+    }
+}
+
+#[derive(Clone)]
+pub struct HavenSocket {
+    n2r_socket: N2rSocket,
+}
+
+impl HavenSocket {
+    pub fn bind(&self) {
+        todo!()
+    }
+    pub fn send(&self) {
+        todo!()
+    }
+    pub fn recv(&self) {
+        todo!()
     }
 }
