@@ -288,7 +288,10 @@ async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         let (message, fingerprint) = ctx.recv_incoming.recv().await?;
 
-        match ctx.socket_recv_queues.get(message.get_dest_dock()) {
+        match ctx
+            .socket_recv_queues
+            .get(&Endpoint::new(fingerprint, message.dest_dock))
+        {
             Some(sender) => sender.try_send((message, fingerprint))?,
             None => ctx.unhandled_incoming.push((message, fingerprint))?,
         }
@@ -365,7 +368,7 @@ pub struct DaemonContext {
     recv_incoming: Receiver<(Message, Fingerprint)>,
     degarblers: Cache<u64, ReplyDegarbler>,
     anon_destinations: Arc<Mutex<ReplyBlockStore>>,
-    socket_recv_queues: Arc<DashMap<Dock, Sender<(Message, Fingerprint)>>>,
+    socket_recv_queues: Arc<DashMap<Endpoint, Sender<(Message, Fingerprint)>>>,
     unhandled_incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
     dht_cache: Cache<Fingerprint, HavenLocator>,
     registered_havens: Arc<Cache<Fingerprint, ()>>,

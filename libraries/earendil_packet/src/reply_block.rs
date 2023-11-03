@@ -32,7 +32,11 @@ impl ReplyBlock {
         let (raw_packet, shared_secs) = RawPacket::new(
             route,
             my_opk,
-            InnerPacket::Message(Message::new(0u32, 0u32, Bytes::new())),
+            InnerPacket::Message(Message {
+                source_dock: 0u32,
+                dest_dock: 0u32,
+                body: Bytes::new(),
+            }),
             &metadata,
             &IdentitySecret::generate(),
         )?;

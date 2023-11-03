@@ -19,9 +19,9 @@ pub enum InnerPacket {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 /// An inner packet message with corresponding UDP port-like source and destinaton docks
 pub struct Message {
-    source_dock: Dock,
-    dest_dock: Dock,
-    body: Bytes,
+    pub source_dock: Dock,
+    pub dest_dock: Dock,
+    pub body: Bytes,
 }
 
 pub type Dock = u32;
@@ -124,18 +124,6 @@ impl Message {
             dest_dock,
             body,
         }
-    }
-
-    pub fn get_source_dock(&self) -> &Dock {
-        &self.source_dock
-    }
-
-    pub fn get_dest_dock(&self) -> &Dock {
-        &self.dest_dock
-    }
-
-    pub fn get_body(&self) -> &Bytes {
-        &self.body
     }
 }
 

@@ -41,7 +41,11 @@ mod tests {
         let my_isk = IdentitySecret::generate();
         let destination_sk = OnionSecret::generate();
         let destination = destination_sk.public();
-        let msg = Message::new(0u32, 0u32, Bytes::copy_from_slice(&[0u8; 100]));
+        let msg = Message {
+            source_dock: 0u32,
+            dest_dock: 0u32,
+            body: Bytes::copy_from_slice(&[0u8; 100]),
+        };
 
         let forward_instructions: Vec<ForwardInstruction> =
             route.iter().map(|(inst, _)| *inst).collect();
@@ -138,7 +142,11 @@ mod tests {
 
         // Prepare message using header from reply block
         let body = "hello world from reply block!";
-        let message = Message::new(0u32, 0u32, Bytes::copy_from_slice(body.as_bytes()));
+        let message = Message {
+            source_dock: 0u32,
+            dest_dock: 0u32,
+            body: Bytes::copy_from_slice(body.as_bytes()),
+        };
         let packet = RawPacket::new_reply(
             &reply_block,
             InnerPacket::Message(message.clone()),

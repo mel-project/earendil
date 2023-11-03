@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{daemon::DaemonContext};
+use crate::daemon::DaemonContext;
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{Dock, Message};
@@ -17,11 +17,12 @@ pub struct N2rSocket {
 }
 
 struct BoundDock {
+    fp: Fingerprint,
     dock: Dock,
     ctx: DaemonContext,
 }
 
-#[derive(Copy, Clone, Deserialize, Serialize)]
+#[derive(Copy, Clone, Deserialize, Serialize, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub struct Endpoint {
     fingerprint: Fingerprint,
     dock: Dock,
@@ -34,24 +35,38 @@ impl N2rSocket {
         anon_id: Option<IdentitySecret>,
         dock: Option<Dock>,
     ) -> N2rSocket {
+        let our_fingerprint = anon_id
+            .as_ref()
+            .map(|anon_id| anon_id.public().fingerprint())
+            .unwrap_or_else(|| ctx.identity.public().fingerprint());
         let dock = if let Some(dock) = dock {
             dock
         } else {
             let mut rand_dock: Dock;
             loop {
                 rand_dock = rand::thread_rng().gen();
-                if !ctx.socket_recv_queues.contains_key(&rand_dock) {
+                if !ctx.socket_recv_queues.contains_key(&Endpoint {
+                    fingerprint: our_fingerprint,
+                    dock: rand_dock,
+                }) {
                     break;
                 }
             }
             rand_dock
         };
         let bound_dock = Arc::new(BoundDock {
+            fp: our_fingerprint,
             dock,
             ctx: ctx.clone(),
         });
         let (send_outgoing, recv_incoming) = smol::channel::bounded(1000);
-        ctx.socket_recv_queues.insert(dock, send_outgoing);
+        ctx.socket_recv_queues.insert(
+            Endpoint {
+                fingerprint: our_fingerprint,
+                dock,
+            },
+            send_outgoing,
+        );
 
         N2rSocket {
             ctx,
@@ -76,15 +91,17 @@ impl N2rSocket {
 
     pub async fn recv_from(&self) -> anyhow::Result<(Bytes, Endpoint)> {
         let (message, fingerprint) = self.recv_incoming.recv().await?;
-        let endpoint = Endpoint::new(fingerprint, *message.get_source_dock());
+        let endpoint = Endpoint::new(fingerprint, message.source_dock);
 
-        Ok((message.get_body().clone(), endpoint))
+        Ok((message.body, endpoint))
     }
 }
 
 impl Drop for BoundDock {
     fn drop(&mut self) {
-        self.ctx.socket_recv_queues.remove(&self.dock);
+        self.ctx
+            .socket_recv_queues
+            .remove(&Endpoint::new(self.fp, self.dock));
     }
 }
 
