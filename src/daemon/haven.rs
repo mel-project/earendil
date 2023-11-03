@@ -15,7 +15,10 @@ use crate::daemon::{
     rendezvous::ForwardRequest,
 };
 
-use super::{n2r_socket::N2rSocket, DaemonContext};
+use super::{
+    n2r_socket::{Endpoint, N2rSocket},
+    DaemonContext,
+};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HavenLocator {
@@ -71,14 +74,17 @@ pub struct HavenMessage {
 pub struct HavenSocket {
     ctx: DaemonContext,
     n2r_socket: N2rSocket,
-    host_descriptor: HostDescriptor,
+    identity_sk: IdentitySecret,
+    onion_sk: OnionSecret,
+    rendezvous_point: Option<Fingerprint>,
 }
 
 impl HavenSocket {
     pub fn bind(
         ctx: DaemonContext,
+        identity_sk: IdentitySecret,
         dock: Option<Dock>,
-        host_descriptor: Option<HostDescriptor>,
+        rendezvous_point: Option<Fingerprint>,
     ) -> HavenSocket {
         let n2r_socket = N2rSocket::bind(ctx.clone(), None, dock);
 
@@ -137,22 +143,27 @@ impl HavenSocket {
         }
     }
 
-    pub fn send(&self, fingerprint: Fingerprint, dock: Dock) {
-        todo!()
+    pub fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
+        match self.rendezvous_point {
+            Some(_) => {
+                // We're Bob:
+                // use or N2rSocket to send (endpoint, msg) to Rob
+                todo!()
+            }
+            None => {
+                // We're Alice:
+                // look up Rob's addr in rendezvous dht
+                // use or N2rSocket to send (endpoint, msg) to Rob
+                todo!()
+            }
+        }
     }
 
-    pub async fn recv(&self) -> anyhow::Result<HavenMessage> {
+    pub async fn recv_from(&self) -> anyhow::Result<HavenMessage> {
         let (n2r_msg, _endpoint) = self.n2r_socket.recv_from().await?;
         let (decrypted_msg, _) = box_decrypt(&n2r_msg, &self.host_descriptor.onion_sk)?;
         let haven_msg: HavenMessage = stdcode::deserialize(&decrypted_msg)?;
 
         Ok(haven_msg)
     }
-}
-
-#[derive(Clone)]
-pub struct HostDescriptor {
-    identity_sk: IdentitySecret,
-    onion_sk: OnionSecret,
-    rendezvous_fingerprint: Fingerprint,
 }
