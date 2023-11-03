@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
-use earendil_packet::crypt::OnionPublic;
+use earendil_packet::{crypt::OnionPublic, Dock};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
 
@@ -56,13 +57,30 @@ pub struct HavenSocket {
 }
 
 impl HavenSocket {
-    pub fn bind(&self) {
+    pub fn bind(&self, dock: Dock, host_descriptor: Option<HavenHostDescriptor>) -> HavenSocket {
+        if let Some(descriptor) = host_descriptor {
+        } else {
+            let mut fingerprint_bytes = [0; 20];
+            rand::thread_rng().fill_bytes(&mut fingerprint_bytes);
+            let fingerprint = Fingerprint::from_bytes(&fingerprint_bytes);
+
+            let descriptor = HavenHostDescriptor {
+                identity_sk: IdentitySecret::generate(),
+                rendezvous_fingerprint: fingerprint,
+            };
+        }
+
         todo!()
     }
-    pub fn send(&self) {
+    pub fn send(&self, fingerprint: Fingerprint, dock: Dock) {
         todo!()
     }
     pub fn recv(&self) {
         todo!()
     }
+}
+#[derive(Clone, Deserialize, Serialize)]
+pub struct HavenHostDescriptor {
+    identity_sk: IdentitySecret,
+    rendezvous_fingerprint: Fingerprint,
 }
