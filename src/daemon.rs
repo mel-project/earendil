@@ -9,6 +9,7 @@ mod n2r_socket;
 mod neightable;
 mod rendezvous;
 mod reply_block_store;
+mod socket;
 
 use anyhow::Context;
 use bytes::Bytes;
