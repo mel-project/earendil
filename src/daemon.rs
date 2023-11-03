@@ -2,12 +2,12 @@ mod control_protocol_impl;
 mod global_rpc;
 mod gossip;
 pub mod haven;
+mod haven_socket;
 mod inout_route;
 mod link_connection;
 mod link_protocol;
 mod n2r_socket;
 mod neightable;
-mod rendezvous;
 mod reply_block_store;
 mod socket;
 
@@ -49,8 +49,8 @@ use crate::{
 
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
 use self::haven::HavenLocator;
+use self::haven::HAVEN_FORWARD_DOCK;
 use self::n2r_socket::{Endpoint, N2rSocket};
-use self::rendezvous::HAVEN_FORWARD_DOCK;
 use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
@@ -507,7 +507,7 @@ impl DaemonContext {
                 Ok(Ok(None)) => continue,
                 Ok(Ok(Some(locator))) => {
                     let id_pk = locator.identity_pk;
-                    let payload = locator.signable();
+                    let payload = locator.to_sign();
                     if id_pk.fingerprint() == fingerprint {
                         id_pk.verify(&payload, &locator.signature)?;
                         return Ok(Some(locator));

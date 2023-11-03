@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::control_protocol::DhtError;
-use crate::daemon::rendezvous::ForwardRequest;
+use crate::daemon::haven::RegisterHavenReq;
 use crate::daemon::{haven::HavenLocator, DaemonContext};
 use earendil_crypt::{Fingerprint, VerifyError};
 
@@ -31,7 +31,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         } else {
             locator
                 .identity_pk
-                .verify(&locator.signable(), &locator.signature)?;
+                .verify(&locator.to_sign(), &locator.signature)?;
 
             log::debug!("inserting key {key} locally");
             self.ctx.dht_cache.insert(key, locator.clone());
@@ -53,7 +53,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         Ok(None)
     }
 
-    async fn alloc_forward(&self, registration: ForwardRequest) -> Result<(), VerifyError> {
+    async fn alloc_forward(&self, registration: RegisterHavenReq) -> Result<(), VerifyError> {
         registration
             .identity_pk
             .verify(registration.to_sign().as_bytes(), &registration.sig)?;

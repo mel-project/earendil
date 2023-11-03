@@ -1,30 +1,18 @@
-use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
-use earendil_packet::{
-    crypt::{box_decrypt, OnionPublic, OnionSecret},
-    Dock,
-};
+use earendil_packet::{crypt::OnionPublic, Dock};
 use serde::{Deserialize, Serialize};
-use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 
-use crate::daemon::{
-    global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
-    rendezvous::{ForwardRequest, HAVEN_FORWARD_DOCK},
-};
-
-use super::{
-    n2r_socket::{Endpoint, N2rSocket},
-    DaemonContext,
-};
+pub const HAVEN_FORWARD_DOCK: Dock = 100002;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HavenLocator {
     pub identity_pk: IdentityPublic,
     pub onion_pk: OnionPublic,
-    pub rendezvous_fingerprint: Fingerprint,
+    pub rendezvous_point: Fingerprint,
     pub signature: Bytes,
 }
 
@@ -38,24 +26,24 @@ impl HavenLocator {
         let locator = HavenLocator {
             identity_pk,
             onion_pk,
-            rendezvous_fingerprint,
+            rendezvous_point: rendezvous_fingerprint,
             signature: Bytes::new(),
         };
-        let signature = identity_sk.sign(&locator.signable());
+        let signature = identity_sk.sign(&locator.to_sign());
 
         HavenLocator {
             identity_pk,
             onion_pk,
-            rendezvous_fingerprint,
+            rendezvous_point: rendezvous_fingerprint,
             signature,
         }
     }
 
-    pub fn signable(&self) -> [u8; 32] {
+    pub fn to_sign(&self) -> [u8; 32] {
         let locator = HavenLocator {
             identity_pk: self.identity_pk,
             onion_pk: self.onion_pk,
-            rendezvous_fingerprint: self.rendezvous_fingerprint,
+            rendezvous_point: self.rendezvous_point,
             signature: Bytes::new(),
         };
         let hash = blake3::keyed_hash(b"haven_locator___________________", &locator.stdcode());
@@ -64,120 +52,30 @@ impl HavenLocator {
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
-pub struct HavenMessage {
-    sender: Fingerprint,
-    inner: Bytes,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RegisterHavenReq {
+    pub identity_pk: IdentityPublic,
+    pub sig: Bytes,
+    pub unix_timestamp: u64,
 }
 
-#[derive(Clone)]
-pub struct HavenSocket {
-    ctx: DaemonContext,
-    n2r_socket: N2rSocket,
-    identity_sk: IdentitySecret,
-    onion_sk: OnionSecret,
-    rendezvous_point: Option<Fingerprint>,
-}
-
-impl HavenSocket {
-    pub fn bind(
-        ctx: DaemonContext,
-        identity_sk: IdentitySecret,
-        dock: Option<Dock>,
-        rendezvous_point: Option<Fingerprint>,
-    ) -> HavenSocket {
-        let n2r_socket = N2rSocket::bind(ctx.clone(), None, dock);
-
-        let descriptor = if let Some(descriptor) = host_descriptor {
-            descriptor
-        } else {
-            // pick a random relay as our rendezvous node if not specified
-            let rendezvous_relay_fp = ctx
-                .relay_graph
-                .read()
-                .random_adjacency()
-                .expect("empty relay graph")
-                .left;
-
-            HostDescriptor {
-                identity_sk: IdentitySecret::generate(),
-                onion_sk: OnionSecret::generate(),
-                rendezvous_fingerprint: rendezvous_relay_fp,
-            }
+impl RegisterHavenReq {
+    pub fn new(identity_sk: IdentitySecret) -> Self {
+        let mut reg = Self {
+            identity_pk: identity_sk.public(),
+            sig: Bytes::new(),
+            unix_timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
         };
-
-        // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
-        let context = ctx.clone();
-        let desc = descriptor.clone();
-        smolscale::spawn(async move {
-            // register forwarding with the rendezvous relay node
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(
-                context.clone(),
-                desc.rendezvous_fingerprint,
-            ));
-            let forward_req = ForwardRequest::new(desc.clone().identity_sk);
-            loop {
-                match gclient
-                    .alloc_forward(forward_req.clone())
-                    .timeout(Duration::from_secs(10))
-                    .await
-                {
-                    Some(Err(e)) => log::debug!(
-                        "registering haven rendezvous {} failed: {:?}",
-                        desc.rendezvous_fingerprint.to_string(),
-                        e
-                    ),
-                    None => log::debug!("registering haven rendezvous relay timed out"),
-                    _ => {}
-                }
-
-                std::thread::sleep(Duration::from_secs(60 * 50));
-            }
-        })
-        .detach();
-
-        HavenSocket {
-            ctx,
-            n2r_socket,
-            host_descriptor: descriptor,
-        }
+        reg.sig = identity_sk.sign(reg.to_sign().as_bytes());
+        reg
     }
 
-    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
-        match self.rendezvous_point {
-            Some(rob) => {
-                // We're Bob:
-                // TODO: encrypt body
-                // use our N2rSocket to send (endpoint, msg) to Rob
-                let fwd_body = (endpoint, body).stdcode();
-                self.n2r_socket
-                    .send_to(fwd_body.into(), Endpoint::new(rob, HAVEN_FORWARD_DOCK));
-                Ok(())
-            }
-            None => {
-                // We're Alice:
-                // look up Rob's addr in rendezvous dht
-                match self.ctx.dht_get(endpoint.fingerprint).await? {
-                    Some(bob_locator) => {
-                        let rob = bob_locator.rendezvous_fingerprint;
-                        // TODO: encrypt body
-                        // use our N2rSocket to send (endpoint, msg) to Rob
-                        let fwd_body = (endpoint, body).stdcode();
-                        self.n2r_socket
-                            .send_to(fwd_body.into(), Endpoint::new(rob, HAVEN_FORWARD_DOCK));
-                        Ok(())
-                    }
-                    None => anyhow::bail!("could not find rendezvous point for haven"),
-                }
-            }
-        }
-    }
-
-    pub async fn recv_from(&self) -> anyhow::Result<HavenMessage> {
-        let (n2r_msg, _endpoint) = self.n2r_socket.recv_from().await?;
-        let (decrypted_msg, _) = box_decrypt(&n2r_msg, &self.host_descriptor.onion_sk)?;
-        let haven_msg: HavenMessage = stdcode::deserialize(&decrypted_msg)?;
-
-        Ok(haven_msg)
+    pub fn to_sign(&self) -> blake3::Hash {
+        let mut this = self.clone();
+        this.sig = Bytes::new();
+        blake3::keyed_hash(b"haven_registration______________", &this.stdcode())
     }
 }
