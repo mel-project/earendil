@@ -114,7 +114,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             registered_havens: Arc::new(
                 Cache::builder()
                     .max_capacity(100_000)
-                    .time_to_idle(Duration::from_secs(3600))
+                    .time_to_idle(Duration::from_secs(60 * 60))
                     .build(),
             ),
         };
@@ -325,31 +325,29 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 const DHT_REDUNDANCY: usize = 3;
 /// Loop that listens to and handles incoming haven forwarding requests
 async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let seen_srcs: Cache<(Fingerprint, Fingerprint), ()> = Cache::builder()
+    let seen_srcs: Cache<(Endpoint, Endpoint), ()> = Cache::builder()
         .max_capacity(100_000)
-        .time_to_idle(Duration::from_secs(3600))
+        .time_to_idle(Duration::from_secs(60 * 60))
         .build();
     let socket = Arc::new(N2rSocket::bind(ctx.clone(), None, Some(HAVEN_FORWARD_DOCK)));
 
     loop {
         if let Ok((msg, src_endpoint)) = socket.recv_from().await {
             let ctx = ctx.clone();
-            let (dest_fp, inner): (Fingerprint, Bytes) = stdcode::deserialize(&msg)?;
-            log::debug!("received forward msg {:?}, meant for {dest_fp}", inner);
+            let (dest_ep, inner): (Endpoint, Bytes) = stdcode::deserialize(&msg)?;
+            log::debug!("received forward msg {:?}, meant for {:?}", inner, dest_ep);
 
-            let is_valid_dest = ctx.registered_havens.contains_key(&dest_fp);
-            let is_seen_src = seen_srcs.contains_key(&(dest_fp, src_endpoint.fingerprint()));
+            let is_valid_dest = ctx.registered_havens.contains_key(&dest_ep.fingerprint());
+            let is_seen_src = seen_srcs.contains_key(&(dest_ep, src_endpoint));
 
             if is_valid_dest {
-                seen_srcs.insert((src_endpoint.fingerprint(), dest_fp), ());
+                seen_srcs.insert((src_endpoint, dest_ep), ());
             }
             if is_valid_dest || is_seen_src {
                 let body: Bytes = (src_endpoint.fingerprint(), inner).stdcode().into();
-                socket
-                    .send_to(body, Endpoint::new(dest_fp, HAVEN_FORWARD_DOCK))
-                    .await?;
+                socket.send_to(body, dest_ep).await?;
             } else {
-                log::warn!("haven {dest_fp} is not registered with me!");
+                log::warn!("haven {} is not registered with me!", dest_ep.fingerprint());
             }
         };
     }
