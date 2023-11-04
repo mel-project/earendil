@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentitySecret};
@@ -29,19 +29,21 @@ impl HavenSocket {
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> HavenSocket {
-        let n2r_socket = N2rSocket::bind(ctx.clone(), identity_sk, dock);
+        let n2r_socket = N2rSocket::bind(ctx.clone(), identity_sk.clone(), dock);
         let isk = match identity_sk {
             Some(isk) => isk,
-            None => *ctx.identity,
+            None => Arc::clone(&ctx.identity).as_ref().clone(),
         };
+
         if let Some(rob) = rendezvous_point {
             // We're Bob:
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
             let context = ctx.clone();
+            let registration_isk = isk.clone();
             smolscale::spawn(async move {
                 // register forwarding with the rendezvous relay node
                 let gclient = GlobalRpcClient(GlobalRpcTransport::new(context.clone(), rob));
-                let forward_req = RegisterHavenReq::new(isk);
+                let forward_req = RegisterHavenReq::new(registration_isk);
                 loop {
                     match gclient
                         .alloc_forward(forward_req.clone())

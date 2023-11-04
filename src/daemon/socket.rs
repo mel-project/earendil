@@ -14,21 +14,29 @@ pub struct Socket {
 }
 
 impl Socket {
-    pub fn bind(
-        &self,
+    pub fn bind_haven(
         ctx: DaemonContext,
-        dock: Option<Dock>,
-        anon_id: Option<IdentitySecret>,
         identity_sk: Option<IdentitySecret>,
+        dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> Socket {
-        let inner = if let Some(isk) = identity_sk {
-            InnerSocket::Haven(HavenSocket::bind(ctx.clone(), isk, dock, rendezvous_point))
-        } else {
-            InnerSocket::N2R(N2rSocket::bind(ctx.clone(), anon_id, dock))
-        };
+        let inner = InnerSocket::Haven(HavenSocket::bind(
+            ctx.clone(),
+            identity_sk,
+            dock,
+            rendezvous_point,
+        ));
 
-        Socket { ctx, inner }
+        Self { ctx, inner }
+    }
+
+    pub fn bind_n2r(
+        ctx: DaemonContext,
+        anon_id: Option<IdentitySecret>,
+        dock: Option<Dock>,
+    ) -> Socket {
+        let inner = InnerSocket::N2R(N2rSocket::bind(ctx.clone(), anon_id, dock));
+        Self { ctx, inner }
     }
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
