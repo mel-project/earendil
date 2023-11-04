@@ -1,6 +1,10 @@
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::Dock;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+use crate::control_protocol::SendMessageError;
 
 use super::{
     haven_socket::HavenSocket,
@@ -9,44 +13,43 @@ use super::{
 };
 
 pub struct Socket {
-    ctx: DaemonContext,
     inner: InnerSocket,
 }
 
 impl Socket {
     pub fn bind_haven(
-        ctx: DaemonContext,
-        identity_sk: Option<IdentitySecret>,
+        ctx: &DaemonContext,
+        anon_id: Option<IdentitySecret>,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> Socket {
         let inner = InnerSocket::Haven(HavenSocket::bind(
             ctx.clone(),
-            identity_sk,
+            anon_id,
             dock,
             rendezvous_point,
         ));
 
-        Self { ctx, inner }
+        Self { inner }
     }
 
     pub fn bind_n2r(
-        ctx: DaemonContext,
+        ctx: &DaemonContext,
         anon_id: Option<IdentitySecret>,
         dock: Option<Dock>,
     ) -> Socket {
         let inner = InnerSocket::N2R(N2rSocket::bind(ctx.clone(), anon_id, dock));
-        Self { ctx, inner }
+        Self { inner }
     }
 
-    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
+    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
         match &self.inner {
             InnerSocket::N2R(s) => s.send_to(body, endpoint).await,
             InnerSocket::Haven(s) => s.send_to(body, endpoint).await,
         }
     }
 
-    pub async fn recv_from(&self) -> anyhow::Result<(Bytes, Endpoint)> {
+    pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
         match &self.inner {
             InnerSocket::N2R(s) => s.recv_from().await,
             InnerSocket::Haven(s) => s.recv_from().await,
@@ -57,4 +60,20 @@ impl Socket {
 enum InnerSocket {
     Haven(HavenSocket),
     N2R(N2rSocket),
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum SocketSendError {
+    #[error(transparent)]
+    N2rSendMessageError(#[from] SendMessageError),
+    #[error("could not get rendezvous point from dht")]
+    DhtError,
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum SocketRecvError {
+    #[error("error receiving in n2r_socket")]
+    N2rRecvError,
+    #[error("improperly formatted inner haven message")]
+    HavenMsgBadFormat,
 }

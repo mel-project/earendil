@@ -38,50 +38,44 @@ enum Commands {
 
 #[derive(Subcommand)]
 pub enum ControlCommands {
-    /// Send a message to a destination.
+    /// Binds to a N2rSocket.
+    BindN2r {
+        #[arg(long)]
+        socket_id: String,
+        #[arg(long)]
+        anon_id: Option<String>,
+        #[arg(long)]
+        dock: Option<Dock>,
+    },
+
+    /// Binds to a HavenSocket.
+    BindHaven {
+        #[arg(long)]
+        socket_id: String,
+        #[arg(long)]
+        anon_id: Option<String>,
+        #[arg(long)]
+        dock: Option<Dock>,
+        #[arg(long)]
+        rendezvous: Option<Fingerprint>,
+    },
+
+    /// Sends a message using a given socket to a destination.
     SendMessage {
         #[arg(long)]
-        id: Option<String>,
-        source_dock: Dock,
-        dest_dock: Dock,
+        socket_id: String,
         #[arg(short, long)]
         destination: Fingerprint,
+        dest_dock: Dock,
         #[arg(short, long)]
         message: String,
-    },
-
-    /// Sends a message to a haven.
-    SendHavenMessage {
-        #[arg(short, long)]
-        message: String,
-        #[arg(short, long)]
-        identity_sk: String,
-        #[arg(short, long)]
-        fingerprint: Fingerprint,
-        #[arg(short, long)]
-        dock: Dock,
-    },
-
-    /// Receives a message as a haven.
-    RecvHavenMessage {
-        #[arg(short, long)]
-        identity_sk: String,
-        #[arg(short, long)]
-        dock: Option<Dock>,
-        #[arg(short, long)]
-        rendezvous_fingerprint: Fingerprint,
-    },
-
-    /// Registers a haven for the given rendezvous relay.
-    RegisterHaven {
-        #[arg(short, long)]
-        identity_sk: String,
-        #[arg(short, long)]
-        rendezvous_fingerprint: Fingerprint,
     },
 
     /// Blocks until a message is received.
-    RecvMessage,
+    RecvMessage {
+        #[arg(long)]
+        socket_id: String,
+    },
 
     /// Send a GlobalRpc request to a destination.
     GlobalRpc {
@@ -94,7 +88,7 @@ pub enum ControlCommands {
         args: Vec<String>,
     },
 
-    /// Insert a rendezvous haven locator.
+    /// Insert a rendezvous haven locator into the dht.
     InsertRendezvous {
         #[arg(short, long)]
         identity_sk: String,

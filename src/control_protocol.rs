@@ -1,4 +1,5 @@
-use std::{net::SocketAddr, str::FromStr, time::Duration};
+use std::marker::Send;
+use std::{net::SocketAddr, str::FromStr};
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -8,7 +9,7 @@ use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentitySecret, VerifyError};
 use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
-    Dock, Message, PacketConstructError,
+    Dock, PacketConstructError,
 };
 
 use nanorpc::nanorpc_derive;
@@ -17,10 +18,9 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{
-    daemon::{haven::HavenLocator, n2r_socket::Endpoint},
-    ControlCommands,
-};
+use crate::daemon::n2r_socket::Endpoint;
+use crate::daemon::{ControlProtRecvErr, ControlProtSendErr};
+use crate::{daemon::haven::HavenLocator, ControlCommands};
 use thiserror::Error;
 
 pub async fn main_control(
@@ -29,72 +29,46 @@ pub async fn main_control(
 ) -> anyhow::Result<()> {
     let client = ControlClient::from(HttpRpcTransport::new(connect));
     match control_command {
+        ControlCommands::BindN2r {
+            socket_id,
+            anon_id,
+            dock,
+        } => {
+            client.bind_n2r(socket_id, anon_id, dock).await?;
+        }
+        ControlCommands::BindHaven {
+            socket_id,
+            anon_id,
+            dock,
+            rendezvous,
+        } => {
+            client
+                .bind_haven(socket_id, anon_id, dock, rendezvous)
+                .await?;
+        }
         ControlCommands::SendMessage {
-            id,
-            source_dock,
-            dest_dock,
+            socket_id,
             destination,
+            dest_dock,
             message,
         } => {
             client
                 .send_message(SendMessageArgs {
-                    id,
-                    source_dock,
+                    socket_id,
                     dest_dock,
                     destination,
                     content: Bytes::copy_from_slice(message.as_bytes()),
                 })
                 .await??;
         }
-        ControlCommands::RecvMessage => loop {
-            if let Some((msg, src)) = client.recv_message().await? {
-                println!("{:?} from {src}", msg);
-                break;
+        ControlCommands::RecvMessage { socket_id } => {
+            match client.recv_message(socket_id.clone()).await? {
+                Ok((msg, src)) => println!("{:?} from {}", msg, src),
+                Err(e) => println!("ERROR receiving message: {e}"),
             }
-            smol::Timer::after(Duration::from_millis(100)).await;
-        },
-
-        ControlCommands::RegisterHaven {
-            identity_sk,
-            rendezvous_fingerprint,
-        } => {
-            client
-                .register_haven(
-                    IdentitySecret::from_str(&identity_sk)?,
-                    rendezvous_fingerprint,
-                )
-                .await?
-        }
-        ControlCommands::SendHavenMessage {
-            message,
-            identity_sk,
-            fingerprint,
-            dock,
-        } => {
-            client
-                .send_haven_message(
-                    Bytes::copy_from_slice(message.as_bytes()),
-                    Some(IdentitySecret::from_str(&identity_sk)?),
-                    Endpoint::new(fingerprint, dock),
-                )
-                .await??;
-        }
-        ControlCommands::RecvHavenMessage {
-            identity_sk,
-            dock,
-            rendezvous_fingerprint,
-        } => {
-            client
-                .recv_haven_message(
-                    Some(IdentitySecret::from_str(&identity_sk)?),
-                    dock,
-                    rendezvous_fingerprint,
-                )
-                .await?;
         }
         ControlCommands::GlobalRpc {
             id,
-
             destination,
             method,
             args,
@@ -167,23 +141,22 @@ pub async fn main_control(
 #[nanorpc_derive]
 #[async_trait]
 pub trait ControlProtocol {
-    async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError>;
+    async fn bind_n2r(&self, socket_id: String, anon_id: Option<String>, dock: Option<Dock>);
 
-    async fn send_haven_message(
+    async fn bind_haven(
         &self,
-        message: Bytes,
-        identity_sk: Option<IdentitySecret>,
-        endpoint: Endpoint,
-    ) -> Result<(), SendMessageError>;
-
-    async fn recv_haven_message(
-        &self,
-        identity_sk: Option<IdentitySecret>,
+        socket_id: String,
+        anon_id: Option<String>,
         dock: Option<Dock>,
-        rendezvous_point: Fingerprint,
-    ) -> (Bytes, Endpoint);
+        rendezvous_point: Option<Fingerprint>,
+    );
 
-    async fn register_haven(&self, identity_sk: IdentitySecret, rendezvous_point: Fingerprint);
+    async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtSendErr>;
+
+    async fn recv_message(
+        &self,
+        socket_id: String,
+    ) -> Result<(Bytes, Endpoint), ControlProtRecvErr>;
 
     async fn send_global_rpc(
         &self,
@@ -193,8 +166,6 @@ pub trait ControlProtocol {
     async fn graph_dump(&self) -> String;
 
     async fn my_routes(&self) -> serde_json::Value;
-
-    async fn recv_message(&self) -> Option<(Message, Fingerprint)>;
 
     async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError>;
 
@@ -227,8 +198,7 @@ pub enum DhtError {
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct SendMessageArgs {
-    pub id: Option<String>,
-    pub source_dock: Dock,
+    pub socket_id: String,
     pub dest_dock: Dock,
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub destination: Fingerprint,

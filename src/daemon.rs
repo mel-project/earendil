@@ -47,6 +47,8 @@ use crate::{
     },
 };
 
+pub use self::control_protocol_impl::ControlProtRecvErr;
+pub use self::control_protocol_impl::ControlProtSendErr;
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
 use self::haven::HavenLocator;
 use self::haven::HAVEN_FORWARD_DOCK;
