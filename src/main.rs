@@ -51,13 +51,34 @@ pub enum ControlCommands {
     },
 
     /// Sends a message to a haven.
-    SendHavenMessage {},
+    SendHavenMessage {
+        #[arg(short, long)]
+        message: String,
+        #[arg(short, long)]
+        identity_sk: String,
+        #[arg(short, long)]
+        fingerprint: Fingerprint,
+        #[arg(short, long)]
+        dock: Dock,
+    },
 
     /// Receives a message as a haven.
-    RecvHavenMessage {},
+    RecvHavenMessage {
+        #[arg(short, long)]
+        identity_sk: String,
+        #[arg(short, long)]
+        dock: Option<Dock>,
+        #[arg(short, long)]
+        rendezvous_fingerprint: Fingerprint,
+    },
 
     /// Registers a haven for the given rendezvous relay.
-    RegisterHaven {},
+    RegisterHaven {
+        #[arg(short, long)]
+        identity_sk: String,
+        #[arg(short, long)]
+        rendezvous_fingerprint: Fingerprint,
+    },
 
     /// Blocks until a message is received.
     RecvMessage,

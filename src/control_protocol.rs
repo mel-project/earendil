@@ -54,10 +54,44 @@ pub async fn main_control(
             smol::Timer::after(Duration::from_millis(100)).await;
         },
 
-        ControlCommands::RegisterHaven {} => {}
-        ControlCommands::SendHavenMessage {} => {}
-        ControlCommands::RecvHavenMessage {} => {}
-
+        ControlCommands::RegisterHaven {
+            identity_sk,
+            rendezvous_fingerprint,
+        } => {
+            client
+                .register_haven(
+                    IdentitySecret::from_str(&identity_sk)?,
+                    rendezvous_fingerprint,
+                )
+                .await?
+        }
+        ControlCommands::SendHavenMessage {
+            message,
+            identity_sk,
+            fingerprint,
+            dock,
+        } => {
+            client
+                .send_haven_message(
+                    Bytes::copy_from_slice(message.as_bytes()),
+                    Some(IdentitySecret::from_str(&identity_sk)?),
+                    Endpoint::new(fingerprint, dock),
+                )
+                .await??;
+        }
+        ControlCommands::RecvHavenMessage {
+            identity_sk,
+            dock,
+            rendezvous_fingerprint,
+        } => {
+            client
+                .recv_haven_message(
+                    Some(IdentitySecret::from_str(&identity_sk)?),
+                    dock,
+                    rendezvous_fingerprint,
+                )
+                .await?;
+        }
         ControlCommands::GlobalRpc {
             id,
 
