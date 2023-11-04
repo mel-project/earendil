@@ -50,6 +50,15 @@ pub enum ControlCommands {
         message: String,
     },
 
+    /// Sends a message to a haven.
+    SendHavenMessage {},
+
+    /// Receives a message as a haven.
+    RecvHavenMessage {},
+
+    /// Registers a haven for the given rendezvous relay.
+    RegisterHaven {},
+
     /// Blocks until a message is received.
     RecvMessage,
 

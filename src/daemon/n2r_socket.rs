@@ -22,12 +22,6 @@ struct BoundDock {
     ctx: DaemonContext,
 }
 
-#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
-pub struct Endpoint {
-    pub fingerprint: Fingerprint,
-    pub dock: Dock,
-}
-
 impl N2rSocket {
     /// Binds an N2R socket. anon_id indicates the anonymous ID to use. If this is not given, then the node's own identity will be used, which will not function properly if this is not running on a relay.
     pub fn bind(
@@ -105,6 +99,11 @@ impl Drop for BoundDock {
     }
 }
 
+#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct Endpoint {
+    pub fingerprint: Fingerprint,
+    pub dock: Dock,
+}
 impl Endpoint {
     pub fn new(fingerprint: Fingerprint, dock: Dock) -> Endpoint {
         Endpoint { fingerprint, dock }

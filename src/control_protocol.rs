@@ -10,13 +10,17 @@ use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
     Dock, Message, PacketConstructError,
 };
+
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{daemon::haven::HavenLocator, ControlCommands};
+use crate::{
+    daemon::{haven::HavenLocator, n2r_socket::Endpoint},
+    ControlCommands,
+};
 use thiserror::Error;
 
 pub async fn main_control(
@@ -49,6 +53,11 @@ pub async fn main_control(
             }
             smol::Timer::after(Duration::from_millis(100)).await;
         },
+
+        ControlCommands::RegisterHaven {} => {}
+        ControlCommands::SendHavenMessage {} => {}
+        ControlCommands::RecvHavenMessage {} => {}
+
         ControlCommands::GlobalRpc {
             id,
 
@@ -125,6 +134,22 @@ pub async fn main_control(
 #[async_trait]
 pub trait ControlProtocol {
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), SendMessageError>;
+
+    async fn send_haven_message(
+        &self,
+        message: Bytes,
+        identity_sk: Option<IdentitySecret>,
+        endpoint: Endpoint,
+    ) -> Result<(), SendMessageError>;
+
+    async fn recv_haven_message(
+        &self,
+        identity_sk: Option<IdentitySecret>,
+        dock: Option<Dock>,
+        rendezvous_point: Fingerprint,
+    ) -> (Bytes, Endpoint);
+
+    async fn register_haven(&self, identity_sk: IdentitySecret, rendezvous_point: Fingerprint);
 
     async fn send_global_rpc(
         &self,

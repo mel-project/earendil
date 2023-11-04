@@ -6,7 +6,7 @@ mod haven_socket;
 mod inout_route;
 mod link_connection;
 mod link_protocol;
-mod n2r_socket;
+pub mod n2r_socket;
 mod neightable;
 mod reply_block_store;
 mod socket;
