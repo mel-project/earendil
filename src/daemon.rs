@@ -479,7 +479,7 @@ impl DaemonContext {
             let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
             match gclient
                 .dht_insert(locator.clone(), false)
-                .timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(60))
                 .await
             {
                 Some(Err(e)) => log::debug!("inserting {key} into {replica} failed: {:?}", e),

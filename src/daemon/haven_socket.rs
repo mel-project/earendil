@@ -3,6 +3,7 @@ use std::{sync::Arc, time::Duration};
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{crypt::OnionSecret, Dock};
+use smol::Timer;
 use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 
@@ -77,7 +78,7 @@ impl HavenSocket {
                             };
                         }
                     }
-                    std::thread::sleep(Duration::from_secs(60 * 50));
+                    Timer::after(Duration::from_secs(60 * 50)).await;
                 }
             })
             .detach();
