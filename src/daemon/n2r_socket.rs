@@ -86,11 +86,10 @@ impl N2rSocket {
     }
 
     pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
-        let (message, fingerprint) = self
-            .recv_incoming
-            .recv()
-            .await
-            .map_err(|_| SocketRecvError::N2rRecvError)?;
+        let (message, fingerprint) = self.recv_incoming.recv().await.map_err(|e| {
+            log::debug!("N2rSocket RecvError: {e}");
+            SocketRecvError::N2rRecvError
+        })?;
         let endpoint = Endpoint::new(fingerprint, message.source_dock);
         Ok((message.body, endpoint))
     }

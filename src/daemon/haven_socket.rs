@@ -93,12 +93,12 @@ impl HavenSocket {
     }
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
+        let fwd_body = (body, endpoint).stdcode();
         match self.rendezvous_point {
             Some(rob) => {
                 // We're Bob:
                 // TODO: encrypt body
-                // use our N2rSocket to send (endpoint, msg) to Rob
-                let fwd_body = (endpoint, body).stdcode();
+                // use our N2rSocket to send (msg, endpoint) to Rob
                 self.n2r_socket
                     .send_to(fwd_body.into(), Endpoint::new(rob, HAVEN_FORWARD_DOCK))
                     .await?;
@@ -116,8 +116,7 @@ impl HavenSocket {
                     Some(bob_locator) => {
                         let rob = bob_locator.rendezvous_point;
                         // TODO: encrypt body
-                        // use our N2rSocket to send (endpoint, msg) to Rob
-                        let fwd_body = (endpoint, body).stdcode();
+                        // use our N2rSocket to send (msg, endpoint) to Rob
                         self.n2r_socket
                             .send_to(fwd_body.into(), Endpoint::new(rob, HAVEN_FORWARD_DOCK))
                             .await?;
@@ -130,11 +129,7 @@ impl HavenSocket {
     }
 
     pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
-        let (n2r_msg, _endpoint) = self
-            .n2r_socket
-            .recv_from()
-            .await
-            .map_err(|_| SocketRecvError::N2rRecvError)?;
+        let (n2r_msg, _) = self.n2r_socket.recv_from().await?;
         // TODO: decrypt
         let inner =
             stdcode::deserialize(&n2r_msg).map_err(|_| SocketRecvError::HavenMsgBadFormat)?;

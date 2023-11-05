@@ -63,12 +63,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtSendErr> {
         if let Some(socket) = self.sockets.get(&args.socket_id) {
-            socket
-                .send_to(
-                    args.content,
-                    Endpoint::new(args.destination, args.dest_dock),
-                )
-                .await?;
+            socket.send_to(args.content, args.destination).await?;
             Ok(())
         } else {
             Err(ControlProtSendErr::NoSocket)

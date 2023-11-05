@@ -238,7 +238,7 @@ async fn peel_forward_loop(
     ) -> anyhow::Result<()> {
         match inner {
             InnerPacket::Message(msg) => {
-                log::debug!("received InnerPacket::Message");
+                // log::debug!("received InnerPacket::Message: {:?}", msg);
                 incoming_send.try_send((msg, source))?;
             }
             InnerPacket::ReplyBlocks(reply_blocks) => {
@@ -339,8 +339,13 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         if let Ok((msg, src_endpoint)) = socket.recv_from().await {
             let ctx = ctx.clone();
-            let (dest_ep, inner): (Endpoint, Bytes) = stdcode::deserialize(&msg)?;
-            log::debug!("received forward msg {:?}, meant for {:?}", inner, dest_ep);
+            let (inner, dest_ep): (Bytes, Endpoint) = stdcode::deserialize(&msg)?;
+            log::debug!(
+                "received forward msg {:?}, from {}, to {}",
+                inner,
+                src_endpoint,
+                dest_ep
+            );
 
             let is_valid_dest = ctx.registered_havens.contains_key(&dest_ep.fingerprint);
             let is_seen_src = seen_srcs.contains_key(&(dest_ep, src_endpoint));
@@ -349,7 +354,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 seen_srcs.insert((src_endpoint, dest_ep), ());
             }
             if is_valid_dest || is_seen_src {
-                let body: Bytes = (src_endpoint.fingerprint, inner).stdcode().into();
+                let body: Bytes = (inner, src_endpoint).stdcode().into();
                 socket.send_to(body, dest_ep).await?;
             } else {
                 log::warn!("haven {} is not registered with me!", dest_ep.fingerprint);

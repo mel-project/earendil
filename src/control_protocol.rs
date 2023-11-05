@@ -49,13 +49,11 @@ pub async fn main_control(
         ControlCommands::SendMessage {
             socket_id,
             destination,
-            dest_dock,
             message,
         } => {
             client
                 .send_message(SendMessageArgs {
                     socket_id,
-                    dest_dock,
                     destination,
                     content: Bytes::copy_from_slice(message.as_bytes()),
                 })
@@ -199,9 +197,8 @@ pub enum DhtError {
 #[derive(Serialize, Deserialize)]
 pub struct SendMessageArgs {
     pub socket_id: String,
-    pub dest_dock: Dock,
     #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub destination: Fingerprint,
+    pub destination: Endpoint,
     #[serde_as(as = "serde_with::base64::Base64")]
     pub content: Bytes,
 }

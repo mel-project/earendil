@@ -4,6 +4,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use config::ConfigFile;
 use control_protocol::main_control;
+use daemon::n2r_socket::Endpoint;
 use earendil_crypt::Fingerprint;
 use earendil_packet::Dock;
 
@@ -65,8 +66,7 @@ pub enum ControlCommands {
         #[arg(long)]
         socket_id: String,
         #[arg(short, long)]
-        destination: Fingerprint,
-        dest_dock: Dock,
+        destination: Endpoint,
         #[arg(short, long)]
         message: String,
     },
