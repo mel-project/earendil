@@ -14,7 +14,6 @@ mod socket;
 use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
-use concurrent_queue::ConcurrentQueue;
 use dashmap::DashMap;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{crypt::OnionSecret, InnerPacket, PeeledPacket};
@@ -109,9 +108,8 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             anon_destinations: Arc::new(Mutex::new(ReplyBlockStore::new())),
 
             socket_recv_queues: Arc::new(DashMap::new()),
-            unhandled_incoming: Arc::new(ConcurrentQueue::unbounded()),
             dht_cache: CacheBuilder::default()
-                .time_to_idle(Duration::from_secs(30))
+                .time_to_idle(Duration::from_secs(60 * 60))
                 .build(),
             registered_havens: Arc::new(
                 Cache::builder()
@@ -228,7 +226,7 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 /// Loop that takes incoming packets, peels them, and processes them
 async fn peel_forward_loop(
     ctx: DaemonContext,
-    incoming_send: Sender<(Message, Fingerprint)>,
+    send_incoming: Sender<(Message, Fingerprint)>,
 ) -> anyhow::Result<()> {
     fn process_inner_pkt(
         ctx: &DaemonContext,
@@ -271,7 +269,7 @@ async fn peel_forward_loop(
             PeeledPacket::Received {
                 from: source,
                 pkt: inner,
-            } => process_inner_pkt(&ctx, &incoming_send, inner, source)?,
+            } => process_inner_pkt(&ctx, &send_incoming, inner, source)?,
             PeeledPacket::GarbledReply { id, mut pkt } => {
                 log::debug!("received garbled packet");
                 let reply_degarbler = ctx
@@ -280,7 +278,7 @@ async fn peel_forward_loop(
                     .context("no degarbler for this garbled pkt")?;
                 let (inner, source) = reply_degarbler.degarble(&mut pkt)?;
                 log::debug!("packet has been degarbled!");
-                process_inner_pkt(&ctx, &incoming_send, inner, source)?
+                process_inner_pkt(&ctx, &send_incoming, inner, source)?
             }
         }
     }
@@ -296,7 +294,10 @@ async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             .get(&Endpoint::new(fingerprint, message.dest_dock))
         {
             Some(sender) => sender.try_send((message, fingerprint))?,
-            None => ctx.unhandled_incoming.push((message, fingerprint))?,
+            None => log::debug!(
+                "Received message for {} with no bound socket! Dropping....",
+                Endpoint::new(fingerprint, message.dest_dock)
+            ),
         }
     }
 }
@@ -375,7 +376,6 @@ pub struct DaemonContext {
     degarblers: Cache<u64, ReplyDegarbler>,
     anon_destinations: Arc<Mutex<ReplyBlockStore>>,
     socket_recv_queues: Arc<DashMap<Endpoint, Sender<(Message, Fingerprint)>>>,
-    unhandled_incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
     dht_cache: Cache<Fingerprint, HavenLocator>,
     registered_havens: Arc<Cache<Fingerprint, ()>>,
 }

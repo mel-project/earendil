@@ -38,20 +38,20 @@ impl Socket {
         anon_id: Option<IdentitySecret>,
         dock: Option<Dock>,
     ) -> Socket {
-        let inner = InnerSocket::N2R(N2rSocket::bind(ctx.clone(), anon_id, dock));
+        let inner = InnerSocket::N2r(N2rSocket::bind(ctx.clone(), anon_id, dock));
         Self { inner }
     }
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
         match &self.inner {
-            InnerSocket::N2R(s) => s.send_to(body, endpoint).await,
+            InnerSocket::N2r(s) => s.send_to(body, endpoint).await,
             InnerSocket::Haven(s) => s.send_to(body, endpoint).await,
         }
     }
 
     pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
         match &self.inner {
-            InnerSocket::N2R(s) => s.recv_from().await,
+            InnerSocket::N2r(s) => s.recv_from().await,
             InnerSocket::Haven(s) => s.recv_from().await,
         }
     }
@@ -59,7 +59,7 @@ impl Socket {
 
 enum InnerSocket {
     Haven(HavenSocket),
-    N2R(N2rSocket),
+    N2r(N2rSocket),
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
