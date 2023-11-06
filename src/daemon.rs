@@ -24,7 +24,7 @@ use moka::sync::{Cache, CacheBuilder};
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::{Mutex, RwLock};
-use smol::channel::{Receiver, Sender};
+use smol::channel::Sender;
 use smol_timeout::TimeoutExt;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
@@ -95,15 +95,12 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 
     smolscale::block_on(async move {
         let table = Arc::new(NeighTable::new());
-        let (send_incoming, recv_incoming) = smol::channel::bounded(1_000_000);
-
         let daemon_ctx = DaemonContext {
             config: Arc::new(config),
             table: table.clone(),
             identity: identity.into(),
             onion_sk: OnionSecret::generate(),
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
-            recv_incoming,
             degarblers: Cache::new(1_000_000),
             anon_destinations: Arc::new(Mutex::new(ReplyBlockStore::new())),
 
@@ -129,11 +126,8 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 
         let _peel_forward = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([daemon_ctx], move || peel_forward_loop(
-                daemon_ctx.clone(),
-                send_incoming.clone()
-            )
-            .map_err(log_error("peel_forward"))),
+            clone!([daemon_ctx], move || peel_forward_loop(daemon_ctx.clone())
+                .map_err(log_error("peel_forward"))),
         );
 
         let _gossip = Immortal::respawn(
@@ -148,14 +142,6 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
                 daemon_ctx.clone()
             )
             .map_err(log_error("control_protocol"))),
-        );
-
-        let _dispatch_by_dock = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([daemon_ctx], move || dispatch_by_dock_loop(
-                daemon_ctx.clone()
-            )
-            .map_err(log_error("dispatch_by_dock"))),
         );
 
         let _global_rpc_loop = Immortal::respawn(
@@ -224,26 +210,27 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 }
 
 /// Loop that takes incoming packets, peels them, and processes them
-async fn peel_forward_loop(
-    ctx: DaemonContext,
-    send_incoming: Sender<(Message, Fingerprint)>,
-) -> anyhow::Result<()> {
+async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     fn process_inner_pkt(
         ctx: &DaemonContext,
-        incoming_send: &Sender<(Message, Fingerprint)>,
         inner: InnerPacket,
-        source: Fingerprint,
+        src_fp: Fingerprint,
+        dest_fp: Fingerprint,
     ) -> anyhow::Result<()> {
         match inner {
             InnerPacket::Message(msg) => {
                 // log::debug!("received InnerPacket::Message: {:?}", msg);
-                incoming_send.try_send((msg, source))?;
+                let dest = Endpoint::new(dest_fp, msg.dest_dock);
+                if let Some(send_incoming) = ctx.socket_recv_queues.get(&dest) {
+                    send_incoming.try_send((msg, src_fp))?;
+                } else {
+                    anyhow::bail!("No socket listening on destination {dest}")
+                }
             }
             InnerPacket::ReplyBlocks(reply_blocks) => {
                 log::debug!("received a batch of ReplyBlocks");
-
                 for reply_block in reply_blocks {
-                    ctx.anon_destinations.lock().insert(source, reply_block);
+                    ctx.anon_destinations.lock().insert(src_fp, reply_block);
                 }
             }
         }
@@ -267,37 +254,19 @@ async fn peel_forward_loop(
                 conn.send_raw_packet(inner).await;
             }
             PeeledPacket::Received {
-                from: source,
+                from: src_fp,
                 pkt: inner,
-            } => process_inner_pkt(&ctx, &send_incoming, inner, source)?,
+            } => process_inner_pkt(&ctx, inner, src_fp, ctx.identity.public().fingerprint())?,
             PeeledPacket::GarbledReply { id, mut pkt } => {
                 log::debug!("received garbled packet");
                 let reply_degarbler = ctx
                     .degarblers
                     .get(&id)
                     .context("no degarbler for this garbled pkt")?;
-                let (inner, source) = reply_degarbler.degarble(&mut pkt)?;
+                let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
                 log::debug!("packet has been degarbled!");
-                process_inner_pkt(&ctx, &send_incoming, inner, source)?
+                process_inner_pkt(&ctx, inner, src_fp, reply_degarbler.my_fp())?
             }
-        }
-    }
-}
-
-/// Loop that dispatches received messages to their corresponding dock queue
-async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    loop {
-        let (message, fingerprint) = ctx.recv_incoming.recv().await?;
-
-        match ctx
-            .socket_recv_queues
-            .get(&Endpoint::new(fingerprint, message.dest_dock))
-        {
-            Some(sender) => sender.try_send((message, fingerprint))?,
-            None => log::debug!(
-                "Received message for {} with no bound socket! Dropping....",
-                Endpoint::new(fingerprint, message.dest_dock)
-            ),
         }
     }
 }
@@ -372,7 +341,6 @@ pub struct DaemonContext {
     identity: Arc<IdentitySecret>,
     onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
-    recv_incoming: Receiver<(Message, Fingerprint)>,
     degarblers: Cache<u64, ReplyDegarbler>,
     anon_destinations: Arc<Mutex<ReplyBlockStore>>,
     socket_recv_queues: Arc<DashMap<Endpoint, Sender<(Message, Fingerprint)>>>,
@@ -446,6 +414,7 @@ impl DaemonContext {
                         &reverse_instructs,
                         &self.onion_sk.public(),
                         my_anon_osk.clone(),
+                        &public_isk,
                     )
                     .map_err(|_| SendMessageError::ReplyBlockFailed)?;
                     rbs.push(rb);

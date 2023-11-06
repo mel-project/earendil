@@ -137,7 +137,7 @@ mod tests {
 
         // Prepare reply block
         let (reply_block, (_, reply_degarbler)) =
-            ReplyBlock::new(&route, &alice_opk, OnionSecret::generate())
+            ReplyBlock::new(&route, &alice_opk, OnionSecret::generate(), &alice_isk)
                 .expect("Failed to create reply block");
 
         // Prepare message using header from reply block
