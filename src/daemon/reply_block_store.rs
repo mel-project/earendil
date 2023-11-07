@@ -92,7 +92,7 @@ mod tests {
         let alice_opk = alice_osk.public();
         let alice_isk = IdentitySecret::generate();
 
-        let (rb, _) = ReplyBlock::new(&route, &alice_opk, OnionSecret::generate(), &alice_isk)
+        let (rb, _) = ReplyBlock::new(&route, &alice_opk, OnionSecret::generate(), alice_isk)
             .expect("Failed to create reply block");
         rb
     }

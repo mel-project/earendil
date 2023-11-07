@@ -10,7 +10,6 @@ use smol::channel::Receiver;
 
 use super::socket::{SocketRecvError, SocketSendError};
 
-#[derive(Clone)]
 pub struct N2rSocket {
     ctx: DaemonContext,
     anon_id: Option<IdentitySecret>,

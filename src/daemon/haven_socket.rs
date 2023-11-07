@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{crypt::OnionSecret, Dock};
-use smol::Timer;
+use smol::{Task, Timer};
 use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 
@@ -17,13 +17,13 @@ use super::{
     DaemonContext,
 };
 
-#[derive(Clone)]
 pub struct HavenSocket {
     ctx: DaemonContext,
     n2r_socket: N2rSocket,
     identity_sk: IdentitySecret,
     onion_sk: OnionSecret,
     rendezvous_point: Option<Fingerprint>,
+    _task: Option<Task<()>>,
 }
 
 impl HavenSocket {
@@ -44,7 +44,7 @@ impl HavenSocket {
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
             let context = ctx.clone();
             let registration_isk = isk.clone();
-            smolscale::spawn(async move {
+            let task = smolscale::spawn(async move {
                 // generate a new onion keypair
                 let onion_sk = OnionSecret::generate();
                 let onion_pk = onion_sk.public();
@@ -80,16 +80,25 @@ impl HavenSocket {
                     }
                     Timer::after(Duration::from_secs(60 * 50)).await;
                 }
-            })
-            .detach();
-        }
-
-        HavenSocket {
-            ctx,
-            n2r_socket,
-            identity_sk: isk,
-            onion_sk: OnionSecret::generate(), // TODO: use this for encryption
-            rendezvous_point,
+            });
+            HavenSocket {
+                ctx,
+                n2r_socket,
+                identity_sk: isk,
+                onion_sk: OnionSecret::generate(), // TODO: use this for encryption
+                rendezvous_point,
+                _task: Some(task),
+            }
+        } else {
+            // We're Alice
+            HavenSocket {
+                ctx,
+                n2r_socket,
+                identity_sk: isk,
+                onion_sk: OnionSecret::generate(), // TODO: use this for encryption
+                rendezvous_point,
+                _task: None,
+            }
         }
     }
 

@@ -265,7 +265,12 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     .context("no degarbler for this garbled pkt")?;
                 let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
                 log::debug!("packet has been degarbled!");
-                process_inner_pkt(&ctx, inner, src_fp, reply_degarbler.my_fp())?
+                process_inner_pkt(
+                    &ctx,
+                    inner,
+                    src_fp,
+                    reply_degarbler.my_anon_isk().public().fingerprint(),
+                )?
             }
         }
     }
@@ -414,7 +419,7 @@ impl DaemonContext {
                         &reverse_instructs,
                         &self.onion_sk.public(),
                         my_anon_osk.clone(),
-                        &public_isk,
+                        (*public_isk).clone(),
                     )
                     .map_err(|_| SendMessageError::ReplyBlockFailed)?;
                     rbs.push(rb);

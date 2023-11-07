@@ -21,7 +21,7 @@ impl ReplyBlock {
         route: &[ForwardInstruction],
         my_opk: &OnionPublic,
         my_anon_osk: OnionSecret,
-        my_isk: &IdentitySecret,
+        my_anon_isk: IdentitySecret,
     ) -> Result<(Self, (u64, ReplyDegarbler)), PacketConstructError> {
         let my_anon_opk = my_anon_osk.public();
 
@@ -39,14 +39,14 @@ impl ReplyBlock {
                 body: Bytes::new(),
             }),
             &metadata,
-            &my_isk,
+            &my_anon_isk,
         )?;
         let header = raw_packet.header;
 
         let rb_degarbler = ReplyDegarbler {
             shared_secs,
             my_anon_osk,
-            my_fp: my_isk.public().fingerprint(),
+            my_anon_isk,
         };
         Ok((
             Self {
@@ -62,7 +62,7 @@ impl ReplyBlock {
 pub struct ReplyDegarbler {
     shared_secs: Vec<[u8; 32]>,
     my_anon_osk: OnionSecret,
-    my_fp: Fingerprint,
+    my_anon_isk: IdentitySecret,
 }
 
 impl ReplyDegarbler {
@@ -74,11 +74,11 @@ impl ReplyDegarbler {
         InnerPacket::open(raw, &self.my_anon_osk)
     }
 
-    pub fn my_anon_osk(&self) -> &OnionSecret {
-        &self.my_anon_osk
+    pub fn my_anon_osk(&self) -> OnionSecret {
+        self.my_anon_osk.clone()
     }
 
-    pub fn my_fp(&self) -> Fingerprint {
-        self.my_fp
+    pub fn my_anon_isk(&self) -> IdentitySecret {
+        self.my_anon_isk.clone()
     }
 }
