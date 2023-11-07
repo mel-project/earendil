@@ -12,7 +12,7 @@ use nanorpc::nanorpc_derive;
 use crate::control_protocol::DhtError;
 
 use super::haven::HavenLocator;
-use super::rendezvous::ForwardRequest;
+use super::haven::RegisterHavenReq;
 
 pub const GLOBAL_RPC_DOCK: Dock = 100001;
 
@@ -29,5 +29,5 @@ pub trait GlobalRpcProtocol {
         recurse: bool,
     ) -> Result<Option<HavenLocator>, DhtError>;
 
-    async fn alloc_forward(&self, forward_req: ForwardRequest) -> Result<(), VerifyError>;
+    async fn alloc_forward(&self, forward_req: RegisterHavenReq) -> Result<(), VerifyError>;
 }

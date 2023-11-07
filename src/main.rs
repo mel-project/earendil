@@ -4,6 +4,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use config::ConfigFile;
 use control_protocol::main_control;
+use daemon::n2r_socket::Endpoint;
 use earendil_crypt::Fingerprint;
 use earendil_packet::Dock;
 
@@ -38,20 +39,43 @@ enum Commands {
 
 #[derive(Subcommand)]
 pub enum ControlCommands {
-    /// Send a message to a destination.
+    /// Binds to a N2rSocket.
+    BindN2r {
+        #[arg(long)]
+        socket_id: String,
+        #[arg(long)]
+        anon_id: Option<String>,
+        #[arg(long)]
+        dock: Option<Dock>,
+    },
+
+    /// Binds to a HavenSocket.
+    BindHaven {
+        #[arg(long)]
+        socket_id: String,
+        #[arg(long)]
+        anon_id: Option<String>,
+        #[arg(long)]
+        dock: Option<Dock>,
+        #[arg(long)]
+        rendezvous: Option<Fingerprint>,
+    },
+
+    /// Sends a message using a given socket to a destination.
     SendMessage {
         #[arg(long)]
-        id: Option<String>,
-        source_dock: Dock,
-        dest_dock: Dock,
+        socket_id: String,
         #[arg(short, long)]
-        destination: Fingerprint,
+        destination: Endpoint,
         #[arg(short, long)]
         message: String,
     },
 
     /// Blocks until a message is received.
-    RecvMessage,
+    RecvMessage {
+        #[arg(long)]
+        socket_id: String,
+    },
 
     /// Send a GlobalRpc request to a destination.
     GlobalRpc {
@@ -64,7 +88,7 @@ pub enum ControlCommands {
         args: Vec<String>,
     },
 
-    /// Insert a rendezvous haven locator.
+    /// Insert a rendezvous haven locator into the dht.
     InsertRendezvous {
         #[arg(short, long)]
         identity_sk: String,

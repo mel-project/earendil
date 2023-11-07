@@ -60,6 +60,7 @@ impl ReplyBlockStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use earendil_crypt::IdentitySecret;
     use earendil_packet::crypt::OnionSecret;
     use earendil_packet::ForwardInstruction;
 
@@ -89,8 +90,9 @@ mod tests {
             .collect();
         let alice_osk = OnionSecret::generate();
         let alice_opk = alice_osk.public();
+        let alice_isk = IdentitySecret::generate();
 
-        let (rb, _) = ReplyBlock::new(&route, &alice_opk, OnionSecret::generate())
+        let (rb, _) = ReplyBlock::new(&route, &alice_opk, OnionSecret::generate(), alice_isk)
             .expect("Failed to create reply block");
         rb
     }

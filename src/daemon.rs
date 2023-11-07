@@ -2,18 +2,18 @@ mod control_protocol_impl;
 mod global_rpc;
 mod gossip;
 pub mod haven;
+mod haven_socket;
 mod inout_route;
 mod link_connection;
 mod link_protocol;
-mod n2r_socket;
+pub mod n2r_socket;
 mod neightable;
-mod rendezvous;
 mod reply_block_store;
+mod socket;
 
 use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
-use concurrent_queue::ConcurrentQueue;
 use dashmap::DashMap;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{crypt::OnionSecret, InnerPacket, PeeledPacket};
@@ -24,7 +24,7 @@ use moka::sync::{Cache, CacheBuilder};
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::{Mutex, RwLock};
-use smol::channel::{Receiver, Sender};
+use smol::channel::Sender;
 use smol_timeout::TimeoutExt;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
@@ -46,10 +46,12 @@ use crate::{
     },
 };
 
+pub use self::control_protocol_impl::ControlProtRecvErr;
+pub use self::control_protocol_impl::ControlProtSendErr;
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
 use self::haven::HavenLocator;
+use self::haven::HAVEN_FORWARD_DOCK;
 use self::n2r_socket::{Endpoint, N2rSocket};
-use self::rendezvous::HAVEN_FORWARD_DOCK;
 use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
@@ -93,27 +95,23 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 
     smolscale::block_on(async move {
         let table = Arc::new(NeighTable::new());
-        let (send_incoming, recv_incoming) = smol::channel::bounded(1_000_000);
-
         let daemon_ctx = DaemonContext {
             config: Arc::new(config),
             table: table.clone(),
             identity: identity.into(),
             onion_sk: OnionSecret::generate(),
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
-            recv_incoming,
             degarblers: Cache::new(1_000_000),
             anon_destinations: Arc::new(Mutex::new(ReplyBlockStore::new())),
 
             socket_recv_queues: Arc::new(DashMap::new()),
-            unhandled_incoming: Arc::new(ConcurrentQueue::unbounded()),
             dht_cache: CacheBuilder::default()
-                .time_to_idle(Duration::from_secs(30))
+                .time_to_idle(Duration::from_secs(60 * 60))
                 .build(),
             registered_havens: Arc::new(
                 Cache::builder()
                     .max_capacity(100_000)
-                    .time_to_idle(Duration::from_secs(3600))
+                    .time_to_idle(Duration::from_secs(60 * 60))
                     .build(),
             ),
         };
@@ -128,11 +126,8 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 
         let _peel_forward = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([daemon_ctx], move || peel_forward_loop(
-                daemon_ctx.clone(),
-                send_incoming.clone()
-            )
-            .map_err(log_error("peel_forward"))),
+            clone!([daemon_ctx], move || peel_forward_loop(daemon_ctx.clone())
+                .map_err(log_error("peel_forward"))),
         );
 
         let _gossip = Immortal::respawn(
@@ -147,14 +142,6 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
                 daemon_ctx.clone()
             )
             .map_err(log_error("control_protocol"))),
-        );
-
-        let _dispatch_by_dock = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([daemon_ctx], move || dispatch_by_dock_loop(
-                daemon_ctx.clone()
-            )
-            .map_err(log_error("dispatch_by_dock"))),
         );
 
         let _global_rpc_loop = Immortal::respawn(
@@ -223,26 +210,27 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 }
 
 /// Loop that takes incoming packets, peels them, and processes them
-async fn peel_forward_loop(
-    ctx: DaemonContext,
-    incoming_send: Sender<(Message, Fingerprint)>,
-) -> anyhow::Result<()> {
+async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     fn process_inner_pkt(
         ctx: &DaemonContext,
-        incoming_send: &Sender<(Message, Fingerprint)>,
         inner: InnerPacket,
-        source: Fingerprint,
+        src_fp: Fingerprint,
+        dest_fp: Fingerprint,
     ) -> anyhow::Result<()> {
         match inner {
             InnerPacket::Message(msg) => {
-                log::debug!("received InnerPacket::Message");
-                incoming_send.try_send((msg, source))?;
+                // log::debug!("received InnerPacket::Message: {:?}", msg);
+                let dest = Endpoint::new(dest_fp, msg.dest_dock);
+                if let Some(send_incoming) = ctx.socket_recv_queues.get(&dest) {
+                    send_incoming.try_send((msg, src_fp))?;
+                } else {
+                    anyhow::bail!("No socket listening on destination {dest}")
+                }
             }
             InnerPacket::ReplyBlocks(reply_blocks) => {
                 log::debug!("received a batch of ReplyBlocks");
-
                 for reply_block in reply_blocks {
-                    ctx.anon_destinations.lock().insert(source, reply_block);
+                    ctx.anon_destinations.lock().insert(src_fp, reply_block);
                 }
             }
         }
@@ -266,34 +254,24 @@ async fn peel_forward_loop(
                 conn.send_raw_packet(inner).await;
             }
             PeeledPacket::Received {
-                from: source,
+                from: src_fp,
                 pkt: inner,
-            } => process_inner_pkt(&ctx, &incoming_send, inner, source)?,
+            } => process_inner_pkt(&ctx, inner, src_fp, ctx.identity.public().fingerprint())?,
             PeeledPacket::GarbledReply { id, mut pkt } => {
                 log::debug!("received garbled packet");
                 let reply_degarbler = ctx
                     .degarblers
                     .get(&id)
                     .context("no degarbler for this garbled pkt")?;
-                let (inner, source) = reply_degarbler.degarble(&mut pkt)?;
+                let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
                 log::debug!("packet has been degarbled!");
-                process_inner_pkt(&ctx, &incoming_send, inner, source)?
+                process_inner_pkt(
+                    &ctx,
+                    inner,
+                    src_fp,
+                    reply_degarbler.my_anon_isk().public().fingerprint(),
+                )?
             }
-        }
-    }
-}
-
-/// Loop that dispatches received messages to their corresponding dock queue
-async fn dispatch_by_dock_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    loop {
-        let (message, fingerprint) = ctx.recv_incoming.recv().await?;
-
-        match ctx
-            .socket_recv_queues
-            .get(&Endpoint::new(fingerprint, message.dest_dock))
-        {
-            Some(sender) => sender.try_send((message, fingerprint))?,
-            None => ctx.unhandled_incoming.push((message, fingerprint))?,
         }
     }
 }
@@ -327,31 +305,34 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 const DHT_REDUNDANCY: usize = 3;
 /// Loop that listens to and handles incoming haven forwarding requests
 async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let seen_srcs: Cache<(Fingerprint, Fingerprint), ()> = Cache::builder()
+    let seen_srcs: Cache<(Endpoint, Endpoint), ()> = Cache::builder()
         .max_capacity(100_000)
-        .time_to_idle(Duration::from_secs(3600))
+        .time_to_idle(Duration::from_secs(60 * 60))
         .build();
     let socket = Arc::new(N2rSocket::bind(ctx.clone(), None, Some(HAVEN_FORWARD_DOCK)));
 
     loop {
         if let Ok((msg, src_endpoint)) = socket.recv_from().await {
             let ctx = ctx.clone();
-            let (dest_fp, inner): (Fingerprint, Bytes) = stdcode::deserialize(&msg)?;
-            log::debug!("received forward msg {:?}, meant for {dest_fp}", inner);
+            let (inner, dest_ep): (Bytes, Endpoint) = stdcode::deserialize(&msg)?;
+            log::debug!(
+                "received forward msg {:?}, from {}, to {}",
+                inner,
+                src_endpoint,
+                dest_ep
+            );
 
-            let is_valid_dest = ctx.registered_havens.contains_key(&dest_fp);
-            let is_seen_src = seen_srcs.contains_key(&(dest_fp, src_endpoint.fingerprint()));
+            let is_valid_dest = ctx.registered_havens.contains_key(&dest_ep.fingerprint);
+            let is_seen_src = seen_srcs.contains_key(&(dest_ep, src_endpoint));
 
             if is_valid_dest {
-                seen_srcs.insert((src_endpoint.fingerprint(), dest_fp), ());
+                seen_srcs.insert((src_endpoint, dest_ep), ());
             }
             if is_valid_dest || is_seen_src {
-                let body: Bytes = (src_endpoint.fingerprint(), inner).stdcode().into();
-                socket
-                    .send_to(body, Endpoint::new(dest_fp, HAVEN_FORWARD_DOCK))
-                    .await?;
+                let body: Bytes = (inner, src_endpoint).stdcode().into();
+                socket.send_to(body, dest_ep).await?;
             } else {
-                log::warn!("haven {dest_fp} is not registered with me!");
+                log::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
             }
         };
     }
@@ -365,11 +346,9 @@ pub struct DaemonContext {
     identity: Arc<IdentitySecret>,
     onion_sk: OnionSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
-    recv_incoming: Receiver<(Message, Fingerprint)>,
     degarblers: Cache<u64, ReplyDegarbler>,
     anon_destinations: Arc<Mutex<ReplyBlockStore>>,
     socket_recv_queues: Arc<DashMap<Endpoint, Sender<(Message, Fingerprint)>>>,
-    unhandled_incoming: Arc<ConcurrentQueue<(Message, Fingerprint)>>,
     dht_cache: Cache<Fingerprint, HavenLocator>,
     registered_havens: Arc<Cache<Fingerprint, ()>>,
 }
@@ -440,6 +419,7 @@ impl DaemonContext {
                         &reverse_instructs,
                         &self.onion_sk.public(),
                         my_anon_osk.clone(),
+                        (*public_isk).clone(),
                     )
                     .map_err(|_| SendMessageError::ReplyBlockFailed)?;
                     rbs.push(rb);
@@ -473,7 +453,7 @@ impl DaemonContext {
             let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
             match gclient
                 .dht_insert(locator.clone(), false)
-                .timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(60))
                 .await
             {
                 Some(Err(e)) => log::debug!("inserting {key} into {replica} failed: {:?}", e),
@@ -508,7 +488,7 @@ impl DaemonContext {
                 Ok(Ok(None)) => continue,
                 Ok(Ok(Some(locator))) => {
                     let id_pk = locator.identity_pk;
-                    let payload = locator.signable();
+                    let payload = locator.to_sign();
                     if id_pk.fingerprint() == fingerprint {
                         id_pk.verify(&payload, &locator.signature)?;
                         return Ok(Some(locator));

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Display, str::FromStr, sync::Arc};
 
 use crate::daemon::DaemonContext;
 use bytes::Bytes;
@@ -8,7 +8,8 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use smol::channel::Receiver;
 
-#[derive(Clone)]
+use super::socket::{SocketRecvError, SocketSendError};
+
 pub struct N2rSocket {
     ctx: DaemonContext,
     anon_id: Option<IdentitySecret>,
@@ -20,12 +21,6 @@ struct BoundDock {
     fp: Fingerprint,
     dock: Dock,
     ctx: DaemonContext,
-}
-
-#[derive(Copy, Clone, Deserialize, Serialize, PartialEq, PartialOrd, Ord, Eq, Hash)]
-pub struct Endpoint {
-    fingerprint: Fingerprint,
-    dock: Dock,
 }
 
 impl N2rSocket {
@@ -76,7 +71,7 @@ impl N2rSocket {
         }
     }
 
-    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
+    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
         self.ctx
             .send_message(
                 self.anon_id.clone(),
@@ -89,10 +84,12 @@ impl N2rSocket {
         Ok(())
     }
 
-    pub async fn recv_from(&self) -> anyhow::Result<(Bytes, Endpoint)> {
-        let (message, fingerprint) = self.recv_incoming.recv().await?;
+    pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
+        let (message, fingerprint) = self.recv_incoming.recv().await.map_err(|e| {
+            log::debug!("N2rSocket RecvError: {e}");
+            SocketRecvError::N2rRecvError
+        })?;
         let endpoint = Endpoint::new(fingerprint, message.source_dock);
-
         Ok((message.body, endpoint))
     }
 }
@@ -105,11 +102,36 @@ impl Drop for BoundDock {
     }
 }
 
+#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct Endpoint {
+    pub fingerprint: Fingerprint,
+    pub dock: Dock,
+}
+
 impl Endpoint {
     pub fn new(fingerprint: Fingerprint, dock: Dock) -> Endpoint {
         Endpoint { fingerprint, dock }
     }
-    pub fn fingerprint(&self) -> Fingerprint {
-        self.fingerprint
+}
+
+impl Display for Endpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}::{}", self.fingerprint, self.dock)
+    }
+}
+
+impl FromStr for Endpoint {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let elems: Vec<&str> = s.split("::").collect();
+        if elems.len() != 2 {
+            return Err(anyhow::anyhow!(
+                "Wrong endpoint format! Endpoint format should be fingerprint::dock"
+            ));
+        }
+        let fp = Fingerprint::from_str(elems[0])?;
+        let dock = u32::from_str(elems[1])?;
+        Ok(Endpoint::new(fp, dock))
     }
 }
