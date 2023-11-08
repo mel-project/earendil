@@ -4,6 +4,8 @@ use earendil_crypt::Fingerprint;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::daemon::n2r_socket::Endpoint;
+
 /// A YAML-serializable configuration file
 #[derive(Serialize, Deserialize)]
 pub struct ConfigFile {
@@ -22,6 +24,8 @@ pub struct ConfigFile {
     /// List of all outgoing connections
     #[serde(default)]
     pub out_routes: BTreeMap<String, OutRouteConfig>,
+
+    pub udp_forwards: Vec<UdpForwardConfig>,
 }
 
 fn default_control_listen() -> SocketAddr {
@@ -51,4 +55,11 @@ pub enum OutRouteConfig {
         #[serde_as(as = "serde_with::hex::Hex")]
         cookie: [u8; 32],
     },
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone)]
+pub struct UdpForwardConfig {
+    pub forward_to: u16,
+    pub remote_ep: Endpoint,
 }

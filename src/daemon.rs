@@ -10,6 +10,7 @@ pub mod n2r_socket;
 mod neightable;
 mod reply_block_store;
 mod socket;
+mod udp_forward;
 
 use anyhow::Context;
 use bytes::Bytes;
@@ -36,6 +37,7 @@ use crate::control_protocol::{DhtError, SendMessageError};
 use crate::daemon::global_rpc::transport::GlobalRpcTransport;
 use crate::daemon::global_rpc::GlobalRpcClient;
 use crate::daemon::reply_block_store::ReplyBlockStore;
+use crate::daemon::udp_forward::udp_forward_loop;
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
     control_protocol::ControlService,
@@ -158,7 +160,23 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             .map_err(log_error("haven_forward_loop"))),
         );
 
-        // TODO: app-level traffic tasks/processes
+        // app-level traffic tasks/processes
+        let _udp_forward_loops: Vec<Immortal> = daemon_ctx
+            .config
+            .udp_forwards
+            .clone()
+            .into_iter()
+            .map(|udp_fwd_cfg| {
+                Immortal::respawn(
+                    RespawnStrategy::Immediate,
+                    clone!([daemon_ctx], move || udp_forward_loop(
+                        daemon_ctx.clone(),
+                        udp_fwd_cfg.clone()
+                    )
+                    .map_err(log_error("udp_forward_loop"))),
+                )
+            })
+            .collect();
 
         let mut route_tasks = FuturesUnordered::new();
 
