@@ -4,6 +4,7 @@ use std::{
 };
 
 use clone_macro::clone;
+use earendil_crypt::IdentitySecret;
 use moka::sync::Cache;
 use smol::net::UdpSocket;
 use smolscale::immortal::Immortal;
@@ -45,7 +46,12 @@ pub async fn udp_forward_loop(
         // get the earendil socket for the src_udp_addr. If it doesn't exist, create one
         // and spawn a loop that forwards messages from the earendil socket back to the src_udp_addr
         let src_earendil_skt = demux_table.get_with(src_udp_addr, || {
-            let earendil_skt = Arc::new(Socket::bind_haven(&ctx, None, None, None));
+            let earendil_skt = Arc::new(Socket::bind_haven(
+                &ctx,
+                Some(IdentitySecret::generate()),
+                None,
+                None,
+            ));
             let down_loop = Immortal::respawn(
                 smolscale::immortal::RespawnStrategy::Immediate,
                 clone!([earendil_skt, udp_socket], move || {
