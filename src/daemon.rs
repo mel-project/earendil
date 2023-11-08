@@ -36,6 +36,7 @@ use std::{path::Path, sync::Arc, time::Duration};
 use crate::control_protocol::{DhtError, SendMessageError};
 use crate::daemon::global_rpc::transport::GlobalRpcTransport;
 use crate::daemon::global_rpc::GlobalRpcClient;
+use crate::daemon::haven::udp_haven_forward_loop;
 use crate::daemon::reply_block_store::ReplyBlockStore;
 use crate::daemon::udp_forward::udp_forward_loop;
 use crate::{
@@ -159,6 +160,23 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             )
             .map_err(log_error("haven_forward_loop"))),
         );
+
+        let _udp_haven_forward_loops: Vec<Immortal> = daemon_ctx
+            .config
+            .havens
+            .clone()
+            .into_iter()
+            .map(|cfg| {
+                Immortal::respawn(
+                    RespawnStrategy::Immediate,
+                    clone!([daemon_ctx], move || udp_haven_forward_loop(
+                        daemon_ctx.clone(),
+                        cfg.clone()
+                    )
+                    .map_err(log_error("udp_haven_forward_loop"))),
+                )
+            })
+            .collect();
 
         // app-level traffic tasks/processes
         let _udp_forward_loops: Vec<Immortal> = daemon_ctx

@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
 
 use earendil_crypt::Fingerprint;
+use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -26,6 +27,8 @@ pub struct ConfigFile {
     pub out_routes: BTreeMap<String, OutRouteConfig>,
 
     pub udp_forwards: Vec<UdpForwardConfig>,
+
+    pub havens: Vec<HavenForwardConfig>,
 }
 
 fn default_control_listen() -> SocketAddr {
@@ -62,4 +65,17 @@ pub enum OutRouteConfig {
 pub struct UdpForwardConfig {
     pub forward_to: u16,
     pub remote_ep: Endpoint,
+}
+
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct HavenForwardConfig {
+    pub identity: PathBuf,
+    pub handler: ForwardHandler,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone)]
+pub enum ForwardHandler {
+    Udp { from_dock: Dock, to_port: u16 },
 }

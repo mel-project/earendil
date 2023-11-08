@@ -1,10 +1,21 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use bytes::Bytes;
+use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use earendil_packet::{crypt::OnionPublic, Dock};
+use moka::sync::{Cache, CacheBuilder};
 use serde::{Deserialize, Serialize};
+use smol::net::UdpSocket;
+use smolscale::immortal::Immortal;
 use stdcode::StdcodeSerializeExt;
+
+use crate::config::{ForwardHandler, HavenForwardConfig};
+
+use super::{n2r_socket::Endpoint, socket::Socket, DaemonContext};
 
 pub const HAVEN_FORWARD_DOCK: Dock = 100002;
 
@@ -77,5 +88,67 @@ impl RegisterHavenReq {
         let mut this = self.clone();
         this.sig = Bytes::new();
         blake3::keyed_hash(b"haven_registration______________", &this.stdcode())
+    }
+}
+
+pub async fn udp_haven_forward_loop(
+    ctx: DaemonContext,
+    haven_cfg: HavenForwardConfig,
+) -> anyhow::Result<()> {
+    // down loop forwards packets back down to the source Earendil endpoints
+    async fn down_loop(
+        udp_skt: Arc<UdpSocket>,
+        earendil_skt: Arc<Socket>,
+        earendil_dest: Endpoint,
+    ) -> anyhow::Result<()> {
+        loop {
+            let mut buf = [0; 10_000];
+            let (n, _) = udp_skt.recv_from(&mut buf).await?;
+            let msg = buf[..n].to_vec();
+            earendil_skt.send_to(msg.into(), earendil_dest).await?;
+        }
+    }
+
+    let haven_id = stdcode::deserialize(&hex::decode(std::fs::read(haven_cfg.identity)?)?)?;
+    let rob = ctx
+        .relay_graph
+        .read()
+        .random_adjacency()
+        .ok_or(anyhow::anyhow!("error picking rendezvous for haven"))?
+        .left; // todo
+    let (from_dock, to_port) = match haven_cfg.handler {
+        ForwardHandler::Udp { from_dock, to_port } => (from_dock, to_port),
+    };
+    let earendil_skt = Arc::new(Socket::bind_haven(
+        &ctx,
+        Some(haven_id),
+        Some(from_dock),
+        Some(rob),
+    ));
+    let dmux_table: Cache<Endpoint, (Arc<UdpSocket>, Arc<Immortal>)> = CacheBuilder::default()
+        .time_to_idle(Duration::from_secs(60 * 60))
+        .build();
+
+    // up loop forwards traffic from destination Earendil endpoint to the destination UDP socket address
+    loop {
+        let (message, src_endpoint) = earendil_skt.recv_from().await?;
+        let udp_socket = if let Some((socket, _)) = dmux_table.get(&src_endpoint) {
+            socket
+        } else {
+            let socket = Arc::new(UdpSocket::bind("127.0.0.1").await?);
+            let down_task = Immortal::respawn(
+                smolscale::immortal::RespawnStrategy::Immediate,
+                clone!([earendil_skt, socket], move || {
+                    down_loop(socket.clone(), earendil_skt.clone(), src_endpoint)
+                }),
+            );
+            dmux_table.insert(src_endpoint, (socket.clone(), Arc::new(down_task)));
+
+            socket
+        };
+
+        udp_socket
+            .send_to(&message, format!("127.0.0.1:{to_port}"))
+            .await?;
     }
 }
