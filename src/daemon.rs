@@ -158,6 +158,8 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             .map_err(log_error("haven_forward_loop"))),
         );
 
+        // TODO: app-level traffic tasks/processes
+
         let mut route_tasks = FuturesUnordered::new();
 
         // For every in_routes block, spawn a task to handle incoming stuff
