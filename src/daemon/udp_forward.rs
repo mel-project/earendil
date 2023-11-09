@@ -1,11 +1,12 @@
 use std::{
     net::{SocketAddr, SocketAddrV4},
     sync::Arc,
+    time::Duration,
 };
 
 use clone_macro::clone;
 use earendil_crypt::IdentitySecret;
-use moka::sync::Cache;
+use moka::sync::{Cache, CacheBuilder};
 use smol::net::UdpSocket;
 use smolscale::immortal::Immortal;
 
@@ -29,7 +30,9 @@ pub async fn udp_forward_loop(
         }
     }
 
-    let demux_table: Cache<SocketAddr, (Arc<Socket>, Arc<Immortal>)> = Cache::new(10_000);
+    let demux_table: Cache<SocketAddr, (Arc<Socket>, Arc<Immortal>)> = CacheBuilder::default()
+        .time_to_idle(Duration::from_secs(60 * 60))
+        .build();
     let udp_socket = Arc::new(
         UdpSocket::bind(SocketAddrV4::new(
             "127.0.0.1".parse()?,
