@@ -8,3 +8,8 @@ in_routes:
     protocol: obfsudp
     listen: 0.0.0.0:19999
     secret: correct horse battery staple
+
+# client config
+udp_forward_config:
+  forward_to: 9910
+  remote_ep: fhsg3742bwxmg3k14jdsbphdp22j119f::69420
