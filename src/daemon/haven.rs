@@ -135,7 +135,7 @@ pub async fn udp_haven_forward_loop(
         let udp_socket = if let Some((socket, _)) = dmux_table.get(&src_endpoint) {
             socket
         } else {
-            let socket = Arc::new(UdpSocket::bind("127.0.0.1").await?);
+            let socket = Arc::new(UdpSocket::bind("127.0.0.1:0").await?);
             let down_task = Immortal::respawn(
                 smolscale::immortal::RespawnStrategy::Immediate,
                 clone!([earendil_skt, socket], move || {
