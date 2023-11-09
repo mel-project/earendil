@@ -11,5 +11,7 @@ in_routes:
 
 # client config
 udp_forward_config:
-  forward_to: 9910
-  remote_ep: fhsg3742bwxmg3k14jdsbphdp22j119f::69420
+  - forward_to: 9910
+    remote_ep: fhsg3742bwxmg3k14jdsbphdp22j119f::69420
+
+havens: []
