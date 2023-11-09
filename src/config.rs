@@ -71,6 +71,7 @@ pub struct UdpForwardConfig {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct HavenForwardConfig {
     pub identity: PathBuf,
+    pub rendezvous: Fingerprint,
     pub handler: ForwardHandler,
 }
 

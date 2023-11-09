@@ -110,12 +110,6 @@ pub async fn udp_haven_forward_loop(
     }
 
     let haven_id = stdcode::deserialize(&hex::decode(std::fs::read(haven_cfg.identity)?)?)?;
-    let rob = ctx
-        .relay_graph
-        .read()
-        .random_adjacency()
-        .ok_or(anyhow::anyhow!("error picking rendezvous for haven"))?
-        .left; // todo
     let (from_dock, to_port) = match haven_cfg.handler {
         ForwardHandler::Udp { from_dock, to_port } => (from_dock, to_port),
     };
@@ -123,7 +117,7 @@ pub async fn udp_haven_forward_loop(
         &ctx,
         Some(haven_id),
         Some(from_dock),
-        Some(rob),
+        Some(haven_cfg.rendezvous),
     ));
     let dmux_table: Cache<Endpoint, (Arc<UdpSocket>, Arc<Immortal>)> = CacheBuilder::default()
         .time_to_idle(Duration::from_secs(60 * 60))
