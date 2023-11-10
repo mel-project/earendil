@@ -183,7 +183,9 @@ impl AnonIdentities {
     }
 
     pub fn get(&mut self, id: &str) -> IdentitySecret {
-        self.map.get_with_by_ref(id, IdentitySecret::generate)
+        let pseudo_secret = blake3::hash(id.as_bytes());
+        self.map
+            .get_with_by_ref(id, || IdentitySecret::from_bytes(pseudo_secret.as_bytes()))
     }
 }
 

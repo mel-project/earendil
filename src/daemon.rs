@@ -425,6 +425,7 @@ impl DaemonContext {
                 .read()
                 .find_shortest_path(&self.identity.public().fingerprint(), &dst_fp)
                 .ok_or(SendMessageError::NoRoute)?;
+            log::debug!("building a normal N2R message with route {:?}", route);
             let instructs = route_to_instructs(route, self.relay_graph.clone())?;
             let their_opk = self
                 .relay_graph
