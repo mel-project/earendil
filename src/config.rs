@@ -25,9 +25,11 @@ pub struct ConfigFile {
     /// List of all outgoing connections
     #[serde(default)]
     pub out_routes: BTreeMap<String, OutRouteConfig>,
-
+    /// List of all client configs for udp forwarding
+    #[serde(default)]
     pub udp_forwards: Vec<UdpForwardConfig>,
-
+    /// List of all haven configs
+    #[serde(default)]
     pub havens: Vec<HavenForwardConfig>,
 }
 
