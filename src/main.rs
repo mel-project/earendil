@@ -42,38 +42,49 @@ pub enum ControlCommands {
     /// Binds to a N2rSocket.
     BindN2r {
         #[arg(long)]
+        /// tag for this socket
         socket_id: String,
         #[arg(long)]
+        /// tag for an anonymous fingerprint
         anon_id: Option<String>,
         #[arg(long)]
+        /// specific dock to bind to
         dock: Option<Dock>,
     },
 
     /// Binds to a HavenSocket.
     BindHaven {
         #[arg(long)]
+        /// tag for this socket
         socket_id: String,
         #[arg(long)]
+        /// tag for an anonymous fingerprint
         anon_id: Option<String>,
         #[arg(long)]
+        /// specific dock to bind to
         dock: Option<Dock>,
         #[arg(long)]
+        /// fingerprint of rendezvous point. Specify this if you are the haven server.
         rendezvous: Option<Fingerprint>,
     },
 
     /// Sends a message using a given socket to a destination.
     SendMessage {
         #[arg(long)]
+        /// tag for the socket to use
         socket_id: String,
         #[arg(short, long)]
+        /// destination fingerprint::dock
         destination: Endpoint,
         #[arg(short, long)]
+        /// message
         message: String,
     },
 
     /// Blocks until a message is received.
     RecvMessage {
         #[arg(long)]
+        /// tag for the socket to listen to
         socket_id: String,
     },
 
