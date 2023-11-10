@@ -19,5 +19,5 @@ havens:
     rendezvous: 957g4y0qgfp1zrcnpyfsg07kexc3qm5p
     handler:
       Udp:
-      from_dock: 69420
-      to_port: 8814 # e.g. listening port of geph4-exit
+        from_dock: 69420
+        to_port: 8814 # e.g. listening port of geph4-exit

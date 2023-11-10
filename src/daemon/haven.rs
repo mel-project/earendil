@@ -116,6 +116,12 @@ pub async fn udp_haven_forward_loop(
     let (from_dock, to_port) = match haven_cfg.handler {
         ForwardHandler::Udp { from_dock, to_port } => (from_dock, to_port),
     };
+
+    log::debug!(
+        "about to bind haven socket for server with rendezvous_point: {}",
+        haven_cfg.rendezvous
+    );
+
     let earendil_skt = Arc::new(Socket::bind_haven(
         &ctx,
         Some(haven_id),
