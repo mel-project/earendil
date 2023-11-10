@@ -27,7 +27,7 @@ use smolscale::{
 use sosistab2::{Multiplex, MuxSecret, MuxStream, Pipe};
 
 use super::{
-    link_protocol::{AuthResponse, InfoResponse, N2nClient, N2nProtocol, N2nService},
+    link_protocol::{AuthResponse, InfoResponse, LinkClient, LinkProtocol, LinkService},
     DaemonContext,
 };
 
@@ -55,8 +55,8 @@ impl LinkConnection {
                 .unwrap_or_else(|e| panic!("connection_loop died with {:?}", e)),
         ));
         let rpc = MultiplexRpcTransport::new(mplex.clone());
-        let n2n = N2nClient::from(rpc);
-        let resp = n2n
+        let link = LinkClient::from(rpc);
+        let resp = link
             .authenticate()
             .await
             .context("did not respond to authenticate")?;
@@ -78,8 +78,8 @@ impl LinkConnection {
     }
 
     /// Returns a handle to the N2N RPC.
-    pub fn link_rpc(&self) -> N2nClient {
-        N2nClient::from(MultiplexRpcTransport::new(self.mplex.clone()))
+    pub fn link_rpc(&self) -> LinkClient {
+        LinkClient::from(MultiplexRpcTransport::new(self.mplex.clone()))
     }
 
     /// Sends an onion-routing packet down this connection.
@@ -107,7 +107,7 @@ async fn connection_loop(
         }),
     );
 
-    let service = Arc::new(N2nService(N2nProtocolImpl {
+    let service = Arc::new(LinkService(N2nProtocolImpl {
         ctx: ctx.clone(),
         mplex: mplex.clone(),
     }));
@@ -232,7 +232,7 @@ struct N2nProtocolImpl {
 }
 
 #[async_trait]
-impl N2nProtocol for N2nProtocolImpl {
+impl LinkProtocol for N2nProtocolImpl {
     async fn authenticate(&self) -> AuthResponse {
         let local_pk = self.mplex.local_pk();
         AuthResponse::new(&self.ctx.identity, &local_pk)

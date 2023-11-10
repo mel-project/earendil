@@ -10,7 +10,7 @@ use sosistab2::MuxPublic;
 
 #[nanorpc_derive]
 #[async_trait]
-pub trait N2nProtocol {
+pub trait LinkProtocol {
     /// Challenge the other end to prove their identity.
     async fn authenticate(&self) -> AuthResponse;
 
