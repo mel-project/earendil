@@ -453,7 +453,7 @@ impl DaemonContext {
                     .ok_or(SendMessageError::NoRoute)?;
                 let reverse_instructs =
                     route_to_instructs(reverse_route, self.relay_graph.clone())?;
-                log::debug!("reverse_instructs = {:?}", reverse_instructs);
+                // log::debug!("reverse_instructs = {:?}", reverse_instructs);
 
                 let mut rbs: Vec<ReplyBlock> = vec![];
                 for _ in 0..n {

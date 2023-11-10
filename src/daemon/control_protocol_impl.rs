@@ -50,7 +50,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
         if let Some(aid) = anon_id {
             log::info!(
-                "Bound N2rSocket with anon fingerprint: {}",
+                "----------- Bound N2rSocket with ANOOOON FINGERPRING: {} ----------",
                 aid.public().fingerprint()
             );
         }
@@ -69,7 +69,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
         if let Some(aid) = anon_id.clone() {
             log::info!(
-                "Bound HavenSocket with anon fingerprint: {}",
+                "----------- Bound HavenSocket with ANOOOON FINGERPRING: {} ----------",
                 aid.public().fingerprint()
             );
         }
