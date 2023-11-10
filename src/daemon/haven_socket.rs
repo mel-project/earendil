@@ -39,12 +39,14 @@ impl HavenSocket {
             None => Arc::clone(&ctx.identity).as_ref().clone(),
         };
 
+        log::debug!("binding haven with rendezvous_point {:?}", rendezvous_point);
         if let Some(rob) = rendezvous_point {
             // We're Bob:
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
             let context = ctx.clone();
             let registration_isk = isk.clone();
             let task = smolscale::spawn(async move {
+                log::debug!("inside haven bind task!!!");
                 // generate a new onion keypair
                 let onion_sk = OnionSecret::generate();
                 let onion_pk = onion_sk.public();
@@ -81,6 +83,7 @@ impl HavenSocket {
                     Timer::after(Duration::from_secs(60 * 50)).await;
                 }
             });
+
             HavenSocket {
                 ctx,
                 n2r_socket,
@@ -117,6 +120,11 @@ impl HavenSocket {
             None => {
                 // We're Alice:
                 // look up Rob's addr in rendezvous dht
+
+                log::debug!(
+                    "alice is about to send an earendil packet! looking up {} in the DHT",
+                    endpoint.fingerprint
+                );
                 match self
                     .ctx
                     .dht_get(endpoint.fingerprint)
@@ -124,6 +132,7 @@ impl HavenSocket {
                     .map_err(|_| SocketSendError::DhtError)?
                 {
                     Some(bob_locator) => {
+                        log::debug!("found rob in the DHT");
                         let rob = bob_locator.rendezvous_point;
                         // TODO: encrypt body
                         // use our N2rSocket to send (msg, endpoint) to Rob
@@ -132,7 +141,10 @@ impl HavenSocket {
                             .await?;
                         Ok(())
                     }
-                    None => Err(SocketSendError::DhtError),
+                    None => {
+                        log::debug!("couldn't find {} in the DHT", endpoint.fingerprint);
+                        Err(SocketSendError::DhtError)
+                    }
                 }
             }
         }

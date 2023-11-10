@@ -64,6 +64,7 @@ pub enum OutRouteConfig {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct UdpForwardConfig {
     pub forward_to: u16,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub remote_ep: Endpoint,
 }
 
@@ -71,6 +72,7 @@ pub struct UdpForwardConfig {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct HavenForwardConfig {
     pub identity: PathBuf,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub rendezvous: Fingerprint,
     pub handler: ForwardHandler,
 }
