@@ -49,7 +49,7 @@ impl ControlProtocol for ControlProtocolImpl {
         self.sockets.insert(socket_id, socket);
 
         if let Some(aid) = anon_id {
-            println!(
+            log::info!(
                 "Bound N2rSocket with anon fingerprint: {}",
                 aid.public().fingerprint()
             );
@@ -68,7 +68,7 @@ impl ControlProtocol for ControlProtocolImpl {
         self.sockets.insert(socket_id, socket);
 
         if let Some(aid) = anon_id.clone() {
-            println!(
+            log::info!(
                 "Bound HavenSocket with anon fingerprint: {}",
                 aid.public().fingerprint()
             );
@@ -138,7 +138,11 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         send_args: GlobalRpcArgs,
     ) -> Result<serde_json::Value, GlobalRpcError> {
-        let client = GlobalRpcTransport::new(self.ctx.clone(), send_args.destination);
+        let client = GlobalRpcTransport::new(
+            self.ctx.clone(),
+            Some(IdentitySecret::generate()),
+            send_args.destination,
+        );
         let res = if let Some(res) = client
             .call(&send_args.method, &send_args.args)
             .await

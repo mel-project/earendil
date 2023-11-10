@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use earendil_crypt::Fingerprint;
+use earendil_crypt::{Fingerprint, IdentitySecret};
 use futures_util::{future, FutureExt};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
 use smol::Timer;
@@ -15,12 +15,21 @@ use super::GLOBAL_RPC_DOCK;
 
 pub struct GlobalRpcTransport {
     ctx: DaemonContext,
-    dest: Fingerprint,
+    anon_isk: Option<IdentitySecret>,
+    dest_fp: Fingerprint,
 }
 
 impl GlobalRpcTransport {
-    pub fn new(ctx: DaemonContext, dest: Fingerprint) -> GlobalRpcTransport {
-        GlobalRpcTransport { ctx, dest }
+    pub fn new(
+        ctx: DaemonContext,
+        anon_isk: Option<IdentitySecret>,
+        dest_fp: Fingerprint,
+    ) -> GlobalRpcTransport {
+        GlobalRpcTransport {
+            ctx,
+            anon_isk,
+            dest_fp,
+        }
     }
 }
 
@@ -29,8 +38,8 @@ impl RpcTransport for GlobalRpcTransport {
     type Error = anyhow::Error;
 
     async fn call_raw(&self, req: JrpcRequest) -> Result<JrpcResponse, Self::Error> {
-        let endpoint = Endpoint::new(self.dest, GLOBAL_RPC_DOCK);
-        let socket = N2rSocket::bind(self.ctx.clone(), None, None);
+        let endpoint = Endpoint::new(self.dest_fp, GLOBAL_RPC_DOCK);
+        let socket = N2rSocket::bind(self.ctx.clone(), self.anon_isk.clone(), None);
         let mut retries = 0;
         let mut timeout: Duration;
 

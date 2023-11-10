@@ -489,10 +489,15 @@ impl DaemonContext {
     pub async fn dht_insert(&self, locator: HavenLocator) {
         let key = locator.identity_pk.fingerprint();
         let replicas = self.dht_key_to_fps(&key.to_string());
+        let anon_isk = Some(IdentitySecret::generate());
 
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
             log::debug!("key {key} inserting into remote replica {replica}");
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(
+                self.clone(),
+                anon_isk.clone(),
+                replica,
+            ));
             match gclient
                 .dht_insert(locator.clone(), false)
                 .timeout(Duration::from_secs(60))
@@ -511,9 +516,12 @@ impl DaemonContext {
     ) -> Result<Option<HavenLocator>, DhtError> {
         let replicas = self.dht_key_to_fps(&fingerprint.to_string());
         let mut gatherer = FuturesUnordered::new();
+        let anon_isk = Some(IdentitySecret::generate());
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
+            let anon_isk = anon_isk.clone();
             gatherer.push(async move {
-                let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
+                let gclient =
+                    GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
                 anyhow::Ok(
                     gclient
                         .dht_get(fingerprint, false)
