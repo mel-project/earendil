@@ -64,7 +64,7 @@ where
     move |s| log::warn!("{label} restart, error: {:?}", s)
 }
 
-pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
+pub fn get_or_create_id(path: &Path) -> anyhow::Result<IdentitySecret> {
     fn read_identity(path: &Path) -> anyhow::Result<IdentitySecret> {
         Ok(stdcode::deserialize(&hex::decode(std::fs::read(path)?)?)?)
     }
@@ -75,22 +75,26 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
         Ok(())
     }
 
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
-        .init();
-    let identity = loop {
-        match read_identity(&config.identity) {
-            Ok(id) => break id,
+    loop {
+        match read_identity(path) {
+            Ok(id) => break Ok(id),
             Err(err) => {
                 log::warn!(
                     "(re)writing identity file at {:?} due to error reading: {:?}",
-                    config.identity,
+                    path,
                     err
                 );
                 let new_id = IdentitySecret::generate();
-                write_identity(&config.identity, &new_id)?;
+                write_identity(path, &new_id)?;
             }
         }
-    };
+    }
+}
+
+pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
+        .init();
+    let identity = get_or_create_id(&config.identity)?;
     log::info!(
         "daemon starting with fingerprint {}",
         identity.public().fingerprint()

@@ -13,7 +13,10 @@ use smol::net::UdpSocket;
 use smolscale::immortal::Immortal;
 use stdcode::StdcodeSerializeExt;
 
-use crate::config::{ForwardHandler, HavenForwardConfig};
+use crate::{
+    config::{ForwardHandler, HavenForwardConfig},
+    daemon::get_or_create_id,
+};
 
 use super::{n2r_socket::Endpoint, socket::Socket, DaemonContext};
 
@@ -109,7 +112,7 @@ pub async fn udp_haven_forward_loop(
         }
     }
 
-    let haven_id = stdcode::deserialize(&hex::decode(std::fs::read(haven_cfg.identity)?)?)?;
+    let haven_id = get_or_create_id(&haven_cfg.identity)?;
     let (from_dock, to_port) = match haven_cfg.handler {
         ForwardHandler::Udp { from_dock, to_port } => (from_dock, to_port),
     };
