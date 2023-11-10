@@ -114,7 +114,7 @@ pub async fn udp_haven_forward_loop(
 
     let haven_id = get_or_create_id(&haven_cfg.identity)?;
     let (from_dock, to_port) = match haven_cfg.handler {
-        ForwardHandler::Udp { from_dock, to_port } => (from_dock, to_port),
+        ForwardHandler::UdpForward { from_dock, to_port } => (from_dock, to_port),
     };
 
     log::debug!(

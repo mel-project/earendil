@@ -39,7 +39,7 @@ fn default_control_listen() -> SocketAddr {
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
-#[serde(tag = "protocol", rename_all = "kebab-case")]
+#[serde(tag = "protocol", rename_all = "snake_case")]
 pub enum InRouteConfig {
     Obfsudp {
         #[serde_as(as = "serde_with::DisplayFromStr")]
@@ -50,7 +50,7 @@ pub enum InRouteConfig {
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "protocol", rename_all = "kebab-case")]
+#[serde(tag = "protocol", rename_all = "snake_case")]
 pub enum OutRouteConfig {
     Obfsudp {
         #[serde_as(as = "serde_with::DisplayFromStr")]
@@ -64,6 +64,7 @@ pub enum OutRouteConfig {
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
 pub struct UdpForwardConfig {
     pub forward_to: u16,
     #[serde_as(as = "serde_with::DisplayFromStr")]
@@ -81,6 +82,7 @@ pub struct HavenForwardConfig {
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ForwardHandler {
-    Udp { from_dock: Dock, to_port: u16 },
+    UdpForward { from_dock: Dock, to_port: u16 },
 }
