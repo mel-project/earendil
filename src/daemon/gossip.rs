@@ -47,23 +47,18 @@ async fn gossip_once(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Resu
     Ok(())
 }
 
-// Step 1: Fetch the identity of the neighbor if it's not already known.
+// Step 1: Fetch the identity of the neighbor.
 async fn fetch_identity(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
     let remote_fingerprint = conn.remote_idpk().fingerprint();
-    if ctx
-        .relay_graph
-        .read()
-        .identity(&remote_fingerprint)
-        .is_none()
-    {
-        log::trace!("getting identity of {remote_fingerprint}");
-        let their_id = conn
-            .link_rpc()
-            .identity(remote_fingerprint)
-            .await?
-            .context("they refused to give us their id descriptor")?;
-        ctx.relay_graph.write().insert_identity(their_id)?;
-    }
+
+    log::trace!("getting identity of {remote_fingerprint}");
+    let their_id = conn
+        .link_rpc()
+        .identity(remote_fingerprint)
+        .await?
+        .context("they refused to give us their id descriptor")?;
+    ctx.relay_graph.write().insert_identity(their_id)?;
+
     Ok(())
 }
 
