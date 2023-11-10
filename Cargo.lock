@@ -990,6 +990,7 @@ dependencies = [
  "log",
  "lru 0.12.0",
  "moka 0.12.1",
+ "moro",
  "nanorpc",
  "nanorpc-http",
  "parking_lot 0.12.1",
@@ -1830,6 +1831,17 @@ dependencies = [
  "thiserror",
  "triomphe",
  "uuid",
+]
+
+[[package]]
+name = "moro"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8472c674b8319e7529bfdb3c51216810e36727be2056136d07130a0b1c132df6"
+dependencies = [
+ "async-channel",
+ "async-trait",
+ "futures",
 ]
 
 [[package]]
