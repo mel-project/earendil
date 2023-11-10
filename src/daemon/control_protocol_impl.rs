@@ -45,8 +45,15 @@ impl ControlProtocolImpl {
 impl ControlProtocol for ControlProtocolImpl {
     async fn bind_n2r(&self, socket_id: String, anon_id: Option<String>, dock: Option<Dock>) {
         let anon_id = anon_id.map(|id| self.anon_identities.lock().get(&id));
-        let socket = Socket::bind_n2r(&self.ctx, anon_id, dock);
+        let socket = Socket::bind_n2r(&self.ctx, anon_id.clone(), dock);
         self.sockets.insert(socket_id, socket);
+
+        if let Some(aid) = anon_id {
+            println!(
+                "Bound N2rSocket with anon fingerprint: {}",
+                aid.public().fingerprint()
+            );
+        }
     }
 
     async fn bind_haven(
@@ -57,8 +64,15 @@ impl ControlProtocol for ControlProtocolImpl {
         rendezvous_point: Option<Fingerprint>,
     ) {
         let anon_id = anon_id.map(|id| self.anon_identities.lock().get(&id));
-        let socket = Socket::bind_haven(&self.ctx, anon_id, dock, rendezvous_point);
+        let socket = Socket::bind_haven(&self.ctx, anon_id.clone(), dock, rendezvous_point);
         self.sockets.insert(socket_id, socket);
+
+        if let Some(aid) = anon_id.clone() {
+            println!(
+                "Bound HavenSocket with anon fingerprint: {}",
+                aid.public().fingerprint()
+            );
+        }
     }
 
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtSendErr> {
