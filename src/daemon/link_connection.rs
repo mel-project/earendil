@@ -13,6 +13,7 @@ use earendil_crypt::{Fingerprint, IdentityPublic};
 use earendil_packet::RawPacket;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use futures_util::TryFutureExt;
+use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use smol::{
     channel::{Receiver, Sender},
@@ -276,13 +277,11 @@ impl LinkProtocol for N2nProtocolImpl {
         self.ctx.relay_graph.read().identity(&fp)
     }
 
-    async fn adjacencies(&self, fp: Fingerprint) -> Vec<AdjacencyDescriptor> {
-        self.ctx
-            .relay_graph
-            .read()
-            .adjacencies(&fp)
-            .into_iter()
-            .flatten()
+    async fn adjacencies(&self, fps: Vec<Fingerprint>) -> Vec<AdjacencyDescriptor> {
+        let rg = self.ctx.relay_graph.read();
+        fps.into_iter()
+            .flat_map(|fp| rg.adjacencies(&fp).into_iter().flatten())
+            .dedup()
             .collect()
     }
 }

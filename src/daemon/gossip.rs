@@ -84,7 +84,7 @@ async fn gossip_once(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Resu
             rand_adj.right
         };
         log::debug!("asking {remote_fingerprint} for neighbors of {rand_node}!");
-        let adjacencies = conn.link_rpc().adjacencies(rand_node).await?;
+        let adjacencies = conn.link_rpc().adjacencies(vec![rand_node]).await?;
         for adjacency in adjacencies {
             let left_fp = adjacency.left;
             let right_fp = adjacency.right;
