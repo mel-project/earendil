@@ -31,6 +31,7 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
 use stdcode::StdcodeSerializeExt;
 
+use std::time::Instant;
 use std::{path::Path, sync::Arc, time::Duration};
 
 use crate::control_protocol::{DhtError, SendMessageError};
@@ -281,9 +282,15 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
     loop {
         let pkt = ctx.table.recv_raw_packet().await;
+        let now = Instant::now();
         log::debug!("received raw packet");
         let peeled = pkt.peel(&ctx.onion_sk)?;
         log::debug!("peeled packet!");
+
+        scopeguard::defer!(log::debug!(
+            "PEEL AND PROCESS MESSAGE TOOK:::::::::: {:?}",
+            now.elapsed()
+        ));
         match peeled {
             PeeledPacket::Forward {
                 to: next_hop,
@@ -404,6 +411,12 @@ impl DaemonContext {
         dst_dock: Dock,
         content: Bytes,
     ) -> Result<(), SendMessageError> {
+        let now = Instant::now();
+        let _guard = scopeguard::guard((), |_| {
+            let send_msg_time = now.elapsed().as_millis();
+            log::debug!("SEND MESSAGE TOOK:::::::::: {send_msg_time}");
+        });
+
         let (public_isk, my_anon_osk) = if let Some(anon_id) = src_anon_id {
             (Arc::new(anon_id), Some(OnionSecret::generate()))
         } else {
