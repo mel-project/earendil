@@ -515,6 +515,9 @@ impl DaemonContext {
         &self,
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
+        if let Some(locator) = self.dht_cache.get(&fingerprint) {
+            return Ok(Some(locator));
+        };
         let replicas = self.dht_key_to_fps(&fingerprint.to_string());
         let mut gatherer = FuturesUnordered::new();
         let anon_isk = Some(IdentitySecret::generate());
@@ -542,6 +545,7 @@ impl DaemonContext {
                     let payload = locator.to_sign();
                     if id_pk.fingerprint() == fingerprint {
                         id_pk.verify(&payload, &locator.signature)?;
+                        self.dht_cache.insert(fingerprint, locator.clone());
                         return Ok(Some(locator));
                     }
                 }
