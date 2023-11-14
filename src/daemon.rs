@@ -166,7 +166,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             .map_err(log_error("haven_forward_loop"))),
         );
 
-        let _udp_haven_forward_loops: Vec<Immortal> = daemon_ctx
+        let _haven_loops: Vec<Immortal> = daemon_ctx
             .config
             .havens
             .clone()

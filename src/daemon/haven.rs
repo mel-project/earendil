@@ -94,10 +94,7 @@ impl RegisterHavenReq {
     }
 }
 
-pub async fn udp_haven_forward_loop(
-    ctx: DaemonContext,
-    haven_cfg: HavenForwardConfig,
-) -> anyhow::Result<()> {
+pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
     // down loop forwards packets back down to the source Earendil endpoints
     async fn down_loop(
         udp_skt: Arc<UdpSocket>,

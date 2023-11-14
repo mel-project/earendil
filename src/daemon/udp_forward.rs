@@ -19,7 +19,7 @@ pub async fn udp_forward_loop(
     ctx: DaemonContext,
     udp_fwd_cfg: UdpForwardConfig,
 ) -> anyhow::Result<()> {
-    async fn udp_forward_down_loop(
+    async fn down_loop(
         earendil_skt: Arc<Socket>,
         udp_skt: Arc<UdpSocket>,
         udp_dest: SocketAddr,
@@ -66,7 +66,7 @@ pub async fn udp_forward_loop(
             let down_loop = Immortal::respawn(
                 smolscale::immortal::RespawnStrategy::Immediate,
                 clone!([earendil_skt, udp_socket], move || {
-                    udp_forward_down_loop(
+                    down_loop(
                         earendil_skt.clone(),
                         udp_socket.clone(),
                         src_udp_addr.clone(),
