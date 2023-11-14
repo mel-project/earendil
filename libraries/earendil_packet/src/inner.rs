@@ -12,7 +12,9 @@ use crate::{
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 /// Represents the actual end-to-end packet that is carried in the 8192-byte payloads. Either an application-level message, or a batch of reply blocks.
 pub enum InnerPacket {
+    /// Normal messages
     Message(Message),
+    /// Reply blocks, used to construct relay->anon messages
     ReplyBlocks(Vec<ReplyBlock>),
 }
 

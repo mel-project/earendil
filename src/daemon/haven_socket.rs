@@ -65,7 +65,10 @@ impl HavenSocket {
                             Timer::after(Duration::from_secs(1)).await;
                             continue;
                         }
-                        None => log::debug!("registering haven rendezvous relay timed out"),
+                        None => {
+                            log::debug!("registering haven rendezvous relay timed out");
+                            Timer::after(Duration::from_secs(1)).await;
+                        }
                         _ => {
                             context
                                 .dht_insert(HavenLocator::new(
@@ -76,9 +79,9 @@ impl HavenSocket {
                                 .timeout(Duration::from_secs(30))
                                 .await;
                             log::debug!("registering haven rendezvous relay SUCCEEDED!");
+                            Timer::after(Duration::from_secs(60 * 50)).await;
                         }
                     }
-                    Timer::after(Duration::from_secs(60 * 50)).await;
                 }
             });
 
