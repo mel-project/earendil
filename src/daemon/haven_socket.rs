@@ -61,7 +61,9 @@ impl HavenSocket {
                         .await
                     {
                         Some(Err(e)) => {
-                            log::debug!("registering haven rendezvous {rob} failed: {:?}", e)
+                            log::debug!("registering haven rendezvous {rob} failed: {:?}", e);
+                            Timer::after(Duration::from_secs(1)).await;
+                            continue;
                         }
                         None => log::debug!("registering haven rendezvous relay timed out"),
                         _ => {
