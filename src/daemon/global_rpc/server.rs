@@ -48,12 +48,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             return Ok(Some(val));
         } else if recurse {
             log::debug!("searching DHT for {key}");
-            let locator = self.ctx.dht_get(key).await;
-            if let Ok(Some(locator)) = locator {
-                self.ctx.dht_cache.insert(key, locator.clone());
-
-                return Ok(Some(locator));
-            }
+            return self.ctx.dht_get(key).await;
         }
         Ok(None)
     }
