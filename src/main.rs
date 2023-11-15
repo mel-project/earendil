@@ -42,39 +42,56 @@ pub enum ControlCommands {
     /// Binds to a N2rSocket.
     BindN2r {
         #[arg(long)]
-        socket_id: String,
+        /// tag for this socket
+        skt_id: String,
         #[arg(long)]
+        /// tag for an anonymous fingerprint
         anon_id: Option<String>,
         #[arg(long)]
+        /// specific dock to bind to
         dock: Option<Dock>,
     },
 
     /// Binds to a HavenSocket.
     BindHaven {
         #[arg(long)]
-        socket_id: String,
+        /// tag for this socket
+        skt_id: String,
         #[arg(long)]
+        /// tag for an anonymous fingerprint
         anon_id: Option<String>,
         #[arg(long)]
+        /// specific dock to bind to
         dock: Option<Dock>,
         #[arg(long)]
+        /// fingerprint of rendezvous point. Specify this if you are the haven server.
         rendezvous: Option<Fingerprint>,
     },
 
-    /// Sends a message using a given socket to a destination.
-    SendMessage {
+    /// Prints the fingerprint and dock of a socket
+    SktInfo {
         #[arg(long)]
-        socket_id: String,
+        skt_id: String,
+    },
+
+    /// Sends a message using a given socket to a destination.
+    SendMsg {
+        #[arg(long)]
+        /// tag for the socket to use
+        skt_id: String,
         #[arg(short, long)]
-        destination: Endpoint,
+        /// destination fingerprint::dock
+        dest: Endpoint,
         #[arg(short, long)]
-        message: String,
+        /// message
+        msg: String,
     },
 
     /// Blocks until a message is received.
-    RecvMessage {
+    RecvMsg {
         #[arg(long)]
-        socket_id: String,
+        /// tag for the socket to listen to
+        skt_id: String,
     },
 
     /// Send a GlobalRpc request to a destination.
@@ -82,7 +99,7 @@ pub enum ControlCommands {
         #[arg(long)]
         id: Option<String>,
         #[arg(short, long)]
-        destination: Fingerprint,
+        dest: Fingerprint,
         #[arg(short, long)]
         method: String,
         args: Vec<String>,

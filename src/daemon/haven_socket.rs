@@ -29,12 +29,12 @@ pub struct HavenSocket {
 impl HavenSocket {
     pub fn bind(
         ctx: DaemonContext,
-        identity_sk: Option<IdentitySecret>,
+        anon_identity: Option<IdentitySecret>,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> HavenSocket {
-        let n2r_socket = N2rSocket::bind(ctx.clone(), identity_sk.clone(), dock);
-        let isk = match identity_sk {
+        let n2r_socket = N2rSocket::bind(ctx.clone(), anon_identity.clone(), dock);
+        let isk = match anon_identity.clone() {
             Some(isk) => isk,
             None => Arc::clone(&ctx.identity).as_ref().clone(),
         };
@@ -42,14 +42,17 @@ impl HavenSocket {
         if let Some(rob) = rendezvous_point {
             // We're Bob:
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
+            log::debug!("binding haven with rendezvous_point {}", rob);
             let context = ctx.clone();
             let registration_isk = isk.clone();
             let task = smolscale::spawn(async move {
+                log::debug!("inside haven bind task!!!");
                 // generate a new onion keypair
                 let onion_sk = OnionSecret::generate();
                 let onion_pk = onion_sk.public();
                 // register forwarding with the rendezvous relay node
-                let gclient = GlobalRpcClient(GlobalRpcTransport::new(context.clone(), rob));
+                let gclient =
+                    GlobalRpcClient(GlobalRpcTransport::new(context.clone(), anon_identity, rob));
                 let forward_req = RegisterHavenReq::new(registration_isk.clone());
                 loop {
                     match gclient
@@ -58,29 +61,30 @@ impl HavenSocket {
                         .await
                     {
                         Some(Err(e)) => {
-                            log::debug!("registering haven rendezvous {rob} failed: {:?}", e)
+                            log::debug!("registering haven rendezvous {rob} failed: {:?}", e);
+                            Timer::after(Duration::from_secs(1)).await;
+                            continue;
                         }
-                        None => log::debug!("registering haven rendezvous relay timed out"),
+                        None => {
+                            log::debug!("registering haven rendezvous relay timed out");
+                            Timer::after(Duration::from_secs(1)).await;
+                        }
                         _ => {
-                            match gclient
-                                .dht_insert(
-                                    HavenLocator::new(registration_isk.clone(), onion_pk, rob),
-                                    true,
-                                )
+                            context
+                                .dht_insert(HavenLocator::new(
+                                    registration_isk.clone(),
+                                    onion_pk,
+                                    rob,
+                                ))
                                 .timeout(Duration::from_secs(30))
-                                .await
-                            {
-                                Some(Err(e)) => {
-                                    log::debug!("inserting HavenLocator into dht failed: {:?}", e)
-                                }
-                                None => log::debug!("inserting HavenLocator into dht timed out"),
-                                _ => log::debug!("registering haven rendezvous relay SUCCEEDED!"),
-                            };
+                                .await;
+                            log::debug!("registering haven rendezvous relay SUCCEEDED!");
+                            Timer::after(Duration::from_secs(60 * 50)).await;
                         }
                     }
-                    Timer::after(Duration::from_secs(60 * 50)).await;
                 }
             });
+
             HavenSocket {
                 ctx,
                 n2r_socket,
@@ -117,6 +121,11 @@ impl HavenSocket {
             None => {
                 // We're Alice:
                 // look up Rob's addr in rendezvous dht
+
+                log::debug!(
+                    "alice is about to send an earendil packet! looking up {} in the DHT",
+                    endpoint.fingerprint
+                );
                 match self
                     .ctx
                     .dht_get(endpoint.fingerprint)
@@ -124,6 +133,7 @@ impl HavenSocket {
                     .map_err(|_| SocketSendError::DhtError)?
                 {
                     Some(bob_locator) => {
+                        log::debug!("found rob in the DHT");
                         let rob = bob_locator.rendezvous_point;
                         // TODO: encrypt body
                         // use our N2rSocket to send (msg, endpoint) to Rob
@@ -132,7 +142,10 @@ impl HavenSocket {
                             .await?;
                         Ok(())
                     }
-                    None => Err(SocketSendError::DhtError),
+                    None => {
+                        log::debug!("couldn't find {} in the DHT", endpoint.fingerprint);
+                        Err(SocketSendError::DhtError)
+                    }
                 }
             }
         }
@@ -144,5 +157,9 @@ impl HavenSocket {
         let inner =
             stdcode::deserialize(&n2r_msg).map_err(|_| SocketRecvError::HavenMsgBadFormat)?;
         Ok(inner)
+    }
+
+    pub fn skt_info(&self) -> Endpoint {
+        self.n2r_socket.skt_info()
     }
 }

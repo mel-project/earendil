@@ -45,7 +45,7 @@ impl ControlProtocolImpl {
 impl ControlProtocol for ControlProtocolImpl {
     async fn bind_n2r(&self, socket_id: String, anon_id: Option<String>, dock: Option<Dock>) {
         let anon_id = anon_id.map(|id| self.anon_identities.lock().get(&id));
-        let socket = Socket::bind_n2r(&self.ctx, anon_id, dock);
+        let socket = Socket::bind_n2r(&self.ctx, anon_id.clone(), dock);
         self.sockets.insert(socket_id, socket);
     }
 
@@ -57,28 +57,33 @@ impl ControlProtocol for ControlProtocolImpl {
         rendezvous_point: Option<Fingerprint>,
     ) {
         let anon_id = anon_id.map(|id| self.anon_identities.lock().get(&id));
-        let socket = Socket::bind_haven(&self.ctx, anon_id, dock, rendezvous_point);
+        let socket = Socket::bind_haven(&self.ctx, anon_id.clone(), dock, rendezvous_point);
         self.sockets.insert(socket_id, socket);
     }
 
-    async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtSendErr> {
+    async fn skt_info(&self, skt_id: String) -> Result<Endpoint, ControlProtErr> {
+        if let Some(skt) = self.sockets.get(&skt_id) {
+            Ok(skt.skt_info())
+        } else {
+            Err(ControlProtErr::NoSocket)
+        }
+    }
+
+    async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtErr> {
         if let Some(socket) = self.sockets.get(&args.socket_id) {
             socket.send_to(args.content, args.destination).await?;
             Ok(())
         } else {
-            Err(ControlProtSendErr::NoSocket)
+            Err(ControlProtErr::NoSocket)
         }
     }
 
-    async fn recv_message(
-        &self,
-        socket_id: String,
-    ) -> Result<(Bytes, Endpoint), ControlProtRecvErr> {
+    async fn recv_message(&self, socket_id: String) -> Result<(Bytes, Endpoint), ControlProtErr> {
         if let Some(socket) = self.sockets.get(&socket_id) {
             let recvd = socket.recv_from().await?;
             Ok(recvd)
         } else {
-            Err(ControlProtRecvErr::NoSocket)
+            Err(ControlProtErr::NoSocket)
         }
     }
 
@@ -124,7 +129,11 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         send_args: GlobalRpcArgs,
     ) -> Result<serde_json::Value, GlobalRpcError> {
-        let client = GlobalRpcTransport::new(self.ctx.clone(), send_args.destination);
+        let client = GlobalRpcTransport::new(
+            self.ctx.clone(),
+            Some(IdentitySecret::generate()),
+            send_args.destination,
+        );
         let res = if let Some(res) = client
             .call(&send_args.method, &send_args.args)
             .await
@@ -165,22 +174,16 @@ impl AnonIdentities {
     }
 
     pub fn get(&mut self, id: &str) -> IdentitySecret {
-        self.map.get_with_by_ref(id, IdentitySecret::generate)
+        let pseudo_secret = blake3::hash(id.as_bytes());
+        self.map
+            .get_with_by_ref(id, || IdentitySecret::from_bytes(pseudo_secret.as_bytes()))
     }
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
-pub enum ControlProtSendErr {
+pub enum ControlProtErr {
     #[error(transparent)]
     SocketSendError(#[from] SocketSendError),
-    #[error(
-        "No socket exists for this socket_id! Bind a socket to this id before trying to use it ^_^"
-    )]
-    NoSocket,
-}
-
-#[derive(Error, Serialize, Deserialize, Debug)]
-pub enum ControlProtRecvErr {
     #[error(transparent)]
     SocketRecvError(#[from] SocketRecvError),
     #[error(

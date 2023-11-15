@@ -101,6 +101,18 @@ impl IdentitySecret {
     }
 }
 
+impl IdentitySecret {
+    /// Convert from bytes representation
+    pub fn from_bytes(b: &[u8; 32]) -> Self {
+        Self(*b)
+    }
+
+    /// View as bytes representation
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
 /// An Earendil node fingerprint, uniquely identifying a relay or client.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct Fingerprint([u8; 20]);

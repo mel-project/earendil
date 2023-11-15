@@ -13,7 +13,6 @@ use crate::{
 pub struct ReplyBlock {
     pub header: RawHeader,
     pub e2e_dest: OnionPublic,
-    // encrypted symmetric key
 }
 
 impl ReplyBlock {

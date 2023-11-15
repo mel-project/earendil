@@ -10,6 +10,7 @@ pub mod n2r_socket;
 mod neightable;
 mod reply_block_store;
 mod socket;
+mod udp_forward;
 
 use anyhow::Context;
 use bytes::Bytes;
@@ -30,12 +31,15 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
 use stdcode::StdcodeSerializeExt;
 
+use std::time::Instant;
 use std::{path::Path, sync::Arc, time::Duration};
 
 use crate::control_protocol::{DhtError, SendMessageError};
 use crate::daemon::global_rpc::transport::GlobalRpcTransport;
 use crate::daemon::global_rpc::GlobalRpcClient;
+use crate::daemon::haven::haven_loop;
 use crate::daemon::reply_block_store::ReplyBlockStore;
+use crate::daemon::udp_forward::udp_forward_loop;
 use crate::{
     config::{ConfigFile, InRouteConfig, OutRouteConfig},
     control_protocol::ControlService,
@@ -46,8 +50,7 @@ use crate::{
     },
 };
 
-pub use self::control_protocol_impl::ControlProtRecvErr;
-pub use self::control_protocol_impl::ControlProtSendErr;
+pub use self::control_protocol_impl::ControlProtErr;
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
 use self::haven::HavenLocator;
 use self::haven::HAVEN_FORWARD_DOCK;
@@ -61,7 +64,7 @@ where
     move |s| log::warn!("{label} restart, error: {:?}", s)
 }
 
-pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
+pub fn get_or_create_id(path: &Path) -> anyhow::Result<IdentitySecret> {
     fn read_identity(path: &Path) -> anyhow::Result<IdentitySecret> {
         Ok(stdcode::deserialize(&hex::decode(std::fs::read(path)?)?)?)
     }
@@ -72,22 +75,26 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
         Ok(())
     }
 
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
-        .init();
-    let identity = loop {
-        match read_identity(&config.identity) {
-            Ok(id) => break id,
+    loop {
+        match read_identity(path) {
+            Ok(id) => break Ok(id),
             Err(err) => {
                 log::warn!(
                     "(re)writing identity file at {:?} due to error reading: {:?}",
-                    config.identity,
+                    path,
                     err
                 );
                 let new_id = IdentitySecret::generate();
-                write_identity(&config.identity, &new_id)?;
+                write_identity(path, &new_id)?;
             }
         }
-    };
+    }
+}
+
+pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
+        .init();
+    let identity = get_or_create_id(&config.identity)?;
     log::info!(
         "daemon starting with fingerprint {}",
         identity.public().fingerprint()
@@ -157,6 +164,41 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             )
             .map_err(log_error("haven_forward_loop"))),
         );
+
+        let _haven_loops: Vec<Immortal> = daemon_ctx
+            .config
+            .havens
+            .clone()
+            .into_iter()
+            .map(|cfg| {
+                Immortal::respawn(
+                    RespawnStrategy::Immediate,
+                    clone!([daemon_ctx], move || haven_loop(
+                        daemon_ctx.clone(),
+                        cfg.clone()
+                    )
+                    .map_err(log_error("udp_haven_forward_loop"))),
+                )
+            })
+            .collect();
+
+        // app-level traffic tasks/processes
+        let _udp_forward_loops: Vec<Immortal> = daemon_ctx
+            .config
+            .udp_forwards
+            .clone()
+            .into_iter()
+            .map(|udp_fwd_cfg| {
+                Immortal::respawn(
+                    RespawnStrategy::Immediate,
+                    clone!([daemon_ctx], move || udp_forward_loop(
+                        daemon_ctx.clone(),
+                        udp_fwd_cfg.clone()
+                    )
+                    .map_err(log_error("udp_forward_loop"))),
+                )
+            })
+            .collect();
 
         let mut route_tasks = FuturesUnordered::new();
 
@@ -239,9 +281,15 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
     loop {
         let pkt = ctx.table.recv_raw_packet().await;
+        let now = Instant::now();
         log::debug!("received raw packet");
         let peeled = pkt.peel(&ctx.onion_sk)?;
         log::debug!("peeled packet!");
+
+        scopeguard::defer!(log::debug!(
+            "PEEL AND PROCESS MESSAGE TOOK:::::::::: {:?}",
+            now.elapsed()
+        ));
         match peeled {
             PeeledPacket::Forward {
                 to: next_hop,
@@ -362,6 +410,12 @@ impl DaemonContext {
         dst_dock: Dock,
         content: Bytes,
     ) -> Result<(), SendMessageError> {
+        let now = Instant::now();
+        let _guard = scopeguard::guard((), |_| {
+            let send_msg_time = now.elapsed().as_millis();
+            log::debug!("SEND MESSAGE TOOK:::::::::: {send_msg_time}");
+        });
+
         let (public_isk, my_anon_osk) = if let Some(anon_id) = src_anon_id {
             (Arc::new(anon_id), Some(OnionSecret::generate()))
         } else {
@@ -383,6 +437,7 @@ impl DaemonContext {
                 .read()
                 .find_shortest_path(&self.identity.public().fingerprint(), &dst_fp)
                 .ok_or(SendMessageError::NoRoute)?;
+            log::debug!("building a normal N2R message with route {:?}", route);
             let instructs = route_to_instructs(route, self.relay_graph.clone())?;
             let their_opk = self
                 .relay_graph
@@ -411,7 +466,7 @@ impl DaemonContext {
                     .ok_or(SendMessageError::NoRoute)?;
                 let reverse_instructs =
                     route_to_instructs(reverse_route, self.relay_graph.clone())?;
-                log::debug!("reverse_instructs = {:?}", reverse_instructs);
+                // log::debug!("reverse_instructs = {:?}", reverse_instructs);
 
                 let mut rbs: Vec<ReplyBlock> = vec![];
                 for _ in 0..n {
@@ -447,10 +502,15 @@ impl DaemonContext {
     pub async fn dht_insert(&self, locator: HavenLocator) {
         let key = locator.identity_pk.fingerprint();
         let replicas = self.dht_key_to_fps(&key.to_string());
+        let anon_isk = Some(IdentitySecret::generate());
 
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
             log::debug!("key {key} inserting into remote replica {replica}");
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(
+                self.clone(),
+                anon_isk.clone(),
+                replica,
+            ));
             match gclient
                 .dht_insert(locator.clone(), false)
                 .timeout(Duration::from_secs(60))
@@ -467,11 +527,17 @@ impl DaemonContext {
         &self,
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
+        if let Some(locator) = self.dht_cache.get(&fingerprint) {
+            return Ok(Some(locator));
+        };
         let replicas = self.dht_key_to_fps(&fingerprint.to_string());
         let mut gatherer = FuturesUnordered::new();
+        let anon_isk = Some(IdentitySecret::generate());
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
+            let anon_isk = anon_isk.clone();
             gatherer.push(async move {
-                let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), replica));
+                let gclient =
+                    GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
                 anyhow::Ok(
                     gclient
                         .dht_get(fingerprint, false)
@@ -491,6 +557,7 @@ impl DaemonContext {
                     let payload = locator.to_sign();
                     if id_pk.fingerprint() == fingerprint {
                         id_pk.verify(&payload, &locator.signature)?;
+                        self.dht_cache.insert(fingerprint, locator.clone());
                         return Ok(Some(locator));
                     }
                 }

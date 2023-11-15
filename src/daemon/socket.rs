@@ -55,6 +55,13 @@ impl Socket {
             InnerSocket::Haven(s) => s.recv_from().await,
         }
     }
+
+    pub fn skt_info(&self) -> Endpoint {
+        match &self.inner {
+            InnerSocket::Haven(haven_skt) => haven_skt.skt_info(),
+            InnerSocket::N2r(n2r_skt) => n2r_skt.skt_info(),
+        }
+    }
 }
 
 enum InnerSocket {

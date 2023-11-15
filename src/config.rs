@@ -1,8 +1,11 @@
 use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
 
 use earendil_crypt::Fingerprint;
+use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+
+use crate::daemon::n2r_socket::Endpoint;
 
 /// A YAML-serializable configuration file
 #[derive(Serialize, Deserialize)]
@@ -22,6 +25,12 @@ pub struct ConfigFile {
     /// List of all outgoing connections
     #[serde(default)]
     pub out_routes: BTreeMap<String, OutRouteConfig>,
+    /// List of all client configs for udp forwarding
+    #[serde(default)]
+    pub udp_forwards: Vec<UdpForwardConfig>,
+    /// List of all haven configs
+    #[serde(default)]
+    pub havens: Vec<HavenForwardConfig>,
 }
 
 fn default_control_listen() -> SocketAddr {
@@ -30,7 +39,7 @@ fn default_control_listen() -> SocketAddr {
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
-#[serde(tag = "protocol", rename_all = "kebab-case")]
+#[serde(tag = "protocol", rename_all = "snake_case")]
 pub enum InRouteConfig {
     Obfsudp {
         #[serde_as(as = "serde_with::DisplayFromStr")]
@@ -41,7 +50,7 @@ pub enum InRouteConfig {
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "protocol", rename_all = "kebab-case")]
+#[serde(tag = "protocol", rename_all = "snake_case")]
 pub enum OutRouteConfig {
     Obfsudp {
         #[serde_as(as = "serde_with::DisplayFromStr")]
@@ -51,4 +60,29 @@ pub enum OutRouteConfig {
         #[serde_as(as = "serde_with::hex::Hex")]
         cookie: [u8; 32],
     },
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct UdpForwardConfig {
+    pub forward_to: u16,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub remote_ep: Endpoint,
+}
+
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct HavenForwardConfig {
+    pub identity: PathBuf,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub rendezvous: Fingerprint,
+    pub handler: ForwardHandler,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ForwardHandler {
+    UdpForward { from_dock: Dock, to_port: u16 },
 }

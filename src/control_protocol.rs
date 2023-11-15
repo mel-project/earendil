@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::daemon::n2r_socket::Endpoint;
-use crate::daemon::{ControlProtRecvErr, ControlProtSendErr};
+use crate::daemon::ControlProtErr;
 use crate::{daemon::haven::HavenLocator, ControlCommands};
 use thiserror::Error;
 
@@ -30,26 +30,28 @@ pub async fn main_control(
     let client = ControlClient::from(HttpRpcTransport::new(connect));
     match control_command {
         ControlCommands::BindN2r {
-            socket_id,
+            skt_id,
             anon_id,
             dock,
         } => {
-            client.bind_n2r(socket_id, anon_id, dock).await?;
+            client.bind_n2r(skt_id, anon_id, dock).await?;
         }
         ControlCommands::BindHaven {
-            socket_id,
+            skt_id,
             anon_id,
             dock,
             rendezvous,
         } => {
-            client
-                .bind_haven(socket_id, anon_id, dock, rendezvous)
-                .await?;
+            client.bind_haven(skt_id, anon_id, dock, rendezvous).await?;
         }
-        ControlCommands::SendMessage {
-            socket_id,
-            destination,
-            message,
+        ControlCommands::SktInfo { skt_id } => {
+            let skt_info = client.skt_info(skt_id).await??;
+            println!("{skt_info}")
+        }
+        ControlCommands::SendMsg {
+            skt_id: socket_id,
+            dest: destination,
+            msg: message,
         } => {
             client
                 .send_message(SendMessageArgs {
@@ -59,7 +61,7 @@ pub async fn main_control(
                 })
                 .await??;
         }
-        ControlCommands::RecvMessage { socket_id } => {
+        ControlCommands::RecvMsg { skt_id: socket_id } => {
             match client.recv_message(socket_id.clone()).await? {
                 Ok((msg, src)) => println!("{:?} from {}", msg, src),
                 Err(e) => println!("ERROR receiving message: {e}"),
@@ -67,7 +69,7 @@ pub async fn main_control(
         }
         ControlCommands::GlobalRpc {
             id,
-            destination,
+            dest: destination,
             method,
             args,
         } => {
@@ -149,12 +151,11 @@ pub trait ControlProtocol {
         rendezvous_point: Option<Fingerprint>,
     );
 
-    async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtSendErr>;
+    async fn skt_info(&self, skt_id: String) -> Result<Endpoint, ControlProtErr>;
 
-    async fn recv_message(
-        &self,
-        socket_id: String,
-    ) -> Result<(Bytes, Endpoint), ControlProtRecvErr>;
+    async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtErr>;
+
+    async fn recv_message(&self, socket_id: String) -> Result<(Bytes, Endpoint), ControlProtErr>;
 
     async fn send_global_rpc(
         &self,
