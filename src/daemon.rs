@@ -37,7 +37,7 @@ use std::{path::Path, sync::Arc, time::Duration};
 use crate::control_protocol::{DhtError, SendMessageError};
 use crate::daemon::global_rpc::transport::GlobalRpcTransport;
 use crate::daemon::global_rpc::GlobalRpcClient;
-use crate::daemon::haven::udp_haven_forward_loop;
+use crate::daemon::haven::haven_loop;
 use crate::daemon::reply_block_store::ReplyBlockStore;
 use crate::daemon::udp_forward::udp_forward_loop;
 use crate::{
@@ -50,8 +50,7 @@ use crate::{
     },
 };
 
-pub use self::control_protocol_impl::ControlProtRecvErr;
-pub use self::control_protocol_impl::ControlProtSendErr;
+pub use self::control_protocol_impl::ControlProtErr;
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
 use self::haven::HavenLocator;
 use self::haven::HAVEN_FORWARD_DOCK;
@@ -174,7 +173,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             .map(|cfg| {
                 Immortal::respawn(
                     RespawnStrategy::Immediate,
-                    clone!([daemon_ctx], move || udp_haven_forward_loop(
+                    clone!([daemon_ctx], move || haven_loop(
                         daemon_ctx.clone(),
                         cfg.clone()
                     )

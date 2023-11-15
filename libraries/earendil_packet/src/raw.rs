@@ -174,7 +174,7 @@ impl RawPacket {
         };
 
         Ok(if metadata[0] == 1 {
-            // otherwise, if the metadata starts with 1, then we need to forward to the next guy.
+            // if the metadata starts with 1, then we need to forward to the next guy.
             // the 20 remaining bytes in the metadata indicate the fingerprint of the next guy.
             let fingerprint = Fingerprint::from_bytes(array_ref![metadata, 1, 20]);
             PeeledPacket::Forward {

@@ -1,5 +1,5 @@
 [workspace]
-members = ["libraries/*", "udp-spammer"]
+members = ["libraries/*", "utilities/*"]
 
 [package]
 name = "earendil"

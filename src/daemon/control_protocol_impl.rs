@@ -47,13 +47,6 @@ impl ControlProtocol for ControlProtocolImpl {
         let anon_id = anon_id.map(|id| self.anon_identities.lock().get(&id));
         let socket = Socket::bind_n2r(&self.ctx, anon_id.clone(), dock);
         self.sockets.insert(socket_id, socket);
-
-        if let Some(aid) = anon_id {
-            log::info!(
-                "----------- Bound N2rSocket with ANOOOON FINGERPRING: {} ----------",
-                aid.public().fingerprint()
-            );
-        }
     }
 
     async fn bind_haven(
@@ -66,33 +59,31 @@ impl ControlProtocol for ControlProtocolImpl {
         let anon_id = anon_id.map(|id| self.anon_identities.lock().get(&id));
         let socket = Socket::bind_haven(&self.ctx, anon_id.clone(), dock, rendezvous_point);
         self.sockets.insert(socket_id, socket);
+    }
 
-        if let Some(aid) = anon_id.clone() {
-            log::info!(
-                "----------- Bound HavenSocket with ANOOOON FINGERPRING: {} ----------",
-                aid.public().fingerprint()
-            );
+    async fn skt_info(&self, skt_id: String) -> Result<Endpoint, ControlProtErr> {
+        if let Some(skt) = self.sockets.get(&skt_id) {
+            Ok(skt.skt_info())
+        } else {
+            Err(ControlProtErr::NoSocket)
         }
     }
 
-    async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtSendErr> {
+    async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtErr> {
         if let Some(socket) = self.sockets.get(&args.socket_id) {
             socket.send_to(args.content, args.destination).await?;
             Ok(())
         } else {
-            Err(ControlProtSendErr::NoSocket)
+            Err(ControlProtErr::NoSocket)
         }
     }
 
-    async fn recv_message(
-        &self,
-        socket_id: String,
-    ) -> Result<(Bytes, Endpoint), ControlProtRecvErr> {
+    async fn recv_message(&self, socket_id: String) -> Result<(Bytes, Endpoint), ControlProtErr> {
         if let Some(socket) = self.sockets.get(&socket_id) {
             let recvd = socket.recv_from().await?;
             Ok(recvd)
         } else {
-            Err(ControlProtRecvErr::NoSocket)
+            Err(ControlProtErr::NoSocket)
         }
     }
 
@@ -190,17 +181,9 @@ impl AnonIdentities {
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
-pub enum ControlProtSendErr {
+pub enum ControlProtErr {
     #[error(transparent)]
     SocketSendError(#[from] SocketSendError),
-    #[error(
-        "No socket exists for this socket_id! Bind a socket to this id before trying to use it ^_^"
-    )]
-    NoSocket,
-}
-
-#[derive(Error, Serialize, Deserialize, Debug)]
-pub enum ControlProtRecvErr {
     #[error(transparent)]
     SocketRecvError(#[from] SocketRecvError),
     #[error(

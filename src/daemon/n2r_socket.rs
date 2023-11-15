@@ -92,6 +92,10 @@ impl N2rSocket {
         let endpoint = Endpoint::new(fingerprint, message.source_dock);
         Ok((message.body, endpoint))
     }
+
+    pub fn skt_info(&self) -> Endpoint {
+        Endpoint::new(self.bound_dock.fp, self.bound_dock.dock)
+    }
 }
 
 impl Drop for BoundDock {

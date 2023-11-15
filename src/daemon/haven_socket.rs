@@ -158,4 +158,8 @@ impl HavenSocket {
             stdcode::deserialize(&n2r_msg).map_err(|_| SocketRecvError::HavenMsgBadFormat)?;
         Ok(inner)
     }
+
+    pub fn skt_info(&self) -> Endpoint {
+        self.n2r_socket.skt_info()
+    }
 }

@@ -43,7 +43,7 @@ pub enum ControlCommands {
     BindN2r {
         #[arg(long)]
         /// tag for this socket
-        socket_id: String,
+        skt_id: String,
         #[arg(long)]
         /// tag for an anonymous fingerprint
         anon_id: Option<String>,
@@ -56,7 +56,7 @@ pub enum ControlCommands {
     BindHaven {
         #[arg(long)]
         /// tag for this socket
-        socket_id: String,
+        skt_id: String,
         #[arg(long)]
         /// tag for an anonymous fingerprint
         anon_id: Option<String>,
@@ -68,24 +68,30 @@ pub enum ControlCommands {
         rendezvous: Option<Fingerprint>,
     },
 
+    /// Prints the fingerprint and dock of a socket
+    SktInfo {
+        #[arg(long)]
+        skt_id: String,
+    },
+
     /// Sends a message using a given socket to a destination.
-    SendMessage {
+    SendMsg {
         #[arg(long)]
         /// tag for the socket to use
-        socket_id: String,
+        skt_id: String,
         #[arg(short, long)]
         /// destination fingerprint::dock
-        destination: Endpoint,
+        dest: Endpoint,
         #[arg(short, long)]
         /// message
-        message: String,
+        msg: String,
     },
 
     /// Blocks until a message is received.
-    RecvMessage {
+    RecvMsg {
         #[arg(long)]
         /// tag for the socket to listen to
-        socket_id: String,
+        skt_id: String,
     },
 
     /// Send a GlobalRpc request to a destination.
@@ -93,7 +99,7 @@ pub enum ControlCommands {
         #[arg(long)]
         id: Option<String>,
         #[arg(short, long)]
-        destination: Fingerprint,
+        dest: Fingerprint,
         #[arg(short, long)]
         method: String,
         args: Vec<String>,
