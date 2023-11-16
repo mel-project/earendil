@@ -23,3 +23,9 @@ serde-big-array = "0.5.1"
 earendil_crypt = { path = "../earendil_crypt" }
 base64 = "0.21.5"
 
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "benchmark"
+harness = false
