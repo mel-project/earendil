@@ -61,6 +61,8 @@ impl FromStr for OnionPublic {
 }
 
 /// An onion-routing secret key, based on x25519.
+///
+/// This is *intentionally* not serializable, and we *intentionally* never expose the underlying bytes representation. This is to ensure we only use them as in-memory ephemeral or mid-term keys.
 #[derive(Clone)]
 pub struct OnionSecret(x25519_dalek::ReusableSecret);
 
