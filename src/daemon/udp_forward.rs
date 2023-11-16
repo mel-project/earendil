@@ -12,7 +12,7 @@ use smolscale::immortal::Immortal;
 
 use crate::{config::UdpForwardConfig, sockets::socket::Socket};
 
-use super::DaemonContext;
+use super::{Daemon, DaemonContext};
 
 /// Loop that forwards a remote earendil address to a local udp port
 pub async fn udp_forward_loop(
@@ -55,8 +55,8 @@ pub async fn udp_forward_loop(
         // and spawn a loop that forwards messages from the earendil socket back to the src_udp_addr
         let src_earendil_skt = demux_table.get_with(src_udp_addr, || {
             log::debug!("about to bind haven socket");
-            let earendil_skt = Arc::new(Socket::bind_haven(
-                &ctx,
+            let earendil_skt = Arc::new(Socket::bind_haven_internal(
+                ctx.clone(),
                 Some(IdentitySecret::generate()),
                 None,
                 None,
@@ -66,11 +66,7 @@ pub async fn udp_forward_loop(
             let down_loop = Immortal::respawn(
                 smolscale::immortal::RespawnStrategy::Immediate,
                 clone!([earendil_skt, udp_socket], move || {
-                    down_loop(
-                        earendil_skt.clone(),
-                        udp_socket.clone(),
-                        src_udp_addr,
-                    )
+                    down_loop(earendil_skt.clone(), udp_socket.clone(), src_udp_addr)
                 }),
             );
             (earendil_skt, Arc::new(down_loop))

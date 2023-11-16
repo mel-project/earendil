@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, str::FromStr, sync::Arc};
 
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentitySecret};
@@ -6,7 +6,10 @@ use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{control_protocol::SendMessageError, daemon::context::DaemonContext};
+use crate::{
+    control_protocol::SendMessageError,
+    daemon::{context::DaemonContext, Daemon},
+};
 
 use super::{haven_socket::HavenSocket, n2r_socket::N2rSocket};
 
@@ -16,7 +19,26 @@ pub struct Socket {
 
 impl Socket {
     pub fn bind_haven(
-        ctx: &DaemonContext,
+        daemon: Daemon,
+        anon_id: Option<IdentitySecret>,
+        dock: Option<Dock>,
+        rendezvous_point: Option<Fingerprint>,
+    ) -> Socket {
+        let inner = HavenSocket::bind(daemon.ctx.clone(), anon_id, dock, rendezvous_point);
+        Self {
+            inner: InnerSocket::Haven(inner),
+        }
+    }
+
+    pub fn bind_n2r(daemon: Daemon, anon_id: Option<IdentitySecret>, dock: Option<Dock>) -> Socket {
+        let inner = N2rSocket::bind(daemon.ctx.clone(), anon_id, dock);
+        Self {
+            inner: InnerSocket::N2r(inner),
+        }
+    }
+
+    pub(crate) fn bind_haven_internal(
+        ctx: DaemonContext,
         anon_id: Option<IdentitySecret>,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
@@ -31,8 +53,8 @@ impl Socket {
         Self { inner }
     }
 
-    pub fn bind_n2r(
-        ctx: &DaemonContext,
+    pub(crate) fn bind_n2r_internal(
+        ctx: DaemonContext,
         anon_id: Option<IdentitySecret>,
         dock: Option<Dock>,
     ) -> Socket {

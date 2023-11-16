@@ -20,7 +20,7 @@ use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use smol::Task;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
@@ -50,7 +50,7 @@ use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
 use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
 
 pub struct Daemon {
-    ctx: DaemonContext,
+    pub ctx: DaemonContext,
     _task: Task<anyhow::Result<()>>,
 }
 
@@ -58,10 +58,8 @@ impl Daemon {
     /// Initializes the daemon and starts all background loops
     pub fn init(config: ConfigFile) -> anyhow::Result<Daemon> {
         let ctx = DaemonContext::new(config)?;
-
         let context = ctx.clone();
         let task = smolscale::spawn(async move { main_daemon(context) });
-
         Ok(Self { ctx, _task: task })
     }
 }
@@ -73,7 +71,7 @@ where
     move |s| log::warn!("{label} restart, error: {:?}", s)
 }
 
-fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
+pub fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
         .init();
     log::info!(

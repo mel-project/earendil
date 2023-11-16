@@ -15,7 +15,7 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::{
     config::{ForwardHandler, HavenForwardConfig},
-    daemon::context::DaemonContext,
+    daemon::{context::DaemonContext, Daemon},
     sockets::socket::{Endpoint, Socket},
     utils::get_or_create_id,
 };
@@ -119,8 +119,8 @@ pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> an
         haven_cfg.rendezvous
     );
 
-    let earendil_skt = Arc::new(Socket::bind_haven(
-        &ctx,
+    let earendil_skt = Arc::new(Socket::bind_haven_internal(
+        ctx.clone(),
         Some(haven_id),
         Some(from_dock),
         Some(haven_cfg.rendezvous),
