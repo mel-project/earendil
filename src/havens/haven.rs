@@ -15,7 +15,7 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::{
     config::{ForwardHandler, HavenForwardConfig},
-    daemon::{context::DaemonContext, Daemon},
+    daemon::context::DaemonContext,
     sockets::socket::{Endpoint, Socket},
     utils::get_or_create_id,
 };
@@ -94,6 +94,12 @@ impl RegisterHavenReq {
     }
 }
 
+/// Handles incoming earendil traffic to the "server-side".
+///
+/// Earendil packets are forwarded to their destination  UDP sockets.
+///
+/// Starts a "down" loop that listens for incoming UDP traffic in the reverse direction and
+/// forwards it back to the earnedil network.
 pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
     // down loop forwards packets back down to the source Earendil endpoints
     async fn down_loop(
@@ -114,14 +120,9 @@ pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> an
         ForwardHandler::UdpForward { from_dock, to_port } => (from_dock, to_port),
     };
 
-    log::debug!(
-        "about to bind haven socket for server with rendezvous_point: {}",
-        haven_cfg.rendezvous
-    );
-
     let earendil_skt = Arc::new(Socket::bind_haven_internal(
         ctx.clone(),
-        Some(haven_id),
+        haven_id,
         Some(from_dock),
         Some(haven_cfg.rendezvous),
     ));

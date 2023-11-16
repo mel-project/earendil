@@ -12,7 +12,7 @@ mod udp_forward;
 use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::Fingerprint;
+use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::ForwardInstruction;
 use earendil_packet::{InnerPacket, PeeledPacket};
 use earendil_topology::RelayGraph;
@@ -20,7 +20,7 @@ use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use smol::Task;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
@@ -277,7 +277,12 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 /// Loop that listens to and handles incoming GlobalRpc requests
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let socket = Arc::new(N2rSocket::bind(ctx.clone(), None, Some(GLOBAL_RPC_DOCK)));
+    // TODO: check if generating a new SK here is correct?
+    let socket = Arc::new(N2rSocket::bind(
+        ctx.clone(),
+        IdentitySecret::generate(),
+        Some(GLOBAL_RPC_DOCK),
+    ));
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
     let group: TaskReaper<anyhow::Result<()>> = TaskReaper::new();
 
@@ -308,7 +313,13 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         .max_capacity(100_000)
         .time_to_idle(Duration::from_secs(60 * 60))
         .build();
-    let socket = Arc::new(N2rSocket::bind(ctx.clone(), None, Some(HAVEN_FORWARD_DOCK)));
+
+    // TODO: check if generating a new SK here is correct?
+    let socket = Arc::new(N2rSocket::bind(
+        ctx.clone(),
+        IdentitySecret::generate(),
+        Some(HAVEN_FORWARD_DOCK),
+    ));
 
     loop {
         if let Ok((msg, src_endpoint)) = socket.recv_from().await {

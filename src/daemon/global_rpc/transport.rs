@@ -15,14 +15,14 @@ use super::GLOBAL_RPC_DOCK;
 
 pub struct GlobalRpcTransport {
     ctx: DaemonContext,
-    anon_isk: Option<IdentitySecret>,
+    anon_isk: IdentitySecret,
     dest_fp: Fingerprint,
 }
 
 impl GlobalRpcTransport {
     pub fn new(
         ctx: DaemonContext,
-        anon_isk: Option<IdentitySecret>,
+        anon_isk: IdentitySecret,
         dest_fp: Fingerprint,
     ) -> GlobalRpcTransport {
         GlobalRpcTransport {

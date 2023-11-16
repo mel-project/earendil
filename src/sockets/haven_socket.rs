@@ -32,16 +32,12 @@ pub struct HavenSocket {
 impl HavenSocket {
     pub fn bind(
         ctx: DaemonContext,
-        anon_identity: Option<IdentitySecret>,
+        anon_identity: IdentitySecret,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> HavenSocket {
         let n2r_socket = N2rSocket::bind(ctx.clone(), anon_identity.clone(), dock);
-        let isk = match anon_identity.clone() {
-            Some(isk) => isk,
-            None => Arc::clone(&ctx.identity).as_ref().clone(),
-        };
-
+        let isk = anon_identity.clone();
         if let Some(rob) = rendezvous_point {
             // We're Bob:
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
@@ -54,8 +50,11 @@ impl HavenSocket {
                 let onion_sk = OnionSecret::generate();
                 let onion_pk = onion_sk.public();
                 // register forwarding with the rendezvous relay node
-                let gclient =
-                    GlobalRpcClient(GlobalRpcTransport::new(context.clone(), anon_identity, rob));
+                let gclient = GlobalRpcClient(GlobalRpcTransport::new(
+                    context.clone(),
+                    anon_identity.clone(),
+                    rob,
+                ));
                 let forward_req = RegisterHavenReq::new(registration_isk.clone());
                 loop {
                     match gclient

@@ -78,7 +78,7 @@ impl DaemonContext {
 
     pub async fn send_message(
         &self,
-        src_anon_id: Option<IdentitySecret>,
+        src_anon_id: IdentitySecret,
         src_dock: Dock,
         dst_fp: Fingerprint,
         dst_dock: Dock,
@@ -87,13 +87,13 @@ impl DaemonContext {
         let now = Instant::now();
         let _guard = scopeguard::guard((), |_| {
             let send_msg_time = now.elapsed().as_millis();
-            log::debug!("SEND MESSAGE TOOK:::::::::: {send_msg_time}");
+            log::debug!("send message took {send_msg_time}");
         });
 
-        let (public_isk, my_anon_osk) = if let Some(anon_id) = src_anon_id {
-            (Arc::new(anon_id), Some(OnionSecret::generate()))
-        } else {
+        let (public_isk, my_anon_osk) = if src_anon_id == *self.identity {
             (self.identity.clone(), None)
+        } else {
+            (Arc::new(src_anon_id), Some(OnionSecret::generate()))
         };
 
         let maybe_reply_block = self.anon_destinations.lock().pop(&dst_fp);
@@ -176,7 +176,7 @@ impl DaemonContext {
     pub async fn dht_insert(&self, locator: HavenLocator) {
         let key = locator.identity_pk.fingerprint();
         let replicas = self.dht_key_to_fps(&key.to_string());
-        let anon_isk = Some(IdentitySecret::generate());
+        let anon_isk = IdentitySecret::generate();
 
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
             log::debug!("key {key} inserting into remote replica {replica}");
@@ -206,7 +206,7 @@ impl DaemonContext {
         };
         let replicas = self.dht_key_to_fps(&fingerprint.to_string());
         let mut gatherer = FuturesUnordered::new();
-        let anon_isk = Some(IdentitySecret::generate());
+        let anon_isk = IdentitySecret::generate();
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
             let anon_isk = anon_isk.clone();
             gatherer.push(async move {

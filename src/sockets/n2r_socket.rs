@@ -12,7 +12,7 @@ use super::socket::{Endpoint, SocketRecvError, SocketSendError};
 
 pub struct N2rSocket {
     ctx: DaemonContext,
-    anon_id: Option<IdentitySecret>,
+    anon_id: IdentitySecret,
     bound_dock: Arc<BoundDock>,
     recv_incoming: Receiver<(Message, Fingerprint)>,
 }
@@ -25,15 +25,8 @@ struct BoundDock {
 
 impl N2rSocket {
     /// Binds an N2R socket. anon_id indicates the anonymous ID to use. If this is not given, then the node's own identity will be used, which will not function properly if this is not running on a relay.
-    pub fn bind(
-        ctx: DaemonContext,
-        anon_id: Option<IdentitySecret>,
-        dock: Option<Dock>,
-    ) -> N2rSocket {
-        let our_fingerprint = anon_id
-            .as_ref()
-            .map(|anon_id| anon_id.public().fingerprint())
-            .unwrap_or_else(|| ctx.identity.public().fingerprint());
+    pub fn bind(ctx: DaemonContext, anon_id: IdentitySecret, dock: Option<Dock>) -> N2rSocket {
+        let our_fingerprint = anon_id.public().fingerprint();
         let dock = if let Some(dock) = dock {
             dock
         } else {

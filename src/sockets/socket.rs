@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr, sync::Arc};
+use std::{fmt::Display, str::FromStr};
 
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentitySecret};
@@ -20,7 +20,7 @@ pub struct Socket {
 impl Socket {
     pub fn bind_haven(
         daemon: Daemon,
-        anon_id: Option<IdentitySecret>,
+        anon_id: IdentitySecret,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> Socket {
@@ -30,7 +30,7 @@ impl Socket {
         }
     }
 
-    pub fn bind_n2r(daemon: Daemon, anon_id: Option<IdentitySecret>, dock: Option<Dock>) -> Socket {
+    pub fn bind_n2r(daemon: Daemon, anon_id: IdentitySecret, dock: Option<Dock>) -> Socket {
         let inner = N2rSocket::bind(daemon.ctx.clone(), anon_id, dock);
         Self {
             inner: InnerSocket::N2r(inner),
@@ -39,7 +39,7 @@ impl Socket {
 
     pub(crate) fn bind_haven_internal(
         ctx: DaemonContext,
-        anon_id: Option<IdentitySecret>,
+        anon_id: IdentitySecret,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> Socket {
@@ -55,7 +55,7 @@ impl Socket {
 
     pub(crate) fn bind_n2r_internal(
         ctx: DaemonContext,
-        anon_id: Option<IdentitySecret>,
+        anon_id: IdentitySecret,
         dock: Option<Dock>,
     ) -> Socket {
         let inner = InnerSocket::N2r(N2rSocket::bind(ctx.clone(), anon_id, dock));
