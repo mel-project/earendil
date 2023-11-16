@@ -41,7 +41,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let payload = InnerPacket::Message(Message {
             source_dock: 0u32,
             dest_dock: 0u32,
-            body: Bytes::from_static(b"hello world"),
+            body: vec![Bytes::from_static(b"hello world")],
         });
         let my_isk = IdentitySecret::generate();
         let my_osk = OnionSecret::generate();

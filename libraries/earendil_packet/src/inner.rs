@@ -21,7 +21,7 @@ pub enum InnerPacket {
 pub struct Message {
     pub source_dock: Dock,
     pub dest_dock: Dock,
-    pub body: Bytes,
+    pub body: Vec<Bytes>,
 }
 
 pub type Dock = u32;
@@ -76,7 +76,7 @@ impl InnerPacket {
 }
 
 impl Message {
-    pub fn new(source_dock: Dock, dest_dock: Dock, body: Bytes) -> Self {
+    pub fn new(source_dock: Dock, dest_dock: Dock, body: Vec<Bytes>) -> Self {
         Message {
             source_dock,
             dest_dock,
@@ -97,8 +97,11 @@ mod tests {
         let identity_secret = IdentitySecret::generate();
 
         // Step 2: Create an InnerPacket
-        let inner_packet =
-            InnerPacket::Message(Message::new(42u32, 200u32, Bytes::from("Hello, World!")));
+        let inner_packet = InnerPacket::Message(Message::new(
+            42u32,
+            200u32,
+            vec![Bytes::from("Hello, World!")],
+        ));
 
         // Step 3: Encrypt the InnerPacket
         let encrypted_packet = inner_packet

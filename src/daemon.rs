@@ -408,7 +408,7 @@ impl DaemonContext {
         src_dock: Dock,
         dst_fp: Fingerprint,
         dst_dock: Dock,
-        content: Bytes,
+        content: Vec<Bytes>,
     ) -> Result<(), SendMessageError> {
         let now = Instant::now();
         let _guard = scopeguard::guard((), |_| {
