@@ -18,7 +18,7 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         (&mut timer).await;
         let neighs = ctx.table.all_neighs();
         if neighs.is_empty() {
-            log::debug!("skipping gossip due to no neighs");
+            log::debug!("skipping gossip due to no neighbors");
             continue;
         }
         // pick a random neighbor and do sync stuff

@@ -101,7 +101,6 @@ impl DaemonContext {
             if my_anon_osk.is_some() {
                 return Err(SendMessageError::NoAnonId);
             }
-            log::debug!("sending message with reply block");
             let inner = InnerPacket::Message(Message::new(src_dock, dst_dock, content));
             let raw_packet = RawPacket::new_reply(&reply_block, inner, &public_isk)?;
             self.table.inject_asif_incoming(raw_packet).await;
@@ -111,7 +110,6 @@ impl DaemonContext {
                 .read()
                 .find_shortest_path(&self.identity.public().fingerprint(), &dst_fp)
                 .ok_or(SendMessageError::NoRoute)?;
-            log::debug!("building a normal N2R message with route {:?}", route);
             let instructs = route_to_instructs(route, self.relay_graph.clone())?;
             let their_opk = self
                 .relay_graph
@@ -140,7 +138,6 @@ impl DaemonContext {
                     .ok_or(SendMessageError::NoRoute)?;
                 let reverse_instructs =
                     route_to_instructs(reverse_route, self.relay_graph.clone())?;
-                // log::debug!("reverse_instructs = {:?}", reverse_instructs);
 
                 let mut rbs: Vec<ReplyBlock> = vec![];
                 for _ in 0..n {
