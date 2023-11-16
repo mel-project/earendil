@@ -159,7 +159,7 @@ impl HavenSocket {
         Ok(inner)
     }
 
-    pub fn skt_info(&self) -> Endpoint {
-        self.n2r_socket.skt_info()
+    pub fn local_endpoint(&self) -> Endpoint {
+        self.n2r_socket.local_endpoint()
     }
 }

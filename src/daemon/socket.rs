@@ -56,10 +56,10 @@ impl Socket {
         }
     }
 
-    pub fn skt_info(&self) -> Endpoint {
+    pub fn local_endpoint(&self) -> Endpoint {
         match &self.inner {
-            InnerSocket::Haven(haven_skt) => haven_skt.skt_info(),
-            InnerSocket::N2r(n2r_skt) => n2r_skt.skt_info(),
+            InnerSocket::Haven(haven_skt) => haven_skt.local_endpoint(),
+            InnerSocket::N2r(n2r_skt) => n2r_skt.local_endpoint(),
         }
     }
 }

@@ -63,7 +63,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn skt_info(&self, skt_id: String) -> Result<Endpoint, ControlProtErr> {
         if let Some(skt) = self.sockets.get(&skt_id) {
-            Ok(skt.skt_info())
+            Ok(skt.local_endpoint())
         } else {
             Err(ControlProtErr::NoSocket)
         }

@@ -122,7 +122,7 @@ impl N2rSocket {
         }
     }
 
-    pub fn skt_info(&self) -> Endpoint {
+    pub fn local_endpoint(&self) -> Endpoint {
         Endpoint::new(self.bound_dock.fp, self.bound_dock.dock)
     }
 }
