@@ -47,10 +47,15 @@ base64 = "0.21.5"
 
 [profile.dev]
 panic = 'abort'
+opt-level = 1
 
 [profile.release]
 panic = 'abort'
 
 [profile.release-dbg]
+inherits = "release"
+debug = 2
+
+[profile.bench]
 inherits = "release"
 debug = 2

@@ -31,5 +31,3 @@ criterion = "0.3"
 name = "benchmark"
 harness = false
 
-[profile.release]
-debug = true  # Include debug symbols in release builds
