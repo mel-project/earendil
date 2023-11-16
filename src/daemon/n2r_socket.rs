@@ -78,7 +78,7 @@ impl N2rSocket {
             send_outgoing,
         );
 
-        let (send_msg, recv_msg) = smol::channel::bounded(100);
+        let (send_msg, recv_msg) = smol::channel::bounded(1000);
         let _send_batcher = Arc::new(Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx, anon_id, recv_msg], move || send_batcher_loop(
