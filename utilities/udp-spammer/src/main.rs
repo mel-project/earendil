@@ -50,10 +50,6 @@ fn main() {
 }
 
 async fn uspammer_client(rate: u64, server: SocketAddr) -> anyhow::Result<()> {
-    if rate <= 0 {
-        anyhow::bail!("rate must be positive")
-    }
-
     let start_time = Instant::now();
     let skt = UdpSocket::bind("0.0.0.0:0").await?;
 
