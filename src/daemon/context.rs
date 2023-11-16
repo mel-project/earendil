@@ -34,6 +34,7 @@ use super::{
     DHT_REDUNDANCY,
 };
 
+/// This does most of the housekeeping for the daemon state.
 #[derive(Clone)]
 pub struct DaemonContext {
     pub config: Arc<ConfigFile>,

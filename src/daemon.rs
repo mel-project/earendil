@@ -51,16 +51,18 @@ use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::Globa
 
 pub struct Daemon {
     pub ctx: DaemonContext,
-    _task: Task<anyhow::Result<()>>,
+    pub task: Task<anyhow::Result<()>>,
 }
 
 impl Daemon {
     /// Initializes the daemon and starts all background loops
     pub fn init(config: ConfigFile) -> anyhow::Result<Daemon> {
+        println!("creating context");
         let ctx = DaemonContext::new(config)?;
+        println!("created ctx");
         let context = ctx.clone();
         let task = smolscale::spawn(async move { main_daemon(context) });
-        Ok(Self { ctx, _task: task })
+        Ok(Self { ctx, task })
     }
 }
 

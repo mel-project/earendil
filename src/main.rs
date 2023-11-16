@@ -46,7 +46,8 @@ fn main() -> anyhow::Result<()> {
                 serde_yaml::from_slice(&std::fs::read(config).context("cannot read config file")?)
                     .context("syntax error in config file")?;
 
-            let _daemon = Daemon::init(config_parsed)?;
+            let _ = Daemon::init(config_parsed)?;
+            std::thread::park();
             Ok(())
         }
         Commands::Control {
