@@ -69,7 +69,7 @@ pub async fn udp_forward_loop(
                     down_loop(
                         earendil_skt.clone(),
                         udp_socket.clone(),
-                        src_udp_addr.clone(),
+                        src_udp_addr,
                     )
                 }),
             );

@@ -49,7 +49,7 @@ pub struct DaemonContext {
 }
 
 impl DaemonContext {
-    pub(crate) fn new(config: ConfigFile, identity: IdentitySecret) -> anyhow::Result<Self> {
+    pub(crate) fn new(config: ConfigFile) -> anyhow::Result<Self> {
         let table = Arc::new(NeighTable::new());
         let identity = get_or_create_id(&config.identity)?;
         let ctx = DaemonContext {

@@ -36,7 +36,6 @@ use crate::daemon::udp_forward::udp_forward_loop;
 use crate::havens::haven::{haven_loop, HAVEN_FORWARD_DOCK};
 use crate::sockets::n2r_socket::N2rSocket;
 use crate::sockets::socket::Endpoint;
-use crate::utils::get_or_create_id;
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::ControlService,
@@ -58,8 +57,7 @@ pub struct Daemon {
 impl Daemon {
     /// Initializes the daemon and starts all background loops
     pub fn init(config: ConfigFile) -> anyhow::Result<Daemon> {
-        let identity = get_or_create_id(&config.identity)?;
-        let ctx = DaemonContext::new(config, identity)?;
+        let ctx = DaemonContext::new(config)?;
 
         let context = ctx.clone();
         let task = smolscale::spawn(async move { main_daemon(context) });

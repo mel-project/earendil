@@ -35,6 +35,12 @@ pub struct ReplyBlockStore {
     items: LruCache<Fingerprint, ReplyBlockDeque>,
 }
 
+impl Default for ReplyBlockStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ReplyBlockStore {
     pub fn new() -> Self {
         let items =
