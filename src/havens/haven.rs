@@ -15,10 +15,10 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::{
     config::{ForwardHandler, HavenForwardConfig},
-    daemon::get_or_create_id,
+    daemon::context::DaemonContext,
+    sockets::socket::{Endpoint, Socket},
+    utils::get_or_create_id,
 };
-
-use super::{n2r_socket::Endpoint, socket::Socket, DaemonContext};
 
 pub const HAVEN_FORWARD_DOCK: Dock = 100002;
 

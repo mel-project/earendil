@@ -16,14 +16,11 @@ use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::{ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs},
     daemon::DaemonContext,
+    havens::haven::HavenLocator,
+    sockets::socket::{Endpoint, Socket, SocketRecvError, SocketSendError},
 };
 
-use super::{
-    global_rpc::transport::GlobalRpcTransport,
-    haven::HavenLocator,
-    n2r_socket::Endpoint,
-    socket::{Socket, SocketRecvError, SocketSendError},
-};
+use super::global_rpc::transport::GlobalRpcTransport;
 
 pub struct ControlProtocolImpl {
     anon_identities: Arc<Mutex<AnonIdentities>>,

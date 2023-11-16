@@ -4,13 +4,18 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use config::ConfigFile;
 use control_protocol::main_control;
-use daemon::n2r_socket::Endpoint;
+use daemon::Daemon;
 use earendil_crypt::Fingerprint;
 use earendil_packet::Dock;
+use sockets::socket::Endpoint;
 
 mod config;
 pub mod control_protocol;
 pub mod daemon;
+
+mod havens;
+mod sockets;
+mod utils;
 
 /// Official implementation of an Earendil node
 #[derive(Parser)]
@@ -138,7 +143,8 @@ fn main() -> anyhow::Result<()> {
                 serde_yaml::from_slice(&std::fs::read(config).context("cannot read config file")?)
                     .context("syntax error in config file")?;
 
-            daemon::main_daemon(config_parsed)
+            let _daemon = Daemon::init(config_parsed)?;
+            Ok(())
         }
         Commands::Control {
             control_command,
