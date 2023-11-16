@@ -12,7 +12,7 @@ use thiserror::Error;
 
 /// An onion-routing public key, based on x25519.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct OnionPublic(ed25519_compact::x25519::PublicKey);
+pub struct OnionPublic(x25519_dalek::PublicKey);
 
 impl<'de> Deserialize<'de> for OnionPublic {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -36,12 +36,12 @@ impl Serialize for OnionPublic {
 impl OnionPublic {
     /// Return the bytes representation.
     pub fn as_bytes(&self) -> &[u8; 32] {
-        &self.0
+        self.0.as_bytes()
     }
 
     /// Construct an OnionPublic from bytes.
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {
-        Self(ed25519_compact::x25519::PublicKey::new(*bytes))
+        Self(x25519_dalek::PublicKey::from(*bytes))
     }
 }
 
@@ -61,23 +61,27 @@ impl FromStr for OnionPublic {
 }
 
 /// An onion-routing secret key, based on x25519.
+///
+/// This is *intentionally* not serializable, and we *intentionally* never expose the underlying bytes representation. This is to ensure we only use them as in-memory ephemeral or mid-term keys.
 #[derive(Clone)]
-pub struct OnionSecret(ed25519_compact::x25519::KeyPair);
+pub struct OnionSecret(x25519_dalek::ReusableSecret);
 
 impl OnionSecret {
     /// Generates a secret key.
     pub fn generate() -> Self {
-        Self(ed25519_compact::x25519::KeyPair::generate())
+        Self(x25519_dalek::ReusableSecret::random_from_rng(
+            rand::thread_rng(),
+        ))
     }
 
     /// Returns the public key of this secret key.
     pub fn public(&self) -> OnionPublic {
-        OnionPublic(self.0.pk)
+        OnionPublic((&self.0).into())
     }
 
     /// Derive the shared secret, given somebody else's public key.
     pub fn shared_secret(&self, theirs: &OnionPublic) -> [u8; 32] {
-        theirs.0.dh(&self.0.sk).map(|d| *d).unwrap_or_default()
+        self.0.diffie_hellman(&theirs.0).to_bytes()
     }
 }
 

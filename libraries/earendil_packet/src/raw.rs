@@ -64,7 +64,7 @@ impl RawPacket {
         Ok(Self {
             header: reply_block.header,
             onion_body: payload
-                .seal(my_isk, &reply_block.e2e_dest)
+                .encode(my_isk)
                 .map_err(|_| PacketConstructError::MessageTooBig)?,
         })
     }
@@ -82,7 +82,7 @@ impl RawPacket {
         // Use a recursive algorithm. Base case: the route is empty
         if route.is_empty() {
             let sealed_payload = payload
-                .seal(my_isk, destination)
+                .encode(my_isk)
                 .map_err(|_| PacketConstructError::MessageTooBig)?;
             // Encrypt for the destination, so that when the destination peels, it receives a PeeledPacket::Receive
             let mut buffer = [0; 21];
@@ -190,7 +190,7 @@ impl RawPacket {
             let inner_metadata = *array_ref![metadata, 1, 20];
             // the remainder is all zeros. it means that this packet is ungarbled and a normal packet
             if inner_metadata == [0; 20] {
-                let (inner_pkt, fp) = InnerPacket::open(&peeled_body, our_sk)
+                let (inner_pkt, fp) = InnerPacket::decode(&peeled_body)
                     .map_err(|_| PacketPeelError::InnerPacketOpenError)?;
                 PeeledPacket::Received {
                     from: fp,

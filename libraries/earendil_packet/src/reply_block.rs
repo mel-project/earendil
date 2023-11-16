@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     crypt::{stream_dencrypt, OnionPublic, OnionSecret},
-    ForwardInstruction, InnerPacket, Message, OpenError, PacketConstructError, RawHeader,
+    DecodeError, ForwardInstruction, InnerPacket, Message, PacketConstructError, RawHeader,
     RawPacket,
 };
 
@@ -65,12 +65,15 @@ pub struct ReplyDegarbler {
 }
 
 impl ReplyDegarbler {
-    pub fn degarble(&self, raw: &mut [u8; 8192]) -> Result<(InnerPacket, Fingerprint), OpenError> {
+    pub fn degarble(
+        &self,
+        raw: &mut [u8; 8192],
+    ) -> Result<(InnerPacket, Fingerprint), DecodeError> {
         for shared_sec in &self.shared_secs {
             let body_key = blake3::keyed_hash(b"body____________________________", shared_sec);
             stream_dencrypt(body_key.as_bytes(), &[0; 12], raw);
         }
-        InnerPacket::open(raw, &self.my_anon_osk)
+        InnerPacket::decode(raw)
     }
 
     pub fn my_anon_osk(&self) -> OnionSecret {

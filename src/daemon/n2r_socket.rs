@@ -128,7 +128,7 @@ impl FromStr for Endpoint {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let elems: Vec<&str> = s.split(":").collect();
+        let elems: Vec<&str> = s.split(':').collect();
         if elems.len() != 2 {
             return Err(anyhow::anyhow!(
                 "Wrong endpoint format! Endpoint format should be fingerprint:dock"
