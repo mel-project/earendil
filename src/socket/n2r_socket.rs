@@ -20,8 +20,6 @@ use super::{Endpoint, SocketSendError};
 
 #[derive(Clone)]
 pub struct N2rSocket {
-    ctx: DaemonContext,
-    anon_id: IdentitySecret,
     bound_dock: Arc<BoundDock>,
     recv_incoming: Receiver<(Message, Fingerprint)>,
     incoming_queue: Arc<ConcurrentQueue<(Bytes, Endpoint)>>,
@@ -71,8 +69,6 @@ impl N2rSocket {
 
         let (send_outgoing, recv_outgoing) = smol::channel::bounded(1000);
         N2rSocket {
-            ctx: ctx.clone(),
-            anon_id: anon_id.clone(),
             bound_dock,
             recv_incoming,
 
