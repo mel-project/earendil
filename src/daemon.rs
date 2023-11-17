@@ -12,7 +12,7 @@ mod udp_forward;
 use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::Fingerprint;
 use earendil_packet::ForwardInstruction;
 use earendil_packet::{InnerPacket, PeeledPacket};
 use earendil_topology::RelayGraph;
@@ -281,7 +281,7 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let socket = Arc::new(N2rSocket::bind(
         ctx.clone(),
-        IdentitySecret::generate(),
+        ctx.identity,
         Some(GLOBAL_RPC_DOCK),
     ));
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
@@ -316,7 +316,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
     let socket = Arc::new(N2rSocket::bind(
         ctx.clone(),
-        IdentitySecret::generate(),
+        ctx.identity,
         Some(HAVEN_FORWARD_DOCK),
     ));
 

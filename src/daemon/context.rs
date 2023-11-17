@@ -37,7 +37,7 @@ const DHT_REDUNDANCY: usize = 3;
 pub struct DaemonContext {
     pub config: Arc<ConfigFile>,
     pub table: Arc<NeighTable>,
-    pub identity: Arc<IdentitySecret>,
+    pub identity: IdentitySecret,
     pub onion_sk: OnionSecret,
     pub relay_graph: Arc<RwLock<RelayGraph>>,
     pub degarblers: Cache<u64, ReplyDegarbler>,
@@ -89,10 +89,10 @@ impl DaemonContext {
             log::debug!("send message took {send_msg_time}");
         });
 
-        let (public_isk, my_anon_osk) = if src_anon_id == *self.identity {
+        let (public_isk, my_anon_osk) = if src_anon_id == self.identity {
             (self.identity.clone(), None)
         } else {
-            (Arc::new(src_anon_id), Some(OnionSecret::generate()))
+            (src_anon_id, Some(OnionSecret::generate()))
         };
 
         let maybe_reply_block = self.anon_destinations.lock().pop(&dst_fp);
@@ -144,7 +144,7 @@ impl DaemonContext {
                         &reverse_instructs,
                         &self.onion_sk.public(),
                         my_anon_osk.clone(),
-                        (*public_isk).clone(),
+                        public_isk,
                     )
                     .map_err(|_| SendMessageError::ReplyBlockFailed)?;
                     rbs.push(rb);

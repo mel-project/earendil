@@ -3,9 +3,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::Context;
 use bytes::Bytes;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
-use futures_util::{future::select, pin_mut};
 use itertools::Itertools;
 use rand::{seq::SliceRandom, thread_rng, Rng};
+use smol_timeout::TimeoutExt;
 
 use super::{link_connection::LinkConnection, DaemonContext};
 
@@ -15,27 +15,29 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     ctx.relay_graph
         .write()
         .insert_identity(IdentityDescriptor::new(&ctx.identity, &ctx.onion_sk))?;
-    let mut timer = smol::Timer::interval(Duration::from_secs(5));
+    let mut sleep_timer = smol::Timer::interval(Duration::from_secs(5));
     loop {
         let once = async {
             let neighs = ctx.table.all_neighs();
             if neighs.is_empty() {
-                log::debug!("skipping gossip due to no neighborss");
-                std::thread::sleep(Duration::from_secs(1));
-            } else {
-                // pick a random neighbor and do sync stuff
-                let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
-                if let Err(err) = gossip_once(&ctx, rand_neigh).await {
-                    log::warn!(
-                        "gossip with {} failed: {:?}",
-                        rand_neigh.remote_idpk().fingerprint(),
-                        err
-                    );
-                }
+                log::debug!("skipping gossip due to no neighs");
+                return;
+            }
+            // pick a random neighbor and do sync stuff
+            let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
+            if let Err(err) = gossip_once(&ctx, rand_neigh).await {
+                log::warn!(
+                    "gossip with {} failed: {:?}",
+                    rand_neigh.remote_idpk().fingerprint(),
+                    err
+                );
             }
         };
-        pin_mut!(once);
-        select(&mut timer, once).await;
+        // pin_mut!(once);
+        if let None = once.timeout(Duration::from_secs(5)).await {
+            log::warn!("gossip once timed out");
+        };
+        (&mut sleep_timer).await;
     }
 }
 
@@ -96,8 +98,8 @@ async fn gossip_graph(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Res
         .copied()
         .collect_vec();
     log::debug!(
-        "asking {remote_fingerprint} for neighbors of {:?}!",
-        random_sample
+        "asking {remote_fingerprint} for neighbors of {} neighbors!",
+        random_sample.len()
     );
     let adjacencies = conn.link_rpc().adjacencies(random_sample).await?;
     for adjacency in adjacencies {
