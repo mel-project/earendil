@@ -41,13 +41,13 @@ pub enum VerifyError {
 impl IdentityPublic {
     /// Verifies a message supposedly signed by this key.
     pub fn verify(&self, msg: &[u8], sig: &[u8]) -> Result<(), VerifyError> {
-        let pk = ed25519_compact::PublicKey::from_slice(&self.0)
+        let pk = ed25519_consensus::VerificationKeyBytes::from(self.0);
+        let pk = ed25519_consensus::VerificationKey::try_from(pk)
             .map_err(|_| VerifyError::SignatureCorrupt)?;
+        let sig: [u8; 64] = sig.try_into().map_err(|_| VerifyError::SignatureCorrupt)?;
+        let sig = ed25519_consensus::Signature::from(sig);
 
-        let sig = ed25519_compact::Signature::from_slice(sig)
-            .map_err(|_| VerifyError::SignatureCorrupt)?;
-
-        pk.verify(msg, &sig)
+        pk.verify(&sig, msg)
             .map_err(|_| VerifyError::SignatureMismatch)
     }
 
@@ -87,17 +87,14 @@ impl IdentitySecret {
 
     /// Returns the public half of this secret identity.
     pub fn public(&self) -> IdentityPublic {
-        let seed = ed25519_compact::Seed::new(self.0);
-        let pair = ed25519_compact::KeyPair::from_seed(seed);
-        let public_key = pair.pk;
-        IdentityPublic(*public_key)
+        let sk = ed25519_consensus::SigningKey::from(self.0);
+        IdentityPublic(sk.verification_key().to_bytes())
     }
 
     /// Signs a message, returning a signature.
     pub fn sign(&self, msg: &[u8]) -> Bytes {
-        let seed = ed25519_compact::Seed::new(self.0);
-        let pair = ed25519_compact::KeyPair::from_seed(seed);
-        pair.sk.sign(msg, None).to_vec().into()
+        let sk = ed25519_consensus::SigningKey::from(self.0);
+        sk.sign(msg).to_bytes().to_vec().into()
     }
 }
 

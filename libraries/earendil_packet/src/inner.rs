@@ -1,13 +1,11 @@
+use arrayref::array_ref;
 use bincode::Options;
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    crypt::{box_decrypt, box_encrypt, OnionPublic, OnionSecret},
-    reply_block::ReplyBlock,
-};
+use crate::reply_block::ReplyBlock;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 /// Represents the actual end-to-end packet that is carried in the 8192-byte payloads. Either an application-level message, or a batch of reply blocks.
@@ -37,85 +35,43 @@ struct InnerPacketCiphertext {
 
 /// Things that can go wrong when parsing an InnerPacket
 #[derive(Error, Debug)]
-pub enum OpenError {
+pub enum DecodeError {
     #[error("outer packaging is bad")]
-    OuterBad(bincode::Error),
-    #[error("inner packaging is bad")]
-    InnerBad(bincode::Error),
+    BadPackaging(bincode::Error),
+
     #[error("decryption failed")]
     DecryptionFailed,
 }
 
 #[derive(Error, Debug)]
-pub enum SealError {
+pub enum EncodeError {
     #[error("serialization of outer packaging failed")]
-    OuterBad(bincode::Error),
-    #[error("serialization of inner packaging failed")]
-    InnerBad(bincode::Error),
+    BadPackaging(bincode::Error),
+
     #[error("message is too big to fit in the payload")]
     MessageTooBig,
 }
 
 impl InnerPacket {
     /// From a raw payload, deduce the inner packet as well as the source fingerprint.
-    pub fn open(raw: &[u8; 8192], my_osk: &OnionSecret) -> Result<(Self, Fingerprint), OpenError> {
+    pub fn decode(raw: &[u8; 8192]) -> Result<(Self, Fingerprint), DecodeError> {
+        let src_fp = Fingerprint::from_bytes(array_ref![raw, 0, 20]);
         let coder = bincode::DefaultOptions::new().allow_trailing_bytes();
-        let ctext: InnerPacketCiphertext =
-            coder.deserialize(&raw[..]).map_err(OpenError::OuterBad)?;
-        // decrypt
-        let (box_ptext, box_epk) = box_decrypt(&ctext.box_ctext, my_osk)
-            .ok()
-            .ok_or(OpenError::DecryptionFailed)?;
-        // check that the signature is correct
-        if ctext
-            .source_sign_pk
-            .verify(box_epk.as_bytes(), &ctext.epk_sig)
-            .is_err()
-        {
-            return Err(OpenError::DecryptionFailed);
-        }
-        // decode the plaintext
-        let inner: InnerPacket = coder.deserialize(&box_ptext).map_err(OpenError::InnerBad)?;
-        Ok((inner, ctext.source_sign_pk.fingerprint()))
+        let msg: Self = coder
+            .deserialize(&raw[20..])
+            .map_err(DecodeError::BadPackaging)?;
+        Ok((msg, src_fp))
     }
 
-    /// Seals into a raw payload, given our signing SK and their onion PK
-    pub fn seal(
-        &self,
-        my_isk: &IdentitySecret,
-        their_opk: &OnionPublic,
-    ) -> Result<[u8; 8192], SealError> {
+    /// Encodes into a raw payload, given our signing SK and their onion PK
+    pub fn encode(&self, my_isk: &IdentitySecret) -> Result<[u8; 8192], EncodeError> {
+        let mut toret = [0u8; 8192];
+        toret[..20].copy_from_slice(my_isk.public().fingerprint().as_bytes());
         let coder = bincode::DefaultOptions::new().allow_trailing_bytes();
-
-        // First, we serialize the InnerPacket
-        let inner_ptext = coder.serialize(&self).map_err(SealError::InnerBad)?;
-
-        // Then, we encrypt this serialized data
-        let (box_ctext, box_esk) = box_encrypt(&inner_ptext, their_opk);
-
-        // We sign the ephemeral public key
-        let epk_sig = my_isk.sign(box_esk.public().as_bytes());
-
-        // We prepare the InnerPacketCiphertext, which includes the source's signing public key, the signed ephemeral public key, and the ciphertext
-        let ctext = InnerPacketCiphertext {
-            source_sign_pk: my_isk.public(),
-            epk_sig,
-            box_ctext: Bytes::from(box_ctext),
-        };
-
-        // We serialize this ciphertext
-        let packet = coder.serialize(&ctext).map_err(SealError::OuterBad)?;
-
-        // We check if the packet is too big to fit in 8192 bytes
-        if packet.len() > 8192 {
-            return Err(SealError::MessageTooBig);
-        }
-
-        // We build our final byte array, filling with zeroes if the packet is smaller than 8192
-        let mut result = [0u8; 8192];
-        result[..packet.len()].copy_from_slice(&packet);
-
-        Ok(result)
+        coder
+            .serialize_into(&mut toret[20..], &self)
+            .map_err(EncodeError::BadPackaging)?;
+        Ok(toret)
     }
 }
 
@@ -131,12 +87,13 @@ impl Message {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
     fn test_inner_packet_roundtrip() {
         // Step 1: Generate OnionSecret and IdentitySecret
-        let onion_secret = OnionSecret::generate();
+
         let identity_secret = IdentitySecret::generate();
 
         // Step 2: Create an InnerPacket
@@ -145,12 +102,12 @@ mod tests {
 
         // Step 3: Encrypt the InnerPacket
         let encrypted_packet = inner_packet
-            .seal(&identity_secret, &onion_secret.public())
+            .encode(&identity_secret)
             .expect("Can't encrypt packet");
 
         // Step 4: Decrypt the InnerPacket
         let (decrypted_packet, _) =
-            InnerPacket::open(&encrypted_packet, &onion_secret).expect("Can't decrypt packet");
+            InnerPacket::decode(&encrypted_packet).expect("Can't decrypt packet");
 
         // Step 5: Assert that the original and decrypted InnerPackets are equal
         assert_eq!(

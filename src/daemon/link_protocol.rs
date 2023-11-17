@@ -10,7 +10,7 @@ use sosistab2::MuxPublic;
 
 #[nanorpc_derive]
 #[async_trait]
-pub trait N2nProtocol {
+pub trait LinkProtocol {
     /// Challenge the other end to prove their identity.
     async fn authenticate(&self) -> AuthResponse;
 
@@ -26,8 +26,8 @@ pub trait N2nProtocol {
     /// Gets the identity of a particular fingerprint. Returns None if that identity is not known to this node.
     async fn identity(&self, fp: Fingerprint) -> Option<IdentityDescriptor>;
 
-    /// Gets all the adjacency-descriptors adjacent to a particular fingerprint. This is called repeatedly to eventually discover the entire graph.
-    async fn adjacencies(&self, fp: Fingerprint) -> Vec<AdjacencyDescriptor>;
+    /// Gets all the adjacency-descriptors adjacent to the given fingerprints. This is called repeatedly to eventually discover the entire graph.
+    async fn adjacencies(&self, fps: Vec<Fingerprint>) -> Vec<AdjacencyDescriptor>;
 }
 
 /// Response to an authentication challenge.
