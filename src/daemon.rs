@@ -1,61 +1,69 @@
+pub mod context;
 mod control_protocol_impl;
-mod global_rpc;
+pub mod global_rpc;
 mod gossip;
-pub mod haven;
-mod haven_socket;
 mod inout_route;
 mod link_connection;
 mod link_protocol;
-pub mod n2r_socket;
 mod neightable;
 mod reply_block_store;
-mod socket;
 mod udp_forward;
 
 use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
-use dashmap::DashMap;
 use earendil_crypt::{Fingerprint, IdentitySecret};
-use earendil_packet::{crypt::OnionSecret, InnerPacket, PeeledPacket};
-use earendil_packet::{Dock, ForwardInstruction, Message, RawPacket, ReplyBlock, ReplyDegarbler};
+use earendil_packet::ForwardInstruction;
+use earendil_packet::{InnerPacket, PeeledPacket};
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
-use moka::sync::{Cache, CacheBuilder};
+use moka::sync::Cache;
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
-use parking_lot::{Mutex, RwLock};
-use smol::channel::Sender;
-use smol_timeout::TimeoutExt;
+use parking_lot::RwLock;
+use smol::Task;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
 use stdcode::StdcodeSerializeExt;
 
 use std::time::Instant;
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use crate::control_protocol::{DhtError, SendMessageError};
-use crate::daemon::global_rpc::transport::GlobalRpcTransport;
-use crate::daemon::global_rpc::GlobalRpcClient;
-use crate::daemon::haven::haven_loop;
-use crate::daemon::reply_block_store::ReplyBlockStore;
+use crate::config::ConfigFile;
+use crate::control_protocol::SendMessageError;
+use crate::daemon::context::DaemonContext;
 use crate::daemon::udp_forward::udp_forward_loop;
+use crate::havens::haven::{haven_loop, HAVEN_FORWARD_DOCK};
+use crate::sockets::n2r_socket::N2rSocket;
+use crate::sockets::socket::Endpoint;
 use crate::{
-    config::{ConfigFile, InRouteConfig, OutRouteConfig},
+    config::{InRouteConfig, OutRouteConfig},
     control_protocol::ControlService,
     daemon::{
         gossip::gossip_loop,
         inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
-        neightable::NeighTable,
     },
 };
 
 pub use self::control_protocol_impl::ControlProtErr;
 use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
-use self::haven::HavenLocator;
-use self::haven::HAVEN_FORWARD_DOCK;
-use self::n2r_socket::{Endpoint, N2rSocket};
 use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
+
+pub struct Daemon {
+    pub ctx: DaemonContext,
+    pub task: Task<anyhow::Result<()>>,
+}
+
+impl Daemon {
+    /// Initializes the daemon and starts all background loops
+    pub fn init(config: ConfigFile) -> anyhow::Result<Daemon> {
+        let ctx = DaemonContext::new(config)?;
+        let context = ctx.clone();
+        log::info!("starting background task for main_daemon");
+        let task = smolscale::spawn(async move { main_daemon(context) });
+        Ok(Self { ctx, task })
+    }
+}
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
 where
@@ -64,65 +72,14 @@ where
     move |s| log::warn!("{label} restart, error: {:?}", s)
 }
 
-pub fn get_or_create_id(path: &Path) -> anyhow::Result<IdentitySecret> {
-    fn read_identity(path: &Path) -> anyhow::Result<IdentitySecret> {
-        Ok(stdcode::deserialize(&hex::decode(std::fs::read(path)?)?)?)
-    }
-
-    fn write_identity(path: &Path, identity: &IdentitySecret) -> anyhow::Result<()> {
-        let encoded_identity = hex::encode(stdcode::serialize(&identity)?);
-        std::fs::write(path, encoded_identity)?;
-        Ok(())
-    }
-
-    loop {
-        match read_identity(path) {
-            Ok(id) => break Ok(id),
-            Err(err) => {
-                log::warn!(
-                    "(re)writing identity file at {:?} due to error reading: {:?}",
-                    path,
-                    err
-                );
-                let new_id = IdentitySecret::generate();
-                write_identity(path, &new_id)?;
-            }
-        }
-    }
-}
-
-pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
-        .init();
-    let identity = get_or_create_id(&config.identity)?;
+pub fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     log::info!(
         "daemon starting with fingerprint {}",
-        identity.public().fingerprint()
+        ctx.identity.public().fingerprint()
     );
 
+    let table = ctx.table.clone();
     smolscale::block_on(async move {
-        let table = Arc::new(NeighTable::new());
-        let daemon_ctx = DaemonContext {
-            config: Arc::new(config),
-            table: table.clone(),
-            identity: identity.into(),
-            onion_sk: OnionSecret::generate(),
-            relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
-            degarblers: Cache::new(1_000_000),
-            anon_destinations: Arc::new(Mutex::new(ReplyBlockStore::new())),
-
-            socket_recv_queues: Arc::new(DashMap::new()),
-            dht_cache: CacheBuilder::default()
-                .time_to_idle(Duration::from_secs(60 * 60))
-                .build(),
-            registered_havens: Arc::new(
-                Cache::builder()
-                    .max_capacity(100_000)
-                    .time_to_idle(Duration::from_secs(60 * 60))
-                    .build(),
-            ),
-        };
-
         // Run the loops
         let _table_gc = Immortal::spawn(clone!([table], async move {
             loop {
@@ -133,39 +90,35 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
 
         let _peel_forward = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([daemon_ctx], move || peel_forward_loop(daemon_ctx.clone())
+            clone!([ctx], move || peel_forward_loop(ctx.clone())
                 .map_err(log_error("peel_forward"))),
         );
 
         let _gossip = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([daemon_ctx], move || gossip_loop(daemon_ctx.clone())
+            clone!([ctx], move || gossip_loop(ctx.clone())
                 .map_err(log_error("gossip"))),
         );
 
         let _control_protocol = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([daemon_ctx], move || control_protocol_loop(
-                daemon_ctx.clone()
-            )
-            .map_err(log_error("control_protocol"))),
+            clone!([ctx], move || control_protocol_loop(ctx.clone())
+                .map_err(log_error("control_protocol"))),
         );
 
         let _global_rpc_loop = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([daemon_ctx], move || global_rpc_loop(daemon_ctx.clone())
+            clone!([ctx], move || global_rpc_loop(ctx.clone())
                 .map_err(log_error("global_rpc_loop"))),
         );
 
         let _rendezvous_forward_loop = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([daemon_ctx], move || rendezvous_forward_loop(
-                daemon_ctx.clone()
-            )
-            .map_err(log_error("haven_forward_loop"))),
+            clone!([ctx], move || rendezvous_forward_loop(ctx.clone())
+                .map_err(log_error("haven_forward_loop"))),
         );
 
-        let _haven_loops: Vec<Immortal> = daemon_ctx
+        let _haven_loops: Vec<Immortal> = ctx
             .config
             .havens
             .clone()
@@ -173,17 +126,14 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             .map(|cfg| {
                 Immortal::respawn(
                     RespawnStrategy::Immediate,
-                    clone!([daemon_ctx], move || haven_loop(
-                        daemon_ctx.clone(),
-                        cfg.clone()
-                    )
-                    .map_err(log_error("udp_haven_forward_loop"))),
+                    clone!([ctx], move || haven_loop(ctx.clone(), cfg.clone())
+                        .map_err(log_error("udp_haven_forward_loop"))),
                 )
             })
             .collect();
 
         // app-level traffic tasks/processes
-        let _udp_forward_loops: Vec<Immortal> = daemon_ctx
+        let _udp_forward_loops: Vec<Immortal> = ctx
             .config
             .udp_forwards
             .clone()
@@ -191,8 +141,8 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
             .map(|udp_fwd_cfg| {
                 Immortal::respawn(
                     RespawnStrategy::Immediate,
-                    clone!([daemon_ctx], move || udp_forward_loop(
-                        daemon_ctx.clone(),
+                    clone!([ctx], move || udp_forward_loop(
+                        ctx.clone(),
                         udp_fwd_cfg.clone()
                     )
                     .map_err(log_error("udp_forward_loop"))),
@@ -203,10 +153,10 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
         let mut route_tasks = FuturesUnordered::new();
 
         // For every in_routes block, spawn a task to handle incoming stuff
-        for (in_route_name, config) in daemon_ctx.config.in_routes.iter() {
+        for (in_route_name, config) in ctx.config.in_routes.iter() {
             let context = InRouteContext {
                 in_route_name: in_route_name.clone(),
-                daemon_ctx: daemon_ctx.clone(),
+                daemon_ctx: ctx.clone(),
             };
             match config.clone() {
                 InRouteConfig::Obfsudp { listen, secret } => {
@@ -216,7 +166,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
         }
 
         // For every out_routes block, spawn a task to handle outgoing stuff
-        for (out_route_name, config) in daemon_ctx.config.out_routes.iter() {
+        for (out_route_name, config) in ctx.config.out_routes.iter() {
             match config {
                 OutRouteConfig::Obfsudp {
                     fingerprint,
@@ -226,7 +176,7 @@ pub fn main_daemon(config: ConfigFile) -> anyhow::Result<()> {
                     let context = OutRouteContext {
                         out_route_name: out_route_name.clone(),
                         remote_fingerprint: *fingerprint,
-                        daemon_ctx: daemon_ctx.clone(),
+                        daemon_ctx: ctx.clone(),
                     };
                     route_tasks.push(smolscale::spawn(out_route_obfsudp(
                         context, *connect, *cookie,
@@ -326,7 +276,11 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 /// Loop that listens to and handles incoming GlobalRpc requests
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let socket = Arc::new(N2rSocket::bind(ctx.clone(), None, Some(GLOBAL_RPC_DOCK)));
+    let socket = Arc::new(N2rSocket::bind(
+        ctx.clone(),
+        IdentitySecret::generate(),
+        Some(GLOBAL_RPC_DOCK),
+    ));
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
     let group: TaskReaper<anyhow::Result<()>> = TaskReaper::new();
 
@@ -350,14 +304,18 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 }
 
-const DHT_REDUNDANCY: usize = 3;
 /// Loop that listens to and handles incoming haven forwarding requests
 async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let seen_srcs: Cache<(Endpoint, Endpoint), ()> = Cache::builder()
         .max_capacity(100_000)
         .time_to_idle(Duration::from_secs(60 * 60))
         .build();
-    let socket = Arc::new(N2rSocket::bind(ctx.clone(), None, Some(HAVEN_FORWARD_DOCK)));
+
+    let socket = Arc::new(N2rSocket::bind(
+        ctx.clone(),
+        IdentitySecret::generate(),
+        Some(HAVEN_FORWARD_DOCK),
+    ));
 
     loop {
         if let Ok((msg, src_endpoint)) = socket.recv_from().await {
@@ -383,187 +341,6 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 log::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
             }
         };
-    }
-}
-
-#[allow(unused)]
-#[derive(Clone)]
-pub struct DaemonContext {
-    config: Arc<ConfigFile>,
-    table: Arc<NeighTable>,
-    identity: Arc<IdentitySecret>,
-    onion_sk: OnionSecret,
-    relay_graph: Arc<RwLock<RelayGraph>>,
-    degarblers: Cache<u64, ReplyDegarbler>,
-    anon_destinations: Arc<Mutex<ReplyBlockStore>>,
-    socket_recv_queues: Arc<DashMap<Endpoint, Sender<(Message, Fingerprint)>>>,
-    dht_cache: Cache<Fingerprint, HavenLocator>,
-    registered_havens: Arc<Cache<Fingerprint, ()>>,
-}
-
-impl DaemonContext {
-    async fn send_message(
-        &self,
-        src_anon_id: Option<IdentitySecret>,
-        src_dock: Dock,
-        dst_fp: Fingerprint,
-        dst_dock: Dock,
-        content: Bytes,
-    ) -> Result<(), SendMessageError> {
-        let now = Instant::now();
-        let _guard = scopeguard::guard((), |_| {
-            let send_msg_time = now.elapsed().as_millis();
-            log::debug!("SEND MESSAGE TOOK:::::::::: {send_msg_time}");
-        });
-
-        let (public_isk, my_anon_osk) = if let Some(anon_id) = src_anon_id {
-            (Arc::new(anon_id), Some(OnionSecret::generate()))
-        } else {
-            (self.identity.clone(), None)
-        };
-
-        let maybe_reply_block = self.anon_destinations.lock().pop(&dst_fp);
-        if let Some(reply_block) = maybe_reply_block {
-            if my_anon_osk.is_some() {
-                return Err(SendMessageError::NoAnonId);
-            }
-            log::debug!("sending message with reply block");
-            let inner = InnerPacket::Message(Message::new(src_dock, dst_dock, content));
-            let raw_packet = RawPacket::new_reply(&reply_block, inner, &public_isk)?;
-            self.table.inject_asif_incoming(raw_packet).await;
-        } else {
-            let route = self
-                .relay_graph
-                .read()
-                .find_shortest_path(&self.identity.public().fingerprint(), &dst_fp)
-                .ok_or(SendMessageError::NoRoute)?;
-            log::debug!("building a normal N2R message with route {:?}", route);
-            let instructs = route_to_instructs(route, self.relay_graph.clone())?;
-            let their_opk = self
-                .relay_graph
-                .read()
-                .identity(&dst_fp)
-                .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
-                .onion_pk;
-            let wrapped_onion = RawPacket::new_normal(
-                &instructs,
-                &their_opk,
-                InnerPacket::Message(Message::new(src_dock, dst_dock, content)),
-                &public_isk,
-            )?;
-            // we send the onion by treating it as a message addressed to ourselves
-            self.table.inject_asif_incoming(wrapped_onion).await;
-
-            // if we want to use an anon source, send a batch of reply blocks
-            // TODO this should be replaced
-            if let Some(my_anon_osk) = my_anon_osk {
-                // currently the path for every one of them is the same; will want to change this in the future
-                let n = 8;
-                let reverse_route = self
-                    .relay_graph
-                    .read()
-                    .find_shortest_path(&dst_fp, &self.identity.public().fingerprint())
-                    .ok_or(SendMessageError::NoRoute)?;
-                let reverse_instructs =
-                    route_to_instructs(reverse_route, self.relay_graph.clone())?;
-                // log::debug!("reverse_instructs = {:?}", reverse_instructs);
-
-                let mut rbs: Vec<ReplyBlock> = vec![];
-                for _ in 0..n {
-                    let (rb, (id, degarbler)) = ReplyBlock::new(
-                        &reverse_instructs,
-                        &self.onion_sk.public(),
-                        my_anon_osk.clone(),
-                        (*public_isk).clone(),
-                    )
-                    .map_err(|_| SendMessageError::ReplyBlockFailed)?;
-                    rbs.push(rb);
-                    self.degarblers.insert(id, degarbler);
-                }
-                let wrapped_rb_onion = RawPacket::new_normal(
-                    &instructs,
-                    &their_opk,
-                    InnerPacket::ReplyBlocks(rbs),
-                    &public_isk,
-                )?;
-                // we send the onion by treating it as a message addressed to ourselves
-                self.table.inject_asif_incoming(wrapped_rb_onion).await;
-            }
-        }
-        Ok(())
-    }
-
-    fn dht_key_to_fps(&self, key: &str) -> Vec<Fingerprint> {
-        let mut all_nodes: Vec<Fingerprint> = self.relay_graph.read().all_nodes().collect();
-        all_nodes.sort_unstable_by_key(|fp| *blake3::hash(&(key, fp).stdcode()).as_bytes());
-        all_nodes
-    }
-
-    pub async fn dht_insert(&self, locator: HavenLocator) {
-        let key = locator.identity_pk.fingerprint();
-        let replicas = self.dht_key_to_fps(&key.to_string());
-        let anon_isk = Some(IdentitySecret::generate());
-
-        for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-            log::debug!("key {key} inserting into remote replica {replica}");
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(
-                self.clone(),
-                anon_isk.clone(),
-                replica,
-            ));
-            match gclient
-                .dht_insert(locator.clone(), false)
-                .timeout(Duration::from_secs(60))
-                .await
-            {
-                Some(Err(e)) => log::debug!("inserting {key} into {replica} failed: {:?}", e),
-                None => log::debug!("inserting {key} into {replica} timed out"),
-                _ => {}
-            }
-        }
-    }
-
-    pub async fn dht_get(
-        &self,
-        fingerprint: Fingerprint,
-    ) -> Result<Option<HavenLocator>, DhtError> {
-        if let Some(locator) = self.dht_cache.get(&fingerprint) {
-            return Ok(Some(locator));
-        };
-        let replicas = self.dht_key_to_fps(&fingerprint.to_string());
-        let mut gatherer = FuturesUnordered::new();
-        let anon_isk = Some(IdentitySecret::generate());
-        for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-            let anon_isk = anon_isk.clone();
-            gatherer.push(async move {
-                let gclient =
-                    GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
-                anyhow::Ok(
-                    gclient
-                        .dht_get(fingerprint, false)
-                        .timeout(Duration::from_secs(30))
-                        .await
-                        .context("timed out")??,
-                )
-            })
-        }
-        while let Some(result) = gatherer.next().await {
-            match result {
-                Err(err) => log::warn!("error while dht_get: {:?}", err),
-                Ok(Err(err)) => log::warn!("error while dht_get: {:?}", err),
-                Ok(Ok(None)) => continue,
-                Ok(Ok(Some(locator))) => {
-                    let id_pk = locator.identity_pk;
-                    let payload = locator.to_sign();
-                    if id_pk.fingerprint() == fingerprint {
-                        id_pk.verify(&payload, &locator.signature)?;
-                        self.dht_cache.insert(fingerprint, locator.clone());
-                        return Ok(Some(locator));
-                    }
-                }
-            }
-        }
-        Ok(None)
     }
 }
 

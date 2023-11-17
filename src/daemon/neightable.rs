@@ -16,6 +16,12 @@ pub struct NeighTable {
     recv_incoming: Receiver<RawPacket>,
 }
 
+impl Default for NeighTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NeighTable {
     /// Create a new NeighTable.
     pub fn new() -> Self {

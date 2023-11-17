@@ -10,9 +10,8 @@ use earendil_packet::Dock;
 use nanorpc::nanorpc_derive;
 
 use crate::control_protocol::DhtError;
-
-use super::haven::HavenLocator;
-use super::haven::RegisterHavenReq;
+use crate::havens::haven::HavenLocator;
+use crate::havens::haven::RegisterHavenReq;
 
 pub const GLOBAL_RPC_DOCK: Dock = 100001;
 

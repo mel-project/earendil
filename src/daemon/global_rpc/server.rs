@@ -1,8 +1,10 @@
 use async_trait::async_trait;
 
-use crate::control_protocol::DhtError;
-use crate::daemon::haven::RegisterHavenReq;
-use crate::daemon::{haven::HavenLocator, DaemonContext};
+use crate::{
+    control_protocol::DhtError,
+    daemon::context::DaemonContext,
+    havens::haven::{HavenLocator, RegisterHavenReq},
+};
 use earendil_crypt::{Fingerprint, VerifyError};
 
 use super::GlobalRpcProtocol;
@@ -34,7 +36,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
                 .verify(&locator.to_sign(), &locator.signature)?;
 
             log::debug!("inserting key {key} locally");
-            self.ctx.dht_cache.insert(key, locator.clone());
+            self.ctx.local_rdht_shard.insert(key, locator.clone());
         }
         Ok(())
     }
@@ -44,7 +46,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         key: Fingerprint,
         recurse: bool,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        if let Some(val) = self.ctx.dht_cache.get(&key) {
+        if let Some(val) = self.ctx.local_rdht_shard.get(&key) {
             return Ok(Some(val));
         } else if recurse {
             log::debug!("searching DHT for {key}");

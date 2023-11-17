@@ -6,23 +6,23 @@ use futures_util::{future, FutureExt};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
 use smol::Timer;
 
-use crate::daemon::{
-    n2r_socket::{Endpoint, N2rSocket},
-    DaemonContext,
+use crate::{
+    daemon::context::DaemonContext,
+    sockets::{n2r_socket::N2rSocket, socket::Endpoint},
 };
 
 use super::GLOBAL_RPC_DOCK;
 
 pub struct GlobalRpcTransport {
     ctx: DaemonContext,
-    anon_isk: Option<IdentitySecret>,
+    anon_isk: IdentitySecret,
     dest_fp: Fingerprint,
 }
 
 impl GlobalRpcTransport {
     pub fn new(
         ctx: DaemonContext,
-        anon_isk: Option<IdentitySecret>,
+        anon_isk: IdentitySecret,
         dest_fp: Fingerprint,
     ) -> GlobalRpcTransport {
         GlobalRpcTransport {
