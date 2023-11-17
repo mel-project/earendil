@@ -16,13 +16,9 @@ use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::{ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs},
     daemon::DaemonContext,
-};
-
-use super::{
     global_rpc::transport::GlobalRpcTransport,
     haven::HavenLocator,
-    n2r_socket::Endpoint,
-    socket::{Socket, SocketRecvError, SocketSendError},
+    socket::{Endpoint, Socket, SocketRecvError, SocketSendError},
 };
 
 pub struct ControlProtocolImpl {
@@ -44,8 +40,10 @@ impl ControlProtocolImpl {
 #[async_trait]
 impl ControlProtocol for ControlProtocolImpl {
     async fn bind_n2r(&self, socket_id: String, anon_id: Option<String>, dock: Option<Dock>) {
-        let anon_id = anon_id.map(|id| self.anon_identities.lock().get(&id));
-        let socket = Socket::bind_n2r(&self.ctx, anon_id.clone(), dock);
+        let anon_id = anon_id
+            .map(|id| self.anon_identities.lock().get(&id))
+            .unwrap_or_else(IdentitySecret::generate);
+        let socket = Socket::bind_n2r_internal(self.ctx.clone(), anon_id, dock);
         self.sockets.insert(socket_id, socket);
     }
 
@@ -56,8 +54,10 @@ impl ControlProtocol for ControlProtocolImpl {
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) {
-        let anon_id = anon_id.map(|id| self.anon_identities.lock().get(&id));
-        let socket = Socket::bind_haven(&self.ctx, anon_id.clone(), dock, rendezvous_point);
+        let anon_id = anon_id
+            .map(|id| self.anon_identities.lock().get(&id))
+            .unwrap_or_else(IdentitySecret::generate);
+        let socket = Socket::bind_haven_internal(self.ctx.clone(), anon_id, dock, rendezvous_point);
         self.sockets.insert(socket_id, socket);
     }
 
@@ -131,7 +131,7 @@ impl ControlProtocol for ControlProtocolImpl {
     ) -> Result<serde_json::Value, GlobalRpcError> {
         let client = GlobalRpcTransport::new(
             self.ctx.clone(),
-            Some(IdentitySecret::generate()),
+            IdentitySecret::generate(),
             send_args.destination,
         );
         let res = if let Some(res) = client

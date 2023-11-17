@@ -1,26 +1,21 @@
-use std::marker::Send;
-use std::{net::SocketAddr, str::FromStr};
-
+use crate::commands::ControlCommands;
+use crate::socket::Endpoint;
+use crate::{daemon::ControlProtErr, haven::HavenLocator};
 use anyhow::Context;
 use async_trait::async_trait;
-
 use bytes::Bytes;
-
 use earendil_crypt::{Fingerprint, IdentitySecret, VerifyError};
 use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
     Dock, PacketConstructError,
 };
-
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
-use crate::daemon::n2r_socket::Endpoint;
-use crate::daemon::ControlProtErr;
-use crate::{daemon::haven::HavenLocator, ControlCommands};
+use std::marker::Send;
+use std::{net::SocketAddr, str::FromStr};
 use thiserror::Error;
 
 pub async fn main_control(

@@ -1,22 +1,12 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    fmt::Display,
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{fmt::Display, str::FromStr, sync::Arc};
 
-use crate::daemon::{log_error, DaemonContext};
+use crate::daemon::DaemonContext;
 use bytes::Bytes;
-use clone_macro::clone;
-use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{Dock, Message};
-use futures_util::TryFutureExt;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use smol::channel::{Receiver, Sender};
-use smolscale::immortal::{Immortal, RespawnStrategy};
+use smol::channel::Receiver;
 
 use super::socket::{SocketRecvError, SocketSendError};
 
@@ -32,6 +22,7 @@ pub struct N2rSocket {
     _send_batcher: Arc<Immortal>,
 }
 
+
 struct BoundDock {
     fp: Fingerprint,
     dock: Dock,
@@ -40,15 +31,8 @@ struct BoundDock {
 
 impl N2rSocket {
     /// Binds an N2R socket. anon_id indicates the anonymous ID to use. If this is not given, then the node's own identity will be used, which will not function properly if this is not running on a relay.
-    pub fn bind(
-        ctx: DaemonContext,
-        anon_id: Option<IdentitySecret>,
-        dock: Option<Dock>,
-    ) -> N2rSocket {
-        let our_fingerprint = anon_id
-            .as_ref()
-            .map(|anon_id| anon_id.public().fingerprint())
-            .unwrap_or_else(|| ctx.identity.public().fingerprint());
+    pub fn bind(ctx: DaemonContext, anon_id: IdentitySecret, dock: Option<Dock>) -> N2rSocket {
+        let our_fingerprint = anon_id.public().fingerprint();
         let dock = if let Some(dock) = dock {
             dock
         } else {
@@ -78,25 +62,11 @@ impl N2rSocket {
             send_outgoing,
         );
 
-        let (send_msg, recv_msg) = smol::channel::bounded(1000);
-        let _send_batcher = Arc::new(Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx, anon_id, recv_msg], move || send_batcher_loop(
-                ctx.clone(),
-                anon_id.clone(),
-                dock,
-                recv_msg.clone()
-            )
-            .map_err(log_error("send_batcher"))),
-        ));
         N2rSocket {
             ctx,
             anon_id,
             bound_dock,
             recv_incoming,
-            send_outgoing: send_msg,
-            incoming_queue: Arc::new(ConcurrentQueue::unbounded()),
-            _send_batcher,
         }
     }
 
@@ -183,36 +153,3 @@ impl Drop for BoundDock {
     }
 }
 
-#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
-pub struct Endpoint {
-    pub fingerprint: Fingerprint,
-    pub dock: Dock,
-}
-
-impl Endpoint {
-    pub fn new(fingerprint: Fingerprint, dock: Dock) -> Endpoint {
-        Endpoint { fingerprint, dock }
-    }
-}
-
-impl Display for Endpoint {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}:{}", self.fingerprint, self.dock)
-    }
-}
-
-impl FromStr for Endpoint {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let elems: Vec<&str> = s.split(':').collect();
-        if elems.len() != 2 {
-            return Err(anyhow::anyhow!(
-                "Wrong endpoint format! Endpoint format should be fingerprint:dock"
-            ));
-        }
-        let fp = Fingerprint::from_str(elems[0])?;
-        let dock = u32::from_str(elems[1])?;
-        Ok(Endpoint::new(fp, dock))
-    }
-}
