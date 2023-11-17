@@ -1,19 +1,27 @@
-use std::{fmt::Display, str::FromStr, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+    time::Duration,
+};
 
-use crate::daemon::DaemonContext;
 use bytes::Bytes;
+use clone_macro::clone;
+use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{Dock, Message};
 use rand::Rng;
-use serde::{Deserialize, Serialize};
-use smol::channel::Receiver;
 
-use super::socket::{SocketRecvError, SocketSendError};
+use smol::channel::{Receiver, Sender};
+use smolscale::immortal::{Immortal, RespawnStrategy};
+
+use crate::{daemon::context::DaemonContext, socket::SocketRecvError};
+
+use super::{Endpoint, SocketSendError};
 
 #[derive(Clone)]
 pub struct N2rSocket {
     ctx: DaemonContext,
-    anon_id: Option<IdentitySecret>,
+    anon_id: IdentitySecret,
     bound_dock: Arc<BoundDock>,
     recv_incoming: Receiver<(Message, Fingerprint)>,
     incoming_queue: Arc<ConcurrentQueue<(Bytes, Endpoint)>>,
@@ -21,7 +29,6 @@ pub struct N2rSocket {
     send_outgoing: Sender<(Bytes, Endpoint)>,
     _send_batcher: Arc<Immortal>,
 }
-
 
 struct BoundDock {
     fp: Fingerprint,
@@ -53,20 +60,35 @@ impl N2rSocket {
             dock,
             ctx: ctx.clone(),
         });
-        let (send_outgoing, recv_incoming) = smol::channel::bounded(1000);
+        let (send_incoming, recv_incoming) = smol::channel::bounded(1000);
         ctx.socket_recv_queues.insert(
             Endpoint {
                 fingerprint: our_fingerprint,
                 dock,
             },
-            send_outgoing,
+            send_incoming,
         );
 
+        let (send_outgoing, recv_outgoing) = smol::channel::bounded(1000);
         N2rSocket {
-            ctx,
-            anon_id,
+            ctx: ctx.clone(),
+            anon_id: anon_id.clone(),
             bound_dock,
             recv_incoming,
+
+            send_outgoing,
+            incoming_queue: Arc::new(ConcurrentQueue::unbounded()),
+
+            _send_batcher: Immortal::respawn(
+                RespawnStrategy::Immediate,
+                clone!([ctx, recv_outgoing], move || send_batcher_loop(
+                    ctx.clone(),
+                    anon_id.clone(),
+                    dock,
+                    recv_outgoing.clone()
+                )),
+            )
+            .into(),
         }
     }
 
@@ -99,7 +121,7 @@ impl N2rSocket {
 
 async fn send_batcher_loop(
     ctx: DaemonContext,
-    anon_id: Option<IdentitySecret>,
+    anon_id: IdentitySecret,
     dock: Dock,
     recv_msg: Receiver<(Bytes, Endpoint)>,
 ) -> anyhow::Result<()> {
@@ -152,4 +174,3 @@ impl Drop for BoundDock {
             .remove(&Endpoint::new(self.fp, self.dock));
     }
 }
-
