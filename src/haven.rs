@@ -16,7 +16,7 @@ use stdcode::StdcodeSerializeExt;
 use crate::{
     config::{ForwardHandler, HavenForwardConfig},
     daemon::context::DaemonContext,
-    sockets::socket::{Endpoint, Socket},
+    socket::{Endpoint, Socket},
     utils::get_or_create_id,
 };
 

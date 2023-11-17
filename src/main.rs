@@ -1,18 +1,10 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use commands::ControlCommands;
-use config::ConfigFile;
-use control_protocol::main_control;
-use daemon::Daemon;
+use earendil::commands::ControlCommands;
+use earendil::config::ConfigFile;
+use earendil::control_protocol::main_control;
+use earendil::daemon::Daemon;
 use std::{net::SocketAddr, path::PathBuf};
-
-mod commands;
-mod config;
-pub mod control_protocol;
-pub mod daemon;
-mod havens;
-mod sockets;
-mod utils;
 
 /// Official implementation of an Earendil node
 #[derive(Parser)]
@@ -49,9 +41,10 @@ fn main() -> anyhow::Result<()> {
                 serde_yaml::from_slice(&std::fs::read(config).context("cannot read config file")?)
                     .context("syntax error in config file")?;
             log::info!("about to init daemon!");
-            let daemon = Daemon::init(config_parsed)?;
-            smolscale::block_on(daemon.task)?;
-            Ok(())
+            let _daemon = Daemon::init(config_parsed)?;
+            loop {
+                std::thread::park();
+            }
         }
         Commands::Control {
             control_command,

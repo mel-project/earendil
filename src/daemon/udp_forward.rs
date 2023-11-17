@@ -10,7 +10,7 @@ use moka::sync::{Cache, CacheBuilder};
 use smol::net::UdpSocket;
 use smolscale::immortal::Immortal;
 
-use crate::{config::UdpForwardConfig, sockets::socket::Socket};
+use crate::{config::UdpForwardConfig, socket::Socket};
 
 use super::DaemonContext;
 

@@ -5,7 +5,7 @@ use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::sockets::socket::Endpoint;
+use crate::socket::Endpoint;
 
 /// A YAML-serializable configuration file
 #[derive(Serialize, Deserialize)]

@@ -8,7 +8,7 @@ use smol::channel::Receiver;
 
 use crate::daemon::context::DaemonContext;
 
-use super::socket::{Endpoint, SocketRecvError, SocketSendError};
+use super::{Endpoint, SocketRecvError, SocketSendError};
 
 pub struct N2rSocket {
     ctx: DaemonContext,

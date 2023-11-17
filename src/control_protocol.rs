@@ -1,6 +1,6 @@
 use crate::commands::ControlCommands;
-use crate::sockets::socket::Endpoint;
-use crate::{daemon::ControlProtErr, havens::haven::HavenLocator};
+use crate::socket::Endpoint;
+use crate::{daemon::ControlProtErr, haven::HavenLocator};
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;

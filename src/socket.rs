@@ -11,7 +11,10 @@ use crate::{
     daemon::{context::DaemonContext, Daemon},
 };
 
-use super::{haven_socket::HavenSocket, n2r_socket::N2rSocket};
+use self::{haven_socket::HavenSocket, n2r_socket::N2rSocket};
+
+pub(crate) mod haven_socket;
+pub(crate) mod n2r_socket;
 
 pub struct Socket {
     inner: InnerSocket,

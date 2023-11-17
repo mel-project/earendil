@@ -1,6 +1,6 @@
-pub mod context;
+pub(crate) mod context;
 mod control_protocol_impl;
-pub mod global_rpc;
+
 mod gossip;
 mod inout_route;
 mod link_connection;
@@ -21,7 +21,7 @@ use moka::sync::Cache;
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
 use parking_lot::RwLock;
-use smol::Task;
+
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
 use stdcode::StdcodeSerializeExt;
@@ -29,13 +29,11 @@ use stdcode::StdcodeSerializeExt;
 use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 
-use crate::config::ConfigFile;
-use crate::control_protocol::SendMessageError;
-use crate::daemon::context::DaemonContext;
 use crate::daemon::udp_forward::udp_forward_loop;
-use crate::havens::haven::{haven_loop, HAVEN_FORWARD_DOCK};
-use crate::sockets::n2r_socket::N2rSocket;
-use crate::sockets::socket::Endpoint;
+use crate::haven::{haven_loop, HAVEN_FORWARD_DOCK};
+use crate::socket::n2r_socket::N2rSocket;
+use crate::socket::Endpoint;
+use crate::{config::ConfigFile, global_rpc::GLOBAL_RPC_DOCK};
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::ControlService,
@@ -44,14 +42,16 @@ use crate::{
         inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
     },
 };
+use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
+use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
 
 pub use self::control_protocol_impl::ControlProtErr;
-use self::global_rpc::{GlobalRpcService, GLOBAL_RPC_DOCK};
-use self::{control_protocol_impl::ControlProtocolImpl, global_rpc::server::GlobalRpcImpl};
+
+use self::control_protocol_impl::ControlProtocolImpl;
 
 pub struct Daemon {
-    pub ctx: DaemonContext,
-    pub task: Task<anyhow::Result<()>>,
+    pub(crate) ctx: DaemonContext,
+    _task: Immortal,
 }
 
 impl Daemon {
@@ -60,8 +60,11 @@ impl Daemon {
         let ctx = DaemonContext::new(config)?;
         let context = ctx.clone();
         log::info!("starting background task for main_daemon");
-        let task = smolscale::spawn(async move { main_daemon(context) });
-        Ok(Self { ctx, task })
+        let task = Immortal::spawn(async move {
+            main_daemon(context).unwrap();
+            panic!("oh no")
+        });
+        Ok(Self { ctx, _task: task })
     }
 }
 

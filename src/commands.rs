@@ -1,8 +1,7 @@
+use crate::socket::Endpoint;
 use clap::{arg, Subcommand};
 use earendil_crypt::Fingerprint;
 use earendil_packet::Dock;
-
-use crate::sockets::socket::Endpoint;
 
 #[derive(Subcommand)]
 pub enum ControlCommands {

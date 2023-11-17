@@ -22,16 +22,13 @@ use crate::{
     config::ConfigFile,
     control_protocol::{DhtError, SendMessageError},
     daemon::route_to_instructs,
-    havens::haven::HavenLocator,
-    sockets::socket::Endpoint,
+    global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
+    haven::HavenLocator,
+    socket::Endpoint,
     utils::get_or_create_id,
 };
 
-use super::{
-    global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
-    neightable::NeighTable,
-    reply_block_store::ReplyBlockStore,
-};
+use super::{neightable::NeighTable, reply_block_store::ReplyBlockStore};
 
 const DHT_REDUNDANCY: usize = 3;
 

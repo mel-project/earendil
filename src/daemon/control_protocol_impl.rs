@@ -12,13 +12,13 @@ use serde::{Deserialize, Serialize};
 use sosistab2::ObfsUdpSecret;
 use thiserror::Error;
 
-use super::global_rpc::transport::GlobalRpcTransport;
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::{ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs},
     daemon::DaemonContext,
-    havens::haven::HavenLocator,
-    sockets::socket::{Endpoint, Socket, SocketRecvError, SocketSendError},
+    global_rpc::transport::GlobalRpcTransport,
+    haven::HavenLocator,
+    socket::{Endpoint, Socket, SocketRecvError, SocketSendError},
 };
 
 pub struct ControlProtocolImpl {

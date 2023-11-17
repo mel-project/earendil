@@ -8,7 +8,7 @@ use smol::Timer;
 
 use crate::{
     daemon::context::DaemonContext,
-    sockets::{n2r_socket::N2rSocket, socket::Endpoint},
+    socket::{n2r_socket::N2rSocket, Endpoint},
 };
 
 use super::GLOBAL_RPC_DOCK;

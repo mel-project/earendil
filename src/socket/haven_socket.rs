@@ -8,17 +8,12 @@ use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 
 use crate::{
-    daemon::{
-        context::DaemonContext,
-        global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
-    },
-    havens::haven::{HavenLocator, RegisterHavenReq, HAVEN_FORWARD_DOCK},
+    daemon::context::DaemonContext,
+    global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
+    haven::{HavenLocator, RegisterHavenReq, HAVEN_FORWARD_DOCK},
 };
 
-use super::{
-    n2r_socket::N2rSocket,
-    socket::{Endpoint, SocketRecvError, SocketSendError},
-};
+use super::{n2r_socket::N2rSocket, Endpoint, SocketRecvError, SocketSendError};
 
 pub struct HavenSocket {
     ctx: DaemonContext,
