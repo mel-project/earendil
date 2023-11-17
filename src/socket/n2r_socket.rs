@@ -24,9 +24,9 @@ struct BoundDock {
 }
 
 impl N2rSocket {
-    /// Binds an N2R socket. anon_id indicates the anonymous ID to use. If this is not given, then the node's own identity will be used, which will not function properly if this is not running on a relay.
-    pub fn bind(ctx: DaemonContext, anon_id: IdentitySecret, dock: Option<Dock>) -> N2rSocket {
-        let our_fingerprint = anon_id.public().fingerprint();
+    /// Binds an N2R socket.
+    pub fn bind(ctx: DaemonContext, idsk: IdentitySecret, dock: Option<Dock>) -> N2rSocket {
+        let our_fingerprint = idsk.public().fingerprint();
         let dock = if let Some(dock) = dock {
             dock
         } else {
@@ -58,7 +58,7 @@ impl N2rSocket {
 
         N2rSocket {
             ctx,
-            anon_id,
+            anon_id: idsk,
             bound_dock,
             recv_incoming,
         }
