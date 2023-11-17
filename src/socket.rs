@@ -95,9 +95,11 @@ enum InnerSocket {
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum SocketSendError {
     #[error(transparent)]
-    N2rSendMessageError(#[from] SendMessageError),
+    N2rSendError(#[from] SendMessageError),
     #[error("could not get rendezvous point from dht")]
     DhtError,
+    #[error("error sending haven message")]
+    HavenSendError,
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
@@ -106,6 +108,8 @@ pub enum SocketRecvError {
     N2rRecvError,
     #[error("improperly formatted inner haven message")]
     HavenMsgBadFormat,
+    #[error("error receiving decrypted haven message")]
+    HavenRecvError,
 }
 
 #[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
