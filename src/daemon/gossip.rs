@@ -21,6 +21,7 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             let neighs = ctx.table.all_neighs();
             if neighs.is_empty() {
                 log::debug!("skipping gossip due to no neighborss");
+                std::thread::sleep(Duration::from_secs(1));
             } else {
                 // pick a random neighbor and do sync stuff
                 let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
