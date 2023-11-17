@@ -67,7 +67,7 @@ impl N2rSocket {
             send_incoming,
         );
 
-        let (send_outgoing, recv_outgoing) = smol::channel::bounded(1000);
+        let (send_outgoing, recv_outgoing) = smol::channel::bounded(10000);
         N2rSocket {
             bound_dock,
             recv_incoming,

@@ -85,8 +85,8 @@ impl DaemonContext {
     ) -> Result<(), SendMessageError> {
         let now = Instant::now();
         let _guard = scopeguard::guard((), |_| {
-            let send_msg_time = now.elapsed().as_millis();
-            log::debug!("send message took {send_msg_time}");
+            let send_msg_time = now.elapsed();
+            log::debug!("send message took {:?}", send_msg_time);
         });
 
         let (public_isk, my_anon_osk) = if src_anon_id == self.identity {
