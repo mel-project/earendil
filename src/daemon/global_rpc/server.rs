@@ -36,7 +36,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
                 .verify(&locator.to_sign(), &locator.signature)?;
 
             log::debug!("inserting key {key} locally");
-            self.ctx.haven_dht.insert(key, locator.clone());
+            self.ctx.local_rdht_shard.insert(key, locator.clone());
         }
         Ok(())
     }
@@ -46,7 +46,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         key: Fingerprint,
         recurse: bool,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        if let Some(val) = self.ctx.haven_dht.get(&key) {
+        if let Some(val) = self.ctx.local_rdht_shard.get(&key) {
             return Ok(Some(val));
         } else if recurse {
             log::debug!("searching DHT for {key}");

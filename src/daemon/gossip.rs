@@ -20,17 +20,17 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         let once = async {
             let neighs = ctx.table.all_neighs();
             if neighs.is_empty() {
-                log::debug!("skipping gossip due to no neighs");
-            }
-            // pick a random neighbor and do sync stuff
-            let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
-
-            if let Err(err) = gossip_once(&ctx, rand_neigh).await {
-                log::warn!(
-                    "gossip with {} failed: {:?}",
-                    rand_neigh.remote_idpk().fingerprint(),
-                    err
-                );
+                log::debug!("skipping gossip due to no neighborss");
+            } else {
+                // pick a random neighbor and do sync stuff
+                let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
+                if let Err(err) = gossip_once(&ctx, rand_neigh).await {
+                    log::warn!(
+                        "gossip with {} failed: {:?}",
+                        rand_neigh.remote_idpk().fingerprint(),
+                        err
+                    );
+                }
             }
         };
         pin_mut!(once);
@@ -89,6 +89,7 @@ async fn sign_adjacency(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::R
 async fn gossip_graph(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
     let remote_fingerprint = conn.remote_idpk().fingerprint();
     let all_known_nodes = ctx.relay_graph.read().all_nodes().collect_vec();
+    log::info!("num known nodes: {}", all_known_nodes.len());
     let random_sample = all_known_nodes
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
         .copied()

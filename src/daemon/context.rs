@@ -31,8 +31,9 @@ use super::{
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
     neightable::NeighTable,
     reply_block_store::ReplyBlockStore,
-    DHT_REDUNDANCY,
 };
+
+const DHT_REDUNDANCY: usize = 3;
 
 /// This does most of the housekeeping for the daemon state.
 #[derive(Clone)]
@@ -45,12 +46,12 @@ pub struct DaemonContext {
     pub degarblers: Cache<u64, ReplyDegarbler>,
     pub anon_destinations: Arc<Mutex<ReplyBlockStore>>,
     pub socket_recv_queues: Arc<DashMap<Endpoint, Sender<(Message, Fingerprint)>>>,
-    pub haven_dht: Cache<Fingerprint, HavenLocator>,
+    pub local_rdht_shard: Cache<Fingerprint, HavenLocator>,
     pub registered_havens: Arc<Cache<Fingerprint, ()>>,
 }
 
 impl DaemonContext {
-    pub(crate) fn new(config: ConfigFile) -> anyhow::Result<Self> {
+    pub fn new(config: ConfigFile) -> anyhow::Result<Self> {
         let table = Arc::new(NeighTable::new());
         let identity = get_or_create_id(&config.identity)?;
         let ctx = DaemonContext {
@@ -63,7 +64,7 @@ impl DaemonContext {
             anon_destinations: Arc::new(Mutex::new(ReplyBlockStore::new())),
 
             socket_recv_queues: Arc::new(DashMap::new()),
-            haven_dht: CacheBuilder::default()
+            local_rdht_shard: CacheBuilder::default()
                 .time_to_idle(Duration::from_secs(60 * 60))
                 .build(),
             registered_havens: Arc::new(
@@ -199,7 +200,7 @@ impl DaemonContext {
         &self,
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        if let Some(locator) = self.haven_dht.get(&fingerprint) {
+        if let Some(locator) = self.local_rdht_shard.get(&fingerprint) {
             return Ok(Some(locator));
         };
         let replicas = self.dht_key_to_fps(&fingerprint.to_string());
@@ -229,7 +230,7 @@ impl DaemonContext {
                     let payload = locator.to_sign();
                     if id_pk.fingerprint() == fingerprint {
                         id_pk.verify(&payload, &locator.signature)?;
-                        self.haven_dht.insert(fingerprint, locator.clone());
+                        self.local_rdht_shard.insert(fingerprint, locator.clone());
                         return Ok(Some(locator));
                     }
                 }

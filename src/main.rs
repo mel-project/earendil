@@ -40,14 +40,17 @@ enum Commands {
 }
 
 fn main() -> anyhow::Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
+        .init();
+
     match Args::parse().command {
         Commands::Daemon { config } => {
             let config_parsed: ConfigFile =
                 serde_yaml::from_slice(&std::fs::read(config).context("cannot read config file")?)
                     .context("syntax error in config file")?;
-
-            let _ = Daemon::init(config_parsed)?;
-            std::thread::park();
+            log::info!("about to init daemon!");
+            let daemon = Daemon::init(config_parsed)?;
+            smolscale::block_on(daemon.task)?;
             Ok(())
         }
         Commands::Control {

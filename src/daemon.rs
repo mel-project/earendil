@@ -57,10 +57,9 @@ pub struct Daemon {
 impl Daemon {
     /// Initializes the daemon and starts all background loops
     pub fn init(config: ConfigFile) -> anyhow::Result<Daemon> {
-        println!("creating context");
         let ctx = DaemonContext::new(config)?;
-        println!("created ctx");
         let context = ctx.clone();
+        log::info!("starting background task for main_daemon");
         let task = smolscale::spawn(async move { main_daemon(context) });
         Ok(Self { ctx, task })
     }
@@ -74,8 +73,6 @@ where
 }
 
 pub fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
-        .init();
     log::info!(
         "daemon starting with fingerprint {}",
         ctx.identity.public().fingerprint()
@@ -279,7 +276,6 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 /// Loop that listens to and handles incoming GlobalRpc requests
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    // TODO: check if generating a new SK here is correct?
     let socket = Arc::new(N2rSocket::bind(
         ctx.clone(),
         IdentitySecret::generate(),
@@ -308,7 +304,6 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 }
 
-const DHT_REDUNDANCY: usize = 3;
 /// Loop that listens to and handles incoming haven forwarding requests
 async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let seen_srcs: Cache<(Endpoint, Endpoint), ()> = Cache::builder()
@@ -316,7 +311,6 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         .time_to_idle(Duration::from_secs(60 * 60))
         .build();
 
-    // TODO: check if generating a new SK here is correct?
     let socket = Arc::new(N2rSocket::bind(
         ctx.clone(),
         IdentitySecret::generate(),
