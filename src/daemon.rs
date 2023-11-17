@@ -26,6 +26,7 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
 use stdcode::StdcodeSerializeExt;
 
+use std::thread::available_parallelism;
 use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 
@@ -91,11 +92,16 @@ pub fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             }
         }));
 
-        let _peel_forward = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || peel_forward_loop(ctx.clone())
-                .map_err(log_error("peel_forward"))),
-        );
+        let _peel_forward_loops: Vec<Immortal> =
+            (0..available_parallelism().map(|s| s.into()).unwrap_or(1))
+                .map(|_| {
+                    Immortal::respawn(
+                        RespawnStrategy::Immediate,
+                        clone!([ctx], move || peel_forward_loop(ctx.clone())
+                            .map_err(log_error("peel_forward"))),
+                    )
+                })
+                .collect();
 
         let _gossip = Immortal::respawn(
             RespawnStrategy::Immediate,
@@ -223,7 +229,7 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 }
             }
             InnerPacket::ReplyBlocks(reply_blocks) => {
-                log::debug!("received a batch of ReplyBlocks");
+                log::trace!("received a batch of ReplyBlocks");
                 for reply_block in reply_blocks {
                     ctx.anon_destinations.lock().insert(src_fp, reply_block);
                 }
@@ -235,9 +241,7 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         let pkt = ctx.table.recv_raw_packet().await;
         let now = Instant::now();
-        log::debug!("received raw packet");
         let peeled = pkt.peel(&ctx.onion_sk)?;
-        log::debug!("peeled packet!");
 
         scopeguard::defer!(log::debug!(
             "PEEL AND PROCESS MESSAGE TOOK:::::::::: {:?}",
@@ -259,13 +263,13 @@ async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 pkt: inner,
             } => process_inner_pkt(&ctx, inner, src_fp, ctx.identity.public().fingerprint())?,
             PeeledPacket::GarbledReply { id, mut pkt } => {
-                log::debug!("received garbled packet");
+                log::trace!("received garbled packet");
                 let reply_degarbler = ctx
                     .degarblers
                     .get(&id)
                     .context("no degarbler for this garbled pkt")?;
                 let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
-                log::debug!("packet has been degarbled!");
+                log::trace!("packet has been degarbled!");
                 process_inner_pkt(
                     &ctx,
                     inner,
@@ -324,7 +328,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         if let Ok((msg, src_endpoint)) = socket.recv_from().await {
             let ctx = ctx.clone();
             let (inner, dest_ep): (Bytes, Endpoint) = stdcode::deserialize(&msg)?;
-            log::debug!(
+            log::trace!(
                 "received forward msg {:?}, from {}, to {}",
                 inner,
                 src_endpoint,

@@ -54,7 +54,7 @@ impl DaemonContext {
         let ctx = DaemonContext {
             config: Arc::new(config),
             table: table.clone(),
-            identity: identity.into(),
+            identity,
             onion_sk: OnionSecret::generate(),
             relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
             degarblers: Cache::new(1_000_000),
@@ -81,16 +81,16 @@ impl DaemonContext {
         src_dock: Dock,
         dst_fp: Fingerprint,
         dst_dock: Dock,
-        content: Bytes,
+        content: Vec<Bytes>,
     ) -> Result<(), SendMessageError> {
         let now = Instant::now();
         let _guard = scopeguard::guard((), |_| {
-            let send_msg_time = now.elapsed().as_millis();
-            log::debug!("send message took {send_msg_time}");
+            let send_msg_time = now.elapsed();
+            log::debug!("send message took {:?}", send_msg_time);
         });
 
         let (public_isk, my_anon_osk) = if src_anon_id == self.identity {
-            (self.identity.clone(), None)
+            (self.identity, None)
         } else {
             (src_anon_id, Some(OnionSecret::generate()))
         };
@@ -176,11 +176,7 @@ impl DaemonContext {
 
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
             log::debug!("key {key} inserting into remote replica {replica}");
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(
-                self.clone(),
-                anon_isk.clone(),
-                replica,
-            ));
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
             match gclient
                 .dht_insert(locator.clone(), false)
                 .timeout(Duration::from_secs(60))
@@ -204,7 +200,6 @@ impl DaemonContext {
         let mut gatherer = FuturesUnordered::new();
         let anon_isk = IdentitySecret::generate();
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-            let anon_isk = anon_isk.clone();
             gatherer.push(async move {
                 let gclient =
                     GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));

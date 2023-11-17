@@ -35,7 +35,7 @@ impl ReplyBlock {
             InnerPacket::Message(Message {
                 source_dock: 0u32,
                 dest_dock: 0u32,
-                body: Bytes::new(),
+                body: vec![Bytes::new()],
             }),
             &metadata,
             &my_anon_isk,
@@ -81,6 +81,6 @@ impl ReplyDegarbler {
     }
 
     pub fn my_anon_isk(&self) -> IdentitySecret {
-        self.my_anon_isk.clone()
+        self.my_anon_isk
     }
 }

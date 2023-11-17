@@ -44,7 +44,7 @@ mod tests {
         let msg = Message {
             source_dock: 0u32,
             dest_dock: 0u32,
-            body: Bytes::copy_from_slice(&[0u8; 100]),
+            body: vec![Bytes::copy_from_slice(&[0u8; 100])],
         };
 
         let forward_instructions: Vec<ForwardInstruction> =
@@ -136,20 +136,16 @@ mod tests {
             .collect();
 
         // Prepare reply block
-        let (reply_block, (_, reply_degarbler)) = ReplyBlock::new(
-            &route,
-            &alice_opk,
-            OnionSecret::generate(),
-            alice_isk.clone(),
-        )
-        .expect("Failed to create reply block");
+        let (reply_block, (_, reply_degarbler)) =
+            ReplyBlock::new(&route, &alice_opk, OnionSecret::generate(), alice_isk)
+                .expect("Failed to create reply block");
 
         // Prepare message using header from reply block
         let body = "hello world from reply block!";
         let message = Message {
             source_dock: 0u32,
             dest_dock: 0u32,
-            body: Bytes::copy_from_slice(body.as_bytes()),
+            body: vec![Bytes::copy_from_slice(body.as_bytes())],
         };
         let packet = RawPacket::new_reply(
             &reply_block,

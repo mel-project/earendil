@@ -34,7 +34,7 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             }
         };
         // pin_mut!(once);
-        if let None = once.timeout(Duration::from_secs(5)).await {
+        if once.timeout(Duration::from_secs(5)).await.is_none() {
             log::warn!("gossip once timed out");
         };
         (&mut sleep_timer).await;

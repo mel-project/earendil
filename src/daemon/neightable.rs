@@ -25,7 +25,7 @@ impl Default for NeighTable {
 impl NeighTable {
     /// Create a new NeighTable.
     pub fn new() -> Self {
-        let (send_incoming, recv_incoming) = smol::channel::bounded(1);
+        let (send_incoming, recv_incoming) = smol::channel::bounded(100);
         Self {
             table: Default::default(),
             send_incoming,
