@@ -31,14 +31,14 @@ impl HavenSocket {
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> HavenSocket {
-        let n2r_socket = N2rSocket::bind(ctx.clone(), idsk.clone(), dock);
-        let isk = idsk.clone();
+        let n2r_socket = N2rSocket::bind(ctx.clone(), idsk, dock);
+        let isk = idsk;
         if let Some(rob) = rendezvous_point {
             // We're Bob:
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
             log::debug!("binding haven with rendezvous_point {}", rob);
             let context = ctx.clone();
-            let registration_isk = isk.clone();
+            let registration_isk = isk;
             let task = smolscale::spawn(async move {
                 log::debug!("inside haven bind task!!!");
                 // generate a new onion keypair
@@ -46,8 +46,8 @@ impl HavenSocket {
                 let onion_pk = onion_sk.public();
                 // register forwarding with the rendezvous relay node
                 let gclient =
-                    GlobalRpcClient(GlobalRpcTransport::new(context.clone(), idsk.clone(), rob));
-                let forward_req = RegisterHavenReq::new(registration_isk.clone());
+                    GlobalRpcClient(GlobalRpcTransport::new(context.clone(), idsk, rob));
+                let forward_req = RegisterHavenReq::new(registration_isk);
                 loop {
                     match gclient
                         .alloc_forward(forward_req.clone())
@@ -66,7 +66,7 @@ impl HavenSocket {
                         _ => {
                             context
                                 .dht_insert(HavenLocator::new(
-                                    registration_isk.clone(),
+                                    registration_isk,
                                     onion_pk,
                                     rob,
                                 ))

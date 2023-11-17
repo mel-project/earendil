@@ -4,7 +4,7 @@ use earendil::commands::ControlCommands;
 use earendil::config::ConfigFile;
 use earendil::control_protocol::main_control;
 use earendil::daemon::Daemon;
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
+use std::{net::SocketAddr, path::PathBuf};
 
 /// Official implementation of an Earendil node
 #[derive(Parser)]

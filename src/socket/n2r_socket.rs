@@ -79,7 +79,7 @@ impl N2rSocket {
                 RespawnStrategy::Immediate,
                 clone!([ctx, recv_outgoing], move || send_batcher_loop(
                     ctx.clone(),
-                    anon_id.clone(),
+                    idsk,
                     dock,
                     recv_outgoing.clone()
                 )),
@@ -152,7 +152,7 @@ async fn send_batcher_loop(
             }
             // send the message
             ctx.send_message(
-                anon_id.clone(),
+                anon_id,
                 dock,
                 endpoint.fingerprint,
                 endpoint.dock,

@@ -68,7 +68,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                         &route,
                         &my_opk,
                         my_anon_osk.clone(),
-                        my_anon_isk.clone(),
+                        my_anon_isk,
                     ))
                 });
             },

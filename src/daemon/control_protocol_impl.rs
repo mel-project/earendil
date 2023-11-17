@@ -42,7 +42,7 @@ impl ControlProtocol for ControlProtocolImpl {
     async fn bind_n2r(&self, socket_id: String, anon_id: Option<String>, dock: Option<Dock>) {
         let anon_id = anon_id
             .map(|id| self.anon_identities.lock().get(&id))
-            .unwrap_or_else(|| self.ctx.identity.clone());
+            .unwrap_or_else(|| self.ctx.identity);
         let socket = Socket::bind_n2r_internal(self.ctx.clone(), anon_id, dock);
         self.sockets.insert(socket_id, socket);
     }
@@ -56,7 +56,7 @@ impl ControlProtocol for ControlProtocolImpl {
     ) {
         let anon_id = anon_id
             .map(|id| self.anon_identities.lock().get(&id))
-            .unwrap_or_else(|| self.ctx.identity.clone());
+            .unwrap_or_else(|| self.ctx.identity);
         let socket = Socket::bind_haven_internal(self.ctx.clone(), anon_id, dock, rendezvous_point);
         self.sockets.insert(socket_id, socket);
     }

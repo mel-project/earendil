@@ -81,6 +81,6 @@ impl ReplyDegarbler {
     }
 
     pub fn my_anon_isk(&self) -> IdentitySecret {
-        self.my_anon_isk.clone()
+        self.my_anon_isk
     }
 }
