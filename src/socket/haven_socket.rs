@@ -1,15 +1,16 @@
 use std::{sync::Arc, time::Duration};
 
+use blake3::Hash;
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use earendil_packet::{
-    crypt::{OnionPublic, OnionSecret},
+    crypt::{AeadKey, OnionPublic, OnionSecret},
     Dock,
 };
-use futures_util::TryFutureExt;
 use moka::sync::Cache;
 use parking_lot::Mutex;
 use replay_filter::ReplayFilter;
+use serde::{Deserialize, Serialize};
 use smol::{
     channel::{Receiver, Sender},
     Task, Timer,
@@ -49,16 +50,106 @@ impl HavenSocket {
     ) -> HavenSocket {
         let n2r_socket = N2rSocket::bind(ctx.clone(), idsk, dock);
         let isk = idsk;
-        let encrypters = Cache::builder()
+        let encrypters: Cache<Fingerprint, Encrypter> = Cache::builder()
             .max_capacity(100_000)
             .time_to_live(Duration::from_secs(60 * 30))
             .build();
         let (send_incoming, recv_incoming) = smol::channel::bounded(1000);
+        let n2r_socket_clone = n2r_socket.clone();
+        let encrypters_clone = encrypters.clone();
         let recv_task = smolscale::spawn(async move {
             loop {
                 // todo: _recv_task should recv a msg from the inner n2r skt, call Encrypter::decrypt_incoming() on incoming packets then send them into send_incoming
 
-                todo!()
+                if let Ok((n2r_msg, _)) = n2r_socket_clone.recv_from().await {
+                    match stdcode::deserialize::<(Bytes, Endpoint)>(&n2r_msg) {
+                        Ok((body, source)) => match stdcode::deserialize::<HavenMsg>(&body) {
+                            Ok(haven_msg) => {
+                                let encrypter = encrypters_clone.get(&source.fingerprint);
+                                match encrypter {
+                                    Some(encrypter) => match haven_msg {
+                                        HavenMsg::Handshake { id_pk, eph_pk, sig } => {
+                                            // todo: verify handshake signature
+
+                                            let mut key_state = encrypter.key_state.lock();
+
+                                            *key_state = match &*key_state {
+                                                HavenKeyState::Pending { my_sk } => {
+                                                    let shared_secret =
+                                                        my_sk.shared_secret(&eph_pk);
+                                                    let up_key = blake3::keyed_hash(
+                                                        blake3::hash(b"haven-up").as_bytes(),
+                                                        &shared_secret,
+                                                    );
+                                                    let down_key = blake3::keyed_hash(
+                                                        blake3::hash(b"haven-dn").as_bytes(),
+                                                        &shared_secret,
+                                                    );
+
+                                                    HavenKeyState::Completed { up_key, down_key }
+                                                }
+                                                HavenKeyState::Completed {
+                                                    up_key: _,
+                                                    down_key: _,
+                                                } => {
+                                                    let new_onion_sk = OnionSecret::generate();
+                                                    let shared_secret =
+                                                        new_onion_sk.shared_secret(&eph_pk);
+                                                    let up_key = blake3::keyed_hash(
+                                                        blake3::hash(b"haven-up").as_bytes(),
+                                                        &shared_secret,
+                                                    );
+                                                    let down_key = blake3::keyed_hash(
+                                                        blake3::hash(b"haven-dn").as_bytes(),
+                                                        &shared_secret,
+                                                    );
+
+                                                    HavenKeyState::Completed { up_key, down_key }
+                                                }
+                                            };
+                                        }
+                                        HavenMsg::Regular { inner, nonce } => {
+                                            let decrypted_msg =
+                                                encrypter.decrypt_incoming(inner, nonce);
+
+                                            match decrypted_msg {
+                                                Ok(decrypted) => {
+                                                    let _ = send_incoming
+                                                        .send((decrypted, source))
+                                                        .await;
+                                                }
+                                                Err(e) => log::debug!(
+                                                    "failed to decrypt haven message: {e}"
+                                                ),
+                                            }
+                                        }
+                                    },
+                                    None => {
+                                        log::debug!("no encrypter exists for {source}");
+                                        match haven_msg {
+                                            HavenMsg::Handshake { id_pk, eph_pk, sig } => {
+                                                // todo: verify signature
+
+                                                let encrypter = Encrypter::new(
+                                                    source,
+                                                    &n2r_socket_clone,
+                                                    Some(eph_pk),
+                                                );
+                                                encrypters_clone
+                                                    .insert(source.fingerprint, encrypter);
+                                            }
+                                            HavenMsg::Regular { inner: _, nonce: _ } => {
+                                                log::debug!("dropping packet")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Err(_) => log::debug!("unsupported haven message"),
+                        },
+                        Err(_) => log::debug!("unable to deserialize N2r body into haven format"),
+                    }
+                }
             }
         });
 
@@ -190,7 +281,7 @@ impl HavenSocket {
 struct Encrypter {
     remote_ep: Endpoint,
     /// haven encryption keys
-    key: Arc<Mutex<HavenKeyState>>,
+    key_state: Arc<Mutex<HavenKeyState>>,
     /// up packet buffer
     send_outgoing: Sender<Bytes>,
     recv_outgoing: Receiver<Bytes>,
@@ -203,8 +294,8 @@ struct Encrypter {
 }
 
 enum HavenKeyState {
-    // Completed { up_key: todo!(), down_key: todo!() }, TODO!
-    Pending { my_pk: OnionPublic },
+    Pending { my_sk: OnionSecret },
+    Completed { up_key: Hash, down_key: Hash },
 }
 
 impl Encrypter {
@@ -220,11 +311,24 @@ impl Encrypter {
     }
 
     /// send an incoming msg into the Encryptor
-    pub fn decrypt_incoming(&self, msg: HavenMsg) -> Bytes {
-        todo!()
+    pub fn decrypt_incoming(&self, ciphertext: Bytes, nonce: u64) -> anyhow::Result<Bytes> {
+        match &*self.key_state.lock() {
+            HavenKeyState::Completed { up_key, down_key } => {
+                // todo: check filter for replays
+
+                let key = AeadKey::from_bytes(down_key.as_bytes());
+                let padded_nonce = pad_nonce(nonce);
+                let plaintext = Bytes::copy_from_slice(&key.open(&padded_nonce, &ciphertext)?);
+                Ok(plaintext)
+            }
+            HavenKeyState::Pending { my_sk } => {
+                anyhow::bail!("handshake pending, dropping packet");
+            }
+        }
     }
 }
 
+#[derive(Serialize, Deserialize)]
 enum HavenMsg {
     Handshake {
         id_pk: IdentityPublic,
@@ -232,6 +336,14 @@ enum HavenMsg {
         sig: [u8; 32],
     },
     Regular {
+        nonce: u64,
         inner: Bytes,
     },
+}
+
+fn pad_nonce(input: u64) -> [u8; 12] {
+    let mut buffer = [0; 12];
+    let bytes = input.to_le_bytes();
+    buffer[..8].copy_from_slice(&bytes);
+    buffer
 }
