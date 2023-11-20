@@ -173,20 +173,25 @@ async fn enc_task(
             }
         }
     };
-    log::trace!("Encrypter got shared_sec!");
+    log::trace!("Encrypter got shared_sec {}!", blake3::hash(&shared_sec));
     let up_key = AeadKey::from_bytes(
         blake3::keyed_hash(blake3::hash(b"haven-up").as_bytes(), &shared_sec).as_bytes(),
     );
     let down_key = AeadKey::from_bytes(
         blake3::keyed_hash(blake3::hash(b"haven-dn").as_bytes(), &shared_sec).as_bytes(),
     );
+    let (enc_key, dec_key) = if rendezvous_fp.is_none() {
+        (up_key, down_key) // we're the client
+    } else {
+        (down_key, up_key) // we're the server
+    };
 
     // start up & down loops
     let up_loop = async {
         let mut nonce = 0;
         loop {
             let msg = recv_outgoing.recv().await?;
-            let ctext = up_key.seal(&pad_nonce(nonce), &msg);
+            let ctext = enc_key.seal(&pad_nonce(nonce), &msg);
             let msg = HavenMsg::Regular {
                 nonce,
                 inner: ctext.into(),
@@ -204,7 +209,8 @@ async fn enc_task(
             let msg = recv_incoming.recv().await?;
             log::debug!("Encrypter down_loop: got msg!!!!");
             if let HavenMsg::Regular { nonce, inner } = msg {
-                let plain = down_key.open(&pad_nonce(nonce), &inner)?;
+                log::debug!("it's a regular haven msg!");
+                let plain = dec_key.open(&pad_nonce(nonce), &inner)?;
                 log::debug!("opened!");
                 send_incoming_decrypted
                     .send((plain.into(), remote_ep))
@@ -214,7 +220,6 @@ async fn enc_task(
             }
         }
     };
-
     up_loop.race(down_loop).await
 }
 
