@@ -1,24 +1,26 @@
 use std::sync::Arc;
 
+use anyhow::Context;
 use bytes::Bytes;
-use clone_macro::clone;
-use earendil_crypt::{IdentityPublic, IdentitySecret};
+use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use earendil_packet::crypt::{AeadKey, OnionPublic, OnionSecret};
 use serde::{Deserialize, Serialize};
 use smol::{
     channel::{Receiver, Sender},
     future::FutureExt,
+    Task,
 };
-use smolscale::immortal::{Immortal, RespawnStrategy};
 use stdcode::StdcodeSerializeExt;
+
+use crate::{daemon::context::DaemonContext, haven::HAVEN_FORWARD_DOCK};
 
 use super::{n2r_socket::N2rSocket, Endpoint, SocketRecvError, SocketSendError};
 
 #[derive(Clone)]
 pub struct Encrypter {
-    send_outgoing: Sender<(Bytes, Endpoint)>,
+    send_outgoing: Sender<Bytes>,
     send_incoming: Sender<HavenMsg>,
-    _task: Arc<Immortal>,
+    _task: Arc<Task<anyhow::Result<()>>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -39,24 +41,24 @@ impl Encrypter {
     pub fn client_new(
         my_isk: IdentitySecret,
         remote_ep: Endpoint,
-        rendezvous_ep: Endpoint,
+        rendezvous_fp: Option<Fingerprint>,
         n2r_skt: N2rSocket,
-        send_incoming: Sender<(Bytes, Endpoint)>,
+        send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
+        ctx: DaemonContext,
     ) -> Self {
         let (send_out, recv_out) = smol::channel::bounded(1000);
         let (send_in, recv_in) = smol::channel::bounded(1000);
-        let task = Immortal::respawn(RespawnStrategy::Immediate, || async {
-            enc_task(
-                my_isk,
-                n2r_skt,
-                remote_ep,
-                rendezvous_ep,
-                recv_in,
-                recv_out,
-                send_incoming,
-                None,
-            )
-        });
+        let task = smolscale::spawn(enc_task(
+            my_isk,
+            n2r_skt,
+            remote_ep,
+            rendezvous_fp,
+            recv_in,
+            recv_out,
+            send_incoming_decrypted,
+            None,
+            ctx,
+        ));
         Self {
             send_outgoing: send_out,
             send_incoming: send_in,
@@ -67,24 +69,33 @@ impl Encrypter {
     pub fn server_new(
         my_isk: IdentitySecret,
         remote_ep: Endpoint,
+        rendezvous_fp: Option<Fingerprint>,
         n2r_skt: N2rSocket,
-        send_incoming: Sender<(Bytes, Endpoint)>,
+        send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
         client_hs: Handshake,
+        ctx: DaemonContext,
     ) -> Self {
         let (send_out, recv_out) = smol::channel::bounded(1000);
         let (send_in, recv_in) = smol::channel::bounded(1000);
+        let task = smolscale::spawn(enc_task(
+            my_isk,
+            n2r_skt,
+            remote_ep,
+            rendezvous_fp,
+            recv_in,
+            recv_out,
+            send_incoming_decrypted,
+            Some(client_hs),
+            ctx,
+        ));
         Self {
             send_outgoing: send_out,
             send_incoming: send_in,
-            _task: todo!(),
+            _task: Arc::new(task),
         }
     }
 
-    pub async fn send_outgoing(
-        &self,
-        msg: Bytes,
-        dest_ep: Endpoint,
-    ) -> Result<(), SocketSendError> {
+    pub async fn send_outgoing(&self, msg: Bytes) -> Result<(), SocketSendError> {
         self.send_outgoing
             .send(msg)
             .await
@@ -103,12 +114,35 @@ async fn enc_task(
     my_isk: IdentitySecret,
     n2r_skt: N2rSocket,
     remote_ep: Endpoint,
-    rendezvous_ep: Endpoint,
+    rendezvous_fp: Option<Fingerprint>,
     recv_incoming: Receiver<HavenMsg>,
-    recv_outgoing: Receiver<(Bytes, Endpoint)>,
-    send_incoming: Sender<(Bytes, Endpoint)>,
+    recv_outgoing: Receiver<Bytes>,
+    send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
     client_hs: Option<Handshake>,
+    ctx: DaemonContext,
 ) -> anyhow::Result<()> {
+    // get rendezvous ep
+    let rendezvous_ep = match rendezvous_fp {
+        Some(rob) => {
+            // We're the server
+            Endpoint::new(rob, HAVEN_FORWARD_DOCK)
+        }
+        None => {
+            // We're the client: look up Rob's addr in rendezvous dht
+            log::trace!(
+                "alice is about to send an earendil packet! looking up {} in the DHT",
+                remote_ep.fingerprint
+            );
+            let bob_locator = ctx
+                .dht_get(remote_ep.fingerprint)
+                .await
+                .map_err(|_| SocketSendError::DhtError)?
+                .context("Could not get rendezvous for {endpoint}")
+                .map_err(|_| SocketSendError::HavenSendError)?;
+            log::trace!("found rob in the DHT");
+            Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
+        }
+    };
     // complete handshake to get the shared secret
     let my_osk = OnionSecret::generate();
     let my_hs: Bytes = Handshake::new(&my_isk, &my_osk).stdcode().into();
@@ -122,7 +156,7 @@ async fn enc_task(
         }
         None => {
             n2r_skt
-                .send_to((my_hs, remote_ep).stdcode().into(), remote_ep)
+                .send_to((my_hs, remote_ep).stdcode().into(), rendezvous_ep)
                 .await?; // send client handshake
             loop {
                 let in_msg = recv_incoming.recv().await?;
@@ -143,9 +177,10 @@ async fn enc_task(
     let up_loop = async {
         let mut nonce = 0;
         loop {
-            let (msg, remote_ep) = recv_outgoing.recv().await?;
-            let ctext = up_key.seal(&pad_nonce(nonce), &msg);
-            n2r_skt.send_to(ctext.into(), remote_ep).await?;
+            let msg = recv_outgoing.recv().await?;
+            let fwd_body = (msg, remote_ep).stdcode();
+            let ctext = up_key.seal(&pad_nonce(nonce), &fwd_body);
+            n2r_skt.send_to(ctext.into(), rendezvous_ep).await?;
             nonce += 1;
         }
     };
@@ -155,14 +190,15 @@ async fn enc_task(
             let msg = recv_incoming.recv().await?;
             if let HavenMsg::Regular { nonce, inner } = msg {
                 let plain = down_key.open(&pad_nonce(nonce), &inner)?;
-                send_incoming.send((plain.into(), remote_ep)).await?
+                send_incoming_decrypted
+                    .send((plain.into(), remote_ep))
+                    .await?
             } else {
-                log::debug!("stray message!");
+                log::debug!("stray handshake message!");
             }
         }
     };
 
-    // race?
     up_loop.race(down_loop).await
 }
 
