@@ -143,15 +143,12 @@ async fn enc_task(
             Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
         }
     };
-    log::debug!("rendezvous_ep = {rendezvous_ep}");
     // complete handshake to get the shared secret
     let my_osk = OnionSecret::generate();
     let my_hs = Handshake::new(&my_isk, &my_osk);
     let shared_sec = match client_hs {
         Some(hs) => {
-            log::debug!("lol computing shared_secret!!@!");
             hs.id_pk.verify(hs.to_sign().as_bytes(), &hs.sig)?; // verify sig
-            log::debug!("sending server handshake!");
             let msg = (HavenMsg::ServerHs(my_hs).stdcode(), remote_ep)
                 .stdcode()
                 .into();
@@ -159,8 +156,6 @@ async fn enc_task(
             my_osk.shared_secret(&hs.eph_pk)
         }
         None => {
-            log::debug!("lol computing shared_secret!!@!");
-            log::debug!("sending client handshake!");
             let msg = (HavenMsg::ClientHs(my_hs).stdcode(), remote_ep)
                 .stdcode()
                 .into();
@@ -173,7 +168,6 @@ async fn enc_task(
             }
         }
     };
-    log::trace!("Encrypter got shared_sec {}!", blake3::hash(&shared_sec));
     let up_key = AeadKey::from_bytes(
         blake3::keyed_hash(blake3::hash(b"haven-up").as_bytes(), &shared_sec).as_bytes(),
     );
@@ -207,11 +201,8 @@ async fn enc_task(
     let down_loop = async {
         loop {
             let msg = recv_incoming.recv().await?;
-            log::debug!("Encrypter down_loop: got msg!!!!");
             if let HavenMsg::Regular { nonce, inner } = msg {
-                log::debug!("it's a regular haven msg!");
                 let plain = dec_key.open(&pad_nonce(nonce), &inner)?;
-                log::debug!("opened!");
                 send_incoming_decrypted
                     .send((plain.into(), remote_ep))
                     .await?
