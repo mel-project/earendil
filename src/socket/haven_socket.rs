@@ -1,5 +1,6 @@
-use std::{convert::Infallible, time::Duration};
+use std::time::Duration;
 
+use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentitySecret};
@@ -35,6 +36,7 @@ pub struct HavenSocket {
     encrypters: Cache<Endpoint, Encrypter>,
     /// buffer for decrypted incoming messages
     recv_incoming: Receiver<(Bytes, Endpoint)>,
+    send_incoming: Sender<(Bytes, Endpoint)>,
     /// task that dispatches not-yet decrypted incoming packets to their right encrypters
     _recv_task: Immortal,
 }
@@ -42,12 +44,12 @@ pub struct HavenSocket {
 impl HavenSocket {
     pub fn bind(
         ctx: DaemonContext,
-        idsk: IdentitySecret,
+        isk: IdentitySecret,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> HavenSocket {
-        let n2r_socket = N2rSocket::bind(ctx.clone(), idsk, dock);
-        let isk = idsk;
+        let n2r_skt = N2rSocket::bind(ctx.clone(), isk, dock);
+        let isk = isk;
         let encrypters: Cache<Endpoint, Encrypter> = Cache::builder()
             .max_capacity(100_000)
             .time_to_live(Duration::from_secs(60 * 30))
@@ -55,12 +57,30 @@ impl HavenSocket {
         let (send_incoming, recv_incoming) = smol::channel::bounded(1000);
         let recv_task = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([n2r_socket, encrypters, send_incoming], move || {
-                recv_task_loop(
-                    n2r_socket.clone(),
-                    encrypters.clone(),
-                    send_incoming.clone(),
-                )
+            clone!([n2r_skt, encrypters, send_incoming], move || {
+                async {
+                    loop {
+                        let (n2r_msg, _rendezvous_ep) = n2r_skt.recv_from().await?;
+                        let (body, remote_ep): (Bytes, Endpoint) = stdcode::deserialize(&n2r_msg)?;
+                        let haven_msg: HavenMsg = stdcode::deserialize(&body)?;
+                        let encrypter = encrypters.get(&remote_ep);
+                        match haven_msg.clone() {
+                            HavenMsg::ServerHs(_) => match encrypter {
+                                Some(enc) => enc.send_incoming(haven_msg).await?,
+                                None => anyhow::bail!("stray msg; dropping"),
+                            },
+                            HavenMsg::ClientHs(hs) => encrypters.insert(
+                                remote_ep,
+                                Encrypter::server_new(isk, remote_ep, n2r_skt, send_incoming, hs),
+                            ),
+                            HavenMsg::Regular { nonce: _, inner: _ } => match encrypter {
+                                Some(enc) => enc.send_incoming(haven_msg).await?,
+                                None => anyhow::bail!("stray msg; dropping"),
+                            },
+                        }
+                    }
+                    anyhow::Ok(())
+                }
             }),
         );
 
@@ -75,7 +95,7 @@ impl HavenSocket {
                 let onion_sk = OnionSecret::generate();
                 let onion_pk = onion_sk.public();
                 // register forwarding with the rendezvous relay node
-                let gclient = GlobalRpcClient(GlobalRpcTransport::new(context.clone(), idsk, rob));
+                let gclient = GlobalRpcClient(GlobalRpcTransport::new(context.clone(), isk, rob));
                 let forward_req = RegisterHavenReq::new(registration_isk);
                 loop {
                     match gclient
@@ -106,24 +126,26 @@ impl HavenSocket {
 
             HavenSocket {
                 ctx,
-                n2r_socket,
+                n2r_socket: n2r_skt,
                 identity_sk: isk,
                 rendezvous_point,
                 _register_haven_task: Some(task),
                 encrypters,
                 recv_incoming,
+                send_incoming,
                 _recv_task: recv_task,
             }
         } else {
             // We're Alice
             HavenSocket {
                 ctx,
-                n2r_socket,
+                n2r_socket: n2r_skt,
                 identity_sk: isk,
                 rendezvous_point,
                 _register_haven_task: None,
                 encrypters,
                 recv_incoming,
+                send_incoming,
                 _recv_task: recv_task,
             }
         }
@@ -131,49 +153,38 @@ impl HavenSocket {
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
         let fwd_body = (body, endpoint).stdcode().into();
-        match self.rendezvous_point {
+        let remote_ep = match self.rendezvous_point {
             Some(rob) => {
-                // We're Bob:
-                let remote_ep = Endpoint::new(rob, HAVEN_FORWARD_DOCK);
-                let enc = self.encrypters.get_with(remote_ep, || {
-                    Encrypter::new(remote_ep, self.n2r_socket.clone(), None, self.identity_sk)
-                });
-                enc.send_outgoing(fwd_body).await
+                // We're Bob
+                Endpoint::new(rob, HAVEN_FORWARD_DOCK)
             }
             None => {
-                // We're Alice:
-                // look up Rob's addr in rendezvous dht
+                // We're Alice: look up Rob's addr in rendezvous dht
                 log::trace!(
                     "alice is about to send an earendil packet! looking up {} in the DHT",
                     endpoint.fingerprint
                 );
-                match self
+                let bob_locator = self
                     .ctx
                     .dht_get(endpoint.fingerprint)
                     .await
                     .map_err(|_| SocketSendError::DhtError)?
-                {
-                    Some(bob_locator) => {
-                        log::trace!("found rob in the DHT");
-                        let rob = bob_locator.rendezvous_point;
-                        let remote_ep = Endpoint::new(rob, HAVEN_FORWARD_DOCK);
-                        let enc = self.encrypters.get_with(remote_ep, || {
-                            Encrypter::new(
-                                remote_ep,
-                                self.n2r_socket.clone(),
-                                None,
-                                self.identity_sk,
-                            )
-                        });
-                        enc.send_outgoing(fwd_body).await
-                    }
-                    None => {
-                        log::debug!("couldn't find {} in the DHT", endpoint.fingerprint);
-                        Err(SocketSendError::DhtError)
-                    }
-                }
+                    .context("Could not get rendezvous for {endpoint}")
+                    .map_err(|_| SocketSendError::HavenSendError)?;
+                log::trace!("found rob in the DHT");
+                Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
             }
-        }
+        };
+        // TODO: move rendezvous lookup logic into encrypters
+        let enc = self.encrypters.get_with(remote_ep, || {
+            Encrypter::client_new(
+                self.identity_sk,
+                remote_ep,
+                self.n2r_socket.clone(),
+                self.send_incoming.clone(),
+            )
+        });
+        enc.send_outgoing(fwd_body).await
     }
 
     pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
@@ -187,63 +198,10 @@ impl HavenSocket {
     }
 }
 
-async fn recv_task_loop(
-    n2r_skt: N2rSocket,
-    encrypters: Cache<Endpoint, Encrypter>,
-    send_incoming: Sender<(Bytes, Endpoint)>,
-) -> anyhow::Result<()> {
-    loop {
-        let (n2r_msg, _rendezvous_ep) = n2r_skt.recv_from().await?;
-        let (body, src_ep): (Bytes, Endpoint) = stdcode::deserialize(&n2r_msg)?;
-        let haven_msg: HavenMsg = stdcode::deserialize(&body)?;
-        let encrypter = encrypters.get(&src_ep);
-        match haven_msg {
-            HavenMsg::Handshake(_) => match encrypter {
-                Some(enc) => todo!(),
-                None => todo!(),
-            },
-            HavenMsg::Regular { nonce, inner } => match encrypter {
-                Some(enc) => todo!(),
-                None => anyhow::bail!("stray msg; dropping"),
-            },
-        }
-    }
-}
+// async fn recv_task(
+//     n2r_skt: N2rSocket,
+//     encrypters: Cache<Endpoint, Encrypter>,
+//     send_incoming: Sender<(Bytes, Endpoint)>,
+// ) -> anyhow::Result<()> {
 
-// todo: verify handshake signature
-
-// let mut key_state = encrypter.key_state.lock();
-
-// *key_state = match &*key_state {
-//     HavenKeyState::PendingRemote { my_sk } => {
-//         let shared_secret = my_sk.shared_secret(&eph_pk);
-//         let up_key = blake3::keyed_hash(
-//             blake3::hash(b"haven-up").as_bytes(),
-//             &shared_secret,
-//         );
-//         let down_key = blake3::keyed_hash(
-//             blake3::hash(b"haven-dn").as_bytes(),
-//             &shared_secret,
-//         );
-
-//         HavenKeyState::Completed { up_key, down_key }
-//     }
-//     HavenKeyState::Completed {
-//         up_key: _,
-//         down_key: _,
-//     } => {
-//         let new_onion_sk = OnionSecret::generate();
-//         let shared_secret = new_onion_sk.shared_secret(&eph_pk);
-//         let up_key = blake3::keyed_hash(
-//             blake3::hash(b"haven-up").as_bytes(),
-//             &shared_secret,
-//         );
-//         let down_key = blake3::keyed_hash(
-//             blake3::hash(b"haven-dn").as_bytes(),
-//             &shared_secret,
-//         );
-
-//         HavenKeyState::Completed { up_key, down_key }
-//     }
-//     HavenKeyState::PendingLocal { their_pk } => todo!(),
-// };
+// }

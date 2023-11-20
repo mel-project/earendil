@@ -1,201 +1,30 @@
+use std::sync::Arc;
+
 use bytes::Bytes;
+use clone_macro::clone;
 use earendil_crypt::{IdentityPublic, IdentitySecret};
 use earendil_packet::crypt::{AeadKey, OnionPublic, OnionSecret};
-use parking_lot::Mutex;
-use replay_filter::ReplayFilter;
 use serde::{Deserialize, Serialize};
 use smol::{
     channel::{Receiver, Sender},
-    Task, Timer,
+    future::FutureExt,
 };
-use std::{sync::Arc, time::Duration};
+use smolscale::immortal::{Immortal, RespawnStrategy};
 use stdcode::StdcodeSerializeExt;
 
-use super::{n2r_socket::N2rSocket, Endpoint, SocketSendError};
+use super::{n2r_socket::N2rSocket, Endpoint, SocketRecvError, SocketSendError};
 
 #[derive(Clone)]
 pub struct Encrypter {
-    remote_ep: Endpoint,
-    /// haven encryption keys
-    key_state: Arc<Mutex<HavenKeyState>>,
-    /// up packet buffer
-    send_outgoing: Sender<Bytes>,
-    recv_outgoing: Receiver<Bytes>,
-    /// task containing two loops; the first one completes the handshake, and the second one sends outgoing packets from the buffer onto the network
-    _up_task: Arc<Task<()>>,
-    /// inner N2rSocket of the haven socket
-    n2r_skt: N2rSocket, // ?? (not sure about this type)
-    replay_filter: Arc<ReplayFilter>,
-    nonce: Arc<Mutex<u64>>,
+    send_outgoing: Sender<(Bytes, Endpoint)>,
+    send_incoming: Sender<HavenMsg>,
+    _task: Arc<Immortal>,
 }
 
-#[derive(Clone)]
-pub enum HavenKeyState {
-    PendingStart,
-    PendingRemote { my_sk: OnionSecret },
-    PendingLocal { their_pk: OnionPublic },
-    Completed { up_key: AeadKey, down_key: AeadKey },
-}
-
-impl Encrypter {
-    pub fn new(
-        remote_ep: Endpoint,
-        n2r_skt: N2rSocket,
-        remote_pk: Option<OnionPublic>,
-        idsk: IdentitySecret,
-    ) -> Self {
-        let key_state = Arc::new(Mutex::new(HavenKeyState::PendingStart));
-        let nonce = Arc::new(Mutex::new(0));
-        let (send_outgoing, recv_outgoing) = smol::channel::bounded(1000);
-        match remote_pk {
-            Some(rpk) => Self {
-                remote_ep,
-                key_state,
-                send_outgoing,
-                recv_outgoing,
-                _up_task: todo!(),
-                n2r_skt,
-                replay_filter: Arc::new(ReplayFilter::default()),
-                nonce,
-            },
-            None => Self {
-                remote_ep,
-                key_state: key_state.clone(),
-                send_outgoing,
-                recv_outgoing: recv_outgoing.clone(),
-                _up_task: Arc::new(smolscale::spawn(up_task(
-                    idsk,
-                    remote_ep,
-                    key_state,
-                    n2r_skt.clone(),
-                    recv_outgoing,
-                    nonce.clone(),
-                ))),
-                n2r_skt,
-                replay_filter: Arc::new(ReplayFilter::default()),
-                nonce,
-            },
-        }
-    }
-    /// sends an outgoing mesage into the Encryptor, which takes care of haven-encrypting it and getting it to the network
-    pub async fn send_outgoing(&self, msg: Bytes) -> Result<(), SocketSendError> {
-        self.send_outgoing
-            .send(msg)
-            .await
-            .map_err(|_| SocketSendError::HavenSendError)
-    }
-
-    /// send an incoming msg into the Encryptor
-    pub fn decrypt_incoming(&self, ciphertext: Bytes, nonce: u64) -> anyhow::Result<Bytes> {
-        match &*self.key_state.lock() {
-            HavenKeyState::Completed { up_key, down_key } => {
-                // todo: check filter for replays
-
-                let padded_nonce = pad_nonce(nonce);
-                let plaintext = Bytes::copy_from_slice(&down_key.open(&padded_nonce, &ciphertext)?);
-                Ok(plaintext)
-            }
-            _ => {
-                anyhow::bail!("handshake pending, dropping packet");
-            }
-        }
-    }
-}
-
-async fn up_task(
-    my_id: IdentitySecret,
-    remote_ep: Endpoint,
-    key_state: Arc<Mutex<HavenKeyState>>,
-    n2r_skt: N2rSocket,
-    recv_outgoing: Receiver<Bytes>,
-    nonce: Arc<Mutex<u64>>,
-) {
-    // 1st loop: completes handshake
-    loop {
-        let state = (*key_state.lock()).clone();
-        match state {
-            HavenKeyState::PendingStart => {
-                let my_osk = OnionSecret::generate();
-                let handshake = Handshake::new(&my_id, &my_osk);
-                match n2r_skt
-                    .send_to(
-                        HavenMsg::Handshake(handshake.clone()).stdcode().into(),
-                        remote_ep,
-                    )
-                    .await
-                {
-                    Ok(_) => *key_state.lock() = HavenKeyState::PendingRemote { my_sk: my_osk },
-                    Err(e) => {
-                        log::warn!("sending handshake FAILED with ERR {e}, RETRYING...");
-                        Timer::after(Duration::from_secs(1)).await;
-                    }
-                }
-            }
-            HavenKeyState::PendingRemote { my_sk: _ } => {
-                // our HavenSocket's recv_task will handle this
-                Timer::after(Duration::from_secs(1));
-            }
-            HavenKeyState::PendingLocal { their_pk } => {
-                let my_osk = OnionSecret::generate();
-                let (up_key, down_key) = calculate_keys(&my_osk, &their_pk);
-                // send handshake
-                let handshake = Handshake::new(&my_id, &my_osk);
-
-                match n2r_skt
-                    .send_to(
-                        HavenMsg::Handshake(handshake.clone()).stdcode().into(),
-                        remote_ep,
-                    )
-                    .await
-                {
-                    Ok(_) => {
-                        *key_state.lock() = HavenKeyState::Completed { up_key, down_key };
-                        break;
-                    }
-                    Err(e) => {
-                        log::warn!("sending handshake FAILED with ERR {e}, RETRYING...");
-                        Timer::after(Duration::from_secs(1)).await;
-                    }
-                }
-            }
-            HavenKeyState::Completed {
-                up_key: _,
-                down_key: _,
-            } => {
-                log::debug!("haven encryption handshake COMPLETED! *v*");
-                break;
-            }
-        }
-    }
-    // 2nd loop: encrypts & sends msg to remote
-    loop {
-        match recv_outgoing.recv().await {
-            Ok(plain) => {
-                let key_state = (*key_state.lock()).clone();
-                match key_state {
-                    HavenKeyState::Completed {
-                        up_key,
-                        down_key: _,
-                    } => {
-                        // encrypt with nonce
-                        let nonce = *nonce.lock();
-                        let msg = up_key.seal(&pad_nonce(nonce), &plain);
-                        // send off!
-                        let _ = n2r_skt.send_to(msg.into(), remote_ep).await;
-                    }
-                    _ => {
-                        log::debug!("waiting for encryption handshake to complete; dropping packet")
-                    }
-                }
-            }
-            Err(e) => log::debug!("ERROR receiving outgoing msg in ENCRYPTER! {e}"),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum HavenMsg {
-    Handshake(Handshake),
+    ClientHs(Handshake),
+    ServerHs(Handshake),
     Regular { nonce: u64, inner: Bytes },
 }
 
@@ -204,6 +33,137 @@ pub struct Handshake {
     id_pk: IdentityPublic,
     eph_pk: OnionPublic,
     sig: Bytes,
+}
+
+impl Encrypter {
+    pub fn client_new(
+        my_isk: IdentitySecret,
+        remote_ep: Endpoint,
+        rendezvous_ep: Endpoint,
+        n2r_skt: N2rSocket,
+        send_incoming: Sender<(Bytes, Endpoint)>,
+    ) -> Self {
+        let (send_out, recv_out) = smol::channel::bounded(1000);
+        let (send_in, recv_in) = smol::channel::bounded(1000);
+        let task = Immortal::respawn(RespawnStrategy::Immediate, || async {
+            enc_task(
+                my_isk,
+                n2r_skt,
+                remote_ep,
+                rendezvous_ep,
+                recv_in,
+                recv_out,
+                send_incoming,
+                None,
+            )
+        });
+        Self {
+            send_outgoing: send_out,
+            send_incoming: send_in,
+            _task: Arc::new(task),
+        }
+    }
+
+    pub fn server_new(
+        my_isk: IdentitySecret,
+        remote_ep: Endpoint,
+        n2r_skt: N2rSocket,
+        send_incoming: Sender<(Bytes, Endpoint)>,
+        client_hs: Handshake,
+    ) -> Self {
+        let (send_out, recv_out) = smol::channel::bounded(1000);
+        let (send_in, recv_in) = smol::channel::bounded(1000);
+        Self {
+            send_outgoing: send_out,
+            send_incoming: send_in,
+            _task: todo!(),
+        }
+    }
+
+    pub async fn send_outgoing(
+        &self,
+        msg: Bytes,
+        dest_ep: Endpoint,
+    ) -> Result<(), SocketSendError> {
+        self.send_outgoing
+            .send(msg)
+            .await
+            .map_err(|_| SocketSendError::HavenSendError)
+    }
+
+    pub async fn send_incoming(&self, msg: HavenMsg) -> Result<(), SocketRecvError> {
+        self.send_incoming
+            .send(msg)
+            .await
+            .map_err(|_| SocketRecvError::HavenRecvError)
+    }
+}
+
+async fn enc_task(
+    my_isk: IdentitySecret,
+    n2r_skt: N2rSocket,
+    remote_ep: Endpoint,
+    rendezvous_ep: Endpoint,
+    recv_incoming: Receiver<HavenMsg>,
+    recv_outgoing: Receiver<(Bytes, Endpoint)>,
+    send_incoming: Sender<(Bytes, Endpoint)>,
+    client_hs: Option<Handshake>,
+) -> anyhow::Result<()> {
+    // complete handshake to get the shared secret
+    let my_osk = OnionSecret::generate();
+    let my_hs: Bytes = Handshake::new(&my_isk, &my_osk).stdcode().into();
+    let shared_sec = match client_hs {
+        Some(hs) => {
+            hs.id_pk.verify(hs.to_sign().as_bytes(), &hs.sig)?; // verify sig
+            n2r_skt
+                .send_to((my_hs, remote_ep).stdcode().into(), rendezvous_ep)
+                .await?; // respond with server handshake
+            my_osk.shared_secret(&hs.eph_pk)
+        }
+        None => {
+            n2r_skt
+                .send_to((my_hs, remote_ep).stdcode().into(), remote_ep)
+                .await?; // send client handshake
+            loop {
+                let in_msg = recv_incoming.recv().await?;
+                if let HavenMsg::ServerHs(hs) = in_msg {
+                    break my_osk.shared_secret(&hs.eph_pk);
+                }
+            }
+        }
+    };
+    let up_key = AeadKey::from_bytes(
+        blake3::keyed_hash(blake3::hash(b"haven-up").as_bytes(), &shared_sec).as_bytes(),
+    );
+    let down_key = AeadKey::from_bytes(
+        blake3::keyed_hash(blake3::hash(b"haven-dn").as_bytes(), &shared_sec).as_bytes(),
+    );
+
+    // start up & down loops
+    let up_loop = async {
+        let mut nonce = 0;
+        loop {
+            let (msg, remote_ep) = recv_outgoing.recv().await?;
+            let ctext = up_key.seal(&pad_nonce(nonce), &msg);
+            n2r_skt.send_to(ctext.into(), remote_ep).await?;
+            nonce += 1;
+        }
+    };
+
+    let down_loop = async {
+        loop {
+            let msg = recv_incoming.recv().await?;
+            if let HavenMsg::Regular { nonce, inner } = msg {
+                let plain = down_key.open(&pad_nonce(nonce), &inner)?;
+                send_incoming.send((plain.into(), remote_ep)).await?
+            } else {
+                log::debug!("stray message!");
+            }
+        }
+    };
+
+    // race?
+    up_loop.race(down_loop).await
 }
 
 impl Handshake {
@@ -226,16 +186,6 @@ impl Handshake {
         this.sig = Bytes::new();
         blake3::keyed_hash(b"haven_handshake_________________", &this.stdcode())
     }
-}
-
-fn calculate_keys(osk: &OnionSecret, opk: &OnionPublic) -> (AeadKey, AeadKey) {
-    let shared_secret = osk.shared_secret(&opk);
-    let up_key = blake3::keyed_hash(blake3::hash(b"haven-up").as_bytes(), &shared_secret);
-    let down_key = blake3::keyed_hash(blake3::hash(b"haven-dn").as_bytes(), &shared_secret);
-    (
-        AeadKey::from_bytes(up_key.as_bytes()),
-        AeadKey::from_bytes(down_key.as_bytes()),
-    )
 }
 
 fn pad_nonce(input: u64) -> [u8; 12] {
