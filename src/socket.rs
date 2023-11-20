@@ -13,6 +13,7 @@ use crate::{
 
 use self::{haven_socket::HavenSocket, n2r_socket::N2rSocket};
 
+pub(crate) mod encrypter;
 pub(crate) mod haven_socket;
 pub(crate) mod n2r_socket;
 

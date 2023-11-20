@@ -86,6 +86,7 @@ impl OnionSecret {
 }
 
 /// AEAD encryption/decryption key
+#[derive(Clone)]
 pub struct AeadKey {
     inner: ChaCha20Poly1305,
 }
