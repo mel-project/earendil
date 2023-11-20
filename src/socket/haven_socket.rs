@@ -137,6 +137,7 @@ impl HavenSocket {
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
         let enc = self.encrypters.get_with(endpoint, || {
+            log::debug!("CCCCCCCCCCC creating new encrypter! EEEEEEEEEEEE");
             Encrypter::client_new(
                 self.identity_sk,
                 endpoint,
@@ -173,29 +174,41 @@ async fn recv_task(
     ctx: DaemonContext,
 ) -> anyhow::Result<()> {
     loop {
+        log::debug!("000000000000000iin recv_task looop!00000000000000");
         let (n2r_msg, _rendezvous_ep) = n2r_skt.recv_from().await?;
+        log::debug!("got msg from n2r");
         let (body, remote_ep): (Bytes, Endpoint) = stdcode::deserialize(&n2r_msg)?;
+        log::debug!("deserialized haven msg!");
         let haven_msg: HavenMsg = stdcode::deserialize(&body)?;
         let encrypter = encrypters.get(&remote_ep);
         match haven_msg.clone() {
             HavenMsg::ServerHs(_) => match encrypter {
-                Some(enc) => enc.send_incoming(haven_msg).await?,
+                Some(enc) => {
+                    log::debug!("~~~~~~~~~~~~RECEIVED SERVER HANDSHAKE!~~~~~~~~~~~~~");
+                    enc.send_incoming(haven_msg).await?
+                }
                 None => anyhow::bail!("stray msg; dropping"),
             },
-            HavenMsg::ClientHs(hs) => encrypters.insert(
-                remote_ep,
-                Encrypter::server_new(
-                    isk,
+            HavenMsg::ClientHs(hs) => {
+                log::debug!("~~~~~~~~~~~~RECEIVED CLIENT HANDSHAKE!~~~~~~~~~~~~~");
+                encrypters.insert(
                     remote_ep,
-                    rob,
-                    n2r_skt.clone(),
-                    send_incoming_decrypted.clone(),
-                    hs,
-                    ctx.clone(),
-                ),
-            ),
+                    Encrypter::server_new(
+                        isk,
+                        remote_ep,
+                        rob,
+                        n2r_skt.clone(),
+                        send_incoming_decrypted.clone(),
+                        hs,
+                        ctx.clone(),
+                    ),
+                )
+            }
             HavenMsg::Regular { nonce: _, inner: _ } => match encrypter {
-                Some(enc) => enc.send_incoming(haven_msg).await?,
+                Some(enc) => {
+                    log::debug!("~~~~~~~~~~~~RECEIVED REGULAR MSG!~~~~~~~~~~~~~");
+                    enc.send_incoming(haven_msg).await?
+                }
                 None => anyhow::bail!("stray msg; dropping"),
             },
         }

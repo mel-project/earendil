@@ -44,6 +44,7 @@ pub struct DaemonContext {
     pub anon_destinations: Arc<Mutex<ReplyBlockStore>>,
     pub socket_recv_queues: Arc<DashMap<Endpoint, Sender<(Message, Fingerprint)>>>,
     pub local_rdht_shard: Cache<Fingerprint, HavenLocator>,
+    // pub rdht_cache: Cache<Fingerprint, HavenLocator>,
     pub registered_havens: Arc<Cache<Fingerprint, ()>>,
 }
 
@@ -64,6 +65,9 @@ impl DaemonContext {
             local_rdht_shard: CacheBuilder::default()
                 .time_to_idle(Duration::from_secs(60 * 60))
                 .build(),
+            // rdht_cache: CacheBuilder::default()
+            //     .time_to_idle(Duration::from_secs(60 * 60))
+            //     .build(),
             registered_havens: Arc::new(
                 Cache::builder()
                     .max_capacity(100_000)

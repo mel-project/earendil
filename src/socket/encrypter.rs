@@ -143,21 +143,28 @@ async fn enc_task(
             Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
         }
     };
+    log::debug!("rendezvous_ep = {rendezvous_ep}");
     // complete handshake to get the shared secret
     let my_osk = OnionSecret::generate();
-    let my_hs: Bytes = Handshake::new(&my_isk, &my_osk).stdcode().into();
+    let my_hs = Handshake::new(&my_isk, &my_osk);
     let shared_sec = match client_hs {
         Some(hs) => {
+            log::debug!("lol computing shared_secret!!@!");
             hs.id_pk.verify(hs.to_sign().as_bytes(), &hs.sig)?; // verify sig
-            n2r_skt
-                .send_to((my_hs, remote_ep).stdcode().into(), rendezvous_ep)
-                .await?; // respond with server handshake
+            log::debug!("sending server handshake!");
+            let msg = (HavenMsg::ServerHs(my_hs).stdcode(), remote_ep)
+                .stdcode()
+                .into();
+            n2r_skt.send_to(msg, rendezvous_ep).await?; // respond with server handshake
             my_osk.shared_secret(&hs.eph_pk)
         }
         None => {
-            n2r_skt
-                .send_to((my_hs, remote_ep).stdcode().into(), rendezvous_ep)
-                .await?; // send client handshake
+            log::debug!("lol computing shared_secret!!@!");
+            log::debug!("sending client handshake!");
+            let msg = (HavenMsg::ClientHs(my_hs).stdcode(), remote_ep)
+                .stdcode()
+                .into();
+            n2r_skt.send_to(msg, rendezvous_ep).await?; // send client handshake
             loop {
                 let in_msg = recv_incoming.recv().await?;
                 if let HavenMsg::ServerHs(hs) = in_msg {
@@ -166,6 +173,7 @@ async fn enc_task(
             }
         }
     };
+    log::trace!("Encrypter got shared_sec!");
     let up_key = AeadKey::from_bytes(
         blake3::keyed_hash(blake3::hash(b"haven-up").as_bytes(), &shared_sec).as_bytes(),
     );
@@ -178,9 +186,15 @@ async fn enc_task(
         let mut nonce = 0;
         loop {
             let msg = recv_outgoing.recv().await?;
-            let fwd_body = (msg, remote_ep).stdcode();
-            let ctext = up_key.seal(&pad_nonce(nonce), &fwd_body);
-            n2r_skt.send_to(ctext.into(), rendezvous_ep).await?;
+            let ctext = up_key.seal(&pad_nonce(nonce), &msg);
+            let msg = HavenMsg::Regular {
+                nonce,
+                inner: ctext.into(),
+            }
+            .stdcode();
+            n2r_skt
+                .send_to((msg, remote_ep).stdcode().into(), rendezvous_ep)
+                .await?;
             nonce += 1;
         }
     };
@@ -188,13 +202,15 @@ async fn enc_task(
     let down_loop = async {
         loop {
             let msg = recv_incoming.recv().await?;
+            log::debug!("Encrypter down_loop: got msg!!!!");
             if let HavenMsg::Regular { nonce, inner } = msg {
                 let plain = down_key.open(&pad_nonce(nonce), &inner)?;
+                log::debug!("opened!");
                 send_incoming_decrypted
                     .send((plain.into(), remote_ep))
                     .await?
             } else {
-                log::debug!("stray handshake message!");
+                log::info!("stray handshake message!");
             }
         }
     };
