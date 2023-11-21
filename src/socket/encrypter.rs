@@ -4,6 +4,7 @@ use anyhow::Context;
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use earendil_packet::crypt::{AeadKey, OnionPublic, OnionSecret};
+use replay_filter::ReplayFilter;
 use serde::{Deserialize, Serialize};
 use smol::{
     channel::{Receiver, Sender},
@@ -199,13 +200,18 @@ async fn enc_task(
     };
 
     let down_loop = async {
+        let mut rf = ReplayFilter::default();
         loop {
             let msg = recv_incoming.recv().await?;
             if let HavenMsg::Regular { nonce, inner } = msg {
-                let plain = dec_key.open(&pad_nonce(nonce), &inner)?;
-                send_incoming_decrypted
-                    .send((plain.into(), remote_ep))
-                    .await?
+                if rf.add(nonce) {
+                    let plain = dec_key.open(&pad_nonce(nonce), &inner)?;
+                    send_incoming_decrypted
+                        .send((plain.into(), remote_ep))
+                        .await?
+                } else {
+                    log::info!("received pkt with duplicate nonce! dropping...")
+                }
             } else {
                 log::info!("stray handshake message!");
             }
