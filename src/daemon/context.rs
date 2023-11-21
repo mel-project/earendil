@@ -13,6 +13,7 @@ use earendil_packet::{
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use moka::sync::{Cache, CacheBuilder};
+use once_cell::sync::Lazy;
 use parking_lot::{Mutex, RwLock};
 use smol::channel::Sender;
 use smol_timeout::TimeoutExt;
@@ -81,7 +82,7 @@ impl DaemonContext {
 
     pub async fn send_message(
         &self,
-        src_anon_id: IdentitySecret,
+        src_idsk: IdentitySecret,
         src_dock: Dock,
         dst_fp: Fingerprint,
         dst_dock: Dock,
@@ -93,19 +94,15 @@ impl DaemonContext {
             log::debug!("send message took {:?}", send_msg_time);
         });
 
-        let (public_isk, my_anon_osk) = if src_anon_id == self.identity {
-            (self.identity, None)
-        } else {
-            (src_anon_id, Some(OnionSecret::generate()))
-        };
+        let src_anon = src_idsk != self.identity;
 
         let maybe_reply_block = self.anon_destinations.lock().pop(&dst_fp);
         if let Some(reply_block) = maybe_reply_block {
-            if my_anon_osk.is_some() {
+            if src_anon {
                 return Err(SendMessageError::NoAnonId);
             }
             let inner = InnerPacket::Message(Message::new(src_dock, dst_dock, content));
-            let raw_packet = RawPacket::new_reply(&reply_block, inner, &public_isk)?;
+            let raw_packet = RawPacket::new_reply(&reply_block, inner, &src_idsk)?;
             self.table.inject_asif_incoming(raw_packet).await;
         } else {
             let route = self
@@ -124,46 +121,71 @@ impl DaemonContext {
                 &instructs,
                 &their_opk,
                 InnerPacket::Message(Message::new(src_dock, dst_dock, content)),
-                &public_isk,
+                &src_idsk,
             )?;
             // we send the onion by treating it as a message addressed to ourselves
             self.table.inject_asif_incoming(wrapped_onion).await;
 
-            // if we want to use an anon source, send a batch of reply blocks
-            // TODO this should be replaced
-            if let Some(my_anon_osk) = my_anon_osk {
-                // currently the path for every one of them is the same; will want to change this in the future
-                let n = 2;
-                let reverse_route = self
-                    .relay_graph
-                    .read()
-                    .find_shortest_path(&dst_fp, &self.identity.public().fingerprint())
-                    .ok_or(SendMessageError::NoRoute)?;
-                let reverse_instructs =
-                    route_to_instructs(reverse_route, self.relay_graph.clone())?;
-
-                let mut rbs: Vec<ReplyBlock> = vec![];
-                for _ in 0..n {
-                    let (rb, (id, degarbler)) = ReplyBlock::new(
-                        &reverse_instructs,
-                        &self.onion_sk.public(),
-                        my_anon_osk.clone(),
-                        public_isk,
-                    )
-                    .map_err(|_| SendMessageError::ReplyBlockFailed)?;
-                    rbs.push(rb);
-                    self.degarblers.insert(id, degarbler);
-                }
-                let wrapped_rb_onion = RawPacket::new_normal(
-                    &instructs,
-                    &their_opk,
-                    InnerPacket::ReplyBlocks(rbs),
-                    &public_isk,
-                )?;
-                // we send the onion by treating it as a message addressed to ourselves
-                self.table.inject_asif_incoming(wrapped_rb_onion).await;
+            // if anon source, send one reply block
+            if src_anon {
+                self.send_reply_block(1, src_idsk, dst_fp).await?;
             }
         }
+        Ok(())
+    }
+
+    pub async fn send_reply_block(
+        &self,
+        count: usize,
+        my_anon_isk: IdentitySecret,
+        dst_fp: Fingerprint,
+    ) -> Result<(), SendMessageError> {
+        static ONION_SK_CACHE: Lazy<Cache<Fingerprint, OnionSecret>> =
+            Lazy::new(|| Cache::new(100000));
+        let my_anon_osk = ONION_SK_CACHE.get_with(my_anon_isk.public().fingerprint(), || {
+            OnionSecret::generate()
+        });
+
+        let route = self
+            .relay_graph
+            .read()
+            .find_shortest_path(&self.identity.public().fingerprint(), &dst_fp)
+            .ok_or(SendMessageError::NoRoute)?;
+        let their_opk = self
+            .relay_graph
+            .read()
+            .identity(&dst_fp)
+            .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
+            .onion_pk;
+        let instructs = route_to_instructs(route, self.relay_graph.clone())?;
+        // currently the path for every one of them is the same; will want to change this in the future
+        let reverse_route = self
+            .relay_graph
+            .read()
+            .find_shortest_path(&dst_fp, &self.identity.public().fingerprint())
+            .ok_or(SendMessageError::NoRoute)?;
+        let reverse_instructs = route_to_instructs(reverse_route, self.relay_graph.clone())?;
+
+        let mut rbs: Vec<ReplyBlock> = vec![];
+        for _ in 0..count {
+            let (rb, (id, degarbler)) = ReplyBlock::new(
+                &reverse_instructs,
+                &self.onion_sk.public(),
+                my_anon_osk.clone(),
+                my_anon_isk,
+            )
+            .map_err(|_| SendMessageError::ReplyBlockFailed)?;
+            rbs.push(rb);
+            self.degarblers.insert(id, degarbler);
+        }
+        let wrapped_rb_onion = RawPacket::new_normal(
+            &instructs,
+            &their_opk,
+            InnerPacket::ReplyBlocks(rbs),
+            &my_anon_isk,
+        )?;
+        // we send the onion by treating it as a message addressed to ourselves
+        self.table.inject_asif_incoming(wrapped_rb_onion).await;
         Ok(())
     }
 

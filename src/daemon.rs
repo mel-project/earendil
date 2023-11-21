@@ -6,15 +6,16 @@ mod inout_route;
 mod link_connection;
 mod link_protocol;
 mod neightable;
+mod peel_forward;
 mod reply_block_store;
 mod udp_forward;
 
-use anyhow::Context;
+
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::Fingerprint;
 use earendil_packet::ForwardInstruction;
-use earendil_packet::{InnerPacket, PeeledPacket};
+
 use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
@@ -27,10 +28,10 @@ use smolscale::reaper::TaskReaper;
 use stdcode::StdcodeSerializeExt;
 
 use std::thread::available_parallelism;
-use std::time::Instant;
+
 use std::{sync::Arc, time::Duration};
 
-use crate::daemon::udp_forward::udp_forward_loop;
+use crate::daemon::{peel_forward::peel_forward_loop, udp_forward::udp_forward_loop};
 use crate::haven::{haven_loop, HAVEN_FORWARD_DOCK};
 use crate::socket::n2r_socket::N2rSocket;
 use crate::socket::Endpoint;
@@ -208,77 +209,6 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let service = ControlService(ControlProtocolImpl::new(ctx));
     http.run(service).await?;
     Ok(())
-}
-
-/// Loop that takes incoming packets, peels them, and processes them
-async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    fn process_inner_pkt(
-        ctx: &DaemonContext,
-        inner: InnerPacket,
-        src_fp: Fingerprint,
-        dest_fp: Fingerprint,
-    ) -> anyhow::Result<()> {
-        match inner {
-            InnerPacket::Message(msg) => {
-                // log::debug!("received InnerPacket::Message: {:?}", msg);
-                let dest = Endpoint::new(dest_fp, msg.dest_dock);
-                if let Some(send_incoming) = ctx.socket_recv_queues.get(&dest) {
-                    send_incoming.try_send((msg, src_fp))?;
-                } else {
-                    anyhow::bail!("No socket listening on destination {dest}")
-                }
-            }
-            InnerPacket::ReplyBlocks(reply_blocks) => {
-                log::trace!("received a batch of ReplyBlocks");
-                for reply_block in reply_blocks {
-                    ctx.anon_destinations.lock().insert(src_fp, reply_block);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    loop {
-        let pkt = ctx.table.recv_raw_packet().await;
-        let now = Instant::now();
-        let peeled = pkt.peel(&ctx.onion_sk)?;
-
-        scopeguard::defer!(log::debug!(
-            "PEEL AND PROCESS MESSAGE TOOK:::::::::: {:?}",
-            now.elapsed()
-        ));
-        match peeled {
-            PeeledPacket::Forward {
-                to: next_hop,
-                pkt: inner,
-            } => {
-                let conn = ctx
-                    .table
-                    .lookup(&next_hop)
-                    .context("could not find this next hop")?;
-                conn.send_raw_packet(inner).await;
-            }
-            PeeledPacket::Received {
-                from: src_fp,
-                pkt: inner,
-            } => process_inner_pkt(&ctx, inner, src_fp, ctx.identity.public().fingerprint())?,
-            PeeledPacket::GarbledReply { id, mut pkt } => {
-                log::trace!("received garbled packet");
-                let reply_degarbler = ctx
-                    .degarblers
-                    .get(&id)
-                    .context("no degarbler for this garbled pkt")?;
-                let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
-                log::trace!("packet has been degarbled!");
-                process_inner_pkt(
-                    &ctx,
-                    inner,
-                    src_fp,
-                    reply_degarbler.my_anon_isk().public().fingerprint(),
-                )?
-            }
-        }
-    }
 }
 
 /// Loop that listens to and handles incoming GlobalRpc requests
