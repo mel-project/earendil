@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use earendil::socket::Endpoint;
+use earendil::socket::{Endpoint, Socket};
 use futures_util::{AsyncRead, AsyncWrite};
 use parking_lot::Mutex;
 use smol::Task;

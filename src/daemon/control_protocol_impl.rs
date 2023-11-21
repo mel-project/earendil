@@ -9,7 +9,7 @@ use moka::sync::Cache;
 use nanorpc::RpcTransport;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use sosistab2::ObfsUdpSecret;
+use sosistab2_obfsudp::ObfsUdpSecret;
 use thiserror::Error;
 
 use crate::{
