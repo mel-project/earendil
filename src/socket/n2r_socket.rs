@@ -119,17 +119,18 @@ async fn send_batcher_loop(
     ctx: DaemonContext,
     anon_id: IdentitySecret,
     dock: Dock,
-    recv_msg: Receiver<(Bytes, Endpoint)>,
+    recv_outgoing: Receiver<(Bytes, Endpoint)>,
 ) -> anyhow::Result<()> {
     let mut batches: HashMap<Endpoint, VecDeque<Bytes>> = HashMap::new();
     loop {
         batches.clear();
         // sleep a little while so that stuff accumulates
-        smol::Timer::after(Duration::from_millis(10)).await;
-        let (msg, dest) = recv_msg.recv().await?;
+        smol::Timer::after(Duration::from_millis(5)).await;
+        log::debug!("{} packets queued up", recv_outgoing.len());
+        let (msg, dest) = recv_outgoing.recv().await?;
         batches.entry(dest).or_default().push_back(msg);
         // try to receive more, as long as they're immediately available
-        while let Ok((msg, dest)) = recv_msg.try_recv() {
+        while let Ok((msg, dest)) = recv_outgoing.try_recv() {
             batches.entry(dest).or_default().push_back(msg);
         }
         // go through all the batches
@@ -138,27 +139,30 @@ async fn send_batcher_loop(
             // take things out until a limit is hit
             const LIMIT: usize = 8192;
             const OVERHEAD: usize = 10; // conservative
-            let mut current_size = 0;
-            // we split the batch into subbatches, each of which cannot be too big
-            subbatch.clear(); // reuse memory rather than reallocate
-            while let Some(first) = batch.pop_front() {
-                let next_size = current_size + first.len() + OVERHEAD;
-                if next_size > LIMIT {
-                    batch.push_front(first);
-                    break;
+            while !batch.is_empty() {
+                let mut current_size = 0;
+                // we split the batch into subbatches, each of which cannot be too big
+                subbatch.clear(); // reuse memory rather than reallocate
+                while let Some(first) = batch.pop_front() {
+                    let next_size = current_size + first.len() + OVERHEAD;
+                    if next_size > LIMIT {
+                        batch.push_front(first);
+                        break;
+                    }
+                    subbatch.push(first);
+                    current_size = next_size;
                 }
-                subbatch.push(first);
-                current_size = next_size;
+                log::debug!("subbatch of size {}", subbatch.len());
+                // send the message
+                ctx.send_message(
+                    anon_id,
+                    dock,
+                    endpoint.fingerprint,
+                    endpoint.dock,
+                    subbatch.clone(),
+                )
+                .await?;
             }
-            // send the message
-            ctx.send_message(
-                anon_id,
-                dock,
-                endpoint.fingerprint,
-                endpoint.dock,
-                subbatch.clone(),
-            )
-            .await?;
         }
     }
 }
