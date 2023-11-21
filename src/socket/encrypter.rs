@@ -64,7 +64,7 @@ impl Encrypter {
             recv_in,
             recv_out,
             send_incoming_decrypted,
-            client_info.map(|(hs, fp)| hs),
+            client_info.map(|(hs, _)| hs),
             ctx,
         ));
         Ok(Self {
