@@ -64,7 +64,7 @@ impl Encrypter {
             recv_in,
             recv_out,
             send_incoming_decrypted,
-            client_info.map(|(hs, fp)| hs),
+            client_info.map(|(hs, _)| hs),
             ctx,
         ));
         Ok(Self {
@@ -100,14 +100,8 @@ async fn enc_task(
     client_hs: Option<Handshake>,
     ctx: DaemonContext,
 ) -> anyhow::Result<()> {
-    async fn send_to_rendezvous(
-        ctx: &DaemonContext,
-        n2r_skt: &N2rSocket,
-        msg: Bytes,
-        dest: Endpoint,
-        rendezvous_fp: Option<Fingerprint>,
-    ) -> anyhow::Result<()> {
-        let fwd_body = (msg, dest).stdcode();
+    let send_to_rendezvous = |msg: Bytes| async {
+        let fwd_body = (msg, remote_ep).stdcode();
         let rendezvous_ep = match rendezvous_fp {
             Some(rob) => {
                 // We're the server
@@ -117,10 +111,10 @@ async fn enc_task(
                 // We're the client: look up Rob's addr in rendezvous dht
                 log::trace!(
                     "alice is about to send an earendil packet! looking up {} in the DHT",
-                    dest.fingerprint
+                    remote_ep.fingerprint
                 );
                 let bob_locator = ctx
-                    .dht_get(dest.fingerprint)
+                    .dht_get(remote_ep.fingerprint)
                     .await
                     .map_err(|_| SocketSendError::DhtError)?
                     .context("Could not get rendezvous for {endpoint}")
@@ -129,9 +123,8 @@ async fn enc_task(
                 Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
             }
         };
-        n2r_skt.send_to(fwd_body.into(), rendezvous_ep).await?;
-        Ok(())
-    }
+        n2r_skt.send_to(fwd_body.into(), rendezvous_ep).await
+    };
 
     // complete handshake to get the shared secret
     let my_osk = OnionSecret::generate();
@@ -140,12 +133,12 @@ async fn enc_task(
         Some(hs) => {
             // we already verified the signature in the Encrypter constructor
             let msg = HavenMsg::ServerHs(my_hs).stdcode().into();
-            send_to_rendezvous(&ctx, &n2r_skt, msg, remote_ep, rendezvous_fp).await?; // respond with server handshake
+            send_to_rendezvous(msg).await?; // respond with server handshake
             my_osk.shared_secret(&hs.eph_pk)
         }
         None => {
             let msg = HavenMsg::ClientHs(my_hs).stdcode().into();
-            send_to_rendezvous(&ctx, &n2r_skt, msg, remote_ep, rendezvous_fp).await?; // send client handshake
+            send_to_rendezvous(msg).await?; // send client handshake
             loop {
                 let in_msg = recv_incoming.recv().await?;
                 if let HavenMsg::ServerHs(hs) = in_msg {
@@ -177,7 +170,7 @@ async fn enc_task(
                 inner: ctext.into(),
             }
             .stdcode();
-            send_to_rendezvous(&ctx, &n2r_skt, msg.into(), remote_ep, rendezvous_fp).await?;
+            send_to_rendezvous(msg.into()).await?;
             nonce += 1;
         }
     };
