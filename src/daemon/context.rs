@@ -44,6 +44,7 @@ pub struct DaemonContext {
     pub anon_destinations: Arc<Mutex<ReplyBlockStore>>,
     pub socket_recv_queues: Arc<DashMap<Endpoint, Sender<(Message, Fingerprint)>>>,
     pub local_rdht_shard: Cache<Fingerprint, HavenLocator>,
+    pub rdht_cache: Cache<Fingerprint, HavenLocator>,
     pub registered_havens: Arc<Cache<Fingerprint, ()>>,
 }
 
@@ -63,6 +64,9 @@ impl DaemonContext {
             socket_recv_queues: Arc::new(DashMap::new()),
             local_rdht_shard: CacheBuilder::default()
                 .time_to_idle(Duration::from_secs(60 * 60))
+                .build(),
+            rdht_cache: CacheBuilder::default()
+                .time_to_live(Duration::from_secs(60))
                 .build(),
             registered_havens: Arc::new(
                 Cache::builder()
@@ -193,9 +197,9 @@ impl DaemonContext {
         &self,
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        if let Some(locator) = self.local_rdht_shard.get(&fingerprint) {
+        if let Some(locator) = self.rdht_cache.get(&fingerprint) {
             return Ok(Some(locator));
-        };
+        }
         let replicas = self.dht_key_to_fps(&fingerprint.to_string());
         let mut gatherer = FuturesUnordered::new();
         let anon_isk = IdentitySecret::generate();
@@ -222,7 +226,7 @@ impl DaemonContext {
                     let payload = locator.to_sign();
                     if id_pk.fingerprint() == fingerprint {
                         id_pk.verify(&payload, &locator.signature)?;
-                        self.local_rdht_shard.insert(fingerprint, locator.clone());
+                        self.rdht_cache.insert(fingerprint, locator.clone());
                         return Ok(Some(locator));
                     }
                 }
