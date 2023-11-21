@@ -1,3 +1,5 @@
+mod stream;
+
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use earendil::commands::ControlCommands;
