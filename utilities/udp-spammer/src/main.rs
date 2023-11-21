@@ -60,10 +60,12 @@ async fn uspammer_client(rate: u64, server: SocketAddr) -> anyhow::Result<()> {
     let socket = skt.clone();
     let _up_task = smolscale::spawn(async move {
         let mut send_counter: u64 = 0;
+        let mut packet = [0u8; 1000]; // use a 1000-byte packet
         let mut timer = Timer::interval(Duration::from_secs_f64(1.0 / rate as f64));
 
         loop {
-            match socket.send_to(&send_counter.to_ne_bytes(), server).await {
+            packet[..8].copy_from_slice(&send_counter.to_ne_bytes());
+            match socket.send_to(&packet, server).await {
                 Ok(_) => {
                     send_counter += 1;
                     timer.next().await;
@@ -77,14 +79,14 @@ async fn uspammer_client(rate: u64, server: SocketAddr) -> anyhow::Result<()> {
     });
 
     let mut recv_counter: u64 = 0;
-    let mut buf = [0u8; 8];
+    let mut buf = [0u8; 1000]; // use a 1000-byte buffer for receiving
     loop {
         skt.recv_from(&mut buf).await?;
         recv_counter += 1;
         let speed = recv_counter as f64 / start_time.elapsed().as_secs_f64().max(1.0);
         eprintln!(
             "recvd pkt {} ---------- speed is {:.2} pkts/s",
-            u64::from_ne_bytes(buf),
+            u64::from_ne_bytes(buf[..8].try_into().unwrap()), // read the counter from the first 8 bytes
             speed
         )
     }
@@ -92,11 +94,14 @@ async fn uspammer_client(rate: u64, server: SocketAddr) -> anyhow::Result<()> {
 
 async fn uspammer_server(listen_port: u16) -> anyhow::Result<()> {
     let socket = UdpSocket::bind(format!("0.0.0.0:{}", listen_port)).await?;
-    let mut buf = [0u8; 8];
+    let mut buf = [0u8; 1000]; // use a 1000-byte buffer for receiving
 
     loop {
         let (len, addr) = socket.recv_from(&mut buf).await?;
-        eprintln!("SERVER: received packet {}!", u64::from_ne_bytes(buf));
+        eprintln!(
+            "SERVER: received packet {}!",
+            u64::from_ne_bytes(buf[..8].try_into().unwrap())
+        ); // read the counter from the first 8 bytes
         socket.send_to(&buf[..len], addr).await.unwrap();
     }
 }

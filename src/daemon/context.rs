@@ -133,7 +133,7 @@ impl DaemonContext {
             // TODO this should be replaced
             if let Some(my_anon_osk) = my_anon_osk {
                 // currently the path for every one of them is the same; will want to change this in the future
-                let n = 8;
+                let n = 2;
                 let reverse_route = self
                     .relay_graph
                     .read()
