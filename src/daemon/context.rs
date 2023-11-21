@@ -66,7 +66,7 @@ impl DaemonContext {
                 .time_to_idle(Duration::from_secs(60 * 60))
                 .build(),
             rdht_cache: CacheBuilder::default()
-                .time_to_idle(Duration::from_secs(60 * 30))
+                .time_to_live(Duration::from_secs(60))
                 .build(),
             registered_havens: Arc::new(
                 Cache::builder()

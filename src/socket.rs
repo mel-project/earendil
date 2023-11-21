@@ -101,6 +101,8 @@ pub enum SocketSendError {
     DhtError,
     #[error("error sending haven message")]
     HavenSendError,
+    #[error("incorrect signature for haven encryption")]
+    HavenEncryptionError,
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]

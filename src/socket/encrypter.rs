@@ -39,16 +39,23 @@ pub struct Handshake {
 }
 
 impl Encrypter {
-    pub fn client_new(
+    pub fn new(
         my_isk: IdentitySecret,
         remote_ep: Endpoint,
         rendezvous_fp: Option<Fingerprint>,
         n2r_skt: N2rSocket,
         send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
         ctx: DaemonContext,
-    ) -> Self {
-        let (send_out, recv_out) = smol::channel::bounded(1000);
-        let (send_in, recv_in) = smol::channel::bounded(1000);
+        client_info: Option<(Handshake, Fingerprint)>,
+    ) -> anyhow::Result<Self> {
+        if let Some((hs, fp)) = client_info.clone() {
+            hs.id_pk.verify(hs.to_sign().as_bytes(), &hs.sig)?; // verify sig & src_fp
+            if hs.id_pk.fingerprint() != fp {
+                anyhow::bail!("spoofed src fingerprint for ClientHandshake!")
+            }
+        }
+        let (send_out, recv_out) = smol::channel::bounded(1);
+        let (send_in, recv_in) = smol::channel::bounded(1);
         let task = smolscale::spawn(enc_task(
             my_isk,
             n2r_skt,
@@ -57,43 +64,14 @@ impl Encrypter {
             recv_in,
             recv_out,
             send_incoming_decrypted,
-            None,
+            client_info.map(|(hs, fp)| hs),
             ctx,
         ));
-        Self {
+        Ok(Self {
             send_outgoing: send_out,
             send_incoming: send_in,
             _task: Arc::new(task),
-        }
-    }
-
-    pub fn server_new(
-        my_isk: IdentitySecret,
-        remote_ep: Endpoint,
-        rendezvous_fp: Option<Fingerprint>,
-        n2r_skt: N2rSocket,
-        send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
-        client_hs: Handshake,
-        ctx: DaemonContext,
-    ) -> Self {
-        let (send_out, recv_out) = smol::channel::bounded(1000);
-        let (send_in, recv_in) = smol::channel::bounded(1000);
-        let task = smolscale::spawn(enc_task(
-            my_isk,
-            n2r_skt,
-            remote_ep,
-            rendezvous_fp,
-            recv_in,
-            recv_out,
-            send_incoming_decrypted,
-            Some(client_hs),
-            ctx,
-        ));
-        Self {
-            send_outgoing: send_out,
-            send_incoming: send_in,
-            _task: Arc::new(task),
-        }
+        })
     }
 
     pub async fn send_outgoing(&self, msg: Bytes) -> Result<(), SocketSendError> {
@@ -122,45 +100,52 @@ async fn enc_task(
     client_hs: Option<Handshake>,
     ctx: DaemonContext,
 ) -> anyhow::Result<()> {
-    // get rendezvous ep
-    let rendezvous_ep = match rendezvous_fp {
-        Some(rob) => {
-            // We're the server
-            Endpoint::new(rob, HAVEN_FORWARD_DOCK)
-        }
-        None => {
-            // We're the client: look up Rob's addr in rendezvous dht
-            log::trace!(
-                "alice is about to send an earendil packet! looking up {} in the DHT",
-                remote_ep.fingerprint
-            );
-            let bob_locator = ctx
-                .dht_get(remote_ep.fingerprint)
-                .await
-                .map_err(|_| SocketSendError::DhtError)?
-                .context("Could not get rendezvous for {endpoint}")
-                .map_err(|_| SocketSendError::HavenSendError)?;
-            log::trace!("found rob in the DHT");
-            Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
-        }
-    };
+    async fn send_to_rendezvous(
+        ctx: &DaemonContext,
+        n2r_skt: &N2rSocket,
+        msg: Bytes,
+        dest: Endpoint,
+        rendezvous_fp: Option<Fingerprint>,
+    ) -> anyhow::Result<()> {
+        let fwd_body = (msg, dest).stdcode();
+        let rendezvous_ep = match rendezvous_fp {
+            Some(rob) => {
+                // We're the server
+                Endpoint::new(rob, HAVEN_FORWARD_DOCK)
+            }
+            None => {
+                // We're the client: look up Rob's addr in rendezvous dht
+                log::trace!(
+                    "alice is about to send an earendil packet! looking up {} in the DHT",
+                    dest.fingerprint
+                );
+                let bob_locator = ctx
+                    .dht_get(dest.fingerprint)
+                    .await
+                    .map_err(|_| SocketSendError::DhtError)?
+                    .context("Could not get rendezvous for {endpoint}")
+                    .map_err(|_| SocketSendError::HavenSendError)?;
+                log::trace!("found rob in the DHT");
+                Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
+            }
+        };
+        n2r_skt.send_to(fwd_body.into(), rendezvous_ep).await?;
+        Ok(())
+    }
+
     // complete handshake to get the shared secret
     let my_osk = OnionSecret::generate();
     let my_hs = Handshake::new(&my_isk, &my_osk);
     let shared_sec = match client_hs {
         Some(hs) => {
-            hs.id_pk.verify(hs.to_sign().as_bytes(), &hs.sig)?; // verify sig
-            let msg = (HavenMsg::ServerHs(my_hs).stdcode(), remote_ep)
-                .stdcode()
-                .into();
-            n2r_skt.send_to(msg, rendezvous_ep).await?; // respond with server handshake
+            // we already verified the signature in the Encrypter constructor
+            let msg = HavenMsg::ServerHs(my_hs).stdcode().into();
+            send_to_rendezvous(&ctx, &n2r_skt, msg, remote_ep, rendezvous_fp).await?; // respond with server handshake
             my_osk.shared_secret(&hs.eph_pk)
         }
         None => {
-            let msg = (HavenMsg::ClientHs(my_hs).stdcode(), remote_ep)
-                .stdcode()
-                .into();
-            n2r_skt.send_to(msg, rendezvous_ep).await?; // send client handshake
+            let msg = HavenMsg::ClientHs(my_hs).stdcode().into();
+            send_to_rendezvous(&ctx, &n2r_skt, msg, remote_ep, rendezvous_fp).await?; // send client handshake
             loop {
                 let in_msg = recv_incoming.recv().await?;
                 if let HavenMsg::ServerHs(hs) = in_msg {
@@ -192,9 +177,7 @@ async fn enc_task(
                 inner: ctext.into(),
             }
             .stdcode();
-            n2r_skt
-                .send_to((msg, remote_ep).stdcode().into(), rendezvous_ep)
-                .await?;
+            send_to_rendezvous(&ctx, &n2r_skt, msg.into(), remote_ep, rendezvous_fp).await?;
             nonce += 1;
         }
     };

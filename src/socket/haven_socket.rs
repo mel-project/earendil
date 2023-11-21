@@ -136,16 +136,22 @@ impl HavenSocket {
     }
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
-        let enc = self.encrypters.get_with(endpoint, || {
-            Encrypter::client_new(
+        let enc = if let Some(enc) = self.encrypters.get(&endpoint) {
+            enc
+        } else {
+            let enc = Encrypter::new(
                 self.identity_sk,
                 endpoint,
                 self.rendezvous_point,
                 self.n2r_socket.clone(),
                 self.send_incoming_decrypted.clone(),
                 self.ctx.clone(),
+                None,
             )
-        });
+            .map_err(|_| SocketSendError::HavenEncryptionError)?;
+            self.encrypters.insert(endpoint, enc.clone());
+            enc
+        };
         if let Err(e) = enc.send_outgoing(body).await {
             self.encrypters.remove(&endpoint);
             log::warn!("Encrypter for {endpoint} FAILED with ERR: {e}! Removed from cache");
@@ -185,15 +191,15 @@ async fn recv_task(
             },
             HavenMsg::ClientHs(hs) => encrypters.insert(
                 remote_ep,
-                Encrypter::server_new(
+                Encrypter::new(
                     isk,
                     remote_ep,
                     rob,
                     n2r_skt.clone(),
                     send_incoming_decrypted.clone(),
-                    hs,
                     ctx.clone(),
-                ),
+                    Some((hs, remote_ep.fingerprint)),
+                )?,
             ),
             HavenMsg::Regular { nonce: _, inner: _ } => match encrypter {
                 Some(enc) => enc.send_incoming(haven_msg).await?,
