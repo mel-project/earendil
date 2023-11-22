@@ -68,7 +68,7 @@ impl StreamListener {
                                     let state = s2_state.clone();
                                     let skt = self.socket.clone();
                                     let table = self.table.clone();
-                                    let ticker_task = smolscale::spawn(async move {
+                                    let ticker = smolscale::spawn(async move {
                                         let mut outgoing = Vec::new();
                                         let maybe_retick =
                                             state.lock().tick(|msg| outgoing.push(msg));
@@ -93,7 +93,7 @@ impl StreamListener {
                                     // return a Stream
                                     Stream {
                                         inner_stream: s2_stream,
-                                        _task: ticker_task,
+                                        _task: ticker,
                                     }
                                 }
 

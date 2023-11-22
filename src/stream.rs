@@ -1,5 +1,3 @@
-mod listener;
-
 use std::{pin::Pin, sync::Arc, time::Duration};
 
 use bytes::Bytes;

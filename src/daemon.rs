@@ -62,7 +62,7 @@ impl Daemon {
         let context = ctx.clone();
         log::info!("starting background task for main_daemon");
         let task = Immortal::spawn(async move {
-            main_daemon(context).unwrap();
+            main_daemon(context).await.unwrap();
             panic!("oh no")
         });
         Ok(Self { ctx, _task: task })
@@ -76,130 +76,128 @@ where
     move |s| log::warn!("{label} restart, error: {:?}", s)
 }
 
-pub fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
+pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     log::info!(
         "daemon starting with fingerprint {}",
         ctx.identity.public().fingerprint()
     );
 
     let table = ctx.table.clone();
-    smolscale::block_on(async move {
-        // Run the loops
-        let _table_gc = Immortal::spawn(clone!([table], async move {
-            loop {
-                smol::Timer::after(Duration::from_secs(60)).await;
-                table.garbage_collect();
-            }
-        }));
+    // Run the loops
+    let _table_gc = Immortal::spawn(clone!([table], async move {
+        loop {
+            smol::Timer::after(Duration::from_secs(60)).await;
+            table.garbage_collect();
+        }
+    }));
 
-        let _peel_forward_loops: Vec<Immortal> =
-            (0..available_parallelism().map(|s| s.into()).unwrap_or(1))
-                .map(|_| {
-                    Immortal::respawn(
-                        RespawnStrategy::Immediate,
-                        clone!([ctx], move || peel_forward_loop(ctx.clone())
-                            .map_err(log_error("peel_forward"))),
-                    )
-                })
-                .collect();
-
-        let _gossip = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || gossip_loop(ctx.clone())
-                .map_err(log_error("gossip"))),
-        );
-
-        let _control_protocol = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || control_protocol_loop(ctx.clone())
-                .map_err(log_error("control_protocol"))),
-        );
-
-        let _global_rpc_loop = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || global_rpc_loop(ctx.clone())
-                .map_err(log_error("global_rpc_loop"))),
-        );
-
-        let _rendezvous_forward_loop = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || rendezvous_forward_loop(ctx.clone())
-                .map_err(log_error("haven_forward_loop"))),
-        );
-
-        let _haven_loops: Vec<Immortal> = ctx
-            .config
-            .havens
-            .clone()
-            .into_iter()
-            .map(|cfg| {
+    let _peel_forward_loops: Vec<Immortal> =
+        (0..available_parallelism().map(|s| s.into()).unwrap_or(1))
+            .map(|_| {
                 Immortal::respawn(
                     RespawnStrategy::Immediate,
-                    clone!([ctx], move || haven_loop(ctx.clone(), cfg.clone())
-                        .map_err(log_error("udp_haven_forward_loop"))),
+                    clone!([ctx], move || peel_forward_loop(ctx.clone())
+                        .map_err(log_error("peel_forward"))),
                 )
             })
             .collect();
 
-        // app-level traffic tasks/processes
-        let _udp_forward_loops: Vec<Immortal> = ctx
-            .config
-            .udp_forwards
-            .clone()
-            .into_iter()
-            .map(|udp_fwd_cfg| {
-                Immortal::respawn(
-                    RespawnStrategy::Immediate,
-                    clone!([ctx], move || udp_forward_loop(
-                        ctx.clone(),
-                        udp_fwd_cfg.clone()
-                    )
-                    .map_err(log_error("udp_forward_loop"))),
+    let _gossip = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([ctx], move || gossip_loop(ctx.clone())
+            .map_err(log_error("gossip"))),
+    );
+
+    let _control_protocol = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([ctx], move || control_protocol_loop(ctx.clone())
+            .map_err(log_error("control_protocol"))),
+    );
+
+    let _global_rpc_loop = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([ctx], move || global_rpc_loop(ctx.clone())
+            .map_err(log_error("global_rpc_loop"))),
+    );
+
+    let _rendezvous_forward_loop = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([ctx], move || rendezvous_forward_loop(ctx.clone())
+            .map_err(log_error("haven_forward_loop"))),
+    );
+
+    let _haven_loops: Vec<Immortal> = ctx
+        .config
+        .havens
+        .clone()
+        .into_iter()
+        .map(|cfg| {
+            Immortal::respawn(
+                RespawnStrategy::Immediate,
+                clone!([ctx], move || haven_loop(ctx.clone(), cfg.clone())
+                    .map_err(log_error("udp_haven_forward_loop"))),
+            )
+        })
+        .collect();
+
+    // app-level traffic tasks/processes
+    let _udp_forward_loops: Vec<Immortal> = ctx
+        .config
+        .udp_forwards
+        .clone()
+        .into_iter()
+        .map(|udp_fwd_cfg| {
+            Immortal::respawn(
+                RespawnStrategy::Immediate,
+                clone!([ctx], move || udp_forward_loop(
+                    ctx.clone(),
+                    udp_fwd_cfg.clone()
                 )
-            })
-            .collect();
+                .map_err(log_error("udp_forward_loop"))),
+            )
+        })
+        .collect();
 
-        let mut route_tasks = FuturesUnordered::new();
+    let mut route_tasks = FuturesUnordered::new();
 
-        // For every in_routes block, spawn a task to handle incoming stuff
-        for (in_route_name, config) in ctx.config.in_routes.iter() {
-            let context = InRouteContext {
-                in_route_name: in_route_name.clone(),
-                daemon_ctx: ctx.clone(),
-            };
-            match config.clone() {
-                InRouteConfig::Obfsudp { listen, secret } => {
-                    route_tasks.push(smolscale::spawn(in_route_obfsudp(context, listen, secret)));
-                }
+    // For every in_routes block, spawn a task to handle incoming stuff
+    for (in_route_name, config) in ctx.config.in_routes.iter() {
+        let context = InRouteContext {
+            in_route_name: in_route_name.clone(),
+            daemon_ctx: ctx.clone(),
+        };
+        match config.clone() {
+            InRouteConfig::Obfsudp { listen, secret } => {
+                route_tasks.push(smolscale::spawn(in_route_obfsudp(context, listen, secret)));
             }
         }
+    }
 
-        // For every out_routes block, spawn a task to handle outgoing stuff
-        for (out_route_name, config) in ctx.config.out_routes.iter() {
-            match config {
-                OutRouteConfig::Obfsudp {
-                    fingerprint,
-                    connect,
-                    cookie,
-                } => {
-                    let context = OutRouteContext {
-                        out_route_name: out_route_name.clone(),
-                        remote_fingerprint: *fingerprint,
-                        daemon_ctx: ctx.clone(),
-                    };
-                    route_tasks.push(smolscale::spawn(out_route_obfsudp(
-                        context, *connect, *cookie,
-                    )));
-                }
+    // For every out_routes block, spawn a task to handle outgoing stuff
+    for (out_route_name, config) in ctx.config.out_routes.iter() {
+        match config {
+            OutRouteConfig::Obfsudp {
+                fingerprint,
+                connect,
+                cookie,
+            } => {
+                let context = OutRouteContext {
+                    out_route_name: out_route_name.clone(),
+                    remote_fingerprint: *fingerprint,
+                    daemon_ctx: ctx.clone(),
+                };
+                route_tasks.push(smolscale::spawn(out_route_obfsudp(
+                    context, *connect, *cookie,
+                )));
             }
         }
+    }
 
-        // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
-        while let Some(next) = route_tasks.next().await {
-            next?;
-        }
-        Ok(())
-    })
+    // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
+    while let Some(next) = route_tasks.next().await {
+        next?;
+    }
+    Ok(())
 }
 
 /// Loop that handles the control protocol
