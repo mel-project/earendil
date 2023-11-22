@@ -9,6 +9,8 @@ use smol::{future::FutureExt, Task, Timer};
 use sosistab2::{RelKind, StreamMessage, StreamState};
 use stdcode::StdcodeSerializeExt;
 
+mod listener;
+
 pub struct Stream {
     inner_stream: sosistab2::Stream,
     _task: Task<()>,

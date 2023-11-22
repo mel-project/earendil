@@ -40,11 +40,7 @@ impl StreamListener {
                                     let (send_tick, recv_tick) = smol::channel::unbounded();
 
                                     let tick_notify = move || {
-                                        let send_tick = send_tick.clone();
-                                        smolscale::spawn(async move {
-                                            let _ = send_tick.send(()).await;
-                                        })
-                                        .detach();
+                                        let _ = send_tick.try_send(());
                                     };
                                     let (s2_state, s2_stream) = StreamState::new_established(
                                         tick_notify,
@@ -96,8 +92,8 @@ impl StreamListener {
 
                                     // return a Stream
                                     Stream {
-                                        s2_stream: Arc::new(Mutex::new(s2_stream)),
-                                        ticker,
+                                        inner_stream: s2_stream,
+                                        _task: ticker,
                                     }
                                 }
 
