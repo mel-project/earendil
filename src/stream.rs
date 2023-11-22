@@ -1,14 +1,14 @@
-use std::sync::Arc;
+mod listener;
 
 use earendil::socket::{Endpoint, Socket};
 use futures_util::{AsyncRead, AsyncWrite};
 use parking_lot::Mutex;
 use smol::Task;
-use sosistab2::StreamState;
+use std::sync::Arc;
 
 pub struct Stream {
-    stream_state: Arc<Mutex<StreamState>>,
-    _task: Task<()>,
+    s2_stream: Arc<Mutex<sosistab2::Stream>>,
+    ticker: Task<()>,
 }
 
 impl Stream {
