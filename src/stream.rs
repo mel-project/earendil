@@ -9,8 +9,6 @@ use smol::{future::FutureExt, Task, Timer};
 use sosistab2::{RelKind, StreamMessage, StreamState};
 use stdcode::StdcodeSerializeExt;
 
-mod listener;
-
 pub struct Stream {
     inner_stream: sosistab2::Stream,
     _task: Task<()>,
@@ -41,20 +39,17 @@ impl Stream {
                 let (msg, ep) = socket.recv_from().await?;
                 if ep == server_endpoint {
                     let maybe: Result<StreamMessage, _> = stdcode::deserialize(&msg);
-                    if let Ok(smsg) = maybe {
-                        if let StreamMessage::Reliable {
-                            kind,
-                            stream_id,
-                            seqno: _,
-                            payload: _,
-                        } = smsg
-                        {
-                            if kind == RelKind::SynAck && stream_id == our_stream_id {
-                                break anyhow::Ok(());
-                            }
-                        }
-                    };
-                }
+
+                    if let Ok(StreamMessage::Reliable {
+                        kind: RelKind::SynAck,
+                        stream_id: _our_stream_id,
+                        seqno: _,
+                        payload: _,
+                    }) = maybe
+                    {
+                        break anyhow::Ok(());
+                    }
+                };
             }
         };
         send_syn.race(wait_synack).await?;
@@ -101,15 +96,13 @@ impl Stream {
                         .send_to(smsg.stdcode().into(), server_endpoint)
                         .await?;
                 }
-                anyhow::Ok(())
             };
             let down_loop = async {
                 loop {
-                    let (msg, ep) = socket.recv_from().await?;
+                    let (msg, _ep) = socket.recv_from().await?;
                     let smsg: StreamMessage = stdcode::deserialize(&msg)?;
                     wrapped_ss.lock().inject_incoming(smsg);
                 }
-                anyhow::Ok(())
             };
             up_loop.race(down_loop).await
         });
