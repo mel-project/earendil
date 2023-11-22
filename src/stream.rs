@@ -1,13 +1,16 @@
+pub mod listener;
+
 use std::{pin::Pin, sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil::socket::{Endpoint, Socket};
 use futures_util::{AsyncRead, AsyncWrite};
 use parking_lot::Mutex;
 use smol::{future::FutureExt, Task, Timer};
 use sosistab2::{RelKind, StreamMessage, StreamState};
 use stdcode::StdcodeSerializeExt;
+
+use crate::socket::{Endpoint, Socket};
 
 pub struct Stream {
     inner_stream: sosistab2::Stream,
@@ -16,6 +19,7 @@ pub struct Stream {
 
 impl Stream {
     pub async fn connect(socket: Socket, server_endpoint: Endpoint) -> anyhow::Result<Self> {
+        println!("connecting...");
         // handshake
         let our_stream_id: u16 = rand::random();
         let syn = StreamMessage::Reliable {
@@ -27,6 +31,8 @@ impl Stream {
         let mut timeout = 4;
         let send_syn = async {
             loop {
+                println!("sending syn");
+
                 socket
                     .send_to(syn.stdcode().into(), server_endpoint)
                     .await?;
@@ -36,6 +42,8 @@ impl Stream {
         };
         let wait_synack = async {
             loop {
+                println!("receiving syn?");
+
                 let (msg, ep) = socket.recv_from().await?;
                 if ep == server_endpoint {
                     let maybe: Result<StreamMessage, _> = stdcode::deserialize(&msg);
@@ -47,12 +55,15 @@ impl Stream {
                         payload: _,
                     }) = maybe
                     {
+                        println!("got synACK");
+
                         break anyhow::Ok(());
                     }
                 };
             }
         };
         send_syn.race(wait_synack).await?;
+        println!("we raced");
 
         // construct sosistab2::Stream & sosistab2::StreamStates
         let (send_tick, recv_tick) = smol::channel::unbounded::<()>();

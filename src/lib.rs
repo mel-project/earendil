@@ -5,4 +5,5 @@ pub mod daemon;
 mod global_rpc;
 mod haven;
 pub mod socket;
+pub mod stream;
 mod utils;

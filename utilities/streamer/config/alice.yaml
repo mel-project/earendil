@@ -1,0 +1,17 @@
+# fingerprint: rxccpfn94v0j223qabk1s8aahfa2d1tc
+identity: alice.asc
+state_cache: state_cache_alice.db
+control_listen: 127.0.0.1:11111
+
+in_routes:
+  # arbitrary names, used for diagnositics and logging
+  main_udp:
+    protocol: obfsudp
+    listen: 0.0.0.0:19999
+    secret: correct horse battery staple
+
+# client config
+udp_forwards:
+  - forward_to: 8080
+    remote_ep: k2qrs2rwm1ygj812mjr0y5bkxdb260b0:69420
+

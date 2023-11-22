@@ -1,0 +1,13 @@
+[package]
+name = "streamer"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.75"
+earendil = { path = "/home/marco/dev/earendil" }
+futures-util = "0.3.29"
+serde_yaml = "0.9.27"
+smolscale = "0.4.1"

@@ -12,7 +12,7 @@ mod udp_forward;
 use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::Fingerprint;
+use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::ForwardInstruction;
 use earendil_packet::{InnerPacket, PeeledPacket};
 use earendil_topology::RelayGraph;
@@ -61,11 +61,18 @@ impl Daemon {
         let ctx = DaemonContext::new(config)?;
         let context = ctx.clone();
         log::info!("starting background task for main_daemon");
+        println!("daemon INIT");
         let task = Immortal::spawn(async move {
+            println!("Daemon Task loop starting");
             main_daemon(context).await.unwrap();
             panic!("oh no")
         });
+        println!("daemon task spawned?");
         Ok(Self { ctx, _task: task })
+    }
+
+    pub fn identity(&self) -> IdentitySecret {
+        self.ctx.identity
     }
 }
 
@@ -81,6 +88,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         "daemon starting with fingerprint {}",
         ctx.identity.public().fingerprint()
     );
+    println!("DAEMON STARTING");
 
     let table = ctx.table.clone();
     // Run the loops

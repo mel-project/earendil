@@ -3090,6 +3090,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "streamer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "earendil",
+ "futures-util",
+ "serde_yaml",
+ "smolscale",
+]
+
+[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

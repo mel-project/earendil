@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use dashmap::DashMap;
-use earendil::socket::{Endpoint, Socket};
 use futures_util::{future, FutureExt};
 use parking_lot::Mutex;
 use sosistab2::{RelKind, StreamMessage, StreamState};
 use stdcode::StdcodeSerializeExt;
+
+use crate::socket::{Endpoint, Socket};
 
 use super::Stream;
 
@@ -25,8 +26,10 @@ impl StreamListener {
 
     pub async fn accept(&mut self) -> anyhow::Result<Stream> {
         loop {
+            println!("entered accept() loop");
             match self.socket.recv_from().await {
                 Ok((msg, endpoint)) => {
+                    println!("we got msg {:?}", msg);
                     let stream_msg: StreamMessage = stdcode::deserialize(&msg)?;
                     match stream_msg.clone() {
                         StreamMessage::Reliable {
