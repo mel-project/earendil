@@ -47,6 +47,8 @@ pub struct DaemonContext {
     pub local_rdht_shard: Cache<Fingerprint, HavenLocator>,
     pub rdht_cache: Cache<Fingerprint, HavenLocator>,
     pub registered_havens: Arc<Cache<Fingerprint, ()>>,
+
+    remote_rb_balance: Cache<(IdentitySecret, Fingerprint), f64>,
 }
 
 impl DaemonContext {
@@ -75,6 +77,10 @@ impl DaemonContext {
                     .time_to_idle(Duration::from_secs(60 * 60))
                     .build(),
             ),
+
+            remote_rb_balance: Cache::builder()
+                .time_to_live(Duration::from_secs(60)) // we don't keep track beyond so if rb calculation is wrong, we don't get stuck for too long
+                .build(),
         };
 
         Ok(ctx)
@@ -123,18 +129,49 @@ impl DaemonContext {
                 InnerPacket::Message(Message::new(src_dock, dst_dock, content)),
                 &src_idsk,
             )?;
+
+            // if anon source, send RBs
+            if src_anon {
+                self.replenish_reply_blocks(src_idsk, dst_fp).await?;
+            }
+
             // we send the onion by treating it as a message addressed to ourselves
             self.table.inject_asif_incoming(wrapped_onion).await;
-
-            // if anon source, send one reply block
-            if src_anon {
-                self.send_reply_block(1, src_idsk, dst_fp).await?;
-            }
         }
         Ok(())
     }
 
-    pub async fn send_reply_block(
+    pub fn decrement_rrb_balance(&self, my_anon_isk: IdentitySecret, reply_source: Fingerprint) {
+        // this is racy, but probably fine
+        let new_balance = self.rb_balance(my_anon_isk, reply_source);
+        self.remote_rb_balance
+            .insert((my_anon_isk, reply_source), new_balance - 1.0);
+    }
+
+    pub async fn replenish_reply_blocks(
+        &self,
+        my_anon_isk: IdentitySecret,
+        dst_fp: Fingerprint,
+    ) -> Result<(), SendMessageError> {
+        const BATCH_SIZE: usize = 10;
+        while self.rb_balance(my_anon_isk, dst_fp) < 100.0 {
+            self.send_reply_blocks(BATCH_SIZE, my_anon_isk, dst_fp)
+                .await?;
+            // we conservatively assume half get there
+            self.remote_rb_balance.insert(
+                (my_anon_isk, dst_fp),
+                self.rb_balance(my_anon_isk, dst_fp) + (BATCH_SIZE / 2) as f64,
+            );
+        }
+        Ok(())
+    }
+
+    fn rb_balance(&self, my_anon_isk: IdentitySecret, reply_source: Fingerprint) -> f64 {
+        self.remote_rb_balance
+            .get_with((my_anon_isk, reply_source), || 0.0)
+    }
+
+    pub async fn send_reply_blocks(
         &self,
         count: usize,
         my_anon_isk: IdentitySecret,
@@ -145,6 +182,8 @@ impl DaemonContext {
         let my_anon_osk = ONION_SK_CACHE.get_with(my_anon_isk.public().fingerprint(), || {
             OnionSecret::generate()
         });
+
+        log::debug!("sending a batch of {count} reply blocks to {dst_fp}");
 
         let route = self
             .relay_graph

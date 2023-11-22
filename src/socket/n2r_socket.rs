@@ -9,12 +9,13 @@ use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{Dock, Message};
+use futures_util::TryFutureExt;
 use rand::Rng;
 
 use smol::channel::{Receiver, Sender};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
-use crate::{daemon::context::DaemonContext, socket::SocketRecvError};
+use crate::{daemon::context::DaemonContext, log_error, socket::SocketRecvError};
 
 use super::{Endpoint, SocketSendError};
 
@@ -82,7 +83,8 @@ impl N2rSocket {
                     idsk,
                     dock,
                     recv_outgoing.clone()
-                )),
+                )
+                .map_err(log_error("send_batcher"))),
             )
             .into(),
         }

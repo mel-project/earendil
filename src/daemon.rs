@@ -10,7 +10,6 @@ mod peel_forward;
 mod reply_block_store;
 mod udp_forward;
 
-
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::Fingerprint;
@@ -31,7 +30,6 @@ use std::thread::available_parallelism;
 
 use std::{sync::Arc, time::Duration};
 
-use crate::daemon::{peel_forward::peel_forward_loop, udp_forward::udp_forward_loop};
 use crate::haven::{haven_loop, HAVEN_FORWARD_DOCK};
 use crate::socket::n2r_socket::N2rSocket;
 use crate::socket::Endpoint;
@@ -46,6 +44,10 @@ use crate::{
 };
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
 use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
+use crate::{
+    daemon::{peel_forward::peel_forward_loop, udp_forward::udp_forward_loop},
+    log_error,
+};
 
 pub use self::control_protocol_impl::ControlProtErr;
 
@@ -68,13 +70,6 @@ impl Daemon {
         });
         Ok(Self { ctx, _task: task })
     }
-}
-
-fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
-where
-    E: std::fmt::Debug,
-{
-    move |s| log::warn!("{label} restart, error: {:?}", s)
 }
 
 pub fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {

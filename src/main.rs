@@ -32,7 +32,7 @@ enum Commands {
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=debug"))
         .init();
 
     match Args::parse().command {
