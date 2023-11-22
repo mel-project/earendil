@@ -1,3 +1,5 @@
+mod listener;
+
 use std::{pin::Pin, sync::Arc, time::Duration};
 
 use bytes::Bytes;
@@ -62,19 +64,19 @@ impl Stream {
         let (send_outgoing, recv_outgoing) = smol::channel::unbounded::<StreamMessage>();
         let tick_notify = move || {
             if let Err(e) = send_tick.try_send(()) {
-                log::debug!("send_tick.try_send(()) failed!");
+                log::debug!("Stream send_tick.try_send(()) failed! {e}");
             }
         };
         let outgoing_callback = move |smsg: StreamMessage| {
             if let Err(e) = send_outgoing.try_send(smsg) {
-                log::debug!("outgoing_callback.try_send(()) failed!");
+                log::debug!("Stream outgoing_callback.try_send(()) failed! {e}");
             }
         };
 
-        let (stream_state, stream) =
-            StreamState::new_established(tick_notify, our_stream_id, "stream!".to_owned());
+        let (s2_state, s2_stream) =
+            StreamState::new_established(tick_notify, our_stream_id, "".to_owned());
 
-        let wrapped_ss = Arc::new(Mutex::new(stream_state));
+        let wrapped_ss = Arc::new(Mutex::new(s2_state));
         let ticker_task = clone!([wrapped_ss], async move {
             loop {
                 let maybe = wrapped_ss.lock().tick(&outgoing_callback);
@@ -119,7 +121,7 @@ impl Stream {
         });
 
         Ok(Self {
-            inner_stream: stream,
+            inner_stream: s2_stream,
             _task: task,
         })
     }

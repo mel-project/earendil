@@ -10,7 +10,7 @@ use stdcode::StdcodeSerializeExt;
 
 use super::Stream;
 
-struct StreamListener {
+pub struct StreamListener {
     socket: Arc<Socket>,
     table: Arc<DashMap<Endpoint, Arc<Mutex<sosistab2::StreamState>>>>,
 }
@@ -40,11 +40,11 @@ impl StreamListener {
                                     let (send_tick, recv_tick) = smol::channel::unbounded();
 
                                     let tick_notify = move || {
-                                        let send_tick = send_tick.clone();
-                                        smolscale::spawn(async move {
-                                            let _ = send_tick.send(()).await;
-                                        })
-                                        .detach();
+                                        if let Err(e) = send_tick.try_send(()) {
+                                            log::debug!(
+                                                "StreamListener send_tick.try_send(()) failed! {e}"
+                                            );
+                                        }
                                     };
                                     let (s2_state, s2_stream) = StreamState::new_established(
                                         tick_notify,
@@ -62,16 +62,13 @@ impl StreamListener {
 
                                     // send the SYNACK message
                                     self.socket
-                                        .send_to(
-                                            Bytes::copy_from_slice(&syn_ack.stdcode()),
-                                            endpoint,
-                                        )
+                                        .send_to(syn_ack.stdcode().into(), endpoint)
                                         .await?;
 
                                     let state = s2_state.clone();
                                     let skt = self.socket.clone();
                                     let table = self.table.clone();
-                                    let ticker = smolscale::spawn(async move {
+                                    let ticker_task = smolscale::spawn(async move {
                                         let mut outgoing = Vec::new();
                                         let maybe_retick =
                                             state.lock().tick(|msg| outgoing.push(msg));
@@ -79,10 +76,9 @@ impl StreamListener {
                                         if let Some(retick_time) = maybe_retick {
                                             let timer = smol::Timer::at(retick_time);
                                             let recv_future = recv_tick.recv();
-
                                             future::select(recv_future, timer.fuse()).await;
                                             for msg in outgoing.drain(..) {
-                                                let msg = Bytes::copy_from_slice(&msg.stdcode());
+                                                let msg = msg.stdcode().into();
                                                 let _ = skt.send_to(msg, endpoint).await;
                                             }
                                         } else {
@@ -96,8 +92,8 @@ impl StreamListener {
 
                                     // return a Stream
                                     Stream {
-                                        s2_stream: Arc::new(Mutex::new(s2_stream)),
-                                        ticker,
+                                        inner_stream: s2_stream,
+                                        _task: ticker_task,
                                     }
                                 }
 
@@ -118,7 +114,7 @@ impl StreamListener {
                                             seqno,
                                             payload,
                                         };
-                                        let msg = Bytes::copy_from_slice(&rst_msg.stdcode());
+                                        let msg = rst_msg.stdcode().into();
                                         self.socket.send_to(msg, endpoint).await?;
 
                                         continue;
