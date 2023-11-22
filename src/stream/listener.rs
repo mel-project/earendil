@@ -1,15 +1,11 @@
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::sync::Arc;
 
 use bytes::Bytes;
 use dashmap::DashMap;
 use earendil::socket::{Endpoint, Socket};
 use futures_util::{future, FutureExt};
 use parking_lot::Mutex;
-use smol::{channel::Sender, Timer};
-use sosistab2::{StreamMessage, StreamState};
+use sosistab2::{RelKind, StreamMessage, StreamState};
 use stdcode::StdcodeSerializeExt;
 
 use super::Stream;
@@ -32,7 +28,7 @@ impl StreamListener {
             match self.socket.recv_from().await {
                 Ok((msg, endpoint)) => {
                     let stream_msg: StreamMessage = stdcode::deserialize(&msg)?;
-                    match stream_msg {
+                    match stream_msg.clone() {
                         StreamMessage::Reliable {
                             kind,
                             stream_id,
@@ -40,7 +36,7 @@ impl StreamListener {
                             payload,
                         } => {
                             match kind {
-                                sosistab2::RelKind::Syn => {
+                                RelKind::Syn => {
                                     let (send_tick, recv_tick) = smol::channel::unbounded();
 
                                     let tick_notify = move || {
@@ -105,15 +101,36 @@ impl StreamListener {
                                     }
                                 }
 
-                                // TODO: handle non-SYN messages
-                                _ => todo!(),
+                                RelKind::Rst => {
+                                    self.table.remove(&endpoint);
+                                    continue;
+                                }
+
+                                _ => match self.table.get(&endpoint) {
+                                    Some(state) => {
+                                        state.lock().inject_incoming(stream_msg);
+                                        continue;
+                                    }
+                                    None => {
+                                        let rst_msg = StreamMessage::Reliable {
+                                            kind: RelKind::Rst,
+                                            stream_id,
+                                            seqno,
+                                            payload,
+                                        };
+                                        let msg = Bytes::copy_from_slice(&rst_msg.stdcode());
+                                        self.socket.send_to(msg, endpoint).await?;
+
+                                        continue;
+                                    }
+                                },
                             };
                         }
                         _ => log::warn!("unreliable stream messages aren't supported"),
                     }
                 }
                 Err(e) => {
-                    log::warn!("error while receiving packet");
+                    log::warn!("error while receiving stream packet: {:?}", e);
                 }
             }
         }
