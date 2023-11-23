@@ -64,13 +64,10 @@ impl Daemon {
         let ctx = DaemonContext::new(config)?;
         let context = ctx.clone();
         log::info!("starting background task for main_daemon");
-        println!("daemon INIT");
         let task = Immortal::spawn(async move {
-            println!("Daemon Task loop starting");
             main_daemon(context).await.unwrap();
             panic!("oh no")
         });
-        println!("daemon task spawned?");
         Ok(Self { ctx, _task: task })
     }
 }
@@ -252,24 +249,19 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     ));
 
     loop {
-        if let Ok((msg, src_endpoint)) = socket.recv_from().await {
+        if let Ok((msg, src_ep)) = socket.recv_from().await {
             let ctx = ctx.clone();
             let (inner, dest_ep): (Bytes, Endpoint) = stdcode::deserialize(&msg)?;
-            log::trace!(
-                "received forward msg {:?}, from {}, to {}",
-                inner,
-                src_endpoint,
-                dest_ep
-            );
+            log::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
 
             let is_valid_dest = ctx.registered_havens.contains_key(&dest_ep.fingerprint);
-            let is_seen_src = seen_srcs.contains_key(&(dest_ep, src_endpoint));
+            let is_seen_src = seen_srcs.contains_key(&(dest_ep, src_ep));
 
             if is_valid_dest {
-                seen_srcs.insert((src_endpoint, dest_ep), ());
+                seen_srcs.insert((src_ep, dest_ep), ());
             }
             if is_valid_dest || is_seen_src {
-                let body: Bytes = (inner, src_endpoint).stdcode().into();
+                let body: Bytes = (inner, src_ep).stdcode().into();
                 socket.send_to(body, dest_ep).await?;
             } else {
                 log::warn!("haven {} is not registered with me!", dest_ep.fingerprint);

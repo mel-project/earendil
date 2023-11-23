@@ -137,13 +137,17 @@ impl ControlProtocol for ControlProtocolImpl {
         let res = if let Some(res) = client
             .call(&send_args.method, &send_args.args)
             .await
-            .map_err(|_| GlobalRpcError::SendError)?
-        {
-            res.map_err(|_| GlobalRpcError::SendError)?
+            .map_err(|e| {
+                log::warn!("send_global_rpc failed with {:?}", e);
+                GlobalRpcError::SendError
+            })? {
+            res.map_err(|e| {
+                log::warn!("send_global_rpc failed with {:?}", e);
+                GlobalRpcError::SendError
+            })?
         } else {
             return Err(GlobalRpcError::SendError);
         };
-
         Ok(res)
     }
 

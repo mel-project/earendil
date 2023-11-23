@@ -1,5 +1,5 @@
 # fingerprint: rxccpfn94v0j223qabk1s8aahfa2d1tc
-identity: ./src/config/alice.asc
+identity: ./config/alice.asc
 state_cache: state_cache_alice.db
 control_listen: 127.0.0.1:11111
 

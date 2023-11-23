@@ -1,0 +1,74 @@
+[workspace]
+members = ["libraries/*", "utilities/*"]
+
+[package]
+name = "earendil"
+version = "0.0.1"
+edition = "2021"
+
+# [lib]
+# name = "earendil"
+# path = "src/lib.rs"
+
+# [[bin]]
+# name = "earendil"
+# path = "src/main.rs"
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1.0.188", features = ["derive"] }
+serde_with = { version = "3.3.0", features = ["hex", "base64"] }
+earendil_packet = { path = "libraries/earendil_packet" }
+earendil_crypt = { path = "libraries/earendil_crypt" }
+earendil_topology = { path = "libraries/earendil_topology" }
+serde_yaml = "0.9.25"
+clap = { version = "4.4.6", features = ["derive"] }
+anyhow = "1.0.75"
+hex = "0.4.3"
+stdcode = "0.1.14"
+log = "0.4.20"
+env_logger = "0.10.0"
+nanorpc = "0.1.12"
+async-trait = "0.1.73"
+bytes = "1.5.0"
+blake3 = "1.5.0"
+sosistab2 = "0.9.7"
+concurrent-queue = "2.3.0"
+smol = "1.3.0"
+scopeguard = "1.2.0"
+serde_json = "1.0.107"
+bytemuck = "1.14.0"
+smolscale = "0.4"
+thiserror = "1.0.49"
+futures-util = "0.3.28"
+dashmap = "5.5.3"
+indexmap = "1.9.3"
+parking_lot = "0.12.1"
+rand = "0.8.5"
+nanorpc-http = "0.1.3"
+clone-macro = "0.1.0"
+moka = { version = "0.12.1", features = ["sync"] }
+lru = "0.12.0"
+smol-timeout = "0.6.0"
+base64 = "0.21.5"
+itertools = "0.11.0"
+moro = "0.4.0"
+replay_filter = "0.1.2"
+once_cell = "1.18.0"
+
+[profile.dev]
+panic = 'abort'
+opt-level = 1
+
+[profile.release]
+panic = 'abort'
+
+[profile.release-dbg]
+inherits = "release"
+debug = 2
+
+[profile.bench]
+inherits = "release"
+debug = 2

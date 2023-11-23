@@ -4,6 +4,7 @@ use anyhow::Context;
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use earendil_packet::crypt::{AeadKey, OnionPublic, OnionSecret};
+use futures_util::TryFutureExt;
 use replay_filter::ReplayFilter;
 use serde::{Deserialize, Serialize};
 use smol::{
@@ -56,17 +57,23 @@ impl Encrypter {
         }
         let (send_out, recv_out) = smol::channel::bounded(1);
         let (send_in, recv_in) = smol::channel::bounded(1);
-        let task = smolscale::spawn(enc_task(
-            my_isk,
-            n2r_skt,
-            remote_ep,
-            rendezvous_fp,
-            recv_in,
-            recv_out,
-            send_incoming_decrypted,
-            client_info.map(|(hs, _)| hs),
-            ctx,
-        ));
+        let task = smolscale::spawn(
+            enc_task(
+                my_isk,
+                n2r_skt,
+                remote_ep,
+                rendezvous_fp,
+                recv_in,
+                recv_out,
+                send_incoming_decrypted,
+                client_info.map(|(hs, _)| hs),
+                ctx,
+            )
+            .map_err(move |e| {
+                log::warn!("enc_task for {remote_ep} died with {:?}", e);
+                e
+            }),
+        );
         Ok(Self {
             send_outgoing: send_out,
             send_incoming: send_in,
@@ -109,21 +116,21 @@ async fn enc_task(
             }
             None => {
                 // We're the client: look up Rob's addr in rendezvous dht
-                log::trace!(
+                log::debug!(
                     "alice is about to send an earendil packet! looking up {} in the DHT",
                     remote_ep.fingerprint
                 );
                 let bob_locator = ctx
                     .dht_get(remote_ep.fingerprint)
                     .await
-                    .map_err(|_| SocketSendError::DhtError)?
-                    .context("Could not get rendezvous for {endpoint}")
-                    .map_err(|_| SocketSendError::HavenSendError)?;
+                    .context("DHT failed for {endpoint}")?
+                    .context("DHT returned None for {endpoint}")?;
                 log::trace!("found rob in the DHT");
                 Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
             }
         };
-        n2r_skt.send_to(fwd_body.into(), rendezvous_ep).await
+        n2r_skt.send_to(fwd_body.into(), rendezvous_ep).await?;
+        anyhow::Ok(())
     };
 
     // complete handshake to get the shared secret

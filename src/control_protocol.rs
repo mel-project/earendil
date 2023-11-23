@@ -41,7 +41,6 @@ pub async fn main_control(
         }
         ControlCommands::SktInfo { skt_id } => {
             let skt_info = client.skt_info(skt_id).await??;
-            println!("{skt_info}")
         }
         ControlCommands::SendMsg {
             skt_id: socket_id,
