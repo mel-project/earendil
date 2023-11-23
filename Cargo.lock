@@ -3095,12 +3095,15 @@ name = "streamer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "earendil",
  "earendil_crypt",
  "env_logger",
  "futures-util",
  "log",
+ "scopeguard",
  "serde_yaml",
+ "smol",
  "smolscale",
 ]
 

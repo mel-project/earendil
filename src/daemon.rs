@@ -70,6 +70,10 @@ impl Daemon {
         });
         Ok(Self { ctx, _task: task })
     }
+
+    pub fn identity(&self) -> IdentitySecret {
+        self.ctx.identity
+    }
 }
 
 pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
@@ -77,7 +81,13 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         "daemon starting with fingerprint {}",
         ctx.identity.public().fingerprint()
     );
-    println!("DAEMON STARTING");
+
+    scopeguard::defer!({
+        log::info!(
+            "daemon with fingerprint {} is now DROPPED!",
+            ctx.identity.public().fingerprint()
+        )
+    });
 
     let table = ctx.table.clone();
     // Run the loops

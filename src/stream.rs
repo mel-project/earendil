@@ -31,8 +31,7 @@ impl Stream {
         let mut timeout = 4;
         let send_syn = async {
             loop {
-                println!("sending syn");
-
+                log::trace!("sending syn");
                 socket
                     .send_to(syn.stdcode().into(), server_endpoint)
                     .await?;
@@ -42,8 +41,6 @@ impl Stream {
         };
         let wait_synack = async {
             loop {
-                println!("receiving syn?");
-
                 let (msg, ep) = socket.recv_from().await?;
                 if ep == server_endpoint {
                     let maybe: Result<StreamMessage, _> = stdcode::deserialize(&msg);
@@ -63,7 +60,6 @@ impl Stream {
             }
         };
         send_syn.race(wait_synack).await?;
-        println!("we raced");
 
         // construct sosistab2::Stream & sosistab2::StreamStates
         let (send_tick, recv_tick) = smol::channel::unbounded::<()>();
@@ -129,6 +125,13 @@ impl Stream {
             _task: task,
         })
     }
+
+    fn pin_project_inner(self: std::pin::Pin<&mut Self>) -> Pin<&mut sosistab2::Stream> {
+        // SAFETY: this is a safe pin-projection, since we never get a &mut sosistab2::Stream from a Pin<&mut Stream> elsewhere.
+        // Safety requires that we either consistently lose Pin or keep it.
+        // We could use the "pin_project" crate but I'm too lazy.
+        unsafe { self.map_unchecked_mut(|s| &mut s.inner_stream) }
+    }
 }
 
 impl AsyncRead for Stream {
@@ -137,7 +140,8 @@ impl AsyncRead for Stream {
         cx: &mut std::task::Context<'_>,
         buf: &mut [u8],
     ) -> std::task::Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.inner_stream.clone()).poll_read(cx, buf)
+        let inner = self.pin_project_inner();
+        inner.poll_read(cx, buf)
     }
 }
 
@@ -147,20 +151,23 @@ impl AsyncWrite for Stream {
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.inner_stream.clone()).poll_write(cx, buf)
+        let inner = self.pin_project_inner();
+        inner.poll_write(cx, buf)
     }
 
     fn poll_flush(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        Pin::new(&mut self.inner_stream.clone()).poll_flush(cx)
+        let inner = self.pin_project_inner();
+        inner.poll_flush(cx)
     }
 
     fn poll_close(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        Pin::new(&mut self.inner_stream.clone()).poll_close(cx)
+        let inner = self.pin_project_inner();
+        inner.poll_close(cx)
     }
 }

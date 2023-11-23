@@ -26,111 +26,110 @@ impl StreamListener {
 
     pub async fn accept(&mut self) -> anyhow::Result<Stream> {
         loop {
-            println!("entered accept() loop");
-            match self.socket.recv_from().await {
-                Ok((msg, endpoint)) => {
-                    println!("we got msg {:?}", msg);
-                    let stream_msg: StreamMessage = stdcode::deserialize(&msg)?;
-                    match stream_msg.clone() {
-                        StreamMessage::Reliable {
-                            kind,
-                            stream_id,
-                            seqno,
-                            payload,
-                        } => {
-                            match kind {
-                                RelKind::Syn => {
-                                    let (send_tick, recv_tick) = smol::channel::unbounded();
+            log::trace!("entered accept() loop");
+            let (msg, client_ep) = self.socket.recv_from().await?;
+            let stream_msg: StreamMessage = stdcode::deserialize(&msg)?;
+            log::trace!("we got msg {:?}", stream_msg);
+            match stream_msg.clone() {
+                StreamMessage::Reliable {
+                    kind,
+                    stream_id,
+                    seqno,
+                    payload,
+                } => {
+                    match kind {
+                        RelKind::Syn => {
+                            let (send_tick, recv_tick) = smol::channel::unbounded();
 
-                                    let tick_notify = move || {
-                                        if let Err(e) = send_tick.try_send(()) {
-                                            log::debug!(
-                                                "StreamListener send_tick.try_send(()) failed! {e}"
-                                            );
-                                        }
-                                    };
-                                    let (s2_state, s2_stream) = StreamState::new_established(
-                                        tick_notify,
-                                        stream_id,
-                                        "".into(),
+                            let tick_notify = move || {
+                                if let Err(e) = send_tick.try_send(()) {
+                                    log::debug!(
+                                        "StreamListener send_tick.try_send(()) failed! {e}"
                                     );
-                                    let s2_state = Arc::new(Mutex::new(s2_state));
-
-                                    let syn_ack = StreamMessage::Reliable {
-                                        kind: sosistab2::RelKind::SynAck,
-                                        stream_id,
-                                        seqno,
-                                        payload,
-                                    };
-
-                                    // send the SYNACK message
-                                    self.socket
-                                        .send_to(syn_ack.stdcode().into(), endpoint)
-                                        .await?;
-
-                                    let state = s2_state.clone();
-                                    let skt = self.socket.clone();
-                                    let table = self.table.clone();
-                                    let ticker = smolscale::spawn(async move {
-                                        let mut outgoing = Vec::new();
-                                        let maybe_retick =
-                                            state.lock().tick(|msg| outgoing.push(msg));
-
-                                        if let Some(retick_time) = maybe_retick {
-                                            let timer = smol::Timer::at(retick_time);
-                                            let recv_future = recv_tick.recv();
-                                            future::select(recv_future, timer.fuse()).await;
-                                            for msg in outgoing.drain(..) {
-                                                let msg = msg.stdcode().into();
-                                                let _ = skt.send_to(msg, endpoint).await;
-                                            }
-                                        } else {
-                                            log::warn!("no retick time: connection is dead! dropping from the table...");
-                                            table.remove(&endpoint);
-                                        }
-                                    });
-
-                                    // insert state into table
-                                    self.table.insert(endpoint, s2_state);
-
-                                    // return a Stream
-                                    Stream {
-                                        inner_stream: s2_stream,
-                                        _task: ticker,
-                                    }
                                 }
-
-                                RelKind::Rst => {
-                                    self.table.remove(&endpoint);
-                                    continue;
-                                }
-
-                                _ => match self.table.get(&endpoint) {
-                                    Some(state) => {
-                                        state.lock().inject_incoming(stream_msg);
-                                        continue;
-                                    }
-                                    None => {
-                                        let rst_msg = StreamMessage::Reliable {
-                                            kind: RelKind::Rst,
-                                            stream_id,
-                                            seqno,
-                                            payload,
-                                        };
-                                        let msg = rst_msg.stdcode().into();
-                                        self.socket.send_to(msg, endpoint).await?;
-
-                                        continue;
-                                    }
-                                },
                             };
+                            let (s2_state, s2_stream) =
+                                StreamState::new_established(tick_notify, stream_id, "".into());
+                            let s2_state = Arc::new(Mutex::new(s2_state));
+
+                            let syn_ack = StreamMessage::Reliable {
+                                kind: sosistab2::RelKind::SynAck,
+                                stream_id,
+                                seqno,
+                                payload,
+                            };
+
+                            // send the SYNACK message
+                            self.socket
+                                .send_to(syn_ack.stdcode().into(), client_ep)
+                                .await?;
+
+                            let state = s2_state.clone();
+                            let skt = self.socket.clone();
+                            let table = self.table.clone();
+                            let ticker = smolscale::spawn(async move {
+                                loop {
+                                    let mut outgoing = Vec::new();
+                                    log::debug!("listener-spawned ticker ticking!!");
+                                    let maybe_retick = state.lock().tick(|msg| outgoing.push(msg));
+
+                                    if let Some(retick_time) = maybe_retick {
+                                        let timer = smol::Timer::at(retick_time);
+                                        let recv_future = recv_tick.recv();
+                                        future::select(recv_future, timer.fuse()).await;
+                                        for msg in outgoing.drain(..) {
+                                            log::debug!(
+                                                "listener sending back result of tick {:?}",
+                                                msg
+                                            );
+                                            let msg = msg.stdcode().into();
+                                            let _ = skt.send_to(msg, client_ep).await;
+                                        }
+                                    } else {
+                                        log::warn!("no retick time: connection is dead! dropping from the table...");
+                                        table.remove(&client_ep);
+                                        return;
+                                    }
+                                }
+                            });
+
+                            // insert state into table
+                            self.table.insert(client_ep, s2_state);
+
+                            // return a Stream
+                            return Ok(Stream {
+                                inner_stream: s2_stream,
+                                _task: ticker,
+                            });
                         }
-                        _ => log::warn!("unreliable stream messages aren't supported"),
-                    }
+
+                        RelKind::Rst => {
+                            self.table.remove(&client_ep);
+                            continue;
+                        }
+
+                        _ => match self.table.get(&client_ep) {
+                            Some(state) => {
+                                log::debug!("INJECTING into state: {:?}", stream_msg);
+                                state.lock().inject_incoming(stream_msg);
+                                continue;
+                            }
+                            None => {
+                                let rst_msg = StreamMessage::Reliable {
+                                    kind: RelKind::Rst,
+                                    stream_id,
+                                    seqno,
+                                    payload,
+                                };
+                                let msg = rst_msg.stdcode().into();
+                                self.socket.send_to(msg, client_ep).await?;
+
+                                continue;
+                            }
+                        },
+                    };
                 }
-                Err(e) => {
-                    log::warn!("error while receiving stream packet: {:?}", e);
-                }
+                _ => log::warn!("unreliable stream messages aren't supported"),
             }
         }
     }

@@ -23,7 +23,7 @@ pub struct Socket {
 
 impl Socket {
     pub fn bind_haven(
-        daemon: Daemon,
+        daemon: &Daemon,
         isk: IdentitySecret,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
@@ -34,7 +34,7 @@ impl Socket {
         }
     }
 
-    pub fn bind_n2r(daemon: Daemon, isk: IdentitySecret, dock: Option<Dock>) -> Socket {
+    pub fn bind_n2r(daemon: &Daemon, isk: IdentitySecret, dock: Option<Dock>) -> Socket {
         let inner = N2rSocket::bind(daemon.ctx.clone(), isk, dock);
         Self {
             inner: InnerSocket::N2r(inner),
