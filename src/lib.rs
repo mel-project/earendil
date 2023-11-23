@@ -6,3 +6,10 @@ mod global_rpc;
 mod haven;
 pub mod socket;
 mod utils;
+
+fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
+where
+    E: std::fmt::Debug,
+{
+    move |s| log::warn!("{label} restart, error: {:?}", s)
+}

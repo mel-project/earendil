@@ -61,7 +61,7 @@ impl IdentityPublic {
 /// The secret half of an "identity" on the network.
 ///
 /// Underlying representation is a Ed25519 "seed".
-#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq, Copy)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq, Copy, Hash)]
 pub struct IdentitySecret([u8; 32]);
 
 impl FromStr for IdentitySecret {
