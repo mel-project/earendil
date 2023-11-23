@@ -5,19 +5,19 @@ use earendil::{
     socket::Socket,
     stream::{listener::StreamListener, Stream},
 };
+use earendil_crypt::IdentitySecret;
 use futures_util::io::AsyncWriteExt;
 
 fn main() -> anyhow::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
         .init();
-    let _ = smolscale::block_on(async {
+    smolscale::block_on(async {
         let client_daemon = spawn_daemon("./config/alice.yaml")?;
-        let client_id = client_daemon.identity();
-        let client_socket = Socket::bind_n2r(client_daemon, client_id, None);
+        let client_socket = Socket::bind_n2r(client_daemon, IdentitySecret::generate(), None);
 
         let server_daemon = spawn_daemon("./config/bob.yaml")?;
-        let server_id = server_daemon.identity();
-        let server_socket = Socket::bind_n2r(server_daemon, server_id, None);
+        let server_anon_id = IdentitySecret::generate();
+        let server_socket = Socket::bind_n2r(server_daemon, server_anon_id, None);
         let server_ep = server_socket.local_endpoint();
         log::info!("server endpoint: {server_ep}");
 
@@ -43,11 +43,7 @@ fn main() -> anyhow::Result<()> {
         let _sz = client_stream.write(data).await?;
 
         anyhow::Ok(())
-    });
-
-    loop {
-        std::thread::park();
-    }
+    })
 }
 
 fn spawn_daemon(path: &str) -> anyhow::Result<Daemon> {

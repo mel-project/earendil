@@ -54,10 +54,10 @@ impl ControlProtocol for ControlProtocolImpl {
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) {
-        let anon_id = anon_id
+        let isk = anon_id
             .map(|id| self.anon_identities.lock().get(&id))
             .unwrap_or_else(|| self.ctx.identity);
-        let socket = Socket::bind_haven_internal(self.ctx.clone(), anon_id, dock, rendezvous_point);
+        let socket = Socket::bind_haven_internal(self.ctx.clone(), isk, dock, rendezvous_point);
         self.sockets.insert(socket_id, socket);
     }
 

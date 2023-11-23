@@ -1126,9 +1126,9 @@ dependencies = [
  "clone-macro",
  "concurrent-queue 2.3.0",
  "dashmap",
- "earendil_crypt 0.1.0",
- "earendil_packet 0.1.0",
- "earendil_topology 0.1.0",
+ "earendil_crypt",
+ "earendil_packet",
+ "earendil_topology",
  "env_logger",
  "futures-util",
  "hex",
@@ -1159,72 +1159,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "earendil"
-version = "0.0.1"
-source = "git+https://github.com/mel-project/earendil.git?branch=stream#4188dcf3c19675c8de0b02e2f5a0c463ea0be98b"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64",
- "blake3",
- "bytemuck",
- "bytes",
- "clap 4.4.8",
- "clone-macro",
- "concurrent-queue 2.3.0",
- "dashmap",
- "earendil_crypt 0.1.0 (git+https://github.com/mel-project/earendil.git?branch=stream)",
- "earendil_packet 0.1.0 (git+https://github.com/mel-project/earendil.git?branch=stream)",
- "earendil_topology 0.1.0 (git+https://github.com/mel-project/earendil.git?branch=stream)",
- "env_logger",
- "futures-util",
- "hex",
- "indexmap 1.9.3",
- "itertools 0.11.0",
- "log",
- "lru 0.12.0",
- "moka",
- "moro",
- "nanorpc",
- "nanorpc-http",
- "parking_lot 0.12.1",
- "rand 0.8.5",
- "replay_filter",
- "scopeguard",
- "serde",
- "serde_json",
- "serde_with 3.4.0",
- "serde_yaml",
- "smol",
- "smol-timeout",
- "smolscale",
- "sosistab2",
- "sosistab2-obfsudp",
- "stdcode",
- "thiserror",
-]
-
-[[package]]
 name = "earendil_crypt"
 version = "0.1.0"
-dependencies = [
- "anyhow",
- "arrayref",
- "base32",
- "base64",
- "blake3",
- "bytes",
- "ed25519-consensus",
- "rand 0.8.5",
- "serde",
- "stdcode",
- "thiserror",
-]
-
-[[package]]
-name = "earendil_crypt"
-version = "0.1.0"
-source = "git+https://github.com/mel-project/earendil.git?branch=stream#4188dcf3c19675c8de0b02e2f5a0c463ea0be98b"
 dependencies = [
  "anyhow",
  "arrayref",
@@ -1254,30 +1190,7 @@ dependencies = [
  "chacha20",
  "chacha20poly1305",
  "criterion",
- "earendil_crypt 0.1.0",
- "rand 0.8.5",
- "serde",
- "serde-big-array",
- "thiserror",
- "x25519-dalek 2.0.0",
-]
-
-[[package]]
-name = "earendil_packet"
-version = "0.1.0"
-source = "git+https://github.com/mel-project/earendil.git?branch=stream#4188dcf3c19675c8de0b02e2f5a0c463ea0be98b"
-dependencies = [
- "anyhow",
- "arrayref",
- "base64",
- "bincode",
- "blake3",
- "bs58",
- "bytemuck",
- "bytes",
- "chacha20",
- "chacha20poly1305",
- "earendil_crypt 0.1.0 (git+https://github.com/mel-project/earendil.git?branch=stream)",
+ "earendil_crypt",
  "rand 0.8.5",
  "serde",
  "serde-big-array",
@@ -1295,32 +1208,8 @@ dependencies = [
  "blake3",
  "bytemuck",
  "bytes",
- "earendil_crypt 0.1.0",
- "earendil_packet 0.1.0",
- "ed25519-compact",
- "indexmap 1.9.3",
- "log",
- "pod",
- "rand 0.8.5",
- "serde",
- "slab",
- "stdcode",
- "thiserror",
-]
-
-[[package]]
-name = "earendil_topology"
-version = "0.1.0"
-source = "git+https://github.com/mel-project/earendil.git?branch=stream#4188dcf3c19675c8de0b02e2f5a0c463ea0be98b"
-dependencies = [
- "anyhow",
- "arrayref",
- "async-trait",
- "blake3",
- "bytemuck",
- "bytes",
- "earendil_crypt 0.1.0 (git+https://github.com/mel-project/earendil.git?branch=stream)",
- "earendil_packet 0.1.0 (git+https://github.com/mel-project/earendil.git?branch=stream)",
+ "earendil_crypt",
+ "earendil_packet",
  "ed25519-compact",
  "indexmap 1.9.3",
  "log",
@@ -3206,7 +3095,8 @@ name = "streamer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "earendil 0.0.1 (git+https://github.com/mel-project/earendil.git?branch=stream)",
+ "earendil",
+ "earendil_crypt",
  "env_logger",
  "futures-util",
  "log",

@@ -24,18 +24,18 @@ pub struct Socket {
 impl Socket {
     pub fn bind_haven(
         daemon: Daemon,
-        anon_id: IdentitySecret,
+        isk: IdentitySecret,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> Socket {
-        let inner = HavenSocket::bind(daemon.ctx.clone(), anon_id, dock, rendezvous_point);
+        let inner = HavenSocket::bind(daemon.ctx.clone(), isk, dock, rendezvous_point);
         Self {
             inner: InnerSocket::Haven(inner),
         }
     }
 
-    pub fn bind_n2r(daemon: Daemon, anon_id: IdentitySecret, dock: Option<Dock>) -> Socket {
-        let inner = N2rSocket::bind(daemon.ctx.clone(), anon_id, dock);
+    pub fn bind_n2r(daemon: Daemon, isk: IdentitySecret, dock: Option<Dock>) -> Socket {
+        let inner = N2rSocket::bind(daemon.ctx.clone(), isk, dock);
         Self {
             inner: InnerSocket::N2r(inner),
         }
@@ -43,26 +43,21 @@ impl Socket {
 
     pub(crate) fn bind_haven_internal(
         ctx: DaemonContext,
-        anon_id: IdentitySecret,
+        isk: IdentitySecret,
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) -> Socket {
-        let inner = InnerSocket::Haven(HavenSocket::bind(
-            ctx.clone(),
-            anon_id,
-            dock,
-            rendezvous_point,
-        ));
+        let inner = InnerSocket::Haven(HavenSocket::bind(ctx.clone(), isk, dock, rendezvous_point));
 
         Self { inner }
     }
 
     pub(crate) fn bind_n2r_internal(
         ctx: DaemonContext,
-        anon_id: IdentitySecret,
+        isk: IdentitySecret,
         dock: Option<Dock>,
     ) -> Socket {
-        let inner = InnerSocket::N2r(N2rSocket::bind(ctx.clone(), anon_id, dock));
+        let inner = InnerSocket::N2r(N2rSocket::bind(ctx.clone(), isk, dock));
         Self { inner }
     }
 

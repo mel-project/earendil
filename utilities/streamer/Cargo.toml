@@ -7,7 +7,8 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.75"
-earendil = { git="https://github.com/mel-project/earendil.git", branch="stream" }
+earendil = {path="../../"}
+earendil_crypt = {path="../../libraries/earendil_crypt/"}
 env_logger = "0.10.1"
 futures-util = "0.3.29"
 log = "0.4.20"
