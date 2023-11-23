@@ -1,0 +1,11 @@
+# fingerprint: vjm326wpq4w60t4yqpd98q1sgdzcfvqb
+identity: ./src/config/bob.asc
+state_cache: state_cache_bob.db
+control_listen: 127.0.0.1:22222
+
+out_routes:
+  neighbor:
+    fingerprint: rxccpfn94v0j223qabk1s8aahfa2d1tc
+    protocol: obfsudp
+    connect: 127.0.0.1:19999
+    cookie: bb27ead798b27ec3384ac2cf2f374a17c02bfce420b19e8b2c5a8f898fd6384d

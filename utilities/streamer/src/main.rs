@@ -5,12 +5,14 @@ use earendil::{
     socket::Socket,
     stream::{listener::StreamListener, Stream},
 };
-use futures_util::{io::AsyncWriteExt, AsyncReadExt};
+use futures_util::io::AsyncWriteExt;
 
 fn main() -> anyhow::Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
+        .init();
     let _ = smolscale::block_on(async {
-        let client_daemon = spawn_daemon("config/alice.yaml")?;
-        let server_daemon = spawn_daemon("config/bob.yaml")?;
+        let client_daemon = spawn_daemon("./src/config/alice.yaml")?;
+        let server_daemon = spawn_daemon("./src/config/bob.yaml")?;
 
         let client_id = client_daemon.identity();
         let server_id = server_daemon.identity();
@@ -25,15 +27,19 @@ fn main() -> anyhow::Result<()> {
             let mut stream_listener = StreamListener::listen(server_socket);
             println!("listening");
 
-            let mut server_stream = stream_listener.accept().await.unwrap();
-            println!("got streams");
+            match stream_listener.accept().await {
+                Ok(server_stream) => {
+                    println!("got stream");
 
-            let mut array = [0; 1000];
-            let buf = &mut array[..];
-            let sz = server_stream.read(buf).await.unwrap();
-            println!("finished reading");
+                    // let mut array = [0; 1000];
+                    // let buf = &mut array[..];
+                    // let sz = server_stream.read(buf).await;
+                    // println!("finished reading");
 
-            println!("{:?}", &buf[..sz]);
+                    // println!("{:?}", &buf[..sz]);
+                }
+                Err(e) => println!("server stream accept error! {e}"),
+            }
         })
         .detach();
 
@@ -56,6 +62,8 @@ fn spawn_daemon(path: &str) -> anyhow::Result<Daemon> {
     let config: ConfigFile =
         serde_yaml::from_slice(&std::fs::read(path).context("cannot read config file")?)
             .context("syntax error in config file")?;
+    println!("read config!");
     let daemon = Daemon::init(config)?;
+    println!("got daemon");
     Ok(daemon)
 }
