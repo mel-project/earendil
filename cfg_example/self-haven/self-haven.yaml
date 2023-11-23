@@ -1,0 +1,23 @@
+identity: identity.asc
+state_cache: state_cache.db
+
+in_routes:
+  # arbitrary names, used for diagnositics and logging
+  main_udp:
+    protocol: obfsudp
+    listen: 0.0.0.0:19999
+    secret: correct horse batteryr staple
+
+# client config
+udp_forwards:
+  - forward_to: 8080
+    remote_ep: cxvc52ndnzvy2kq1x9ajr2ft0tn5wk6n:10000
+
+# server config
+havens:
+  - identity: haven.asc
+    rendezvous: bnjmrmw1kvjf7jmx5fa6a9x1hjtq7qh3
+    handler:
+      type: udp_forward
+      from_dock: 10000
+      to_port: 10000
