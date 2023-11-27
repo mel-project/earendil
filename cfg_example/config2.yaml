@@ -18,3 +18,9 @@ havens:
       type: udp_forward
       from_dock: 69420
       to_port: 8814 # e.g. listening port of geph4-exit
+  - identity: haven.asc
+    rendezvous: 957g4y0qgfp1zrcnpyfsg07kexc3qm5p
+    handler:
+      type: tcp_forward
+      from_dock: 69421
+      to_port: 8815 # e.g. listening port of geph4-exit

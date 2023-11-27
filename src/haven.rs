@@ -118,6 +118,8 @@ pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> an
     let haven_id = get_or_create_id(&haven_cfg.identity)?;
     let (from_dock, to_port) = match haven_cfg.handler {
         ForwardHandler::UdpForward { from_dock, to_port } => (from_dock, to_port),
+        ForwardHandler::TcpForward { from_dock, to_port } => todo!(),
+        ForwardHandler::SimpleProxy { listen_dock } => todo!(),
     };
 
     let earendil_skt = Arc::new(Socket::bind_haven_internal(

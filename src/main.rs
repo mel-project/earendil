@@ -37,9 +37,10 @@ fn main() -> anyhow::Result<()> {
 
     match Args::parse().command {
         Commands::Daemon { config } => {
-            let config_parsed: ConfigFile =
+            let json: serde_json::Value =
                 serde_yaml::from_slice(&std::fs::read(config).context("cannot read config file")?)
                     .context("syntax error in config file")?;
+            let config_parsed: ConfigFile = serde_json::from_value(json)?;
             log::info!("about to init daemon!");
             let _daemon = Daemon::init(config_parsed)?;
             loop {

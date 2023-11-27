@@ -22,6 +22,12 @@ udp_forwards:
   - forward_to: 8080
     remote_ep: fhsg3742bwxmg3k14jdsbphdp22j119f:69420
 
+tcp_forwards:
+  - forward_to: 8081
+    remote_ep: fhsg3742bwxmg3k14jdsbphdp22j119f:69421
 
-
-
+socks5:
+  port: 1000
+  fallback: 
+    simple_proxy:
+      remote_ep: fhsg3742bwxmg3k14jdsbphdp22j119f:69422
