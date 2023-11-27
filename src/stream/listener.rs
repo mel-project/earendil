@@ -39,7 +39,7 @@ impl StreamListener {
 
                     let tick_notify = move || {
                         if let Err(e) = send_tick.try_send(()) {
-                            log::debug!("StreamListener send_tick.try_send(()) failed! {e}");
+                            log::error!("StreamListener send_tick.try_send(()) failed! {e}");
                         }
                     };
                     let (s2_state, s2_stream) =
@@ -77,7 +77,7 @@ impl StreamListener {
                                     let _ = skt.send_to(msg, client_ep).await;
                                 }
                             } else {
-                                log::warn!("no retick time: connection is dead! dropping from the table...");
+                                log::debug!("no retick time: connection is dead! dropping from the table...");
                                 table.remove(&client_ep);
                                 return;
                             }
