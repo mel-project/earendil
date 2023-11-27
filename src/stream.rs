@@ -19,7 +19,6 @@ pub struct Stream {
 
 impl Stream {
     pub async fn connect(socket: Socket, server_endpoint: Endpoint) -> anyhow::Result<Self> {
-        println!("connecting...");
         // handshake
         let our_stream_id: u16 = rand::random();
         let syn = StreamMessage::Reliable {
@@ -52,8 +51,6 @@ impl Stream {
                         payload: _,
                     }) = maybe
                     {
-                        println!("got synACK");
-
                         break anyhow::Ok(());
                     }
                 };
