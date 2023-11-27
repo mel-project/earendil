@@ -9,7 +9,7 @@ use moka::sync::Cache;
 use nanorpc::RpcTransport;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use sosistab2::ObfsUdpSecret;
+use sosistab2_obfsudp::ObfsUdpSecret;
 use thiserror::Error;
 
 use crate::{
@@ -54,10 +54,10 @@ impl ControlProtocol for ControlProtocolImpl {
         dock: Option<Dock>,
         rendezvous_point: Option<Fingerprint>,
     ) {
-        let anon_id = anon_id
+        let isk = anon_id
             .map(|id| self.anon_identities.lock().get(&id))
             .unwrap_or_else(|| self.ctx.identity);
-        let socket = Socket::bind_haven_internal(self.ctx.clone(), anon_id, dock, rendezvous_point);
+        let socket = Socket::bind_haven_internal(self.ctx.clone(), isk, dock, rendezvous_point);
         self.sockets.insert(socket_id, socket);
     }
 
@@ -137,13 +137,17 @@ impl ControlProtocol for ControlProtocolImpl {
         let res = if let Some(res) = client
             .call(&send_args.method, &send_args.args)
             .await
-            .map_err(|_| GlobalRpcError::SendError)?
-        {
-            res.map_err(|_| GlobalRpcError::SendError)?
+            .map_err(|e| {
+                log::warn!("send_global_rpc failed with {:?}", e);
+                GlobalRpcError::SendError
+            })? {
+            res.map_err(|e| {
+                log::warn!("send_global_rpc failed with {:?}", e);
+                GlobalRpcError::SendError
+            })?
         } else {
             return Err(GlobalRpcError::SendError);
         };
-
         Ok(res)
     }
 

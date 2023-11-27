@@ -159,7 +159,8 @@ impl HavenSocket {
 
     pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
         self.recv_incoming_decrypted
-            .recv_blocking()
+            .recv()
+            .await
             .map_err(|_| SocketRecvError::HavenRecvError)
     }
 

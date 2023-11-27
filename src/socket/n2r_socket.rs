@@ -119,7 +119,7 @@ impl N2rSocket {
 
 async fn send_batcher_loop(
     ctx: DaemonContext,
-    anon_id: IdentitySecret,
+    isk: IdentitySecret,
     dock: Dock,
     recv_outgoing: Receiver<(Bytes, Endpoint)>,
 ) -> anyhow::Result<()> {
@@ -157,7 +157,7 @@ async fn send_batcher_loop(
                 log::debug!("subbatch of size {}", subbatch.len());
                 // send the message
                 ctx.send_message(
-                    anon_id,
+                    isk,
                     dock,
                     endpoint.fingerprint,
                     endpoint.dock,

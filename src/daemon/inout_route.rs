@@ -3,7 +3,7 @@ use std::{net::SocketAddr, time::Duration};
 use earendil_crypt::Fingerprint;
 use smol::future::FutureExt;
 use smolscale::reaper::TaskReaper;
-use sosistab2::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
+use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
 
 use crate::daemon::link_connection::LinkConnection;
 
@@ -26,7 +26,7 @@ pub async fn in_route_obfsudp(
         context.in_route_name,
         hex::encode(secret.to_public().as_bytes())
     );
-    let listener = ObfsUdpListener::bind(listen, secret)?;
+    let listener = ObfsUdpListener::bind(listen, secret).await?;
     let group = TaskReaper::new();
     loop {
         let next = listener.accept().await?;
