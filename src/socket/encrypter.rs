@@ -82,10 +82,10 @@ impl Encrypter {
     }
 
     pub async fn send_outgoing(&self, msg: Bytes) -> Result<(), SocketSendError> {
-        self.send_outgoing
-            .send(msg)
-            .await
-            .map_err(|_| SocketSendError::HavenSendError)
+        self.send_outgoing.send(msg).await.map_err(|e| {
+            log::warn!("encrypter send outgoing failed: {e}");
+            SocketSendError::HavenSendError
+        })
     }
 
     pub async fn send_incoming(&self, msg: HavenMsg) -> Result<(), SocketRecvError> {
@@ -123,8 +123,8 @@ async fn enc_task(
                 let bob_locator = ctx
                     .dht_get(remote_ep.fingerprint)
                     .await
-                    .context("DHT failed for {endpoint}")?
-                    .context("DHT returned None for {endpoint}")?;
+                    .context(format!("DHT failed for {}", remote_ep.fingerprint))?
+                    .context(format!("DHT returned None for {}", remote_ep.fingerprint))?;
                 log::trace!("found rob in the DHT");
                 Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
             }

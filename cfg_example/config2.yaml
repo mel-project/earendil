@@ -13,7 +13,7 @@ out_routes:
 # server config
 havens:
   - identity: haven.asc
-    rendezvous: 957g4y0qgfp1zrcnpyfsg07kexc3qm5p
+    rendezvous: 91fbz7f7b2fwy0xrvsyqqbwbmmqytdnr
     handler:
       type: udp_forward
       from_dock: 69420

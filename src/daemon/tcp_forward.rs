@@ -22,6 +22,18 @@ pub async fn tcp_forward_loop(
         earendil_stream: Arc<RwLock<Stream>>,
         tcp_stream: Arc<RwLock<TcpStream>>,
     ) -> anyhow::Result<()> {
+        let up = async {
+            loop {
+                let mut buf = [0u8; 1000];
+                let mut tcp_stream = tcp_stream.write().await;
+                let n = tcp_stream.read(&mut buf).await?;
+                let mut earendil_stream = earendil_stream.write().await;
+                println!("TCP STREAMING CLIENT SIDE:\n{}", hex::encode(&buf[..n]));
+                earendil_stream.write(&buf[..n]).await?;
+            }
+            anyhow::Ok(())
+        };
+
         let down = async {
             loop {
                 let mut buf = [0u8; 1000];
@@ -29,17 +41,6 @@ pub async fn tcp_forward_loop(
                 let n = earendil_stream.read(&mut buf).await?;
                 let mut tcp_stream = tcp_stream.write().await;
                 tcp_stream.write(&buf[..n]).await?;
-            }
-            anyhow::Ok(())
-        };
-
-        let up = async {
-            loop {
-                let mut buf = [0u8; 1000];
-                let mut tcp_stream = tcp_stream.write().await;
-                let n = tcp_stream.read(&mut buf).await?;
-                let mut earendil_stream = earendil_stream.write().await;
-                earendil_stream.write(&buf[..n]).await?;
             }
             anyhow::Ok(())
         };
@@ -59,6 +60,7 @@ pub async fn tcp_forward_loop(
 
     loop {
         let (tcp_stream, _) = tcp_listener.accept().await?;
+        println!("ACCEPTED TEE-SEE-PEE STREAM!!!");
         let tcp_stream = Arc::new(RwLock::new(tcp_stream));
 
         let earendil_socket =

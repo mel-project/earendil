@@ -1,15 +1,12 @@
-# fingerprint: 957g4y0qgfp1zrcnpyfsg07kexc3qm5p
+# fingerprint: 91fbz7f7b2fwy0xrvsyqqbwbmmqytdnr
 
 identity: rendezvous.asc
 state_cache: state_cache2.db
-control_listen: 127.0.0.1:22222
+control_listen: 127.0.0.1:33333
 
 out_routes:
-  server:
-    fingerprint: 83kv9hb6jfxdnp9fwj7x5s417v2d2wx9
+  neighbor:
+    fingerprint: w0pj999ezrc36spw5zz88nn79z9h7mss
     protocol: obfsudp
-    connect: 164.92.86.192:42000
+    connect: 127.0.0.1:19999
     cookie: bb27ead798b27ec3384ac2cf2f374a17c02bfce420b19e8b2c5a8f898fd6384d
-
-udp_forwards: []
-havens: []

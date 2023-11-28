@@ -195,14 +195,10 @@ async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
         loop {
             // listen for a message on the earendil stream
             let mut buf = [0u8; 10000];
-            {
-                let mut earendil_stream = earendil_stream.write().await;
-                earendil_stream.read(&mut buf).await?;
-            }
-            {
-                let mut tcp_stream = tcp_stream.write().await;
-                tcp_stream.write(&buf).await?;
-            }
+            let mut earendil_stream = earendil_stream.write().await;
+            let n = earendil_stream.read(&mut buf).await?;
+            let mut tcp_stream = tcp_stream.write().await;
+            tcp_stream.write(&buf[..n]).await?;
         }
     }
 
@@ -213,14 +209,10 @@ async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
         loop {
             // listen for incoming data from the TCP stream
             let mut buf = [0u8; 10000];
-            {
-                let mut tcp_stream = tcp_stream.write().await;
-                tcp_stream.read(&mut buf).await?;
-            }
-            {
-                let mut earendil_stream = earendil_stream.write().await;
-                earendil_stream.write(&buf).await?;
-            }
+            let mut tcp_stream = tcp_stream.write().await;
+            let n = tcp_stream.read(&mut buf).await?;
+            let mut earendil_stream = earendil_stream.write().await;
+            earendil_stream.write(&buf[..n]).await?;
         }
     }
 
