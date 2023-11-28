@@ -8,8 +8,14 @@ use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use earendil_packet::{crypt::OnionPublic, Dock};
 use moka::sync::{Cache, CacheBuilder};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use smol::net::UdpSocket;
+use smol::{
+    future::FutureExt,
+    io::{AsyncReadExt, AsyncWriteExt},
+    lock::RwLock,
+    net::{TcpStream, UdpSocket},
+};
 use smolscale::immortal::Immortal;
 use stdcode::StdcodeSerializeExt;
 
@@ -17,6 +23,7 @@ use crate::{
     config::{ForwardHandler, HavenForwardConfig},
     daemon::context::DaemonContext,
     socket::{Endpoint, Socket},
+    stream::{listener::StreamListener, Stream},
     utils::get_or_create_id,
 };
 
@@ -101,6 +108,14 @@ impl RegisterHavenReq {
 /// Starts a "down" loop that listens for incoming UDP traffic in the reverse direction and
 /// forwards it back to the earnedil network.
 pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
+    match haven_cfg.handler {
+        ForwardHandler::UdpForward { from_dock, to_port } => udp_forward(ctx, haven_cfg).await,
+        ForwardHandler::TcpForward { from_dock, to_port } => tcp_forward(ctx, haven_cfg).await,
+        ForwardHandler::SimpleProxy { listen_dock } => todo!(),
+    }
+}
+
+async fn udp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
     // down loop forwards packets back down to the source Earendil endpoints
     async fn down_loop(
         udp_skt: Arc<UdpSocket>,
@@ -115,12 +130,12 @@ pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> an
         }
     }
 
-    let haven_id = get_or_create_id(&haven_cfg.identity)?;
     let (from_dock, to_port) = match haven_cfg.handler {
         ForwardHandler::UdpForward { from_dock, to_port } => (from_dock, to_port),
-        ForwardHandler::TcpForward { from_dock, to_port } => todo!(),
-        ForwardHandler::SimpleProxy { listen_dock } => todo!(),
+        _ => anyhow::bail!("invalid config for UDP forwarding"),
     };
+
+    let haven_id = get_or_create_id(&haven_cfg.identity)?;
 
     let earendil_skt = Arc::new(Socket::bind_haven_internal(
         ctx.clone(),
@@ -153,5 +168,94 @@ pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> an
         udp_socket
             .send_to(&message, format!("127.0.0.1:{to_port}"))
             .await?;
+    }
+}
+
+async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
+    let (from_dock, to_port) = match haven_cfg.handler {
+        ForwardHandler::TcpForward { from_dock, to_port } => (from_dock, to_port),
+        _ => anyhow::bail!("invalid config for UDP forwarding"),
+    };
+
+    let haven_id = get_or_create_id(&haven_cfg.identity)?;
+
+    let earendil_skt = Socket::bind_haven_internal(
+        ctx.clone(),
+        haven_id,
+        Some(from_dock),
+        Some(haven_cfg.rendezvous),
+    );
+
+    let mut listener = StreamListener::listen(earendil_skt);
+
+    async fn up_loop(
+        earendil_stream: Arc<RwLock<Stream>>,
+        tcp_stream: Arc<RwLock<TcpStream>>,
+    ) -> anyhow::Result<()> {
+        loop {
+            // listen for a message on the earendil stream
+            let mut buf = [0u8; 10000];
+            {
+                let mut earendil_stream = earendil_stream.write().await;
+                earendil_stream.read(&mut buf).await?;
+            }
+            {
+                let mut tcp_stream = tcp_stream.write().await;
+                tcp_stream.write(&buf).await?;
+            }
+        }
+    }
+
+    async fn down_loop(
+        earendil_stream: Arc<RwLock<Stream>>,
+        tcp_stream: Arc<RwLock<TcpStream>>,
+    ) -> anyhow::Result<()> {
+        loop {
+            // listen for incoming data from the TCP stream
+            let mut buf = [0u8; 10000];
+            {
+                let mut tcp_stream = tcp_stream.write().await;
+                tcp_stream.read(&mut buf).await?;
+            }
+            {
+                let mut earendil_stream = earendil_stream.write().await;
+                earendil_stream.write(&buf).await?;
+            }
+        }
+    }
+
+    async fn stream_loop(
+        earendil_stream: Arc<RwLock<Stream>>,
+        tcp_stream: Arc<RwLock<TcpStream>>,
+    ) -> anyhow::Result<()> {
+        let up = async {
+            let _ = up_loop(earendil_stream.clone(), tcp_stream.clone()).await;
+        };
+
+        let down = async {
+            let _ = down_loop(earendil_stream.clone(), tcp_stream.clone()).await;
+        };
+
+        up.race(down).await;
+
+        Ok(())
+    }
+
+    let mut stream_loops = Vec::new();
+
+    loop {
+        let earendil_stream = Arc::new(RwLock::new(listener.accept().await?));
+        let tcp_stream = Arc::new(RwLock::new(
+            TcpStream::connect(format!("127.0.0.1:{to_port}")).await?,
+        ));
+
+        let stream_loop = Immortal::respawn(
+            smolscale::immortal::RespawnStrategy::Immediate,
+            clone!([earendil_stream, tcp_stream], move || {
+                stream_loop(earendil_stream.clone(), tcp_stream.clone())
+            }),
+        );
+
+        stream_loops.push(stream_loop);
     }
 }
