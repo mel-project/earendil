@@ -1,6 +1,7 @@
 use std::net::SocketAddrV4;
 
 use earendil_crypt::IdentitySecret;
+use futures_util::io;
 use smol::{
     future::FutureExt,
     io::{AsyncReadExt, AsyncWriteExt},
@@ -18,27 +19,11 @@ pub async fn tcp_forward_loop(
 ) -> anyhow::Result<()> {
     log::debug!("lol tcp forward loop 1 instance");
     async fn stream_loop(earendil_stream: Stream, tcp_stream: TcpStream) -> anyhow::Result<()> {
-        let up = async {
-            let mut tstream = tcp_stream.clone();
-            let mut estream = earendil_stream.clone();
-            let mut buf: [u8; 10000] = [0u8; 10000];
-            loop {
-                let n = tstream.read(&mut buf).await?;
-                estream.write(&buf[..n]).await?;
-            }
-            anyhow::Ok(())
-        };
-        let down = async {
-            let mut tstream = tcp_stream.clone();
-            let mut estream = earendil_stream.clone();
-            let mut buf = [0u8; 10000];
-            loop {
-                let n = estream.read(&mut buf).await?;
-                tstream.write(&buf[..n]).await?;
-            }
-            anyhow::Ok(())
-        };
-        up.race(down).await
+        loop {
+            io::copy(tcp_stream.clone(), &mut earendil_stream.clone())
+                .race(io::copy(earendil_stream.clone(), &mut tcp_stream.clone()))
+                .await?;
+        }
     }
 
     let tcp_listener = TcpListener::bind(SocketAddrV4::new(
