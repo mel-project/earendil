@@ -171,8 +171,8 @@ pub trait ControlProtocol {
 
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum SendMessageError {
-    #[error("no route to the given destination")]
-    NoRoute,
+    #[error("no route to the given destination {0}")]
+    NoRoute(Fingerprint),
     #[error(transparent)]
     PacketConstructError(#[from] PacketConstructError),
     #[error("no onion public key for fingerprint {0}")]

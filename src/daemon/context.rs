@@ -115,7 +115,7 @@ impl DaemonContext {
                 .relay_graph
                 .read()
                 .find_shortest_path(&self.identity.public().fingerprint(), &dst_fp)
-                .ok_or(SendMessageError::NoRoute)?;
+                .ok_or(SendMessageError::NoRoute(dst_fp))?;
             let instructs = route_to_instructs(route, self.relay_graph.clone())?;
             let their_opk = self
                 .relay_graph
@@ -189,7 +189,7 @@ impl DaemonContext {
             .relay_graph
             .read()
             .find_shortest_path(&self.identity.public().fingerprint(), &dst_fp)
-            .ok_or(SendMessageError::NoRoute)?;
+            .ok_or(SendMessageError::NoRoute(dst_fp))?;
         let their_opk = self
             .relay_graph
             .read()
@@ -202,7 +202,7 @@ impl DaemonContext {
             .relay_graph
             .read()
             .find_shortest_path(&dst_fp, &self.identity.public().fingerprint())
-            .ok_or(SendMessageError::NoRoute)?;
+            .ok_or(SendMessageError::NoRoute(dst_fp))?;
         let reverse_instructs = route_to_instructs(reverse_route, self.relay_graph.clone())?;
 
         let mut rbs: Vec<ReplyBlock> = vec![];

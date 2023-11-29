@@ -24,7 +24,7 @@ udp_forwards:
 
 tcp_forwards:
   - forward_to: 8081
-    remote_ep: fhsg3742bwxmg3k14jdsbphdp22j119f:69421
+    remote_ep: jp3va171wew9r19d089z55w5sqtp73rb:69421
 
 socks5:
   port: 1000
