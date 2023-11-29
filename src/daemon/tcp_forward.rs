@@ -4,7 +4,6 @@ use earendil_crypt::IdentitySecret;
 use futures_util::io;
 use smol::{
     future::FutureExt,
-    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
 use smolscale::reaper::TaskReaper;

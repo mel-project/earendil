@@ -7,12 +7,11 @@ use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use earendil_packet::{crypt::OnionPublic, Dock};
+use futures_util::io;
 use moka::sync::{Cache, CacheBuilder};
 use serde::{Deserialize, Serialize};
 use smol::{
     future::FutureExt,
-    io::{AsyncReadExt, AsyncWriteExt},
-    lock::RwLock,
     net::{TcpStream, UdpSocket},
 };
 use smolscale::{immortal::Immortal, reaper::TaskReaper};
@@ -177,6 +176,14 @@ async fn udp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
 }
 
 async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
+    async fn stream_loop(earendil_stream: Stream, tcp_stream: TcpStream) -> anyhow::Result<()> {
+        loop {
+            io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
+                .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
+                .await?;
+        }
+    }
+
     let (from_dock, to_port) = match haven_cfg.handler {
         ForwardHandler::TcpForward { from_dock, to_port } => (from_dock, to_port),
         _ => anyhow::bail!("invalid config for TCP forwarding"),
@@ -193,49 +200,12 @@ async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
 
     let mut listener = StreamListener::listen(earendil_skt);
 
-    async fn up_loop(
-        earendil_stream: Arc<RwLock<Stream>>,
-        tcp_stream: Arc<RwLock<TcpStream>>,
-    ) -> anyhow::Result<()> {
-        loop {
-            // listen for a message on the earendil stream
-            let mut buf = [0u8; 10000];
-            let mut earendil_stream = earendil_stream.write().await;
-            let n = earendil_stream.read(&mut buf).await?;
-            let mut tcp_stream = tcp_stream.write().await;
-            tcp_stream.write(&buf[..n]).await?;
-        }
-    }
-
-    async fn down_loop(
-        earendil_stream: Arc<RwLock<Stream>>,
-        tcp_stream: Arc<RwLock<TcpStream>>,
-    ) -> anyhow::Result<()> {
-        loop {
-            // listen for incoming data from the TCP stream
-            let mut buf = [0u8; 10000];
-            let mut tcp_stream = tcp_stream.write().await;
-            let n = tcp_stream.read(&mut buf).await?;
-            let mut earendil_stream = earendil_stream.write().await;
-            earendil_stream.write(&buf[..n]).await?;
-        }
-    }
-
-    async fn stream_loop(
-        earendil_stream: Arc<RwLock<Stream>>,
-        tcp_stream: Arc<RwLock<TcpStream>>,
-    ) -> anyhow::Result<()> {
-        up_loop(earendil_stream.clone(), tcp_stream.clone())
-            .race(down_loop(earendil_stream.clone(), tcp_stream.clone()))
-            .await
-    }
-
     let reaper = TaskReaper::new();
+
     loop {
-        let earendil_stream = Arc::new(RwLock::new(listener.accept().await?));
-        let tcp_stream = Arc::new(RwLock::new(
-            TcpStream::connect(format!("127.0.0.1:{to_port}")).await?,
-        ));
+        let earendil_stream = listener.accept().await?;
+        let tcp_stream = TcpStream::connect(format!("127.0.0.1:{to_port}")).await?;
+
         log::debug!("ACCEPTED TCP FOOOOORRRRRWWAAAAARRRRDDDDD!");
         reaper.attach(smolscale::spawn(stream_loop(
             earendil_stream.clone(),
