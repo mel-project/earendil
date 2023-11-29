@@ -137,7 +137,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     let _rendezvous_forward_loop = Immortal::respawn(
         RespawnStrategy::Immediate,
         clone!([ctx], move || rendezvous_forward_loop(ctx.clone())
-            .map_err(log_error("haven_forward_loop"))),
+            .map_err(log_error("rendezvous_forward_loop"))),
     );
 
     let _haven_loops: Vec<Immortal> = ctx
@@ -149,7 +149,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             Immortal::respawn(
                 RespawnStrategy::Immediate,
                 clone!([ctx], move || haven_loop(ctx.clone(), cfg.clone())
-                    .map_err(log_error("udp_haven_forward_loop"))),
+                    .map_err(log_error("haven_forward_loop"))),
             )
         })
         .collect();

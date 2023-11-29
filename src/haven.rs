@@ -109,9 +109,15 @@ impl RegisterHavenReq {
 /// forwards it back to the earnedil network.
 pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
     match haven_cfg.handler {
-        ForwardHandler::UdpForward { from_dock, to_port } => udp_forward(ctx, haven_cfg).await,
-        ForwardHandler::TcpForward { from_dock, to_port } => tcp_forward(ctx, haven_cfg).await,
-        ForwardHandler::SimpleProxy { listen_dock } => todo!(),
+        ForwardHandler::UdpForward {
+            from_dock: _,
+            to_port: _,
+        } => udp_forward(ctx, haven_cfg).await,
+        ForwardHandler::TcpForward {
+            from_dock: _,
+            to_port: _,
+        } => tcp_forward(ctx, haven_cfg).await,
+        ForwardHandler::SimpleProxy { listen_dock: _ } => todo!(),
     }
 }
 
@@ -174,7 +180,7 @@ async fn udp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
 async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
     let (from_dock, to_port) = match haven_cfg.handler {
         ForwardHandler::TcpForward { from_dock, to_port } => (from_dock, to_port),
-        _ => anyhow::bail!("invalid config for UDP forwarding"),
+        _ => anyhow::bail!("invalid config for TCP forwarding"),
     };
 
     let haven_id = get_or_create_id(&haven_cfg.identity)?;
@@ -220,26 +226,18 @@ async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
         earendil_stream: Arc<RwLock<Stream>>,
         tcp_stream: Arc<RwLock<TcpStream>>,
     ) -> anyhow::Result<()> {
-        let up = async {
-            let _ = up_loop(earendil_stream.clone(), tcp_stream.clone()).await;
-        };
-
-        let down = async {
-            let _ = down_loop(earendil_stream.clone(), tcp_stream.clone()).await;
-        };
-
-        up.race(down).await;
-
-        Ok(())
+        up_loop(earendil_stream.clone(), tcp_stream.clone())
+            .race(down_loop(earendil_stream.clone(), tcp_stream.clone()))
+            .await
     }
 
     let mut stream_loops = Vec::new();
-
     loop {
         let earendil_stream = Arc::new(RwLock::new(listener.accept().await?));
         let tcp_stream = Arc::new(RwLock::new(
             TcpStream::connect(format!("127.0.0.1:{to_port}")).await?,
         ));
+        log::debug!("ACCEPTED TCP FOOOOORRRRRWWAAAAARRRRDDDDD!");
 
         let stream_loop = Immortal::respawn(
             smolscale::immortal::RespawnStrategy::Immediate,

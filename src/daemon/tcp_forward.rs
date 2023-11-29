@@ -18,13 +18,14 @@ pub async fn tcp_forward_loop(
     ctx: DaemonContext,
     tcp_fwd_cfg: TcpForwardConfig,
 ) -> anyhow::Result<()> {
+    log::debug!("lol tcp forward loop 1 instance");
     async fn stream_loop(
         earendil_stream: Arc<RwLock<Stream>>,
         tcp_stream: Arc<RwLock<TcpStream>>,
     ) -> anyhow::Result<()> {
         let up = async {
             loop {
-                let mut buf = [0u8; 1000];
+                let mut buf = [0u8; 10000];
                 let mut tcp_stream = tcp_stream.write().await;
                 let n = tcp_stream.read(&mut buf).await?;
                 let mut earendil_stream = earendil_stream.write().await;
@@ -35,7 +36,7 @@ pub async fn tcp_forward_loop(
 
         let down = async {
             loop {
-                let mut buf = [0u8; 1000];
+                let mut buf = [0u8; 10000];
                 let mut earendil_stream = earendil_stream.write().await;
                 let n = earendil_stream.read(&mut buf).await?;
                 let mut tcp_stream = tcp_stream.write().await;
@@ -44,9 +45,7 @@ pub async fn tcp_forward_loop(
             anyhow::Ok(())
         };
 
-        up.race(down).await?;
-
-        Ok(())
+        up.race(down).await
     }
 
     let tcp_listener = TcpListener::bind(SocketAddrV4::new(
@@ -54,7 +53,6 @@ pub async fn tcp_forward_loop(
         tcp_fwd_cfg.forward_to,
     ))
     .await?;
-
     let mut stream_loops = vec![];
 
     loop {
@@ -66,7 +64,7 @@ pub async fn tcp_forward_loop(
         let earendil_stream = Arc::new(RwLock::new(
             Stream::connect(earendil_socket, tcp_fwd_cfg.remote_ep).await?,
         ));
-
+        log::debug!("TTTTTTTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCCPPPPPPPPPPPPPPPP");
         let stream_loop = Immortal::respawn(
             smolscale::immortal::RespawnStrategy::Immediate,
             clone!([earendil_stream, tcp_stream], move || {
