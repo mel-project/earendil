@@ -1,6 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use anyhow::Context;
+use argon2::Argon2;
 use arrayref::array_ref;
 use base32::Alphabet;
 use base64::{engine::general_purpose, Engine as _};
@@ -8,6 +9,15 @@ use bytes::Bytes;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+/// Derive a key from a human-readable seed. Uses Argon2.
+pub fn kdf_from_human(human: &str, salt: &str) -> [u8; 32] {
+    let mut output_key_material = [0u8; 32];
+    Argon2::default()
+        .hash_password_into(human.as_bytes(), salt.as_bytes(), &mut output_key_material)
+        .unwrap();
+    output_key_material
+}
 
 /// The public half of an "identity" on the network.
 ///

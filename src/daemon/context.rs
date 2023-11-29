@@ -54,7 +54,11 @@ pub struct DaemonContext {
 impl DaemonContext {
     pub fn new(config: ConfigFile) -> anyhow::Result<Self> {
         let table = Arc::new(NeighTable::new());
-        let identity = get_or_create_id(&config.identity)?;
+        let identity = if let Some(seed) = &config.identity_seed {
+            IdentitySecret::from_bytes(&earendil_crypt::kdf_from_human(seed, "identity_kdf_salt"))
+        } else {
+            IdentitySecret::generate()
+        };
         let ctx = DaemonContext {
             config: Arc::new(config),
             table: table.clone(),
