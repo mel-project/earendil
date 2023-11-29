@@ -10,10 +10,10 @@ use crate::socket::Endpoint;
 /// A YAML-serializable configuration file
 #[derive(Serialize, Deserialize)]
 pub struct ConfigFile {
-    /// Path to the long-term identity.
-    pub identity: PathBuf,
-    /// Path to the state cache.
-    pub state_cache: PathBuf,
+    /// Seed of the long-term identity. Must be long and difficult to guess!
+    ///
+    /// If this is not provided, then we default to randomly creating an identity.
+    pub identity_seed: Option<String>,
 
     /// Where to listen for the local control protocol.
     #[serde(default = "default_control_listen")]
