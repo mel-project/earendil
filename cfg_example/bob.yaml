@@ -1,6 +1,6 @@
 # fingerprint: fhsg3742bwxmg3k14jdsbphdp22j119f
 identity: bob.asc
-state_cache: state_cache2.db
+state_cache: bob_cache.db
 control_listen: 127.0.0.1:22222
 
 out_routes:

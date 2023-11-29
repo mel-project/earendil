@@ -1,6 +1,5 @@
 # fingerprint: w0pj999ezrc36spw5zz88nn79z9h7mss
-
-identity: alice-id.asc
+identity: alice.asc
 state_cache: alice_cache.db
 
 in_routes:
