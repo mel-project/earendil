@@ -1,7 +1,7 @@
 # fingerprint: w0pj999ezrc36spw5zz88nn79z9h7mss
 
 identity: alice-id.asc
-state_cache: state_cache.db
+state_cache: alice_cache.db
 
 in_routes:
   # arbitrary names, used for diagnositics and logging

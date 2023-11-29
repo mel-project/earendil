@@ -1,7 +1,6 @@
 # fingerprint: 91fbz7f7b2fwy0xrvsyqqbwbmmqytdnr
-
-identity: rendezvous.asc
-state_cache: state_cache2.db
+identity: rob.asc
+state_cache: rob_cache.db
 control_listen: 127.0.0.1:33333
 
 out_routes:

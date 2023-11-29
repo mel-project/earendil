@@ -1,5 +1,5 @@
 # fingerprint: fhsg3742bwxmg3k14jdsbphdp22j119f
-identity: identity2.asc
+identity: bob.asc
 state_cache: state_cache2.db
 control_listen: 127.0.0.1:22222
 
