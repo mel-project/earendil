@@ -55,8 +55,6 @@ pub async fn tcp_forward_loop(
     ))
     .await?;
 
-    let mut stream_loops = vec![];
-
     loop {
         let (tcp_stream, _) = tcp_listener.accept().await?;
         let tcp_stream = Arc::new(RwLock::new(tcp_stream));
@@ -67,13 +65,6 @@ pub async fn tcp_forward_loop(
             Stream::connect(earendil_socket, tcp_fwd_cfg.remote_ep).await?,
         ));
 
-        let stream_loop = Immortal::respawn(
-            smolscale::immortal::RespawnStrategy::Immediate,
-            clone!([earendil_stream, tcp_stream], move || {
-                stream_loop(earendil_stream.clone(), tcp_stream.clone())
-            }),
-        );
-
-        stream_loops.push(stream_loop);
+        smol::spawn(stream_loop(earendil_stream.clone(), tcp_stream.clone())).detach();
     }
 }
