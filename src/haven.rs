@@ -8,7 +8,6 @@ use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use earendil_packet::{crypt::OnionPublic, Dock};
 use moka::sync::{Cache, CacheBuilder};
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use smol::{
     future::FutureExt,

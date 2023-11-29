@@ -12,9 +12,10 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::socket::{Endpoint, Socket};
 
+#[derive(Clone)]
 pub struct Stream {
     inner_stream: sosistab2::Stream,
-    _task: Task<()>,
+    _task: Arc<Task<()>>,
 }
 
 impl Stream {
@@ -119,7 +120,7 @@ impl Stream {
 
         Ok(Self {
             inner_stream: s2_stream,
-            _task: task,
+            _task: Arc::new(task),
         })
     }
 

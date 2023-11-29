@@ -1,14 +1,12 @@
-use std::{net::SocketAddrV4, sync::Arc};
+use std::net::SocketAddrV4;
 
-use clone_macro::clone;
 use earendil_crypt::IdentitySecret;
 use smol::{
     future::FutureExt,
     io::{AsyncReadExt, AsyncWriteExt},
-    lock::RwLock,
     net::{TcpListener, TcpStream},
 };
-use smolscale::immortal::Immortal;
+use smolscale::reaper::TaskReaper;
 
 use crate::{config::TcpForwardConfig, socket::Socket, stream::Stream};
 
@@ -19,32 +17,27 @@ pub async fn tcp_forward_loop(
     tcp_fwd_cfg: TcpForwardConfig,
 ) -> anyhow::Result<()> {
     log::debug!("lol tcp forward loop 1 instance");
-    async fn stream_loop(
-        earendil_stream: Arc<RwLock<Stream>>,
-        tcp_stream: Arc<RwLock<TcpStream>>,
-    ) -> anyhow::Result<()> {
+    async fn stream_loop(earendil_stream: Stream, tcp_stream: TcpStream) -> anyhow::Result<()> {
         let up = async {
+            let mut tstream = tcp_stream.clone();
+            let mut estream = earendil_stream.clone();
+            let mut buf: [u8; 10000] = [0u8; 10000];
             loop {
-                let mut buf = [0u8; 10000];
-                let mut tcp_stream = tcp_stream.write().await;
-                let n = tcp_stream.read(&mut buf).await?;
-                let mut earendil_stream = earendil_stream.write().await;
-                earendil_stream.write(&buf[..n]).await?;
+                let n = tstream.read(&mut buf).await?;
+                estream.write(&buf[..n]).await?;
             }
             anyhow::Ok(())
         };
-
         let down = async {
+            let mut tstream = tcp_stream.clone();
+            let mut estream = earendil_stream.clone();
+            let mut buf = [0u8; 10000];
             loop {
-                let mut buf = [0u8; 10000];
-                let mut earendil_stream = earendil_stream.write().await;
-                let n = earendil_stream.read(&mut buf).await?;
-                let mut tcp_stream = tcp_stream.write().await;
-                tcp_stream.write(&buf[..n]).await?;
+                let n = estream.read(&mut buf).await?;
+                tstream.write(&buf[..n]).await?;
             }
             anyhow::Ok(())
         };
-
         up.race(down).await
     }
 
@@ -53,25 +46,14 @@ pub async fn tcp_forward_loop(
         tcp_fwd_cfg.forward_to,
     ))
     .await?;
-    let mut stream_loops = vec![];
+    let mut reaper = TaskReaper::new();
 
     loop {
         let (tcp_stream, _) = tcp_listener.accept().await?;
-        let tcp_stream = Arc::new(RwLock::new(tcp_stream));
-
         let earendil_socket =
             Socket::bind_haven_internal(ctx.clone(), IdentitySecret::generate(), None, None);
-        let earendil_stream = Arc::new(RwLock::new(
-            Stream::connect(earendil_socket, tcp_fwd_cfg.remote_ep).await?,
-        ));
+        let earendil_stream = Stream::connect(earendil_socket, tcp_fwd_cfg.remote_ep).await?;
         log::debug!("TTTTTTTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCCPPPPPPPPPPPPPPPP");
-        let stream_loop = Immortal::respawn(
-            smolscale::immortal::RespawnStrategy::Immediate,
-            clone!([earendil_stream, tcp_stream], move || {
-                stream_loop(earendil_stream.clone(), tcp_stream.clone())
-            }),
-        );
-
-        stream_loops.push(stream_loop);
+        reaper.attach(smolscale::spawn(stream_loop(earendil_stream, tcp_stream)));
     }
 }
