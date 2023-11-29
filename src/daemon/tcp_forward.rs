@@ -46,7 +46,7 @@ pub async fn tcp_forward_loop(
         tcp_fwd_cfg.forward_to,
     ))
     .await?;
-    let mut reaper = TaskReaper::new();
+    let reaper = TaskReaper::new();
 
     loop {
         let (tcp_stream, _) = tcp_listener.accept().await?;

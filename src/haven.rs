@@ -15,7 +15,7 @@ use smol::{
     lock::RwLock,
     net::{TcpStream, UdpSocket},
 };
-use smolscale::immortal::Immortal;
+use smolscale::{immortal::Immortal, reaper::TaskReaper};
 use stdcode::StdcodeSerializeExt;
 
 use crate::{
@@ -230,21 +230,16 @@ async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
             .await
     }
 
-    let mut stream_loops = Vec::new();
+    let reaper = TaskReaper::new();
     loop {
         let earendil_stream = Arc::new(RwLock::new(listener.accept().await?));
         let tcp_stream = Arc::new(RwLock::new(
             TcpStream::connect(format!("127.0.0.1:{to_port}")).await?,
         ));
         log::debug!("ACCEPTED TCP FOOOOORRRRRWWAAAAARRRRDDDDD!");
-
-        let stream_loop = Immortal::respawn(
-            smolscale::immortal::RespawnStrategy::Immediate,
-            clone!([earendil_stream, tcp_stream], move || {
-                stream_loop(earendil_stream.clone(), tcp_stream.clone())
-            }),
-        );
-
-        stream_loops.push(stream_loop);
+        reaper.attach(smolscale::spawn(stream_loop(
+            earendil_stream.clone(),
+            tcp_stream.clone(),
+        )));
     }
 }
