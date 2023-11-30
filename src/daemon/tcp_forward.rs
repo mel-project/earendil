@@ -28,10 +28,11 @@ pub async fn tcp_forward_loop(
         let earendil_stream = Stream::connect(earendil_socket, tcp_fwd_cfg.remote_ep).await?;
         reaper.attach(smolscale::spawn(async move {
             loop {
-                let _ = io::copy(tcp_stream.clone(), &mut earendil_stream.clone())
+                io::copy(tcp_stream.clone(), &mut earendil_stream.clone())
                     .race(io::copy(earendil_stream.clone(), &mut tcp_stream.clone()))
-                    .await;
+                    .await?;
             }
+            anyhow::Ok(())
         }));
     }
 }
