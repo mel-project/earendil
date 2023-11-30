@@ -21,8 +21,7 @@ use crate::{
     config::{ForwardHandler, HavenForwardConfig},
     daemon::context::DaemonContext,
     socket::{Endpoint, Socket},
-    stream::{listener::StreamListener, Stream},
-    utils::get_or_create_id,
+    stream::listener::StreamListener,
 };
 
 pub const HAVEN_FORWARD_DOCK: Dock = 100002;
@@ -180,14 +179,6 @@ async fn udp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
 }
 
 async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
-    async fn stream_loop(earendil_stream: Stream, tcp_stream: TcpStream) -> anyhow::Result<()> {
-        loop {
-            io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
-                .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
-                .await?;
-        }
-    }
-
     let (from_dock, to_port) = match haven_cfg.handler {
         ForwardHandler::TcpForward { from_dock, to_port } => (from_dock, to_port),
         _ => anyhow::bail!("invalid config for TCP forwarding"),
@@ -214,10 +205,13 @@ async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
         let earendil_stream = listener.accept().await?;
         let tcp_stream = TcpStream::connect(format!("127.0.0.1:{to_port}")).await?;
 
-        log::debug!("ACCEPTED TCP FOOOOORRRRRWWAAAAARRRRDDDDD!");
-        reaper.attach(smolscale::spawn(stream_loop(
-            earendil_stream.clone(),
-            tcp_stream.clone(),
-        )));
+        log::debug!("accepted TCP forward");
+        reaper.attach(smolscale::spawn(async move {
+            loop {
+                let _ = io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
+                    .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
+                    .await;
+            }
+        }));
     }
 }
