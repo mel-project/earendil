@@ -90,7 +90,7 @@ impl StreamListener {
                     // return a Stream
                     return Ok(Stream {
                         inner_stream: s2_stream,
-                        _task: ticker,
+                        _task: Arc::new(ticker),
                     });
                 }
 

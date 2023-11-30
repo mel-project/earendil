@@ -10,8 +10,9 @@ use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
-use earendil_topology::RelayGraph;
+use earendil_topology::{IdentityDescriptor, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt};
+use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};
 use once_cell::sync::Lazy;
 use parking_lot::{Mutex, RwLock};
@@ -59,12 +60,19 @@ impl DaemonContext {
         } else {
             IdentitySecret::generate()
         };
+        let onion_sk = OnionSecret::generate();
+        // set up the topology stuff for myself
+        let relay_graph = Arc::new(RwLock::new(RelayGraph::new()));
+        relay_graph
+            .write()
+            .insert_identity(IdentityDescriptor::new(&identity, &onion_sk))?;
+
         let ctx = DaemonContext {
             config: Arc::new(config),
             table: table.clone(),
             identity,
-            onion_sk: OnionSecret::generate(),
-            relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
+            onion_sk,
+            relay_graph,
             degarblers: Cache::new(1_000_000),
             anon_destinations: Arc::new(Mutex::new(ReplyBlockStore::new())),
 
@@ -119,7 +127,7 @@ impl DaemonContext {
                 .relay_graph
                 .read()
                 .find_shortest_path(&self.identity.public().fingerprint(), &dst_fp)
-                .ok_or(SendMessageError::NoRoute)?;
+                .ok_or(SendMessageError::NoRoute(dst_fp))?;
             let instructs = route_to_instructs(route, self.relay_graph.clone())?;
             let their_opk = self
                 .relay_graph
@@ -193,20 +201,20 @@ impl DaemonContext {
             .relay_graph
             .read()
             .find_shortest_path(&self.identity.public().fingerprint(), &dst_fp)
-            .ok_or(SendMessageError::NoRoute)?;
+            .ok_or(SendMessageError::NoRoute(dst_fp))?;
         let their_opk = self
             .relay_graph
             .read()
             .identity(&dst_fp)
             .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
             .onion_pk;
-        let instructs = route_to_instructs(route, self.relay_graph.clone())?;
+        let instructs = route_to_instructs(route.clone(), self.relay_graph.clone())?;
         // currently the path for every one of them is the same; will want to change this in the future
         let reverse_route = self
             .relay_graph
             .read()
             .find_shortest_path(&dst_fp, &self.identity.public().fingerprint())
-            .ok_or(SendMessageError::NoRoute)?;
+            .ok_or(SendMessageError::NoRoute(dst_fp))?;
         let reverse_instructs = route_to_instructs(reverse_route, self.relay_graph.clone())?;
 
         let mut rbs: Vec<ReplyBlock> = vec![];
@@ -227,6 +235,10 @@ impl DaemonContext {
             InnerPacket::ReplyBlocks(rbs),
             &my_anon_isk,
         )?;
+        log::debug!(
+            "inject_asif_incoming on route = {:?}",
+            route.iter().map(|s| s.to_string()).collect_vec()
+        );
         // we send the onion by treating it as a message addressed to ourselves
         self.table.inject_asif_incoming(wrapped_rb_onion).await;
         Ok(())

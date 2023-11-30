@@ -7,17 +7,21 @@ use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use earendil_packet::{crypt::OnionPublic, Dock};
+use futures_util::io;
 use moka::sync::{Cache, CacheBuilder};
 use serde::{Deserialize, Serialize};
-use smol::net::UdpSocket;
-use smolscale::immortal::Immortal;
+use smol::{
+    future::FutureExt,
+    net::{TcpStream, UdpSocket},
+};
+use smolscale::{immortal::Immortal, reaper::TaskReaper};
 use stdcode::StdcodeSerializeExt;
 
 use crate::{
     config::{ForwardHandler, HavenForwardConfig},
     daemon::context::DaemonContext,
     socket::{Endpoint, Socket},
-    utils::get_or_create_id,
+    stream::listener::StreamListener,
 };
 
 pub const HAVEN_FORWARD_DOCK: Dock = 100002;
@@ -101,6 +105,20 @@ impl RegisterHavenReq {
 /// Starts a "down" loop that listens for incoming UDP traffic in the reverse direction and
 /// forwards it back to the earnedil network.
 pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
+    match haven_cfg.handler {
+        ForwardHandler::UdpForward {
+            from_dock: _,
+            to_port: _,
+        } => udp_forward(ctx, haven_cfg).await,
+        ForwardHandler::TcpForward {
+            from_dock: _,
+            to_port: _,
+        } => tcp_forward(ctx, haven_cfg).await,
+        ForwardHandler::SimpleProxy { listen_dock: _ } => todo!(),
+    }
+}
+
+async fn udp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
     // down loop forwards packets back down to the source Earendil endpoints
     async fn down_loop(
         udp_skt: Arc<UdpSocket>,
@@ -115,10 +133,16 @@ pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> an
         }
     }
 
-    let haven_id = get_or_create_id(&haven_cfg.identity)?;
     let (from_dock, to_port) = match haven_cfg.handler {
         ForwardHandler::UdpForward { from_dock, to_port } => (from_dock, to_port),
+        _ => anyhow::bail!("invalid config for UDP forwarding"),
     };
+
+    let haven_id = IdentitySecret::from_bytes(&earendil_crypt::kdf_from_human(
+        &haven_cfg.identity_seed,
+        "identity_kdf_salt",
+    ));
+    log::info!("haven fingerprint: {}", haven_id.public().fingerprint());
 
     let earendil_skt = Arc::new(Socket::bind_haven_internal(
         ctx.clone(),
@@ -151,5 +175,42 @@ pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> an
         udp_socket
             .send_to(&message, format!("127.0.0.1:{to_port}"))
             .await?;
+    }
+}
+
+async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
+    let (from_dock, to_port) = match haven_cfg.handler {
+        ForwardHandler::TcpForward { from_dock, to_port } => (from_dock, to_port),
+        _ => anyhow::bail!("invalid config for TCP forwarding"),
+    };
+
+    let haven_id = IdentitySecret::from_bytes(&earendil_crypt::kdf_from_human(
+        &haven_cfg.identity_seed,
+        "identity_kdf_salt",
+    ));
+    log::info!("haven fingerprint: {}", haven_id.public().fingerprint());
+
+    let earendil_skt = Socket::bind_haven_internal(
+        ctx.clone(),
+        haven_id,
+        Some(from_dock),
+        Some(haven_cfg.rendezvous),
+    );
+
+    let mut listener = StreamListener::listen(earendil_skt);
+
+    let reaper = TaskReaper::new();
+
+    loop {
+        let earendil_stream = listener.accept().await?;
+        let tcp_stream = TcpStream::connect(format!("127.0.0.1:{to_port}")).await?;
+
+        log::debug!("accepted TCP forward");
+        reaper.attach(smolscale::spawn(async move {
+            io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
+                .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
+                .await?;
+            anyhow::Ok(())
+        }));
     }
 }

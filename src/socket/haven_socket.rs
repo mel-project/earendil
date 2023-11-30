@@ -152,7 +152,7 @@ impl HavenSocket {
             .map_err(|_| SocketSendError::HavenEncryptionError)?;
         if let Err(e) = enc.send_outgoing(body).await {
             self.encrypters.remove(&endpoint);
-            log::warn!("Encrypter for {endpoint} FAILED with ERR: {e}! Removed from cache");
+            log::warn!("encrypter for {endpoint} failed and was removed from cache: {e}");
         };
         Ok(())
     }

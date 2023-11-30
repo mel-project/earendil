@@ -1,0 +1,34 @@
+identity_seed: alice-was-here
+state_cache: alice_state_cache.db
+control_listen: 127.0.0.1:22222
+
+
+# in_routes:
+#   # arbitrary names, used for diagnositics and logging
+#   main_udp:
+#     protocol: obfsudp
+#     listen: 0.0.0.0:20000
+#     secret: labooyah hahaha lol smany
+
+out_routes:
+  rob:
+    fingerprint: q29wsm1jpvg6j494kfdyf3wad5m92331
+    protocol: obfsudp
+    connect: 127.0.0.1:34567
+    cookie: 11deaee1eb5b796e416d54ad56522083938ea38218e8e7ea00e7466a04b5b750
+
+# udp_forwards:
+#   - forward_to: 8080
+#     remote_ep: v7c854h336wtphnk0eqjrydexmffvhgb:69420
+
+tcp_forwards:
+  - forward_to: 8081
+    # remote_ep: v7c854h336wtphnk0eqjrydexmffvhgb:69421 # this has to be bob??
+    # remote_ep: ar8rfz3mp32m8ffkh86q258kq21j9abk:69421 # this has to be rob??
+    remote_ep: yqem5bc2m218hqzdk01wbdak42ky715e:69421
+
+# socks5:
+#   port: 1000
+#   fallback: 
+#     simple_proxy:
+

@@ -8,6 +8,7 @@ mod link_protocol;
 mod neightable;
 mod peel_forward;
 mod reply_block_store;
+mod tcp_forward;
 mod udp_forward;
 
 use bytes::Bytes;
@@ -45,7 +46,10 @@ use crate::{
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
 use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
 use crate::{
-    daemon::{peel_forward::peel_forward_loop, udp_forward::udp_forward_loop},
+    daemon::{
+        peel_forward::peel_forward_loop, tcp_forward::tcp_forward_loop,
+        udp_forward::udp_forward_loop,
+    },
     log_error,
 };
 
@@ -111,8 +115,11 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 
     let _gossip = Immortal::respawn(
         RespawnStrategy::Immediate,
-        clone!([ctx], move || gossip_loop(ctx.clone())
-            .map_err(log_error("gossip"))),
+        clone!([ctx], move || gossip_loop(
+            ctx.clone(),
+            !ctx.config.in_routes.is_empty()
+        )
+        .map_err(log_error("gossip"))),
     );
 
     let _control_protocol = Immortal::respawn(
@@ -130,7 +137,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     let _rendezvous_forward_loop = Immortal::respawn(
         RespawnStrategy::Immediate,
         clone!([ctx], move || rendezvous_forward_loop(ctx.clone())
-            .map_err(log_error("haven_forward_loop"))),
+            .map_err(log_error("rendezvous_forward_loop"))),
     );
 
     let _haven_loops: Vec<Immortal> = ctx
@@ -142,7 +149,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             Immortal::respawn(
                 RespawnStrategy::Immediate,
                 clone!([ctx], move || haven_loop(ctx.clone(), cfg.clone())
-                    .map_err(log_error("udp_haven_forward_loop"))),
+                    .map_err(log_error("haven_forward_loop"))),
             )
         })
         .collect();
@@ -161,6 +168,23 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                     udp_fwd_cfg.clone()
                 )
                 .map_err(log_error("udp_forward_loop"))),
+            )
+        })
+        .collect();
+
+    let _tcp_forward_loops: Vec<Immortal> = ctx
+        .config
+        .tcp_forwards
+        .clone()
+        .into_iter()
+        .map(|tcp_fwd_cfg| {
+            Immortal::respawn(
+                RespawnStrategy::Immediate,
+                clone!([ctx], move || tcp_forward_loop(
+                    ctx.clone(),
+                    tcp_fwd_cfg.clone()
+                )
+                .map_err(log_error("tcp_forward_loop"))),
             )
         })
         .collect();

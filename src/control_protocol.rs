@@ -59,7 +59,7 @@ pub async fn main_control(
         ControlCommands::RecvMsg { skt_id: socket_id } => {
             match client.recv_message(socket_id.clone()).await? {
                 Ok((msg, src)) => println!("{:?} from {}", msg, src),
-                Err(e) => println!("ERROR receiving message: {e}"),
+                Err(e) => println!("error receiving message: {e}"),
             }
         }
         ControlCommands::GlobalRpc {
@@ -171,8 +171,8 @@ pub trait ControlProtocol {
 
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum SendMessageError {
-    #[error("no route to the given destination")]
-    NoRoute,
+    #[error("no route to the given destination {0}")]
+    NoRoute(Fingerprint),
     #[error(transparent)]
     PacketConstructError(#[from] PacketConstructError),
     #[error("no onion public key for fingerprint {0}")]

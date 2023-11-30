@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use bytes::Bytes;
-use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
+use earendil_topology::AdjacencyDescriptor;
 use itertools::Itertools;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use smol_timeout::TimeoutExt;
@@ -10,11 +10,7 @@ use smol_timeout::TimeoutExt;
 use super::{link_connection::LinkConnection, DaemonContext};
 
 /// Loop that gossips things around
-pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    // set up the topology stuff for myself
-    ctx.relay_graph
-        .write()
-        .insert_identity(IdentityDescriptor::new(&ctx.identity, &ctx.onion_sk))?;
+pub async fn gossip_loop(ctx: DaemonContext, is_relay: bool) -> anyhow::Result<()> {
     let mut sleep_timer = smol::Timer::interval(Duration::from_secs(5));
     loop {
         let once = async {
@@ -25,7 +21,7 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             }
             // pick a random neighbor and do sync stuff
             let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
-            if let Err(err) = gossip_once(&ctx, rand_neigh).await {
+            if let Err(err) = gossip_once(&ctx, rand_neigh, is_relay).await {
                 log::warn!(
                     "gossip with {} failed: {:?}",
                     rand_neigh.remote_idpk().fingerprint(),
@@ -42,7 +38,12 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 }
 
 /// One round of gossip with a particular neighbor.
-async fn gossip_once(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
+async fn gossip_once(
+    ctx: &DaemonContext,
+    conn: &LinkConnection,
+    is_relay: bool,
+) -> anyhow::Result<()> {
+    // TODO: the correct solution to prevent spamming clients into the relay graph is to actually have a flag in IdentityDescriptor that distinguishes relays from clients. Adjacencies that involve non-relays will then be filtered out during gossip, when peers ask for adjacencies.
     fetch_identity(ctx, conn).await?;
     sign_adjacency(ctx, conn).await?;
     gossip_graph(ctx, conn).await?;

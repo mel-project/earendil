@@ -28,6 +28,11 @@ pub struct ConfigFile {
     /// List of all client configs for udp forwarding
     #[serde(default)]
     pub udp_forwards: Vec<UdpForwardConfig>,
+    /// List of all client configs for tcp forwarding
+    #[serde(default)]
+    pub tcp_forwards: Vec<TcpForwardConfig>,
+    /// where and how to start a socks5 proxy
+    pub socks5: Option<Socks5>,
     /// List of all haven configs
     #[serde(default)]
     pub havens: Vec<HavenForwardConfig>,
@@ -72,9 +77,38 @@ pub struct UdpForwardConfig {
 }
 
 #[serde_as]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct TcpForwardConfig {
+    pub forward_to: u16,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub remote_ep: Endpoint,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct Socks5 {
+    pub port: u16,
+    pub fallback: Fallback,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum Fallback {
+    Block,
+    PassThrough,
+    SimpleProxy {
+        #[serde_as(as = "serde_with::DisplayFromStr")]
+        remote_ep: Endpoint,
+    },
+}
+
+#[serde_as]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct HavenForwardConfig {
-    pub identity: PathBuf,
+    pub identity_seed: String,
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub rendezvous: Fingerprint,
     pub handler: ForwardHandler,
@@ -85,4 +119,6 @@ pub struct HavenForwardConfig {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ForwardHandler {
     UdpForward { from_dock: Dock, to_port: u16 },
+    TcpForward { from_dock: Dock, to_port: u16 },
+    SimpleProxy { listen_dock: Dock },
 }
