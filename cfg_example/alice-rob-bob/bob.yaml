@@ -19,7 +19,7 @@ havens:
   #     from_dock: 69420
   #     to_port: 8814 # e.g. listening port of geph4-exit
   #
-    # haven fingerprint: vtcwz1tvpgp7ccxzepmw0evb6cpa09t7
+  # haven fingerprint: vtcwz1tvpgp7ccxzepmw0evb6cpa09t7
   - identity_seed: i-am-a-haven-pls-no-eat-me
     rendezvous: q29wsm1jpvg6j494kfdyf3wad5m92331 # rob's fingerprint
     handler:
