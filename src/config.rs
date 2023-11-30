@@ -108,7 +108,7 @@ pub enum Fallback {
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct HavenForwardConfig {
-    pub identity: PathBuf,
+    pub identity_seed: String,
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub rendezvous: Fingerprint,
     pub handler: ForwardHandler,
