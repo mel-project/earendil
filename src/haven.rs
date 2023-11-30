@@ -207,11 +207,9 @@ async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
 
         log::debug!("accepted TCP forward");
         reaper.attach(smolscale::spawn(async move {
-            loop {
-                io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
-                    .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
-                    .await?;
-            }
+            io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
+                .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
+                .await?;
             anyhow::Ok(())
         }));
     }
