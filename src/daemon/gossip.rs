@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use bytes::Bytes;
-use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
+use earendil_topology::AdjacencyDescriptor;
 use itertools::Itertools;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use smol_timeout::TimeoutExt;
@@ -11,11 +11,6 @@ use super::{link_connection::LinkConnection, DaemonContext};
 
 /// Loop that gossips things around
 pub async fn gossip_loop(ctx: DaemonContext, is_relay: bool) -> anyhow::Result<()> {
-    // set up the topology stuff for myself
-    ctx.relay_graph
-        .write()
-        .insert_identity(IdentityDescriptor::new(&ctx.identity, &ctx.onion_sk))?;
-
     let mut sleep_timer = smol::Timer::interval(Duration::from_secs(5));
     loop {
         let once = async {
@@ -48,10 +43,9 @@ async fn gossip_once(
     conn: &LinkConnection,
     is_relay: bool,
 ) -> anyhow::Result<()> {
+    // TODO: the correct solution to prevent spamming clients into the relay graph is to actually have a flag in IdentityDescriptor that distinguishes relays from clients. Adjacencies that involve non-relays will then be filtered out during gossip, when peers ask for adjacencies.
     fetch_identity(ctx, conn).await?;
-    if is_relay {
-        sign_adjacency(ctx, conn).await?;
-    }
+    sign_adjacency(ctx, conn).await?;
     gossip_graph(ctx, conn).await?;
     Ok(())
 }

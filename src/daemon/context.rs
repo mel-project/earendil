@@ -10,7 +10,7 @@ use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
-use earendil_topology::RelayGraph;
+use earendil_topology::{IdentityDescriptor, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use moka::sync::{Cache, CacheBuilder};
 use once_cell::sync::Lazy;
@@ -59,12 +59,19 @@ impl DaemonContext {
         } else {
             IdentitySecret::generate()
         };
+        let onion_sk = OnionSecret::generate();
+        // set up the topology stuff for myself
+        let relay_graph = Arc::new(RwLock::new(RelayGraph::new()));
+        relay_graph
+            .write()
+            .insert_identity(IdentityDescriptor::new(&identity, &onion_sk))?;
+
         let ctx = DaemonContext {
             config: Arc::new(config),
             table: table.clone(),
             identity,
             onion_sk: OnionSecret::generate(),
-            relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
+            relay_graph,
             degarblers: Cache::new(1_000_000),
             anon_destinations: Arc::new(Mutex::new(ReplyBlockStore::new())),
 
