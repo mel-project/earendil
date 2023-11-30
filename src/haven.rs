@@ -1,4 +1,5 @@
 use std::{
+    net::SocketAddr,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -142,30 +143,28 @@ async fn simple_proxy(
 
     let mut listener = StreamListener::listen(earendil_skt);
 
-    // let reaper = TaskReaper::new();
+    let reaper = TaskReaper::new();
     loop {
         let mut earendil_stream = listener.accept().await?;
 
-        // read the first 2 bytes out of the earendil stream
-        let mut buf = [0; 10_000];
-        let n = earendil_stream.read(&mut buf).await?;
-        assert_eq!(n, 2);
+        // the first 2 bytes of the stream encode the byte-length of the subsequent `hostname:port`
+        let mut len_buf = [0; 2];
+        earendil_stream.read_exact(&mut len_buf).await?;
+        let len: u16 = stdcode::deserialize(&len_buf)?;
 
-        // encoded (hostname, port)
-        let encoded_addr = buf[..n].to_vec();
+        let mut hostname_buf = vec![0; len as usize];
+        earendil_stream.read_exact(&mut hostname_buf).await?;
+        let encoded_addr: SocketAddr = stdcode::deserialize(&hostname_buf)?;
 
-        // TODO: make a TCP connection to this hostname and port, and then do the usual io::copy
-        // race
+        let tcp_stream = TcpStream::connect(encoded_addr).await?;
 
-        // let tcp_stream = TcpStream::connect(format!("127.0.0.1:{to_port}")).await?;
-
-        // log::debug!("accepted TCP forward");
-        // reaper.attach(smolscale::spawn(async move {
-        //     io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
-        //         .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
-        //         .await?;
-        //     anyhow::Ok(())
-        // }));
+        log::debug!("accepted simple proxy forward");
+        reaper.attach(smolscale::spawn(async move {
+            io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
+                .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
+                .await?;
+            anyhow::Ok(())
+        }));
     }
 }
 
