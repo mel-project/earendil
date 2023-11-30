@@ -12,6 +12,7 @@ use moka::sync::{Cache, CacheBuilder};
 use serde::{Deserialize, Serialize};
 use smol::{
     future::FutureExt,
+    io::AsyncReadExt,
     net::{TcpStream, UdpSocket},
 };
 use smolscale::{immortal::Immortal, reaper::TaskReaper};
@@ -114,7 +115,57 @@ pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> an
             from_dock: _,
             to_port: _,
         } => tcp_forward(ctx, haven_cfg).await,
-        ForwardHandler::SimpleProxy { listen_dock: _ } => todo!(),
+        ForwardHandler::SimpleProxy { listen_dock: _ } => simple_proxy(ctx, haven_cfg).await,
+    }
+}
+
+async fn simple_proxy(
+    ctx: DaemonContext,
+    haven_cfg: HavenForwardConfig,
+) -> Result<(), anyhow::Error> {
+    let listen_dock = match haven_cfg.handler {
+        ForwardHandler::SimpleProxy { listen_dock } => listen_dock,
+        _ => anyhow::bail!("invalid config for simple_proxy"),
+    };
+
+    let haven_id = IdentitySecret::from_bytes(&earendil_crypt::kdf_from_human(
+        &haven_cfg.identity_seed,
+        "identity_kdf_salt",
+    ));
+
+    let earendil_skt = Socket::bind_haven_internal(
+        ctx.clone(),
+        haven_id,
+        Some(listen_dock),
+        Some(haven_cfg.rendezvous),
+    );
+
+    let mut listener = StreamListener::listen(earendil_skt);
+
+    // let reaper = TaskReaper::new();
+    loop {
+        let mut earendil_stream = listener.accept().await?;
+
+        // read the first 2 bytes out of the earendil stream
+        let mut buf = [0; 10_000];
+        let n = earendil_stream.read(&mut buf).await?;
+        assert_eq!(n, 2);
+
+        // encoded (hostname, port)
+        let encoded_addr = buf[..n].to_vec();
+
+        // TODO: make a TCP connection to this hostname and port, and then do the usual io::copy
+        // race
+
+        // let tcp_stream = TcpStream::connect(format!("127.0.0.1:{to_port}")).await?;
+
+        // log::debug!("accepted TCP forward");
+        // reaper.attach(smolscale::spawn(async move {
+        //     io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
+        //         .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
+        //         .await?;
+        //     anyhow::Ok(())
+        // }));
     }
 }
 
