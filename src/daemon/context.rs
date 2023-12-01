@@ -27,7 +27,6 @@ use crate::{
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
     haven::HavenLocator,
     socket::Endpoint,
-    utils::get_or_create_id,
 };
 
 use super::{neightable::NeighTable, reply_block_store::ReplyBlockStore};

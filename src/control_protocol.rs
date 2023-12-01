@@ -129,6 +129,12 @@ pub async fn main_control(
             let routes = client.my_routes().await?;
             println!("{}", serde_yaml::to_string(&routes)?);
         }
+        ControlCommands::HavensInfo => {
+            let havens_info = client.havens_info().await?;
+            for info in havens_info {
+                println!("{} - {}", info.0, info.1)
+            }
+        }
     }
     Ok(())
 }
@@ -147,6 +153,8 @@ pub trait ControlProtocol {
     );
 
     async fn skt_info(&self, skt_id: String) -> Result<Endpoint, ControlProtErr>;
+
+    async fn havens_info(&self) -> Vec<(String, String)>;
 
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtErr>;
 
