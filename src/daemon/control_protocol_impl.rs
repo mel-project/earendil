@@ -69,6 +69,42 @@ impl ControlProtocol for ControlProtocolImpl {
         }
     }
 
+    async fn havens_info(&self) -> Vec<(String, String)> {
+        self.ctx
+            .config
+            .havens
+            .iter()
+            .map(|haven_cfg| {
+                let fp = IdentitySecret::from_bytes(&earendil_crypt::kdf_from_human(
+                    &haven_cfg.identity_seed,
+                    "identity_kdf_salt",
+                ))
+                .public()
+                .fingerprint();
+                match haven_cfg.handler {
+                    crate::config::ForwardHandler::UdpForward {
+                        from_dock,
+                        to_port: _,
+                    } => (
+                        "UdpForward".to_string(),
+                        fp.to_string() + ":" + &from_dock.to_string(),
+                    ),
+                    crate::config::ForwardHandler::TcpForward {
+                        from_dock,
+                        to_port: _,
+                    } => (
+                        "TcpForward".to_string(),
+                        fp.to_string() + ":" + &from_dock.to_string(),
+                    ),
+                    crate::config::ForwardHandler::SimpleProxy { listen_dock } => (
+                        "SimpleProxy".to_string(),
+                        fp.to_string() + ":" + &listen_dock.to_string(),
+                    ),
+                }
+            })
+            .collect()
+    }
+
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtErr> {
         if let Some(socket) = self.sockets.get(&args.socket_id) {
             socket.send_to(args.content, args.destination).await?;
