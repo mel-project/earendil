@@ -1,4 +1,5 @@
 use anyhow::Context;
+use bip39::Mnemonic;
 use clap::{Parser, Subcommand};
 use earendil::commands::ControlCommands;
 use earendil::config::ConfigFile;
@@ -29,6 +30,7 @@ enum Commands {
         #[command(subcommand)]
         control_command: ControlCommands,
     },
+    GenSeed,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -51,5 +53,16 @@ fn main() -> anyhow::Result<()> {
             control_command,
             connect,
         } => smolscale::block_on(main_control(control_command, connect)),
+        Commands::GenSeed => {
+            let seed_phrase = gen_seed()?;
+            println!("{}", seed_phrase);
+            Ok(())
+        }
     }
+}
+
+fn gen_seed() -> anyhow::Result<String> {
+    let entropy: [u8; 16] = rand::random();
+    let mnemonic = Mnemonic::from_entropy(&entropy)?;
+    Ok(mnemonic.to_string())
 }
