@@ -1199,6 +1199,7 @@ dependencies = [
  "smol",
  "smol-timeout",
  "smolscale",
+ "socksv5",
  "sosistab2",
  "sosistab2-obfsudp",
  "stdcode",
@@ -3015,6 +3016,17 @@ checksum = "9f7916fc008ca5542385b89a3d3ce689953c143e9304a9bf8beec1de48994c0d"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "socksv5"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aacc0d3f4727eeea5226189bf99d225b3f496d1379305c492f2af06adfeb8a51"
+dependencies = [
+ "byteorder",
+ "futures",
+ "thiserror",
 ]
 
 [[package]]

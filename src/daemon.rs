@@ -8,6 +8,7 @@ mod link_protocol;
 mod neightable;
 mod peel_forward;
 mod reply_block_store;
+mod socks5;
 mod tcp_forward;
 mod udp_forward;
 
@@ -47,7 +48,7 @@ use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
 use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
 use crate::{
     daemon::{
-        peel_forward::peel_forward_loop, tcp_forward::tcp_forward_loop,
+        peel_forward::peel_forward_loop, socks5::socks5_loop, tcp_forward::tcp_forward_loop,
         udp_forward::udp_forward_loop,
     },
     log_error,
@@ -188,6 +189,13 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             )
         })
         .collect();
+
+    let _socks5_loop = ctx.config.socks5.clone().map(|config| {
+        Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([ctx], move || socks5_loop(ctx.clone(), config.clone(),)),
+        )
+    });
 
     let mut route_tasks = FuturesUnordered::new();
 
