@@ -89,7 +89,7 @@ pub struct TcpForwardConfig {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct Socks5 {
-    pub port: u16,
+    pub listen_port: u16,
     pub fallback: Fallback,
 }
 
