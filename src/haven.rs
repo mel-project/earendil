@@ -1,9 +1,9 @@
 use std::{
-    net::SocketAddr,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
@@ -150,13 +150,20 @@ async fn simple_proxy(
         // the first 2 bytes of the stream encode the byte-length of the subsequent `hostname:port`
         let mut len_buf = [0; 2];
         earendil_stream.read_exact(&mut len_buf).await?;
-        let len: u16 = stdcode::deserialize(&len_buf)?;
+        let len: u16 = u16::from_be_bytes(len_buf);
 
         let mut hostname_buf = vec![0; len as usize];
         earendil_stream.read_exact(&mut hostname_buf).await?;
-        let encoded_addr: SocketAddr = stdcode::deserialize(&hostname_buf)?;
 
-        let tcp_stream = TcpStream::connect(encoded_addr).await?;
+        let addr = String::from_utf8_lossy(&hostname_buf).into_owned();
+        let mut addrs = smol::net::resolve(addr.clone()).await?;
+
+        let tcp_stream = TcpStream::connect(
+            addrs
+                .pop()
+                .context(format!("unable to resolve address {addr}"))?,
+        )
+        .await?;
 
         log::debug!("accepted simple proxy forward");
         reaper.attach(smolscale::spawn(async move {
