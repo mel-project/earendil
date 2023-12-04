@@ -94,7 +94,9 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
                             let mut proxy_stream = Stream::connect(proxy_skt, remote_ep).await?;
                             let prepend = (domain.len() as u16).to_be_bytes();
                             proxy_stream.write(&prepend).await?;
-                            proxy_stream.write(domain.as_bytes()).await?;
+
+                            let addr = format!("{}:{}", domain, port);
+                            proxy_stream.write(addr.as_bytes()).await?;
 
                             io::copy(tcp_stream.clone(), &mut proxy_stream.clone())
                                 .race(io::copy(proxy_stream.clone(), &mut tcp_stream.clone()))
