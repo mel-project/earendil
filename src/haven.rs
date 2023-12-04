@@ -133,6 +133,10 @@ async fn simple_proxy(
         &haven_cfg.identity_seed,
         "identity_kdf_salt",
     ));
+    log::info!(
+        "simple proxy haven fingerprint: {}",
+        haven_id.public().fingerprint()
+    );
 
     let earendil_skt = Socket::bind_haven_internal(
         ctx.clone(),
@@ -199,7 +203,10 @@ async fn udp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
         &haven_cfg.identity_seed,
         "identity_kdf_salt",
     ));
-    log::info!("haven fingerprint: {}", haven_id.public().fingerprint());
+    log::info!(
+        "UDP forward haven fingerprint: {}",
+        haven_id.public().fingerprint()
+    );
 
     let earendil_skt = Arc::new(Socket::bind_haven_internal(
         ctx.clone(),
@@ -245,7 +252,10 @@ async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
         &haven_cfg.identity_seed,
         "identity_kdf_salt",
     ));
-    log::info!("haven fingerprint: {}", haven_id.public().fingerprint());
+    log::info!(
+        "TCP forward haven fingerprint: {}",
+        haven_id.public().fingerprint()
+    );
 
     let earendil_skt = Socket::bind_haven_internal(
         ctx.clone(),
