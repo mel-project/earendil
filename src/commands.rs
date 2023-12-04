@@ -40,6 +40,9 @@ pub enum ControlCommands {
         skt_id: String,
     },
 
+    /// Prints the information of all hosted havens
+    HavensInfo,
+
     /// Sends a message using a given socket to a destination.
     SendMsg {
         #[arg(long)]

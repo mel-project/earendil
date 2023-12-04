@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
+use std::{collections::BTreeMap, net::SocketAddr};
 
 use earendil_crypt::Fingerprint;
 use earendil_packet::Dock;
