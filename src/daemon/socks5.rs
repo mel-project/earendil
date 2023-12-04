@@ -8,6 +8,7 @@ use earendil_crypt::Fingerprint;
 use futures_util::io;
 use smol::{
     future::FutureExt,
+    io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
 };
 use smolscale::reaper::TaskReaper;
@@ -90,7 +91,10 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
                         Fallback::SimpleProxy { remote_ep } => {
                             let proxy_skt =
                                 Socket::bind_haven_internal(ctx.clone(), ctx.identity, None, None);
-                            let proxy_stream = Stream::connect(proxy_skt, remote_ep).await?;
+                            let mut proxy_stream = Stream::connect(proxy_skt, remote_ep).await?;
+                            let prepend = (domain.len() as u16).to_be_bytes();
+                            proxy_stream.write(&prepend).await?;
+                            proxy_stream.write(domain.as_bytes()).await?;
 
                             io::copy(tcp_stream.clone(), &mut proxy_stream.clone())
                                 .race(io::copy(proxy_stream.clone(), &mut tcp_stream.clone()))
