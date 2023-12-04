@@ -35,13 +35,13 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
     loop {
         let ctx = ctx.clone();
         let fallback = fallback.clone();
-        let (tcp_stream, _) = tcp_listener.accept().await?;
+        let (client_stream, _) = tcp_listener.accept().await?;
 
-        reaper.attach(smol::spawn(async move {
-            tcp_stream.set_nodelay(true)?;
-            let _handshake = read_handshake(tcp_stream.clone()).await?;
-            write_auth_method(tcp_stream.clone(), SocksV5AuthMethod::Noauth).await?;
-            let request = read_request(tcp_stream.clone()).await?;
+        reaper.attach(smolscale::spawn(async move {
+            client_stream.set_nodelay(true)?;
+            let _handshake = read_handshake(client_stream.clone()).await?;
+            write_auth_method(client_stream.clone(), SocksV5AuthMethod::Noauth).await?;
+            let request = read_request(client_stream.clone()).await?;
             let port = request.port;
             let domain: String = match &request.host {
                 SocksV5Host::Domain(dom) => String::from_utf8_lossy(dom).parse()?,
@@ -54,7 +54,7 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
             let addr = format!("{domain}:{port}");
 
             write_request_status(
-                tcp_stream.clone(),
+                client_stream.clone(),
                 SocksV5RequestStatus::Success,
                 request.host,
                 port,
@@ -78,8 +78,11 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
                         Socket::bind_haven_internal(ctx.clone(), ctx.identity, None, None);
                     let earendil_stream = Stream::connect(earendil_skt, endpoint).await?;
 
-                    io::copy(tcp_stream.clone(), &mut earendil_stream.clone())
-                        .race(io::copy(earendil_stream.clone(), &mut tcp_stream.clone()))
+                    io::copy(client_stream.clone(), &mut earendil_stream.clone())
+                        .race(io::copy(
+                            earendil_stream.clone(),
+                            &mut client_stream.clone(),
+                        ))
                         .await?;
                 } else {
                     match fallback {
@@ -91,24 +94,24 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
                             )?)
                             .await?;
 
-                            io::copy(tcp_stream.clone(), &mut passthrough_stream.clone())
+                            io::copy(client_stream.clone(), &mut passthrough_stream.clone())
                                 .race(io::copy(
                                     passthrough_stream.clone(),
-                                    &mut tcp_stream.clone(),
+                                    &mut client_stream.clone(),
                                 ))
                                 .await?;
                         }
                         Fallback::SimpleProxy { remote_ep } => {
-                            let proxy_skt =
+                            let remote_skt =
                                 Socket::bind_haven_internal(ctx.clone(), ctx.identity, None, None);
-                            let mut proxy_stream = Stream::connect(proxy_skt, remote_ep).await?;
+                            let mut remote_stream = Stream::connect(remote_skt, remote_ep).await?;
                             let prepend = (addr.len() as u16).to_be_bytes();
-                            proxy_stream.write(&prepend).await?;
+                            remote_stream.write(&prepend).await?;
 
-                            proxy_stream.write(addr.as_bytes()).await?;
+                            remote_stream.write(addr.as_bytes()).await?;
 
-                            io::copy(tcp_stream.clone(), &mut proxy_stream.clone())
-                                .race(io::copy(proxy_stream.clone(), &mut tcp_stream.clone()))
+                            io::copy(client_stream.clone(), &mut remote_stream.clone())
+                                .race(io::copy(remote_stream.clone(), &mut client_stream.clone()))
                                 .await?;
                         }
                     }
