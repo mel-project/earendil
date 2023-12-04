@@ -108,68 +108,24 @@ impl RegisterHavenReq {
 /// forwards it back to the earnedil network.
 pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
     match haven_cfg.handler {
-        ForwardHandler::UdpForward {
-            from_dock: _,
-            to_port: _,
-        } => udp_forward(ctx, haven_cfg).await,
-        ForwardHandler::TcpForward {
-            from_dock: _,
-            to_port: _,
-        } => tcp_forward(ctx, haven_cfg).await,
-        ForwardHandler::SimpleProxy { listen_dock: _ } => simple_proxy(ctx, haven_cfg).await,
+        ForwardHandler::UdpForward { from_dock, to_port } => {
+            udp_forward(ctx, haven_cfg, from_dock, to_port).await
+        }
+        ForwardHandler::TcpForward { from_dock, to_port } => {
+            tcp_forward(ctx, haven_cfg, from_dock, to_port).await
+        }
+        ForwardHandler::SimpleProxy { listen_dock } => {
+            simple_proxy(ctx, haven_cfg, listen_dock).await
+        }
     }
 }
 
-async fn simple_proxy(
+async fn udp_forward(
     ctx: DaemonContext,
     haven_cfg: HavenForwardConfig,
-) -> Result<(), anyhow::Error> {
-    let listen_dock = match haven_cfg.handler {
-        ForwardHandler::SimpleProxy { listen_dock } => listen_dock,
-        _ => anyhow::bail!("invalid config for simple_proxy"),
-    };
-
-    let haven_id = id_from_seed(&haven_cfg.identity_seed);
-    log::info!(
-        "simple proxy haven fingerprint: {}",
-        haven_id.public().fingerprint()
-    );
-
-    let earendil_skt = Socket::bind_haven_internal(
-        ctx.clone(),
-        haven_id,
-        Some(listen_dock),
-        Some(haven_cfg.rendezvous),
-    );
-
-    let mut listener = StreamListener::listen(earendil_skt);
-
-    let reaper = TaskReaper::new();
-    loop {
-        let mut earendil_stream = listener.accept().await?;
-
-        log::debug!("accepted simple proxy forward");
-        reaper.attach(smolscale::spawn(async move {
-            // the first 2 bytes of the stream encode the byte-length of the subsequent `hostname:port`
-            let mut len_buf = [0; 2];
-            earendil_stream.read_exact(&mut len_buf).await?;
-            let len: u16 = u16::from_be_bytes(len_buf);
-
-            let mut addr_buf = vec![0; len as usize];
-            earendil_stream.read_exact(&mut addr_buf).await?;
-
-            let addr = String::from_utf8_lossy(&addr_buf).into_owned();
-            let tcp_stream = TcpStream::connect(addr).await?;
-
-            io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
-                .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
-                .await?;
-            anyhow::Ok(())
-        }));
-    }
-}
-
-async fn udp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
+    from_dock: Dock,
+    to_port: u16,
+) -> anyhow::Result<()> {
     // down loop forwards packets back down to the source Earendil endpoints
     async fn down_loop(
         udp_skt: Arc<UdpSocket>,
@@ -183,11 +139,6 @@ async fn udp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
             earendil_skt.send_to(msg.into(), earendil_dest).await?;
         }
     }
-
-    let (from_dock, to_port) = match haven_cfg.handler {
-        ForwardHandler::UdpForward { from_dock, to_port } => (from_dock, to_port),
-        _ => anyhow::bail!("invalid config for UDP forwarding"),
-    };
 
     let haven_id = id_from_seed(&haven_cfg.identity_seed);
     log::info!(
@@ -229,12 +180,12 @@ async fn udp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
     }
 }
 
-async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
-    let (from_dock, to_port) = match haven_cfg.handler {
-        ForwardHandler::TcpForward { from_dock, to_port } => (from_dock, to_port),
-        _ => anyhow::bail!("invalid config for TCP forwarding"),
-    };
-
+async fn tcp_forward(
+    ctx: DaemonContext,
+    haven_cfg: HavenForwardConfig,
+    from_dock: Dock,
+    to_port: u16,
+) -> anyhow::Result<()> {
     let haven_id = id_from_seed(&haven_cfg.identity_seed);
     log::info!(
         "TCP forward haven fingerprint: {}",
@@ -258,6 +209,51 @@ async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
 
         log::debug!("accepted TCP forward");
         reaper.attach(smolscale::spawn(async move {
+            io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
+                .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
+                .await?;
+            anyhow::Ok(())
+        }));
+    }
+}
+
+async fn simple_proxy(
+    ctx: DaemonContext,
+    haven_cfg: HavenForwardConfig,
+    listen_dock: u32,
+) -> Result<(), anyhow::Error> {
+    let haven_id = id_from_seed(&haven_cfg.identity_seed);
+    log::info!(
+        "simple proxy haven fingerprint: {}",
+        haven_id.public().fingerprint()
+    );
+
+    let earendil_skt = Socket::bind_haven_internal(
+        ctx.clone(),
+        haven_id,
+        Some(listen_dock),
+        Some(haven_cfg.rendezvous),
+    );
+
+    let mut listener = StreamListener::listen(earendil_skt);
+
+    let reaper = TaskReaper::new();
+    loop {
+        let mut earendil_stream = listener.accept().await?;
+
+        log::debug!("accepted simple proxy forward");
+        reaper.attach(smolscale::spawn(async move {
+            // the first 2 bytes of the stream encode the byte-length of the subsequent `hostname:port`
+            let mut len_buf = [0; 2];
+            earendil_stream.read_exact(&mut len_buf).await?;
+            let len: u16 = u16::from_be_bytes(len_buf);
+
+            let mut addr_buf = vec![0; len as usize];
+            earendil_stream.read_exact(&mut addr_buf).await?;
+
+            let addr = String::from_utf8_lossy(&addr_buf).into_owned();
+            let tcp_stream = TcpStream::connect(addr).await?;
+
             io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
                 .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
                 .await?;
