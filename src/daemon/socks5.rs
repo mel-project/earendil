@@ -88,12 +88,7 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
                     match fallback {
                         Fallback::Block => return Ok(()),
                         Fallback::PassThrough => {
-                            let mut addrs: Vec<SocketAddr> = addr.to_socket_addrs()?.collect();
-                            let passthrough_stream = TcpStream::connect(addrs.pop().context(
-                                format!("unable to resolve passthrough address {addr}"),
-                            )?)
-                            .await?;
-
+                            let passthrough_stream = TcpStream::connect(addr).await?;
                             io::copy(client_stream.clone(), &mut passthrough_stream.clone())
                                 .race(io::copy(
                                     passthrough_stream.clone(),
