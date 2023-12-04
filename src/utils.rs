@@ -28,3 +28,10 @@ pub fn get_or_create_id(path: &Path) -> anyhow::Result<IdentitySecret> {
         }
     }
 }
+
+pub fn id_from_seed(id_seed: &str) -> IdentitySecret {
+    IdentitySecret::from_bytes(&earendil_crypt::kdf_from_human(
+        id_seed,
+        "identity_kdf_salt",
+    ))
+}

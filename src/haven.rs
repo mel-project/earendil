@@ -3,7 +3,6 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
@@ -24,6 +23,7 @@ use crate::{
     daemon::context::DaemonContext,
     socket::{Endpoint, Socket},
     stream::listener::StreamListener,
+    utils::id_from_seed,
 };
 
 pub const HAVEN_FORWARD_DOCK: Dock = 100002;
@@ -129,10 +129,7 @@ async fn simple_proxy(
         _ => anyhow::bail!("invalid config for simple_proxy"),
     };
 
-    let haven_id = IdentitySecret::from_bytes(&earendil_crypt::kdf_from_human(
-        &haven_cfg.identity_seed,
-        "identity_kdf_salt",
-    ));
+    let haven_id = id_from_seed(&haven_cfg.identity_seed);
     log::info!(
         "simple proxy haven fingerprint: {}",
         haven_id.public().fingerprint()
@@ -158,19 +155,11 @@ async fn simple_proxy(
             earendil_stream.read_exact(&mut len_buf).await?;
             let len: u16 = u16::from_be_bytes(len_buf);
 
-            let mut hostname_buf = vec![0; len as usize];
-            earendil_stream.read_exact(&mut hostname_buf).await?;
+            let mut addr_buf = vec![0; len as usize];
+            earendil_stream.read_exact(&mut addr_buf).await?;
 
-            let addr = String::from_utf8_lossy(&hostname_buf).into_owned();
-            log::error!("address is {addr}");
-            let mut addrs = smol::net::resolve(addr.clone()).await?;
-
-            let tcp_stream = TcpStream::connect(
-                addrs
-                    .pop()
-                    .context(format!("unable to resolve address {addr}"))?,
-            )
-            .await?;
+            let addr = String::from_utf8_lossy(&addr_buf).into_owned();
+            let tcp_stream = TcpStream::connect(addr).await?;
 
             io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
                 .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
@@ -200,10 +189,7 @@ async fn udp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
         _ => anyhow::bail!("invalid config for UDP forwarding"),
     };
 
-    let haven_id = IdentitySecret::from_bytes(&earendil_crypt::kdf_from_human(
-        &haven_cfg.identity_seed,
-        "identity_kdf_salt",
-    ));
+    let haven_id = id_from_seed(&haven_cfg.identity_seed);
     log::info!(
         "UDP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
@@ -249,10 +235,7 @@ async fn tcp_forward(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyho
         _ => anyhow::bail!("invalid config for TCP forwarding"),
     };
 
-    let haven_id = IdentitySecret::from_bytes(&earendil_crypt::kdf_from_human(
-        &haven_cfg.identity_seed,
-        "identity_kdf_salt",
-    ));
+    let haven_id = id_from_seed(&haven_cfg.identity_seed);
     log::info!(
         "TCP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
