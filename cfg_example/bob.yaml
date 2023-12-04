@@ -19,10 +19,18 @@ havens:
       type: udp_forward
       from_dock: 69420
       to_port: 8814 # e.g. listening port of geph4-exit
+
   # fingerprint: pm3atrnq6awfp96qrjg5rmxp39d1bqfh
   - identity_seed: TCP_haven
     rendezvous: 0k28pjf5qa8nwbt7cn8138xetxdknhz3
     handler:
       type: tcp_forward
       from_dock: 69421
-      to_port: 8815 # e.g. listening port of geph4-exit
+      to_port: 8815
+
+  # fingerprint: jm21nbaf4c8ejg25yq9mc7bg6sdeksja
+  - identity_seed: simple_proxy_haven
+    rendezvous: 0k28pjf5qa8nwbt7cn8138xetxdknhz3
+    handler:
+      type: simple_proxy
+      listen_dock: 69422

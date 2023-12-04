@@ -51,10 +51,21 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
                 }
                 _ => anyhow::bail!("IPv6 not supported"),
             };
-            log::info!("socks5 received request for {domain}:{port}");
+            let addr = format!("{domain}:{port}");
+
+            write_request_status(
+                tcp_stream.clone(),
+                SocksV5RequestStatus::Success,
+                request.host,
+                port,
+            )
+            .await?;
+
+            log::info!("socks5 received request for {addr}");
 
             let mut split_domain = domain.split('.');
             let top_level = split_domain.clone().last();
+
             if let Some(top) = top_level {
                 if top == "haven" {
                     let endpoint = Endpoint::new(
@@ -74,7 +85,6 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
                     match fallback {
                         Fallback::Block => return Ok(()),
                         Fallback::PassThrough => {
-                            let addr = format!("{domain}{port}");
                             let mut addrs: Vec<SocketAddr> = addr.to_socket_addrs()?.collect();
                             let passthrough_stream = TcpStream::connect(addrs.pop().context(
                                 format!("unable to resolve passthrough address {addr}"),
@@ -92,10 +102,9 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
                             let proxy_skt =
                                 Socket::bind_haven_internal(ctx.clone(), ctx.identity, None, None);
                             let mut proxy_stream = Stream::connect(proxy_skt, remote_ep).await?;
-                            let prepend = (domain.len() as u16).to_be_bytes();
+                            let prepend = (addr.len() as u16).to_be_bytes();
                             proxy_stream.write(&prepend).await?;
 
-                            let addr = format!("{}:{}", domain, port);
                             proxy_stream.write(addr.as_bytes()).await?;
 
                             io::copy(tcp_stream.clone(), &mut proxy_stream.clone())

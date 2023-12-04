@@ -18,8 +18,8 @@ tcp_forwards:
   - forward_to: 8081
     remote_ep: pm3atrnq6awfp96qrjg5rmxp39d1bqfh:69421
 
-# socks5:
-#   port: 1000
-#   fallback: 
-#     simple_proxy:
-#       remote_ep: fhsg3742bwxmg3k14jdsbphdp22j119f:69422
+socks5:
+  listen_port: 8082
+  fallback: 
+    simple_proxy:
+      remote_ep: jm21nbaf4c8ejg25yq9mc7bg6sdeksja:69422
