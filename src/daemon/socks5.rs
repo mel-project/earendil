@@ -23,7 +23,7 @@ use crate::{
 use super::DaemonContext;
 
 pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Result<()> {
-    log::debug!("socks5 loop");
+    log::debug!("socks5 loop started");
     let tcp_listener = TcpListener::bind(SocketAddrV4::new(
         "127.0.0.1".parse()?,
         socks5_cfg.listen_port,

@@ -31,7 +31,7 @@ impl Stream {
         let mut timeout = 4;
         let send_syn = async {
             loop {
-                log::trace!("sending syn");
+                log::debug!("sending SYN to create a stream");
                 socket
                     .send_to(syn.stdcode().into(), server_endpoint)
                     .await?;
@@ -58,6 +58,7 @@ impl Stream {
             }
         };
         send_syn.race(wait_synack).await?;
+        log::debug!("received SYNACK for stream");
 
         // construct sosistab2::Stream & sosistab2::StreamStates
         let (send_tick, recv_tick) = smol::channel::unbounded::<()>();

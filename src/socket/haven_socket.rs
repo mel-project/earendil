@@ -71,7 +71,7 @@ impl HavenSocket {
         if let Some(rob) = rendezvous_point {
             // We're Bob:
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
-            log::trace!("binding haven with rendezvous_point {}", rob);
+            log::debug!("binding haven with rendezvous_point {}", rob);
             let context = ctx.clone();
             let registration_isk = isk;
             let task = smolscale::spawn(async move {

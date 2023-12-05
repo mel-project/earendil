@@ -141,7 +141,7 @@ async fn udp_forward(
     }
 
     let haven_id = id_from_seed(&haven_cfg.identity_seed);
-    log::info!(
+    log::debug!(
         "UDP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
     );
@@ -187,7 +187,7 @@ async fn tcp_forward(
     to_port: u16,
 ) -> anyhow::Result<()> {
     let haven_id = id_from_seed(&haven_cfg.identity_seed);
-    log::info!(
+    log::debug!(
         "TCP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
     );
@@ -207,7 +207,7 @@ async fn tcp_forward(
         let earendil_stream = listener.accept().await?;
         let tcp_stream = TcpStream::connect(format!("127.0.0.1:{to_port}")).await?;
 
-        log::debug!("accepted TCP forward");
+        log::debug!("TCP forward earendil stream accepted");
         reaper.attach(smolscale::spawn(async move {
             io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
                 .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
@@ -223,7 +223,7 @@ async fn simple_proxy(
     listen_dock: u32,
 ) -> Result<(), anyhow::Error> {
     let haven_id = id_from_seed(&haven_cfg.identity_seed);
-    log::info!(
+    log::debug!(
         "simple proxy haven fingerprint: {}",
         haven_id.public().fingerprint()
     );
@@ -241,7 +241,7 @@ async fn simple_proxy(
     loop {
         let mut earendil_stream = listener.accept().await?;
 
-        log::debug!("accepted simple proxy forward");
+        log::debug!("simple proxy forward earendil stream accepted");
         reaper.attach(smolscale::spawn(async move {
             // the first 2 bytes of the stream encode the byte-length of the subsequent `hostname:port`
             let mut len_buf = [0; 2];
