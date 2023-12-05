@@ -15,7 +15,7 @@ pub async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         let now = Instant::now();
         let peeled = pkt.peel(&ctx.onion_sk)?;
 
-        scopeguard::defer!(log::debug!("message peel forward took {:?}", now.elapsed()));
+        scopeguard::defer!(log::trace!("message peel forward took {:?}", now.elapsed()));
         match peeled {
             PeeledPacket::Forward {
                 to: next_hop,
