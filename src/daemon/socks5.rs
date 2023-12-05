@@ -1,5 +1,5 @@
 use std::{
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs},
+    net::{Ipv4Addr, SocketAddrV4},
     str::FromStr,
 };
 
