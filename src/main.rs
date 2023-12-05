@@ -64,5 +64,5 @@ fn main() -> anyhow::Result<()> {
 fn gen_seed() -> anyhow::Result<String> {
     let entropy: [u8; 16] = rand::random();
     let mnemonic = Mnemonic::from_entropy(&entropy)?;
-    Ok(mnemonic.to_string().replace(" ", "-"))
+    Ok(mnemonic.to_string().replace(' ', "-"))
 }

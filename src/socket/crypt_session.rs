@@ -1,28 +1,28 @@
-use std::sync::Arc;
+use std::convert::Infallible;
 
 use anyhow::Context;
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
 use earendil_packet::crypt::{AeadKey, OnionPublic, OnionSecret};
-use futures_util::TryFutureExt;
+use futures_util::{future::Shared, FutureExt};
 use replay_filter::ReplayFilter;
 use serde::{Deserialize, Serialize};
+use smol::future::FutureExt as Fe;
 use smol::{
     channel::{Receiver, Sender},
-    future::FutureExt,
     Task,
 };
 use stdcode::StdcodeSerializeExt;
 
 use crate::{daemon::context::DaemonContext, haven::HAVEN_FORWARD_DOCK};
 
-use super::{n2r_socket::N2rSocket, Endpoint, SocketRecvError, SocketSendError};
+use super::{n2r_socket::N2rSocket, Endpoint};
 
 #[derive(Clone)]
-pub struct Encrypter {
+pub struct CryptSession {
     send_outgoing: Sender<Bytes>,
     send_incoming: Sender<HavenMsg>,
-    _task: Arc<Task<anyhow::Result<()>>>,
+    _task: Shared<Task<String>>, // returns an error string
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -39,7 +39,7 @@ pub struct Handshake {
     sig: Bytes,
 }
 
-impl Encrypter {
+impl CryptSession {
     pub fn new(
         my_isk: IdentitySecret,
         remote_ep: Endpoint,
@@ -69,30 +69,33 @@ impl Encrypter {
                 client_info.map(|(hs, _)| hs),
                 ctx,
             )
-            .map_err(move |e| {
-                log::warn!("enc_task for {remote_ep} died with {:?}", e);
-                e
-            }),
+            .map(move |e| format!("{:?}", e.unwrap_err())),
         );
         Ok(Self {
             send_outgoing: send_out,
             send_incoming: send_in,
-            _task: Arc::new(task),
+            _task: task.shared(),
         })
     }
 
-    pub async fn send_outgoing(&self, msg: Bytes) -> Result<(), SocketSendError> {
-        self.send_outgoing.send(msg).await.map_err(|e| {
-            log::warn!("encrypter send outgoing failed: {e}");
-            SocketSendError::HavenSendError
-        })
+    async fn wait_error(&self) -> anyhow::Result<()> {
+        Err(anyhow::anyhow!(self._task.clone().await))
     }
 
-    pub async fn send_incoming(&self, msg: HavenMsg) -> Result<(), SocketRecvError> {
-        self.send_incoming
-            .send(msg)
-            .await
-            .map_err(|_| SocketRecvError::HavenRecvError)
+    pub async fn send_outgoing(&self, msg: Bytes) -> anyhow::Result<()> {
+        if self.send_outgoing.send(msg).await.is_err() {
+            self.wait_error().await
+        } else {
+            Ok(())
+        }
+    }
+
+    pub async fn send_incoming(&self, msg: HavenMsg) -> anyhow::Result<()> {
+        if self.send_incoming.send(msg).await.is_err() {
+            self.wait_error().await
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -106,7 +109,7 @@ async fn enc_task(
     send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
     client_hs: Option<Handshake>,
     ctx: DaemonContext,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Infallible> {
     let send_to_rendezvous = |msg: Bytes| async {
         let fwd_body = (msg, remote_ep).stdcode();
         let rendezvous_ep = match rendezvous_fp {
