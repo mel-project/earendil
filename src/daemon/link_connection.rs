@@ -280,7 +280,12 @@ impl LinkProtocol for N2nProtocolImpl {
     async fn adjacencies(&self, fps: Vec<Fingerprint>) -> Vec<AdjacencyDescriptor> {
         let rg = self.ctx.relay_graph.read();
         fps.into_iter()
-            .flat_map(|fp| rg.adjacencies(&fp).into_iter().flatten())
+            .flat_map(|fp| {
+                rg.adjacencies(&fp).into_iter().flatten().filter(|adj| {
+                    rg.identity(&adj.left).map_or(false, |id| id.is_relay)
+                        && rg.identity(&adj.right).map_or(false, |id| id.is_relay)
+                })
+            })
             .dedup()
             .collect()
     }
