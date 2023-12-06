@@ -108,7 +108,7 @@ async fn connection_loop(
         }),
     );
 
-    let service = Arc::new(LinkService(N2nProtocolImpl {
+    let service = Arc::new(LinkService(LinkProtocolImpl {
         ctx: ctx.clone(),
         mplex: mplex.clone(),
     }));
@@ -227,13 +227,13 @@ impl RpcTransport for MultiplexRpcTransport {
     }
 }
 
-struct N2nProtocolImpl {
+struct LinkProtocolImpl {
     ctx: DaemonContext,
     mplex: Arc<Multiplex>,
 }
 
 #[async_trait]
-impl LinkProtocol for N2nProtocolImpl {
+impl LinkProtocol for LinkProtocolImpl {
     async fn authenticate(&self) -> AuthResponse {
         let local_pk = self.mplex.local_pk();
         AuthResponse::new(&self.ctx.identity, &local_pk)
