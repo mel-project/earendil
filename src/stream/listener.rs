@@ -129,7 +129,7 @@ impl StreamListener {
                     }
                 },
                 _ => {
-                    log::warn!("unreliable stream messages aren't supported")
+                    log::debug!("unreliable stream messages aren't supported")
                 }
             };
         }
