@@ -30,7 +30,7 @@ enum Commands {
         #[command(subcommand)]
         control_command: ControlCommands,
     },
-    GenSeed,
+    GenerateSeed,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -53,7 +53,7 @@ fn main() -> anyhow::Result<()> {
             control_command,
             connect,
         } => smolscale::block_on(main_control(control_command, connect)),
-        Commands::GenSeed => {
+        Commands::GenerateSeed => {
             let seed_phrase = gen_seed()?;
             println!("{}", seed_phrase);
             Ok(())
@@ -64,5 +64,5 @@ fn main() -> anyhow::Result<()> {
 fn gen_seed() -> anyhow::Result<String> {
     let entropy: [u8; 16] = rand::random();
     let mnemonic = Mnemonic::from_entropy(&entropy)?;
-    Ok(mnemonic.to_string())
+    Ok(mnemonic.to_string().replace(" ", "-"))
 }

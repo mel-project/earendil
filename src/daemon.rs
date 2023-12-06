@@ -116,11 +116,8 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 
     let _gossip = Immortal::respawn(
         RespawnStrategy::Immediate,
-        clone!([ctx], move || gossip_loop(
-            ctx.clone(),
-            !ctx.config.in_routes.is_empty()
-        )
-        .map_err(log_error("gossip"))),
+        clone!([ctx], move || gossip_loop(ctx.clone())
+            .map_err(log_error("gossip"))),
     );
 
     let _control_protocol = Immortal::respawn(

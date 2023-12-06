@@ -62,9 +62,10 @@ impl DaemonContext {
         let onion_sk = OnionSecret::generate();
         // set up the topology stuff for myself
         let relay_graph = Arc::new(RwLock::new(RelayGraph::new()));
+        let am_i_relay = !config.in_routes.is_empty();
         relay_graph
             .write()
-            .insert_identity(IdentityDescriptor::new(&identity, &onion_sk))?;
+            .insert_identity(IdentityDescriptor::new(&identity, &onion_sk, am_i_relay))?;
 
         let ctx = DaemonContext {
             config: Arc::new(config),
