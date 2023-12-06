@@ -25,7 +25,7 @@ use smolscale::{
     immortal::{Immortal, RespawnStrategy},
     reaper::TaskReaper,
 };
-use sosistab2::{Multiplex, MuxSecret, MuxStream, Pipe};
+use sosistab2::{Multiplex, MuxSecret, Pipe};
 
 use super::{
     link_protocol::{AuthResponse, InfoResponse, LinkClient, LinkProtocol, LinkService},
@@ -118,7 +118,7 @@ async fn connection_loop(
         let service = service.clone();
         let mut stream = mplex.accept_conn().await?;
 
-        match stream.additional_info() {
+        match stream.label() {
             "n2n_control" => group.attach(smolscale::spawn(async move {
                 let mut stream_lines = BufReader::new(stream.clone()).lines();
                 while let Some(line) = stream_lines.next().await {
@@ -155,7 +155,7 @@ async fn onion_keepalive(
 }
 
 async fn handle_onion_packets(
-    conn: MuxStream,
+    conn: sosistab2::Stream,
     send_incoming: Sender<RawPacket>,
     recv_outgoing: Receiver<RawPacket>,
 ) -> anyhow::Result<()> {
@@ -180,7 +180,7 @@ async fn handle_onion_packets(
 
 const POOL_TIMEOUT: Duration = Duration::from_secs(60);
 
-type PooledConn = (BufReader<MuxStream>, MuxStream);
+type PooledConn = (BufReader<sosistab2::Stream>, sosistab2::Stream);
 
 struct MultiplexRpcTransport {
     mplex: Arc<Multiplex>,
