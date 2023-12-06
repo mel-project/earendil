@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
-use earendil_crypt::Fingerprint;
+use earendil_crypt::{Fingerprint, IdentitySecret};
 use futures_util::io;
 use smol::{
     future::FutureExt,
@@ -74,8 +74,12 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
                         )?,
                         port.into(),
                     );
-                    let earendil_skt =
-                        Socket::bind_haven_internal(ctx.clone(), ctx.identity, None, None);
+                    let earendil_skt = Socket::bind_haven_internal(
+                        ctx.clone(),
+                        IdentitySecret::generate(),
+                        None,
+                        None,
+                    );
                     let earendil_stream = Stream::connect(earendil_skt, endpoint).await?;
 
                     io::copy(client_stream.clone(), &mut earendil_stream.clone())
@@ -97,8 +101,12 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
                                 .await?;
                         }
                         Fallback::SimpleProxy { remote_ep } => {
-                            let remote_skt =
-                                Socket::bind_haven_internal(ctx.clone(), ctx.identity, None, None);
+                            let remote_skt = Socket::bind_haven_internal(
+                                ctx.clone(),
+                                IdentitySecret::generate(),
+                                None,
+                                None,
+                            );
                             let mut remote_stream = Stream::connect(remote_skt, remote_ep).await?;
                             let prepend = (addr.len() as u16).to_be_bytes();
                             remote_stream.write(&prepend).await?;
