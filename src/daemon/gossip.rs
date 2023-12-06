@@ -101,17 +101,15 @@ async fn gossip_graph(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Res
     for adjacency in adjacencies {
         let left_fp = adjacency.left;
         let right_fp = adjacency.right;
-        // insert all unknown identities
-        if ctx.relay_graph.read().identity(&left_fp).is_none() {
-            if let Some(left_id) = conn.link_rpc().identity(left_fp).await? {
-                ctx.relay_graph.write().insert_identity(left_id)?
-            }
+        // fetch and insert the identities. we unconditionally do this since identity descriptors may change over time
+        if let Some(left_id) = conn.link_rpc().identity(left_fp).await? {
+            ctx.relay_graph.write().insert_identity(left_id)?
         }
-        if ctx.relay_graph.read().identity(&right_fp).is_none() {
-            if let Some(right_id) = conn.link_rpc().identity(right_fp).await? {
-                ctx.relay_graph.write().insert_identity(right_id)?
-            }
+
+        if let Some(right_id) = conn.link_rpc().identity(right_fp).await? {
+            ctx.relay_graph.write().insert_identity(right_id)?
         }
+
         // insert the adjacency
         ctx.relay_graph.write().insert_adjacency(adjacency)?
     }
