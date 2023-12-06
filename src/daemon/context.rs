@@ -109,7 +109,7 @@ impl DaemonContext {
         let now = Instant::now();
         let _guard = scopeguard::guard((), |_| {
             let send_msg_time = now.elapsed();
-            log::debug!("send message took {:?}", send_msg_time);
+            log::trace!("send message took {:?}", send_msg_time);
         });
 
         let src_anon = src_idsk != self.identity;
@@ -195,7 +195,7 @@ impl DaemonContext {
             OnionSecret::generate()
         });
 
-        log::debug!("sending a batch of {count} reply blocks to {dst_fp}");
+        log::trace!("sending a batch of {count} reply blocks to {dst_fp}");
 
         let route = self
             .relay_graph
@@ -235,7 +235,7 @@ impl DaemonContext {
             InnerPacket::ReplyBlocks(rbs),
             &my_anon_isk,
         )?;
-        log::debug!(
+        log::trace!(
             "inject_asif_incoming on route = {:?}",
             route.iter().map(|s| s.to_string()).collect_vec()
         );
@@ -256,7 +256,7 @@ impl DaemonContext {
         let anon_isk = IdentitySecret::generate();
 
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-            log::debug!("key {key} inserting into remote replica {replica}");
+            log::trace!("key {key} inserting into remote replica {replica}");
             let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
             match gclient
                 .dht_insert(locator.clone(), false)

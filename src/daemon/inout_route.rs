@@ -33,7 +33,7 @@ pub async fn in_route_obfsudp(
         let context = context.clone();
         group.attach(smolscale::spawn(async move {
             let connection = LinkConnection::connect(context.daemon_ctx.clone(), next).await?;
-            log::debug!(
+            log::info!(
                 "obfsudp in_route {} accepted {}",
                 context.in_route_name,
                 connection.remote_idpk().fingerprint()
@@ -68,8 +68,8 @@ pub async fn out_route_obfsudp(
         let fallible = async {
             log::debug!("obfsudp out_route {} trying...", context.out_route_name);
             let pipe = ObfsUdpPipe::connect(connect, ObfsUdpPublic::from_bytes(cookie), "").await?;
-            log::debug!(
-                "obfsudp out_route {} pipe connected...",
+            log::info!(
+                "obfsudp out_route {} pipe connected",
                 context.out_route_name
             );
             let connection = LinkConnection::connect(context.daemon_ctx.clone(), pipe).await?;
@@ -84,7 +84,7 @@ pub async fn out_route_obfsudp(
                 .daemon_ctx
                 .table
                 .insert_pinned(context.remote_fingerprint, connection);
-            log::debug!("obfsudp out_route {} successful", context.out_route_name);
+            log::info!("obfsudp out_route {} successful", context.out_route_name);
             anyhow::Ok(())
         };
         async {

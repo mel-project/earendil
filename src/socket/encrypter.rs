@@ -116,16 +116,11 @@ async fn enc_task(
             }
             None => {
                 // We're the client: look up Rob's addr in rendezvous dht
-                log::debug!(
-                    "alice is about to send an earendil packet! looking up {} in the DHT",
-                    remote_ep.fingerprint
-                );
                 let bob_locator = ctx
                     .dht_get(remote_ep.fingerprint)
                     .await
                     .context(format!("DHT failed for {}", remote_ep.fingerprint))?
                     .context(format!("DHT returned None for {}", remote_ep.fingerprint))?;
-                log::trace!("found rob in the DHT");
                 Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
             }
         };
@@ -193,10 +188,10 @@ async fn enc_task(
                         .send((plain.into(), remote_ep))
                         .await?
                 } else {
-                    log::info!("received pkt with duplicate nonce! dropping...")
+                    log::debug!("received pkt with duplicate nonce! dropping...")
                 }
             } else {
-                log::info!("stray handshake message!");
+                log::debug!("stray handshake message!");
             }
         }
     };

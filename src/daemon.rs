@@ -71,7 +71,7 @@ impl Daemon {
         log::info!("starting background task for main_daemon");
         let task = Immortal::spawn(async move {
             main_daemon(context).await.unwrap();
-            panic!("oh no")
+            panic!("daemon failed to start!")
         });
         Ok(Self { ctx, _task: task })
     }
