@@ -13,7 +13,7 @@ use stdcode::StdcodeSerializeExt;
 
 /// A full, indexed representation of the Earendil relay graph. Includes info about:
 /// - Which fingerprints are adjacent to which fingerprints
-/// - What signing keys and midterm keys does each fingerprint have
+/// - What signing keys and midterm keys do each fingerprint have
 #[derive(Default)]
 pub struct RelayGraph {
     unalloc_id: u64,
@@ -80,6 +80,7 @@ impl RelayGraph {
         self.adjacency.entry(left_id).or_default().insert(right_id);
         self.adjacency.entry(right_id).or_default().insert(left_id);
 
+        self.cleanup();
         Ok(())
     }
 
@@ -169,6 +170,62 @@ impl RelayGraph {
         }
 
         None
+    }
+
+    // removes all information more than ROUTE_TIMEOUT ago
+    fn cleanup(&mut self) {
+        const ROUTE_TIMEOUT: u64 = 60 * 60; // e.g., 1 hour in seconds
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+
+        let outdated_identities: HashSet<u64> = self
+            .id_to_descriptor
+            .iter()
+            .filter_map(|(&id, descriptor)| {
+                if now - descriptor.unix_timestamp > ROUTE_TIMEOUT {
+                    Some(id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for &id in &outdated_identities {
+            self.id_to_descriptor.remove(&id);
+            if let Some(fp) = self.id_to_fp.remove(&id) {
+                self.fp_to_id.remove(&fp);
+            }
+        }
+
+        let outdated_documents: Vec<(u64, u64)> = self
+            .documents
+            .iter()
+            .filter_map(|(&(left_id, right_id), descriptor)| {
+                if outdated_identities.contains(&left_id)
+                    || outdated_identities.contains(&right_id)
+                    || now - descriptor.unix_timestamp > ROUTE_TIMEOUT
+                {
+                    Some((left_id, right_id))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for (left_id, right_id) in outdated_documents {
+            self.documents.remove(&(left_id, right_id));
+            if let Some(neighbors) = self.adjacency.get_mut(&left_id) {
+                neighbors.remove(&right_id);
+            }
+            if let Some(neighbors) = self.adjacency.get_mut(&right_id) {
+                neighbors.remove(&left_id);
+            }
+        }
+
+        // Cleanup adjacency entries for nodes that have no neighbors left
+        self.adjacency.retain(|_, neighbors| !neighbors.is_empty());
     }
 
     fn alloc_id(&mut self, fp: &Fingerprint) -> u64 {
