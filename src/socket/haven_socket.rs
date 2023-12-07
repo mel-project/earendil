@@ -18,7 +18,7 @@ use crate::{
 };
 
 use super::{
-    encrypter::{Encrypter, HavenMsg},
+    crypt_session::{CryptSession, HavenMsg},
     n2r_socket::N2rSocket,
     Endpoint, SocketRecvError, SocketSendError,
 };
@@ -29,8 +29,8 @@ pub struct HavenSocket {
     identity_sk: IdentitySecret,
     rendezvous_point: Option<Fingerprint>,
     _register_haven_task: Option<Task<()>>,
-    /// mapping between destination endpoints and encrypters
-    encrypters: Cache<Endpoint, Encrypter>,
+    /// mapping between destination endpoints and encryption sessions
+    crypt_sessions: Cache<Endpoint, CryptSession>,
     /// buffer for decrypted incoming messages
     recv_incoming_decrypted: Receiver<(Bytes, Endpoint)>,
     send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
@@ -46,7 +46,7 @@ impl HavenSocket {
         rendezvous_point: Option<Fingerprint>,
     ) -> HavenSocket {
         let n2r_skt = N2rSocket::bind(ctx.clone(), isk, dock);
-        let encrypters: Cache<Endpoint, Encrypter> = Cache::builder()
+        let encrypters: Cache<Endpoint, CryptSession> = Cache::builder()
             .max_capacity(100_000)
             .time_to_live(Duration::from_secs(60 * 30))
             .build();
@@ -114,7 +114,7 @@ impl HavenSocket {
                 identity_sk: isk,
                 rendezvous_point,
                 _register_haven_task: Some(task),
-                encrypters,
+                crypt_sessions: encrypters,
                 recv_incoming_decrypted,
                 send_incoming_decrypted,
                 _recv_task: recv_task,
@@ -127,7 +127,7 @@ impl HavenSocket {
                 identity_sk: isk,
                 rendezvous_point,
                 _register_haven_task: None,
-                encrypters,
+                crypt_sessions: encrypters,
                 recv_incoming_decrypted,
                 send_incoming_decrypted,
                 _recv_task: recv_task,
@@ -137,9 +137,9 @@ impl HavenSocket {
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
         let enc = self
-            .encrypters
+            .crypt_sessions
             .try_get_with(endpoint, || {
-                Encrypter::new(
+                CryptSession::new(
                     self.identity_sk,
                     endpoint,
                     self.rendezvous_point,
@@ -149,19 +149,21 @@ impl HavenSocket {
                     None,
                 )
             })
-            .map_err(|_| SocketSendError::HavenEncryptionError)?;
+            .map_err(|e| SocketSendError::HavenEncryptionError(e.to_string()))?;
         if let Err(e) = enc.send_outgoing(body).await {
-            self.encrypters.remove(&endpoint);
-            log::warn!("encrypter for {endpoint} failed and was removed from cache: {e}");
-        };
-        Ok(())
+            self.crypt_sessions.remove(&endpoint);
+            Err(SocketSendError::HavenEncryptionError(e.to_string()))
+        } else {
+            Ok(())
+        }
     }
 
     pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
-        self.recv_incoming_decrypted
+        Ok(self
+            .recv_incoming_decrypted
             .recv()
             .await
-            .map_err(|_| SocketRecvError::HavenRecvError)
+            .expect("this must be infallible here, because the sending side is never dropped"))
     }
 
     pub fn local_endpoint(&self) -> Endpoint {
@@ -171,7 +173,7 @@ impl HavenSocket {
 
 async fn recv_task(
     n2r_skt: N2rSocket,
-    encrypters: Cache<Endpoint, Encrypter>,
+    encrypters: Cache<Endpoint, CryptSession>,
     isk: IdentitySecret,
     rob: Option<Fingerprint>,
     send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
@@ -190,7 +192,7 @@ async fn recv_task(
             },
             HavenMsg::ClientHs(hs) => encrypters.insert(
                 remote_ep,
-                Encrypter::new(
+                CryptSession::new(
                     isk,
                     remote_ep,
                     rob,

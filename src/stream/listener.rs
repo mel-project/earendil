@@ -64,7 +64,7 @@ impl StreamListener {
                     let ticker = smolscale::spawn(async move {
                         loop {
                             let mut outgoing = Vec::new();
-                            log::debug!("listener-spawned ticker ticking!!");
+                            log::trace!("listener-spawned ticker ticking!!");
                             let maybe_retick = state.lock().tick(|msg| outgoing.push(msg));
 
                             if let Some(retick_time) = maybe_retick {
@@ -72,7 +72,7 @@ impl StreamListener {
                                 let recv_future = recv_tick.recv();
                                 future::select(recv_future, timer.fuse()).await;
                                 for msg in outgoing.drain(..) {
-                                    log::debug!("listener sending back result of tick {:?}", msg);
+                                    log::trace!("listener sending back result of tick {:?}", msg);
                                     let msg = msg.stdcode().into();
                                     let _ = skt.send_to(msg, client_ep).await;
                                 }
@@ -111,7 +111,7 @@ impl StreamListener {
                     payload,
                 } => match self.table.get(&client_ep) {
                     Some(state) => {
-                        log::debug!("INJECTING into state: {:?}", stream_msg);
+                        log::trace!("INJECTING into state: {:?}", stream_msg);
                         state.lock().inject_incoming(stream_msg);
                         continue;
                     }

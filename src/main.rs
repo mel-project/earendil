@@ -34,7 +34,7 @@ enum Commands {
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=trace"))
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=debug"))
         .init();
 
     match Args::parse().command {
@@ -64,5 +64,5 @@ fn main() -> anyhow::Result<()> {
 fn gen_seed() -> anyhow::Result<String> {
     let entropy: [u8; 16] = rand::random();
     let mnemonic = Mnemonic::from_entropy(&entropy)?;
-    Ok(mnemonic.to_string().replace(" ", "-"))
+    Ok(mnemonic.to_string().replace(' ', "-"))
 }

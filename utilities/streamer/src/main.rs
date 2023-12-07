@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Context;
-use bytes::Bytes;
+
 use earendil::{
     config::ConfigFile,
     daemon::Daemon,

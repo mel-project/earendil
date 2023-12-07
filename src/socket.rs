@@ -13,7 +13,7 @@ use crate::{
 
 use self::{haven_socket::HavenSocket, n2r_socket::N2rSocket};
 
-pub(crate) mod encrypter;
+pub(crate) mod crypt_session;
 pub(crate) mod haven_socket;
 pub(crate) mod n2r_socket;
 
@@ -92,22 +92,14 @@ enum InnerSocket {
 pub enum SocketSendError {
     #[error(transparent)]
     N2rSendError(#[from] SendMessageError),
-    #[error("could not get rendezvous point from dht")]
-    DhtError,
-    #[error("error sending haven message")]
-    HavenSendError,
-    #[error("incorrect signature for haven encryption")]
-    HavenEncryptionError,
+    #[error("haven encryption problem: {0}")]
+    HavenEncryptionError(String),
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum SocketRecvError {
     #[error("error receiving in n2r_socket")]
     N2rRecvError,
-    #[error("improperly formatted inner haven message")]
-    HavenMsgBadFormat,
-    #[error("error receiving decrypted haven message")]
-    HavenRecvError,
 }
 
 #[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
