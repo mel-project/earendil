@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Context;
 use earendil_crypt::{Fingerprint, IdentitySecret};
-use futures_util::io;
+use futures_util::{io, TryFutureExt};
 use smol::{
     future::FutureExt,
     io::AsyncWriteExt,
@@ -35,11 +35,10 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
     loop {
         let (client_stream, _) = tcp_listener.accept().await?;
 
-        reaper.attach(smolscale::spawn(socks5_once(
-            ctx.clone(),
-            client_stream,
-            fallback,
-        )));
+        reaper.attach(smolscale::spawn(
+            socks5_once(ctx.clone(), client_stream, fallback)
+                .map_err(|e| log::warn!("socks5 worker failed: {:?}", e)),
+        ));
     }
 }
 
