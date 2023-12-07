@@ -128,7 +128,7 @@ async fn send_batcher_loop(
         batches.clear();
         // sleep a little while so that stuff accumulates
         smol::Timer::after(Duration::from_millis(5)).await;
-        log::debug!("{} packets queued up", recv_outgoing.len());
+        log::trace!("{} packets queued up", recv_outgoing.len());
         let (msg, dest) = recv_outgoing.recv().await?;
         batches.entry(dest).or_default().push_back(msg);
         // try to receive more, as long as they're immediately available
@@ -154,7 +154,7 @@ async fn send_batcher_loop(
                     subbatch.push(first);
                     current_size = next_size;
                 }
-                log::debug!("subbatch of size {}", subbatch.len());
+                log::trace!("subbatch of size {}", subbatch.len());
                 // send the message
                 ctx.send_message(
                     isk,
