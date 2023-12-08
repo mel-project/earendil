@@ -1,0 +1,9 @@
+# derek fingerprint: bk6c3s76dzs8exna5vpcxwy92p49v0qt
+identity_seed: rude-labor-favorite-fuel-expand-essay-conduct-wet-hazard-letter-unlock-antenna
+control_listen: 127.0.0.1:11114
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12005
+    protocol: obfsudp
+    secret: push-hawk-horn-useful-logic-ice-wide-toy-party-main-island-merry
+out_routes: {}
