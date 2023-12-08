@@ -1,0 +1,14 @@
+# bob fingerprint: xh6tsvafwbgd2wc9akckc8pdwbv4arqw
+identity_seed: usual-method-clap-gain-orange-bomb-rookie-surge-circle-quality-risk-couch
+control_listen: 127.0.0.1:11112
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12003
+    protocol: obfsudp
+    secret: endorse-clock-warrior-pact-taxi-brief-diesel-feature-hope-airport-arch-memory
+out_routes:
+  charlie:
+    connect: 127.0.0.1:12004
+    cookie: e1634484eb0a357e290ff462c0dd0f2f2a0cd9f5318dbc0bc673d62b6c04b04d
+    fingerprint: wbnm5bhq7hr6jwgnjqtd50zryebccq43
+    protocol: obfsudp
