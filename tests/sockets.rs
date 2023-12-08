@@ -136,6 +136,7 @@ fn haven() {
             .recv_from()
             .timeout(Duration::from_secs(10))
             .await
+            .context("timed out")
             .unwrap()
             .unwrap();
         assert_eq!(body, derek_msg);

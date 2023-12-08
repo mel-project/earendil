@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, str::Chars, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -156,14 +156,14 @@ impl ControlProtocol for ControlProtocolImpl {
             "relay"
         };
         if human {
-            let all_neighs = self
-                .ctx
-                .table
-                .all_neighs()
-                .iter()
-                .fold(String::new(), |acc, neigh| {
-                    acc + &neigh.remote_idpk().fingerprint().to_string() + "\n"
-                });
+            let all_neighs =
+                self.ctx
+                    .table
+                    .all_neighs()
+                    .iter()
+                    .fold(String::new(), |acc, neigh| {
+                        acc + &format!("{:?}\n", neigh.remote_idpk().fingerprint().to_string())
+                    });
             let all_adjs = self
                 .ctx
                 .relay_graph
@@ -182,14 +182,14 @@ impl ControlProtocol for ControlProtocolImpl {
                 my_fp, relay_or_client, all_neighs, all_adjs
             )
         } else {
-            let all_neighs = self
-                .ctx
-                .table
-                .all_neighs()
-                .iter()
-                .fold(String::new(), |acc, neigh| {
-                    acc + &neigh.remote_idpk().fingerprint().to_string() + ";\n"
-                });
+            let all_neighs =
+                self.ctx
+                    .table
+                    .all_neighs()
+                    .iter()
+                    .fold(String::new(), |acc, neigh| {
+                        acc + &format!("{:?}\n", neigh.remote_idpk().fingerprint().to_string())
+                    });
             let all_adjs = self
                 .ctx
                 .relay_graph
@@ -203,27 +203,41 @@ impl ControlProtocol for ControlProtocolImpl {
                         adj.right.to_string()
                     )
                 });
+            let all_nodes: String =
+                self.ctx
+                    .relay_graph
+                    .read()
+                    .all_nodes()
+                    .fold(String::new(), |acc, node| {
+                        let node = node.to_string();
+                        acc + &format!(
+                            "{:?} [label=\"{}..{}\"]\n",
+                            node,
+                            &node[..4],
+                            &node[node.len() - 4..node.len()]
+                        )
+                    });
             format!(
                 "digraph G {{
-                node [shape=rect]
-                subgraph myself {{
-                    style=filled;
+                subgraph cluster_0 {{
                     color=lightblue;
-                    label=\"Myself [{}]\";
-                    node [shape=Mdiamond];
-                    {}
+                    label=\"myself      [{}]\";
+                    node [shape=Mdiamond,color=lightblue,style=filled];
+                    {:?}
                 }}
-                subgraph my_neighs {{
-                    label=\"My neighbors\";
+                subgraph cluster_1 {{
+                    color=lightpink
+                    label=\"my neighbors\";
                     node [color=lightpink,style=filled]
                     {}
                 }}
                 {}
+                {}
             }}",
-                relay_or_client, my_fp, all_neighs, all_adjs
+                relay_or_client, my_fp, all_neighs, all_nodes, all_adjs
             )
         }
-    } // TODO: sort before dumping to make graph_dump deterministic
+    }
 
     async fn send_global_rpc(
         &self,
