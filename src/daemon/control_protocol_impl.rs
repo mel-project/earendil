@@ -210,7 +210,7 @@ impl ControlProtocol for ControlProtocolImpl {
                     style=filled;
                     color=lightblue;
                     label=\"Myself [{}]\";
-                    node [shape=Mdiamond];
+                    node [shape=Mdiamond,color=lightblue,style=filled];
                     {}
                 }}
                 subgraph my_neighs {{
