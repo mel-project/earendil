@@ -1,0 +1,24 @@
+# fingerprint: zbnrtrkbw8k6xded5d8v9crc6fx0q3y9
+identity_seed: judy
+state_cache: judy.db
+control_listen: 127.0.0.1:10010
+
+out_routes:
+  ivan:
+    fingerprint: fevts9m09kk50dw868ba7s2fwp38nay9
+    protocol: obfsudp
+    connect: 127.0.0.1:8009
+    cookie: bb27ead798b27ec3384ac2cf2f374a17c02bfce420b19e8b2c5a8f898fd6384d
+
+havens:
+  # fingerprint: pm3atrnq6awfp96qrjg5rmxp39d1bqfh
+  - identity_seed: TCP_haven
+    rendezvous: 7wrkhwar5kj3hybwaf9pe996eydzc969 # alice
+    handler:
+      type: tcp_forward
+      from_dock: 6666
+      to_port: 8888
+
+tcp_forwards:
+  - forward_to: 4444
+    remote_ep: pm3atrnq6awfp96qrjg5rmxp39d1bqfh:6666
