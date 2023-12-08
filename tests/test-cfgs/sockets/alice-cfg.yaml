@@ -1,0 +1,10 @@
+# alice fingerprint: 7vcnrhf8dhjfyyc4djn255sbe3jj3g6r
+identity_seed: custom-wire-maximum-puzzle-pink-fire-head-banana-afford-essence-loyal-solid
+control_listen: 127.0.0.1:11111
+
+out_routes:
+  bob:
+    connect: 127.0.0.1:12003
+    cookie: 8221034c5c46eac58756e5d4650059465931333c4b9808a9395ad570793fcd0f
+    fingerprint: xh6tsvafwbgd2wc9akckc8pdwbv4arqw
+    protocol: obfsudp

@@ -94,7 +94,10 @@ pub enum ControlCommands {
     RendezvousHavenTest,
 
     /// Dumps the graph.
-    GraphDump,
+    GraphDump {
+        #[arg(short, long)]
+        human: bool,
+    },
 
     /// Dumps my own routes.
     MyRoutes,

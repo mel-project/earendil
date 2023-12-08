@@ -121,8 +121,8 @@ pub async fn main_control(
                 eprintln!("oh no couldn't find locator");
             }
         }
-        ControlCommands::GraphDump => {
-            let res = client.graph_dump().await?;
+        ControlCommands::GraphDump { human } => {
+            let res = client.graph_dump(human).await?;
             println!("{res}");
         }
         ControlCommands::MyRoutes => {
@@ -165,7 +165,7 @@ pub trait ControlProtocol {
         args: GlobalRpcArgs,
     ) -> Result<serde_json::Value, GlobalRpcError>;
 
-    async fn graph_dump(&self) -> String;
+    async fn graph_dump(&self, human: bool) -> String;
 
     async fn my_routes(&self) -> serde_json::Value;
 

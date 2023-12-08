@@ -5,6 +5,7 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::Dock;
+use itertools::Itertools;
 use moka::sync::Cache;
 use nanorpc::RpcTransport;
 use parking_lot::Mutex;
@@ -147,19 +148,82 @@ impl ControlProtocol for ControlProtocolImpl {
         serde_json::to_value(lala).unwrap()
     }
 
-    async fn graph_dump(&self) -> String {
-        let mut out = String::new();
-        out.push_str("graph G {\n");
-        for adj in self.ctx.relay_graph.read().all_adjacencies() {
-            out.push_str(&format!(
-                "{:?} -- {:?}\n",
-                adj.left.to_string(),
-                adj.right.to_string()
-            ));
+    async fn graph_dump(&self, human: bool) -> String {
+        let my_fp = self.ctx.identity.public().fingerprint().to_string();
+        let relay_or_client = if self.ctx.config.in_routes.is_empty() {
+            "client"
+        } else {
+            "relay"
+        };
+        if human {
+            let all_neighs = self
+                .ctx
+                .table
+                .all_neighs()
+                .iter()
+                .fold(String::new(), |acc, neigh| {
+                    acc + &neigh.remote_idpk().fingerprint().to_string() + "\n"
+                });
+            let all_adjs = self
+                .ctx
+                .relay_graph
+                .read()
+                .all_adjacencies()
+                .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
+                .fold(String::new(), |acc, adj| {
+                    acc + &format!(
+                        "{:?} -- {:?}\n",
+                        adj.left.to_string(),
+                        adj.right.to_string()
+                    )
+                });
+            format!(
+                "My fingerprint:\n{}    [{}]\n\nMy neighbors:\n{}\nRelay graph:\n{}",
+                my_fp, relay_or_client, all_neighs, all_adjs
+            )
+        } else {
+            let all_neighs = self
+                .ctx
+                .table
+                .all_neighs()
+                .iter()
+                .fold(String::new(), |acc, neigh| {
+                    acc + &neigh.remote_idpk().fingerprint().to_string() + ";\n"
+                });
+            let all_adjs = self
+                .ctx
+                .relay_graph
+                .read()
+                .all_adjacencies()
+                .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
+                .fold(String::new(), |acc, adj| {
+                    acc + &format!(
+                        "{:?} -> {:?};\n",
+                        adj.left.to_string(),
+                        adj.right.to_string()
+                    )
+                });
+            format!(
+                "digraph G {{
+                node [shape=rect]
+                subgraph myself {{
+                    style=filled;
+                    color=lightblue;
+                    label=\"Myself [{}]\";
+                    node [shape=Mdiamond];
+                    {}
+                }}
+                subgraph my_neighs {{
+                    label=\"My neighbors\";
+                    node [color=lightpink,style=filled]
+                    {}
+                }}
+                {}
+            }}",
+                relay_or_client, my_fp, all_neighs, all_adjs
+            )
         }
-        out.push_str("}\n");
-        out
-    }
+    } // TODO: sort before dumping to make graph_dump deterministic
 
     async fn send_global_rpc(
         &self,
