@@ -51,7 +51,7 @@ fn n2r() {
     // alice sends charlie a msg
     smolscale::block_on(async move {
         // sleep to give the nodes time to connect
-        Timer::after(Duration::from_secs(20)).await;
+        Timer::after(Duration::from_secs(60)).await;
         let alice_msg = Bytes::from_static("Hello, dear Charlie!".as_bytes());
         alice_skt
             .send_to(alice_msg.clone(), charlie_skt.local_endpoint())
