@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use bytes::Bytes;
-use earendil_topology::AdjacencyDescriptor;
+use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use itertools::Itertools;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use smol_timeout::TimeoutExt;
@@ -39,6 +39,16 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 /// One round of gossip with a particular neighbor.
 async fn gossip_once(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
+    // first insert ourselves
+    let am_i_relay = !ctx.config.in_routes.is_empty();
+    ctx.relay_graph
+        .write()
+        .insert_identity(IdentityDescriptor::new(
+            &ctx.identity,
+            &ctx.onion_sk,
+            am_i_relay,
+        ))?;
+
     fetch_identity(ctx, conn).await?;
     sign_adjacency(ctx, conn).await?;
     gossip_graph(ctx, conn).await?;
