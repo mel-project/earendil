@@ -1,19 +1,10 @@
 [workspace]
-members = ["libraries/*", "utilities/*"]
+members = ["libraries/*", "utilities/*", "shadow-tests/gen-earendil-shadow", "shadow-tests/gen-topo"]
 
 [package]
 name = "earendil"
 version = "0.0.1"
 edition = "2021"
-
-# [lib]
-# name = "earendil"
-# path = "src/lib.rs"
-
-# [[bin]]
-# name = "earendil"
-# path = "src/main.rs"
-
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
