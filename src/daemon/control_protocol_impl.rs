@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::Chars, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
