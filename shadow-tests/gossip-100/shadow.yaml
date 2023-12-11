@@ -1,0 +1,647 @@
+general:
+  model_unblocked_syscall_latency: true
+  stop_time: 1200s
+  template_directory: ./configs/
+hosts:
+  adder:
+    ip_addr: 200.64.1.62
+    network_node_id: 0
+    processes:
+    - args: daemon --config adder-cfg.yaml
+      expected_final_state: running
+      path: earendil
+    - path: earendil
+      args: control graph-dump
+      start_time: 1190s
+  anemone:
+    ip_addr: 200.64.1.33
+    network_node_id: 0
+    processes:
+    - args: daemon --config anemone-cfg.yaml
+      expected_final_state: running
+      path: earendil
+    - path: earendil
+      args: control graph-dump
+      start_time: 1190s
+  bat:
+    ip_addr: 200.64.1.41
+    network_node_id: 0
+    processes:
+    - args: daemon --config bat-cfg.yaml
+      expected_final_state: running
+      path: earendil
+    - path: earendil
+      args: control graph-dump
+      start_time: 1190s
+  bee:
+    ip_addr: 200.64.1.30
+    network_node_id: 0
+    processes:
+    - args: daemon --config bee-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  boar:
+    ip_addr: 200.64.1.3
+    network_node_id: 0
+    processes:
+    - args: daemon --config boar-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  bream:
+    ip_addr: 200.64.1.61
+    network_node_id: 0
+    processes:
+    - args: daemon --config bream-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  bug:
+    ip_addr: 200.64.1.2
+    network_node_id: 0
+    processes:
+    - args: daemon --config bug-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  bullfrog:
+    ip_addr: 200.64.1.20
+    network_node_id: 0
+    processes:
+    - args: daemon --config bullfrog-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  caribou:
+    ip_addr: 200.64.1.4
+    network_node_id: 0
+    processes:
+    - args: daemon --config caribou-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  cheetah:
+    ip_addr: 200.64.1.49
+    network_node_id: 0
+    processes:
+    - args: daemon --config cheetah-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  chigger:
+    ip_addr: 200.64.1.72
+    network_node_id: 0
+    processes:
+    - args: daemon --config chigger-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  chimp:
+    ip_addr: 200.64.1.85
+    network_node_id: 0
+    processes:
+    - args: daemon --config chimp-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  condor:
+    ip_addr: 200.64.1.15
+    network_node_id: 0
+    processes:
+    - args: daemon --config condor-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  dane:
+    ip_addr: 200.64.1.44
+    network_node_id: 0
+    processes:
+    - args: daemon --config dane-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  dassie:
+    ip_addr: 200.64.1.11
+    network_node_id: 0
+    processes:
+    - args: daemon --config dassie-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  dolphin:
+    ip_addr: 200.64.1.47
+    network_node_id: 0
+    processes:
+    - args: daemon --config dolphin-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  duck:
+    ip_addr: 200.64.1.45
+    network_node_id: 0
+    processes:
+    - args: daemon --config duck-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  elephant:
+    ip_addr: 200.64.1.59
+    network_node_id: 0
+    processes:
+    - args: daemon --config elephant-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  flamingo:
+    ip_addr: 200.64.1.5
+    network_node_id: 0
+    processes:
+    - args: daemon --config flamingo-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  foxhound:
+    ip_addr: 200.64.1.48
+    network_node_id: 0
+    processes:
+    - args: daemon --config foxhound-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  gator:
+    ip_addr: 200.64.1.39
+    network_node_id: 0
+    processes:
+    - args: daemon --config gator-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  ghoul:
+    ip_addr: 200.64.1.90
+    network_node_id: 0
+    processes:
+    - args: daemon --config ghoul-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  goldfish:
+    ip_addr: 200.64.1.89
+    network_node_id: 0
+    processes:
+    - args: daemon --config goldfish-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  gopher:
+    ip_addr: 200.64.1.40
+    network_node_id: 0
+    processes:
+    - args: daemon --config gopher-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  gorilla:
+    ip_addr: 200.64.1.27
+    network_node_id: 0
+    processes:
+    - args: daemon --config gorilla-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  grackle:
+    ip_addr: 200.64.1.87
+    network_node_id: 0
+    processes:
+    - args: daemon --config grackle-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  grizzly:
+    ip_addr: 200.64.1.46
+    network_node_id: 0
+    processes:
+    - args: daemon --config grizzly-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  hornet:
+    ip_addr: 200.64.1.17
+    network_node_id: 0
+    processes:
+    - args: daemon --config hornet-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  husky:
+    ip_addr: 200.64.1.34
+    network_node_id: 0
+    processes:
+    - args: daemon --config husky-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  impala:
+    ip_addr: 200.64.1.54
+    network_node_id: 0
+    processes:
+    - args: daemon --config impala-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  jaybird:
+    ip_addr: 200.64.1.80
+    network_node_id: 0
+    processes:
+    - args: daemon --config jaybird-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  joey:
+    ip_addr: 200.64.1.23
+    network_node_id: 0
+    processes:
+    - args: daemon --config joey-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  katydid:
+    ip_addr: 200.64.1.10
+    network_node_id: 0
+    processes:
+    - args: daemon --config katydid-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  kingfish:
+    ip_addr: 200.64.1.50
+    network_node_id: 0
+    processes:
+    - args: daemon --config kingfish-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  koala:
+    ip_addr: 200.64.1.51
+    network_node_id: 0
+    processes:
+    - args: daemon --config koala-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  leech:
+    ip_addr: 200.64.1.53
+    network_node_id: 0
+    processes:
+    - args: daemon --config leech-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  lioness:
+    ip_addr: 200.64.1.18
+    network_node_id: 0
+    processes:
+    - args: daemon --config lioness-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  lobster:
+    ip_addr: 200.64.1.52
+    network_node_id: 0
+    processes:
+    - args: daemon --config lobster-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  locust:
+    ip_addr: 200.64.1.7
+    network_node_id: 0
+    processes:
+    - args: daemon --config locust-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  marmoset:
+    ip_addr: 200.64.1.56
+    network_node_id: 0
+    processes:
+    - args: daemon --config marmoset-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  meerkat:
+    ip_addr: 200.64.1.79
+    network_node_id: 0
+    processes:
+    - args: daemon --config meerkat-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  midge:
+    ip_addr: 200.64.1.36
+    network_node_id: 0
+    processes:
+    - args: daemon --config midge-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  monitor:
+    ip_addr: 200.64.1.67
+    network_node_id: 0
+    processes:
+    - args: daemon --config monitor-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  moray:
+    ip_addr: 200.64.1.84
+    network_node_id: 0
+    processes:
+    - args: daemon --config moray-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  moth:
+    ip_addr: 200.64.1.28
+    network_node_id: 0
+    processes:
+    - args: daemon --config moth-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  muskox:
+    ip_addr: 200.64.1.86
+    network_node_id: 0
+    processes:
+    - args: daemon --config muskox-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  muskrat:
+    ip_addr: 200.64.1.58
+    network_node_id: 0
+    processes:
+    - args: daemon --config muskrat-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  oarfish:
+    ip_addr: 200.64.1.8
+    network_node_id: 0
+    processes:
+    - args: daemon --config oarfish-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  octopus:
+    ip_addr: 200.64.1.13
+    network_node_id: 0
+    processes:
+    - args: daemon --config octopus-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  orca:
+    ip_addr: 200.64.1.12
+    network_node_id: 0
+    processes:
+    - args: daemon --config orca-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  oriole:
+    ip_addr: 200.64.1.14
+    network_node_id: 0
+    processes:
+    - args: daemon --config oriole-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  pangolin:
+    ip_addr: 200.64.1.21
+    network_node_id: 0
+    processes:
+    - args: daemon --config pangolin-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  parrot:
+    ip_addr: 200.64.1.16
+    network_node_id: 0
+    processes:
+    - args: daemon --config parrot-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  peacock:
+    ip_addr: 200.64.1.24
+    network_node_id: 0
+    processes:
+    - args: daemon --config peacock-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  pheasant:
+    ip_addr: 200.64.1.77
+    network_node_id: 0
+    processes:
+    - args: daemon --config pheasant-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  phoenix:
+    ip_addr: 200.64.1.55
+    network_node_id: 0
+    processes:
+    - args: daemon --config phoenix-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  pipefish:
+    ip_addr: 200.64.1.73
+    network_node_id: 0
+    processes:
+    - args: daemon --config pipefish-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  ram:
+    ip_addr: 200.64.1.70
+    network_node_id: 0
+    processes:
+    - args: daemon --config ram-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  reindeer:
+    ip_addr: 200.64.1.81
+    network_node_id: 0
+    processes:
+    - args: daemon --config reindeer-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  reptile:
+    ip_addr: 200.64.1.42
+    network_node_id: 0
+    processes:
+    - args: daemon --config reptile-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  rhino:
+    ip_addr: 200.64.1.38
+    network_node_id: 0
+    processes:
+    - args: daemon --config rhino-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  roughy:
+    ip_addr: 200.64.1.32
+    network_node_id: 0
+    processes:
+    - args: daemon --config roughy-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  seal:
+    ip_addr: 200.64.1.26
+    network_node_id: 0
+    processes:
+    - args: daemon --config seal-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  seasnail:
+    ip_addr: 200.64.1.25
+    network_node_id: 0
+    processes:
+    - args: daemon --config seasnail-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  serval:
+    ip_addr: 200.64.1.29
+    network_node_id: 0
+    processes:
+    - args: daemon --config serval-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  shiner:
+    ip_addr: 200.64.1.57
+    network_node_id: 0
+    processes:
+    - args: daemon --config shiner-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  shrew:
+    ip_addr: 200.64.1.9
+    network_node_id: 0
+    processes:
+    - args: daemon --config shrew-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  silkworm:
+    ip_addr: 200.64.1.78
+    network_node_id: 0
+    processes:
+    - args: daemon --config silkworm-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  sloth:
+    ip_addr: 200.64.1.63
+    network_node_id: 0
+    processes:
+    - args: daemon --config sloth-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  slug:
+    ip_addr: 200.64.1.75
+    network_node_id: 0
+    processes:
+    - args: daemon --config slug-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  snail:
+    ip_addr: 200.64.1.60
+    network_node_id: 0
+    processes:
+    - args: daemon --config snail-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  snapper:
+    ip_addr: 200.64.1.69
+    network_node_id: 0
+    processes:
+    - args: daemon --config snapper-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  spaniel:
+    ip_addr: 200.64.1.71
+    network_node_id: 0
+    processes:
+    - args: daemon --config spaniel-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  squid:
+    ip_addr: 200.64.1.6
+    network_node_id: 0
+    processes:
+    - args: daemon --config squid-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  squirrel:
+    ip_addr: 200.64.1.74
+    network_node_id: 0
+    processes:
+    - args: daemon --config squirrel-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  starling:
+    ip_addr: 200.64.1.65
+    network_node_id: 0
+    processes:
+    - args: daemon --config starling-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  stork:
+    ip_addr: 200.64.1.31
+    network_node_id: 0
+    processes:
+    - args: daemon --config stork-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  stud:
+    ip_addr: 200.64.1.88
+    network_node_id: 0
+    processes:
+    - args: daemon --config stud-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  sturgeon:
+    ip_addr: 200.64.1.76
+    network_node_id: 0
+    processes:
+    - args: daemon --config sturgeon-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  sunbeam:
+    ip_addr: 200.64.1.83
+    network_node_id: 0
+    processes:
+    - args: daemon --config sunbeam-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  tahr:
+    ip_addr: 200.64.1.35
+    network_node_id: 0
+    processes:
+    - args: daemon --config tahr-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  tarpon:
+    ip_addr: 200.64.1.1
+    network_node_id: 0
+    processes:
+    - args: daemon --config tarpon-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  toad:
+    ip_addr: 200.64.1.66
+    network_node_id: 0
+    processes:
+    - args: daemon --config toad-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  tuna:
+    ip_addr: 200.64.1.82
+    network_node_id: 0
+    processes:
+    - args: daemon --config tuna-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  turtle:
+    ip_addr: 200.64.1.22
+    network_node_id: 0
+    processes:
+    - args: daemon --config turtle-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  weevil:
+    ip_addr: 200.64.1.64
+    network_node_id: 0
+    processes:
+    - args: daemon --config weevil-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  whippet:
+    ip_addr: 200.64.1.37
+    network_node_id: 0
+    processes:
+    - args: daemon --config whippet-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  wildcat:
+    ip_addr: 200.64.1.68
+    network_node_id: 0
+    processes:
+    - args: daemon --config wildcat-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  wolf:
+    ip_addr: 200.64.1.43
+    network_node_id: 0
+    processes:
+    - args: daemon --config wolf-cfg.yaml
+      expected_final_state: running
+      path: earendil
+  yeti:
+    ip_addr: 200.64.1.19
+    network_node_id: 0
+    processes:
+    - args: daemon --config yeti-cfg.yaml
+      expected_final_state: running
+      path: earendil
+network:
+  graph:
+    type: 1_gbit_switch

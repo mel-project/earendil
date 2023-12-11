@@ -1,0 +1,53 @@
+# moray fingerprint: ssp7mkh4g712wdt92fpcezw8zrj58daa
+identity_seed: dry-fade-detect-forward-please-bone-chronic-fashion-deny-ridge-clump-scout
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12166
+    protocol: obfsudp
+    secret: salt-table-champion-faculty-trade-uphold-betray-basket-pottery-sheriff-today-uniform
+out_routes:
+  dane:
+    connect: 200.64.1.44:12086
+    cookie: 388104dcef2cb2c93f59e4305ac351314aeb7628f6428c973302ec6f0fc5c315
+    fingerprint: r4gkv596z1w16c717f0q7je0rrjq2069
+    protocol: obfsudp
+  ghoul:
+    connect: 200.64.1.90:12178
+    cookie: 404dfea77f04c857eb3d4e2f66d84edd8d7567f1450d6ec71fce8cc07d484029
+    fingerprint: nd387swdra9tdves59td36en6xkwmajy
+    protocol: obfsudp
+  gorilla:
+    connect: 200.64.1.27:12052
+    cookie: 35f99052dc1f2daa57d9ce566c8482710bce77201aa083e0b81d3a5f4ac0ad1f
+    fingerprint: g6w6wp1sx6xdg23hh4yh75eab85jf6a2
+    protocol: obfsudp
+  katydid:
+    connect: 200.64.1.10:12018
+    cookie: 62c10ebbc1ffb0624eb3c8eb70dcaa7b142f60d45080e29b5659ba97695d7e0e
+    fingerprint: gksmy18w78z5xqq9kf4tsvagckzzkk07
+    protocol: obfsudp
+  muskrat:
+    connect: 200.64.1.58:12114
+    cookie: 6fd4c17b8169c32a6bdcfcf819c263220e56e5df936094abc2e8f59cb494bb23
+    fingerprint: arsgzbxkqczwtch4r33jkz00w35vrgzn
+    protocol: obfsudp
+  reptile:
+    connect: 200.64.1.42:12082
+    cookie: 569e0f88f9535b08d26c7d9aac46d9a7c0f2d49d37b76fd59a3658093725341b
+    fingerprint: y3ew7xs9bey15zrfk99g2d6nevr20fwd
+    protocol: obfsudp
+  seal:
+    connect: 200.64.1.26:12050
+    cookie: 0d3785400d2c5ca49e8e23b70910541c17d6ef8c1712668a5b539e9727371936
+    fingerprint: h2gpxqb11vn9575cdaednh2a6b691bg2
+    protocol: obfsudp
+  sloth:
+    connect: 200.64.1.63:12124
+    cookie: f69316c0957fd97faefce2b230a042cf98a4f6567ebae526d73fdace74539c22
+    fingerprint: 5w42hjytbabgdkadhrqvtzghc0trm4w9
+    protocol: obfsudp
+  snapper:
+    connect: 200.64.1.69:12136
+    cookie: 40d661d9a3d1730b31d57c7a6bb500b8696fed8aeb56c0b8919ab43912eda205
+    fingerprint: z1z0ks21zgwzsvexmb158x0djymrsd3g
+    protocol: obfsudp

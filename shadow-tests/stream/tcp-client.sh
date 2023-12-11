@@ -1,0 +1,1 @@
+echo "the future is now" | nc 200.64.1.1 4444 

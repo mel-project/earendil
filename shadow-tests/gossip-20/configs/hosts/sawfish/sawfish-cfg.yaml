@@ -1,0 +1,23 @@
+# sawfish fingerprint: 0a6r82xs3g7xephae89bt673qznm5ycq
+identity_seed: scorpion-good-relief-dash-silent-guitar-use-team-below-relief-aware-face
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12016
+    protocol: obfsudp
+    secret: punch-brain-slow-hunt-supreme-asset-cousin-lunch-kingdom-bachelor-float-moon
+out_routes:
+  dory:
+    connect: 200.64.1.18:12034
+    cookie: dec686402c4c0e5791cdc0f8513ebeebb4004bbc7d814a2d317d0da51f8dda78
+    fingerprint: w742x18w872v2gd9fgd5bpxd1990g7e2
+    protocol: obfsudp
+  honeybee:
+    connect: 200.64.1.10:12018
+    cookie: ab1822ec6e0b2696462290bc96eae6c685f5cf345a2bc502e833b37037e50c61
+    fingerprint: s0x2aww6w0qaqtfawvdmtgjhqssqs15z
+    protocol: obfsudp
+  pug:
+    connect: 200.64.1.8:12014
+    cookie: 0fa6d7dbb2b2223e8feb92c8f341e9230d051d989f2d3bf28fd297894616b478
+    fingerprint: p56n010gbdf9aqxpzjjmx59hhr4gst8b
+    protocol: obfsudp

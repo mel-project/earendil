@@ -1,0 +1,23 @@
+# stork fingerprint: kjxbq9g0kb83c85vndfp8w4haats135c
+identity_seed: where-load-script-thunder-exist-loan-injury-congress-next-art-ticket-inch
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12060
+    protocol: obfsudp
+    secret: beef-struggle-marriage-bleak-dial-lake-crumble-entry-visit-fuel-practice-rebuild
+out_routes:
+  bream:
+    connect: 200.64.1.61:12120
+    cookie: 144325d77af008e74e9333a8e86800d8abdb497ed38717adff26de163730d94c
+    fingerprint: ajq74w1svhz94dfpz3p928prnveyamp1
+    protocol: obfsudp
+  pangolin:
+    connect: 200.64.1.21:12040
+    cookie: ddd8005bfa7235c0bbc63fc92afe4e7393891ecdc030e0a70bf388a766a1ff25
+    fingerprint: 462957764kyg76j8dyjcf44q6hfcwvje
+    protocol: obfsudp
+  stud:
+    connect: 200.64.1.88:12174
+    cookie: 084f10364da5b3647ae88cfdde76c4fc4537240339844a98d8e8e6b3b48fc33f
+    fingerprint: v0twhrndx7kgc33skhj6rg9szgssgfs8
+    protocol: obfsudp

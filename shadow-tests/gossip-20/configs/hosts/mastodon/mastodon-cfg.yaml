@@ -1,0 +1,23 @@
+# mastodon fingerprint: nxaatjc8qq9dkmvn0wpdxwerbekwfzhb
+identity_seed: oppose-shell-setup-example-oblige-report-raise-pill-green-round-brief-kite
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12028
+    protocol: obfsudp
+    secret: skate-they-hundred-gun-fatal-soccer-start-era-dirt-squirrel-tomorrow-more
+out_routes:
+  burro:
+    connect: 200.64.1.6:12010
+    cookie: fc760624957edf838ee9387bff13d67b6ab5c30f6507ffe008a5d59a85be367d
+    fingerprint: fnef5zpfjbpm7pp5pvjgxrs39z2tpg4y
+    protocol: obfsudp
+  louse:
+    connect: 200.64.1.5:12008
+    cookie: 3e7fb497bc41c20f2fc43b467430dfb68d4deb4a076cc8b9901883bd66933002
+    fingerprint: 5ar84m47wy87j3b8wzr4v861799wq8pk
+    protocol: obfsudp
+  parakeet:
+    connect: 200.64.1.16:12030
+    cookie: 9ead3e46c05b5f36c662afdb9fbd0ab3d9a9e5a562703f3f6852db0e3ac52f1a
+    fingerprint: h133nnen7zx9kny8sdp47p9mzpz0pcg6
+    protocol: obfsudp

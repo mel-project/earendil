@@ -1,0 +1,23 @@
+# shrew fingerprint: rtnw7f3fc3kx4tw1qv57wzbb33fzs1y9
+identity_seed: modify-syrup-deputy-system-token-office-august-gain-vacant-thought-problem-type
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12016
+    protocol: obfsudp
+    secret: pink-oblige-heart-crane-old-author-brain-mimic-divide-winter-display-tide
+out_routes:
+  bug:
+    connect: 200.64.1.2:12002
+    cookie: 0f72f2e18a39e79cfca8333fdee0cea92f666fbcc2865c0f64d4a8756f62eb6e
+    fingerprint: 8r8gtf3z7mnc61hmrm0zk7962006v6ke
+    protocol: obfsudp
+  seasnail:
+    connect: 200.64.1.25:12048
+    cookie: 8de16c00f3191c37806e813456490437fc0ed1651bc2805f5f05687a5f7fb113
+    fingerprint: tnkne88zpr8srnpp18v761z0q8s1f1nm
+    protocol: obfsudp
+  snail:
+    connect: 200.64.1.60:12118
+    cookie: d29df5e4a914ceff860dfa5710053edce8d3e7aa932ae04d39e0b136a5dd7f68
+    fingerprint: 4d1rz52aww75vk9mb9q9w2ac8cecy254
+    protocol: obfsudp

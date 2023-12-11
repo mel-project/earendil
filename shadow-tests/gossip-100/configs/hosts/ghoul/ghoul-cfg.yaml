@@ -1,0 +1,38 @@
+# ghoul fingerprint: nd387swdra9tdves59td36en6xkwmajy
+identity_seed: powder-tape-fox-science-inherit-banana-lake-derive-gas-explain-shadow-lava
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12178
+    protocol: obfsudp
+    secret: option-upon-drift-unhappy-pond-genuine-earn-nerve-polar-siren-path-knife
+out_routes:
+  foxhound:
+    connect: 200.64.1.48:12094
+    cookie: 79f05374a2babcfaaae72376421f658e0b59ce556e2260e740a7a7ffa20c695e
+    fingerprint: z67616mzjwsx9bvqhkm3ayagfm0rhawk
+    protocol: obfsudp
+  ghoul:
+    connect: 200.64.1.90:12178
+    cookie: 404dfea77f04c857eb3d4e2f66d84edd8d7567f1450d6ec71fce8cc07d484029
+    fingerprint: nd387swdra9tdves59td36en6xkwmajy
+    protocol: obfsudp
+  goldfish:
+    connect: 200.64.1.89:12176
+    cookie: 2717068fa4cf369497ab2c4d2962c7d461578f1d96bbbc5b9416ebc9c2113c2e
+    fingerprint: pc0dmyr5yzts734z7n043175a8s1tk80
+    protocol: obfsudp
+  pheasant:
+    connect: 200.64.1.77:12152
+    cookie: a71945a6c6cb62816467c23a9e678109d7a56c13b3a8d2b9299911adf155d14d
+    fingerprint: 847gs66v7d5veb0ng29060a0c3s2rank
+    protocol: obfsudp
+  squirrel:
+    connect: 200.64.1.74:12146
+    cookie: 677dc6ae5f71df34e2f92882803b4fc443d2bb3ccba24da21d49c86e15d8b452
+    fingerprint: sddz1n2qjnp0da2en1ksahs5eryp58ak
+    protocol: obfsudp
+  stork:
+    connect: 200.64.1.31:12060
+    cookie: 6acaa5f3a8f7341d43339c6b726969b72bc5c040961d79ee7827c40d79a1d313
+    fingerprint: kjxbq9g0kb83c85vndfp8w4haats135c
+    protocol: obfsudp

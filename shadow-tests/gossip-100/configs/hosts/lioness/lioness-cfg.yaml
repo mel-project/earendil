@@ -1,0 +1,33 @@
+# lioness fingerprint: ser0em4w49qfcwemtd3yv08r6p9nz99t
+identity_seed: always-hurdle-prize-swap-garbage-divide-cry-relief-hybrid-roof-hand-describe
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12034
+    protocol: obfsudp
+    secret: barely-bottom-sting-liar-concert-tackle-faint-rally-stamp-grid-wonder-dwarf
+out_routes:
+  anemone:
+    connect: 200.64.1.33:12064
+    cookie: 79f5235eb2712362789eaf5251c547ba39da9b8604f18bd40b8c15810f59d171
+    fingerprint: qm005ezxbetkjpn6nzc4gdh1xwk7d4ee
+    protocol: obfsudp
+  bat:
+    connect: 200.64.1.41:12080
+    cookie: a067284db4e2369355478edf21d5d18eef66dff29b237792fba30f983c312d70
+    fingerprint: dtprzzgm0e0z07pj68d3q89br906ejnz
+    protocol: obfsudp
+  hornet:
+    connect: 200.64.1.17:12032
+    cookie: a98f45e690100532d4e1e96e637843f244b0bce03cf98c231222b6d9040c4e36
+    fingerprint: mc3sbea8m23t5p1mqe6eqf3can6skd46
+    protocol: obfsudp
+  moth:
+    connect: 200.64.1.28:12054
+    cookie: fb07b568ed6552bcf2086c8c73602fef2320389b7552b3e3bc17b389128ae01e
+    fingerprint: sd6h70rwcym6adsyf5dynexenbgy2mhf
+    protocol: obfsudp
+  muskox:
+    connect: 200.64.1.86:12170
+    cookie: b0885ee4f76bd125a584c2f86503d61a88b29d94c79137efbc91152c85f54151
+    fingerprint: 7m1v679bqqbxw0nm06jahzqrd92w66dq
+    protocol: obfsudp

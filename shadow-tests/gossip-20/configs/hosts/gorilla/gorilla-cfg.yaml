@@ -1,0 +1,23 @@
+# gorilla fingerprint: 8nvvqmx2m16haw897y1c2d5f26gdpb92
+identity_seed: inflict-violin-friend-sorry-option-crystal-garbage-correct-loyal-peanut-mother-nerve
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12024
+    protocol: obfsudp
+    secret: snake-cruise-total-pioneer-anxiety-income-limb-increase-humor-hospital-shoulder-enjoy
+out_routes:
+  cow:
+    connect: 200.64.1.20:12038
+    cookie: f3a8797c89d61718dcda9b511a769b73ea4b15801e103b806dce39b13a346f7c
+    fingerprint: 3850wrrv3a36qermpeh4r39fz3hhpvp1
+    protocol: obfsudp
+  fish:
+    connect: 200.64.1.2:12002
+    cookie: 271e9abd9b40756d19765da71e9745b055ad55c3a978f8dd8dece4ff55c80b12
+    fingerprint: pp50c0d1ewyadpva4cr7ss3hrqh9hzea
+    protocol: obfsudp
+  wren:
+    connect: 200.64.1.4:12006
+    cookie: 4db091e9247114bdea10bd227bb59479009730684eb8b2ced30616596b8fc835
+    fingerprint: 2efm7f61x808ezad4bkfgrr4c03s4624
+    protocol: obfsudp

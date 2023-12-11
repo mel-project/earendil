@@ -1,0 +1,23 @@
+# gorilla fingerprint: g6w6wp1sx6xdg23hh4yh75eab85jf6a2
+identity_seed: goddess-prepare-cart-garden-pink-current-pretty-family-battle-essence-tornado-army
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12052
+    protocol: obfsudp
+    secret: item-habit-top-become-staff-found-total-bargain-fatal-unlock-orchard-noise
+out_routes:
+  lioness:
+    connect: 200.64.1.18:12034
+    cookie: 23d38d1c9d3ec20366e8f74022b127bc5c0e99a09cbf41c6e20ae47d63326123
+    fingerprint: ser0em4w49qfcwemtd3yv08r6p9nz99t
+    protocol: obfsudp
+  roughy:
+    connect: 200.64.1.32:12062
+    cookie: 32fc1a7a360ebe0ad5181a80b1c397ecae8e3aef87daf34fbcfaa809a1d37842
+    fingerprint: bjgx7ay0a2swmqvs87sdh6m7rs9strzb
+    protocol: obfsudp
+  wildcat:
+    connect: 200.64.1.68:12134
+    cookie: 3101cb06cdf6b9390d16716091e0d401c295855c064dd486916c799b6478157e
+    fingerprint: vmp4qb0bgs8rbbdzh0dh05b9e6jgpg6s
+    protocol: obfsudp

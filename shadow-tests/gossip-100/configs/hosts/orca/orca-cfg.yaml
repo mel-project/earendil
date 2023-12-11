@@ -1,0 +1,23 @@
+# orca fingerprint: jwqngs9hekvy4m0apxez48gffnptzgea
+identity_seed: nose-chat-audit-february-flight-link-earth-lawn-benefit-useless-gadget-artefact
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12022
+    protocol: obfsudp
+    secret: pelican-fitness-gospel-toss-access-pelican-salute-trip-brother-grace-float-change
+out_routes:
+  gorilla:
+    connect: 200.64.1.27:12052
+    cookie: 35f99052dc1f2daa57d9ce566c8482710bce77201aa083e0b81d3a5f4ac0ad1f
+    fingerprint: g6w6wp1sx6xdg23hh4yh75eab85jf6a2
+    protocol: obfsudp
+  joey:
+    connect: 200.64.1.23:12044
+    cookie: 034efc21671fc352b6f801ad925f840e49fd30345a976fea8f63aaa59cac7b5a
+    fingerprint: 06f05dzj20wy1whq3wc1qmnzct4c2amc
+    protocol: obfsudp
+  moray:
+    connect: 200.64.1.84:12166
+    cookie: 3b5658329871b58f52ab1b72fd67a23ca7dd69bd659a2502c795c319cc273662
+    fingerprint: ssp7mkh4g712wdt92fpcezw8zrj58daa
+    protocol: obfsudp

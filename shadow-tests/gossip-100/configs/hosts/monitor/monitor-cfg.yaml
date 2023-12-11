@@ -1,0 +1,23 @@
+# monitor fingerprint: ttak033a28gqdf2qsd0csydy47yrrgzb
+identity_seed: seminar-rose-knock-night-mosquito-gas-that-bread-pave-rally-noise-fork
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12132
+    protocol: obfsudp
+    secret: mail-gauge-midnight-grunt-return-east-inject-hazard-client-cabbage-bar-hero
+out_routes:
+  lioness:
+    connect: 200.64.1.18:12034
+    cookie: 23d38d1c9d3ec20366e8f74022b127bc5c0e99a09cbf41c6e20ae47d63326123
+    fingerprint: ser0em4w49qfcwemtd3yv08r6p9nz99t
+    protocol: obfsudp
+  slug:
+    connect: 200.64.1.75:12148
+    cookie: 8f8c785bc37b1a4a7b3764a7d988149357680b99260b22cda8f4a181778cec69
+    fingerprint: jghhy9d8h3d41d2p32j3wxqb55m7782w
+    protocol: obfsudp
+  toad:
+    connect: 200.64.1.66:12130
+    cookie: 88a1df8122790b2a652e91312c4d6abaa7e0e4c5eed914440b6066cc0e621a4e
+    fingerprint: 3jw0rgz7hh7jp27njtvdrb4a1h1br07n
+    protocol: obfsudp

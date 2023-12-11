@@ -1,0 +1,23 @@
+# bee fingerprint: zqxwhwahpjp5dj8jrcfx9e1bn04h9tsz
+identity_seed: reveal-art-claw-universe-myth-stage-funny-public-soft-fiction-relax-bread
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12058
+    protocol: obfsudp
+    secret: arctic-whip-demise-broccoli-above-cross-cousin-leaf-make-account-cargo-witness
+out_routes:
+  adder:
+    connect: 200.64.1.62:12122
+    cookie: b1bab0b4879d4ade2b0c65932c39805bc5929c9c6e9df3d65137ab2017cacd50
+    fingerprint: zcq8wa3x8z8ptbwgq2h6w4mq6v02s0sm
+    protocol: obfsudp
+  grizzly:
+    connect: 200.64.1.46:12090
+    cookie: 8df10c32c85a7a03fbbfdecaef7c86437abc7042bf8baba80f4bdb2d915e2124
+    fingerprint: 5amxy70cyz48sj89t7exyzmqywhvwqh2
+    protocol: obfsudp
+  reindeer:
+    connect: 200.64.1.81:12160
+    cookie: f9a56a84ed206d43b8feff693baca0d1169e2feb2d172d231ca8843e10b6e873
+    fingerprint: jmca4nm7tnp2ygxg6fn4j7r96vdm3wtp
+    protocol: obfsudp

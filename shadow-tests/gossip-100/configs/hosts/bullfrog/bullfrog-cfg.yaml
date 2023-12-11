@@ -1,0 +1,23 @@
+# bullfrog fingerprint: kx81x12858df7sdrkj0f1960735vn3kt
+identity_seed: wonder-unfair-practice-buffalo-evoke-document-symbol-fiction-option-mammal-cattle-cotton
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12038
+    protocol: obfsudp
+    secret: disease-degree-glimpse-frequent-hint-report-impose-afraid-meat-imitate-bench-adjust
+out_routes:
+  boar:
+    connect: 200.64.1.3:12004
+    cookie: 196803a00763037f3ebdcc6a833d2442d03695573d1cb3175983190988f4f917
+    fingerprint: w8seyfhgw2shjks5t9wt7w1ek8znnqw2
+    protocol: obfsudp
+  dane:
+    connect: 200.64.1.44:12086
+    cookie: 388104dcef2cb2c93f59e4305ac351314aeb7628f6428c973302ec6f0fc5c315
+    fingerprint: r4gkv596z1w16c717f0q7je0rrjq2069
+    protocol: obfsudp
+  reindeer:
+    connect: 200.64.1.81:12160
+    cookie: f9a56a84ed206d43b8feff693baca0d1169e2feb2d172d231ca8843e10b6e873
+    fingerprint: jmca4nm7tnp2ygxg6fn4j7r96vdm3wtp
+    protocol: obfsudp

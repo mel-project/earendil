@@ -1,0 +1,23 @@
+# leech fingerprint: ryz2jf3hw09780ssxs2phft2f1shqgz4
+identity_seed: rally-cradle-unhappy-bronze-wreck-vanish-slush-limb-obvious-forum-pear-nominee
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12104
+    protocol: obfsudp
+    secret: name-license-capable-gain-waste-catch-neither-escape-world-genuine-staff-saddle
+out_routes:
+  bug:
+    connect: 200.64.1.2:12002
+    cookie: 0f72f2e18a39e79cfca8333fdee0cea92f666fbcc2865c0f64d4a8756f62eb6e
+    fingerprint: 8r8gtf3z7mnc61hmrm0zk7962006v6ke
+    protocol: obfsudp
+  husky:
+    connect: 200.64.1.34:12066
+    cookie: 187d8ba912f491d127773101d76074607e9d16e2c3773ca71a0b40d79c30f63f
+    fingerprint: efhdqschnn12pze5p2nv3x9jn7y8exmt
+    protocol: obfsudp
+  rhino:
+    connect: 200.64.1.38:12074
+    cookie: 5ae4a7bd964615d3201dc33fc60aeeb818985055cfc67a53b6748dc7def60968
+    fingerprint: 54wp8pnksmqyzyc1t605879y7gb6x1f7
+    protocol: obfsudp

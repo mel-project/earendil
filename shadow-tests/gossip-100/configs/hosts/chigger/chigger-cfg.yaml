@@ -1,0 +1,23 @@
+# chigger fingerprint: 6ndbe81yccsh3qeg7m06d31h3p1h6f1v
+identity_seed: congress-grab-pen-lottery-chef-more-radio-country-alarm-huge-mango-avoid
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12142
+    protocol: obfsudp
+    secret: under-cattle-ten-patch-blast-moral-boost-cruel-sudden-endless-curtain-core
+out_routes:
+  bullfrog:
+    connect: 200.64.1.20:12038
+    cookie: 88e17cdc25dba9798e24329b65554c7a9b31e7b2788e8887ff3984f3d7099725
+    fingerprint: kx81x12858df7sdrkj0f1960735vn3kt
+    protocol: obfsudp
+  chimp:
+    connect: 200.64.1.85:12168
+    cookie: adde574f7bbe43fa6e70155f05cb9f86f6a9dcb909873d0dc8415a10eb99e717
+    fingerprint: fqjtasvgw228e8phchy8eb3s57vad6q5
+    protocol: obfsudp
+  snail:
+    connect: 200.64.1.60:12118
+    cookie: d29df5e4a914ceff860dfa5710053edce8d3e7aa932ae04d39e0b136a5dd7f68
+    fingerprint: 4d1rz52aww75vk9mb9q9w2ac8cecy254
+    protocol: obfsudp

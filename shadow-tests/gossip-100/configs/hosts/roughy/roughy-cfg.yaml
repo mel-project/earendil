@@ -1,0 +1,23 @@
+# roughy fingerprint: bjgx7ay0a2swmqvs87sdh6m7rs9strzb
+identity_seed: excite-twenty-tip-parent-roof-blood-draft-foil-bus-balcony-height-suit
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12062
+    protocol: obfsudp
+    secret: simple-bottom-drift-void-lizard-virus-negative-learn-pattern-inch-pumpkin-estate
+out_routes:
+  bug:
+    connect: 200.64.1.2:12002
+    cookie: 0f72f2e18a39e79cfca8333fdee0cea92f666fbcc2865c0f64d4a8756f62eb6e
+    fingerprint: 8r8gtf3z7mnc61hmrm0zk7962006v6ke
+    protocol: obfsudp
+  dane:
+    connect: 200.64.1.44:12086
+    cookie: 388104dcef2cb2c93f59e4305ac351314aeb7628f6428c973302ec6f0fc5c315
+    fingerprint: r4gkv596z1w16c717f0q7je0rrjq2069
+    protocol: obfsudp
+  serval:
+    connect: 200.64.1.29:12056
+    cookie: d9a1266d6d89e1397d5e03572b646ee850b506dfa9169bd06d06c734beee8357
+    fingerprint: kb4g0tk7c8ggfn7rth1cfsjdcgvnaseg
+    protocol: obfsudp

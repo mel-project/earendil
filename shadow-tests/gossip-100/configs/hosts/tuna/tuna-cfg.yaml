@@ -1,0 +1,23 @@
+# tuna fingerprint: 4rafcceggd2kc93x9c4aq8dsxx88baxq
+identity_seed: hand-bring-butter-voice-wisdom-habit-assume-assault-saddle-hawk-accident-perfect
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12162
+    protocol: obfsudp
+    secret: mandate-observe-spread-catch-zero-cheese-economy-asthma-either-kiwi-clown-venture
+out_routes:
+  bug:
+    connect: 200.64.1.2:12002
+    cookie: 0f72f2e18a39e79cfca8333fdee0cea92f666fbcc2865c0f64d4a8756f62eb6e
+    fingerprint: 8r8gtf3z7mnc61hmrm0zk7962006v6ke
+    protocol: obfsudp
+  katydid:
+    connect: 200.64.1.10:12018
+    cookie: 62c10ebbc1ffb0624eb3c8eb70dcaa7b142f60d45080e29b5659ba97695d7e0e
+    fingerprint: gksmy18w78z5xqq9kf4tsvagckzzkk07
+    protocol: obfsudp
+  sloth:
+    connect: 200.64.1.63:12124
+    cookie: f69316c0957fd97faefce2b230a042cf98a4f6567ebae526d73fdace74539c22
+    fingerprint: 5w42hjytbabgdkadhrqvtzghc0trm4w9
+    protocol: obfsudp

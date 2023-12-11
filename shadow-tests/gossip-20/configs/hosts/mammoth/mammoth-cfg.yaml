@@ -1,0 +1,23 @@
+# mammoth fingerprint: n49w089fpsy97t80p7vvvkbvnh2jvhqb
+identity_seed: alpha-clump-yard-glide-army-wheel-taste-eagle-behind-use-duck-mosquito
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12012
+    protocol: obfsudp
+    secret: diary-sample-lazy-bracket-maple-later-ozone-october-nerve-abstract-flash-flee
+out_routes:
+  burro:
+    connect: 200.64.1.6:12010
+    cookie: fc760624957edf838ee9387bff13d67b6ab5c30f6507ffe008a5d59a85be367d
+    fingerprint: fnef5zpfjbpm7pp5pvjgxrs39z2tpg4y
+    protocol: obfsudp
+  cow:
+    connect: 200.64.1.20:12038
+    cookie: f3a8797c89d61718dcda9b511a769b73ea4b15801e103b806dce39b13a346f7c
+    fingerprint: 3850wrrv3a36qermpeh4r39fz3hhpvp1
+    protocol: obfsudp
+  mastodon:
+    connect: 200.64.1.15:12028
+    cookie: c8d991d6703971d166e108b36cb90c1bc0de8f4a0d80cf34a627e21215811d0e
+    fingerprint: nxaatjc8qq9dkmvn0wpdxwerbekwfzhb
+    protocol: obfsudp

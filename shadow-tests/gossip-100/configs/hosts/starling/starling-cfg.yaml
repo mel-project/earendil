@@ -1,0 +1,23 @@
+# starling fingerprint: arh8epn40whthcb76shrta1ajh9b8hnd
+identity_seed: never-come-absorb-spring-recall-antique-jump-borrow-vocal-cannon-garbage-skill
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12128
+    protocol: obfsudp
+    secret: short-skill-hockey-canal-engage-omit-crawl-glory-crumble-wage-snake-deal
+out_routes:
+  anemone:
+    connect: 200.64.1.33:12064
+    cookie: 79f5235eb2712362789eaf5251c547ba39da9b8604f18bd40b8c15810f59d171
+    fingerprint: qm005ezxbetkjpn6nzc4gdh1xwk7d4ee
+    protocol: obfsudp
+  midge:
+    connect: 200.64.1.36:12070
+    cookie: 7529f428c843705995244cbce1d0faba95060baa60c3fac4023885d6611d354f
+    fingerprint: atf9kaj0m8xtwd6byeskw56dzpsza66r
+    protocol: obfsudp
+  oarfish:
+    connect: 200.64.1.8:12014
+    cookie: bdd88791bc2993c12db6ef93f275de35a4929a07f65e3b3b779b51a498be6528
+    fingerprint: 2y7g969ta3rbmtr4kxv19pswjd2d60a7
+    protocol: obfsudp

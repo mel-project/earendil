@@ -1,0 +1,23 @@
+# seal fingerprint: h2gpxqb11vn9575cdaednh2a6b691bg2
+identity_seed: paddle-purpose-bamboo-evolve-hunt-identify-reveal-mind-jazz-indoor-fashion-fat
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12050
+    protocol: obfsudp
+    secret: unfair-emotion-alpha-polar-kingdom-typical-gesture-exclude-left-arrow-patch-mutual
+out_routes:
+  gator:
+    connect: 200.64.1.39:12076
+    cookie: a644956227de8569015b2a8e081a79a8c3674780d818f8b98e80c46cc2c77238
+    fingerprint: 126zjycts5nchbv2hdvzvfdwz8q5r96w
+    protocol: obfsudp
+  moth:
+    connect: 200.64.1.28:12054
+    cookie: fb07b568ed6552bcf2086c8c73602fef2320389b7552b3e3bc17b389128ae01e
+    fingerprint: sd6h70rwcym6adsyf5dynexenbgy2mhf
+    protocol: obfsudp
+  stork:
+    connect: 200.64.1.31:12060
+    cookie: 6acaa5f3a8f7341d43339c6b726969b72bc5c040961d79ee7827c40d79a1d313
+    fingerprint: kjxbq9g0kb83c85vndfp8w4haats135c
+    protocol: obfsudp

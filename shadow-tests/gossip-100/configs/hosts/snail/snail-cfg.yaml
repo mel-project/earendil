@@ -1,0 +1,23 @@
+# snail fingerprint: 4d1rz52aww75vk9mb9q9w2ac8cecy254
+identity_seed: minute-index-play-deposit-radar-input-style-flag-cart-rabbit-husband-cheap
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12118
+    protocol: obfsudp
+    secret: anger-pudding-refuse-advice-salon-click-view-clown-safe-item-save-special
+out_routes:
+  dane:
+    connect: 200.64.1.44:12086
+    cookie: 388104dcef2cb2c93f59e4305ac351314aeb7628f6428c973302ec6f0fc5c315
+    fingerprint: r4gkv596z1w16c717f0q7je0rrjq2069
+    protocol: obfsudp
+  leech:
+    connect: 200.64.1.53:12104
+    cookie: e49110ea36e4757d1fa587dc1930d29abfe3652527d2e7d696dcd41e9e571324
+    fingerprint: ryz2jf3hw09780ssxs2phft2f1shqgz4
+    protocol: obfsudp
+  wolf:
+    connect: 200.64.1.43:12084
+    cookie: f8886d213b86d3878ad5fb3fabd403b3f8f6e884bff84ef8470f4af148886131
+    fingerprint: rphdzr3bmt5j3spjy2rbtewtndk6rmst
+    protocol: obfsudp

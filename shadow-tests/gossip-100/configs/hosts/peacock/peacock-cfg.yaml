@@ -1,0 +1,23 @@
+# peacock fingerprint: paefj0zx00xj22ncz1740gp36b243tmf
+identity_seed: keen-snap-puppy-step-ranch-silent-trip-salmon-hammer-cousin-tent-mandate
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12046
+    protocol: obfsudp
+    secret: obvious-alert-kit-sick-fade-bulb-tail-knock-side-patch-behave-cousin
+out_routes:
+  goldfish:
+    connect: 200.64.1.89:12176
+    cookie: 2717068fa4cf369497ab2c4d2962c7d461578f1d96bbbc5b9416ebc9c2113c2e
+    fingerprint: pc0dmyr5yzts734z7n043175a8s1tk80
+    protocol: obfsudp
+  kingfish:
+    connect: 200.64.1.50:12098
+    cookie: c31e1d72e97697cec17a1ef26984502d1f241fc64751456f2438c0055800680d
+    fingerprint: azr4mj1ts4qedn9hjbwpnvpr0vtyzvzb
+    protocol: obfsudp
+  muskrat:
+    connect: 200.64.1.58:12114
+    cookie: 6fd4c17b8169c32a6bdcfcf819c263220e56e5df936094abc2e8f59cb494bb23
+    fingerprint: arsgzbxkqczwtch4r33jkz00w35vrgzn
+    protocol: obfsudp

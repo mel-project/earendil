@@ -1,0 +1,23 @@
+# silkworm fingerprint: kzppgt7k68emxtgm31xfkjqpram5b37s
+identity_seed: ability-fall-unable-minimum-warrior-erupt-armed-fix-chalk-alpha-praise-zebra
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12154
+    protocol: obfsudp
+    secret: can-seminar-best-immense-acoustic-three-border-ten-december-prepare-mammal-sustain
+out_routes:
+  octopus:
+    connect: 200.64.1.13:12024
+    cookie: 9b4cdd2cf8f1c5d428e03af260ba19a1e45ab124eb6591fdd8fe317b94202749
+    fingerprint: 856rqtrwqcezra2sng4x4q0xg8tn0rc1
+    protocol: obfsudp
+  sunbeam:
+    connect: 200.64.1.83:12164
+    cookie: 3b5ca2c6a61b747b776ede7f6dc72751f1e87599c4b4033e98e6db3f19717857
+    fingerprint: 5jzv7xy8ng9aytqmay5zf5esbsmhdwjk
+    protocol: obfsudp
+  weevil:
+    connect: 200.64.1.64:12126
+    cookie: fcde5997f5d2366a11aed013275a9fa34accdc0445e3dc929267f39ce0c9f948
+    fingerprint: yfeeyh8pztmvpv176yhwj3pjh4c5139m
+    protocol: obfsudp

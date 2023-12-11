@@ -1,0 +1,23 @@
+# squid fingerprint: 9y2bjdp2891p71xakh0e86t4ws8ef055
+identity_seed: announce-brass-edge-embody-indoor-ranch-club-party-grit-crime-crowd-scheme
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12010
+    protocol: obfsudp
+    secret: solve-picnic-brick-young-hair-minute-future-slab-elevator-mixed-depend-offer
+out_routes:
+  oriole:
+    connect: 200.64.1.14:12026
+    cookie: 4b3c1cfdf87219ac3028d5c0913f9a8a66d0b19b9bd95c2b9e2132603ce4503f
+    fingerprint: czmtb9zr99sj7e04d7twc1zs4vtqmxda
+    protocol: obfsudp
+  roughy:
+    connect: 200.64.1.32:12062
+    cookie: 32fc1a7a360ebe0ad5181a80b1c397ecae8e3aef87daf34fbcfaa809a1d37842
+    fingerprint: bjgx7ay0a2swmqvs87sdh6m7rs9strzb
+    protocol: obfsudp
+  turtle:
+    connect: 200.64.1.22:12042
+    cookie: c722a0d9ee07c3f1a54eea7b694294ae4fdbd2d1408e718722661ab3c31e2812
+    fingerprint: njt1gwzd8shtxs1dac2g0rkenx3ae64e
+    protocol: obfsudp

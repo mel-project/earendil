@@ -1,0 +1,18 @@
+# cow fingerprint: 3850wrrv3a36qermpeh4r39fz3hhpvp1
+identity_seed: skate-spring-trophy-arch-team-occur-include-snake-fruit-parrot-access-often
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12038
+    protocol: obfsudp
+    secret: inject-surround-letter-able-danger-fuel-slam-spider-enough-legal-onion-twelve
+out_routes:
+  fish:
+    connect: 200.64.1.2:12002
+    cookie: 271e9abd9b40756d19765da71e9745b055ad55c3a978f8dd8dece4ff55c80b12
+    fingerprint: pp50c0d1ewyadpva4cr7ss3hrqh9hzea
+    protocol: obfsudp
+  phoenix:
+    connect: 200.64.1.3:12004
+    cookie: a344f0bb2f1853eec55a62e960f2e9cbc6ea71daae6fd542f05ab40cf7897958
+    fingerprint: hgqmxycs7s75d8gzm4w1a4v7nb98nb3k
+    protocol: obfsudp

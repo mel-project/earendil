@@ -1,0 +1,23 @@
+# reptile fingerprint: y3ew7xs9bey15zrfk99g2d6nevr20fwd
+identity_seed: flag-van-blur-boat-afford-more-truly-then-loan-festival-park-frozen
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12082
+    protocol: obfsudp
+    secret: pistol-prepare-smooth-push-budget-hamster-wide-agree-delay-love-when-bag
+out_routes:
+  sloth:
+    connect: 200.64.1.63:12124
+    cookie: f69316c0957fd97faefce2b230a042cf98a4f6567ebae526d73fdace74539c22
+    fingerprint: 5w42hjytbabgdkadhrqvtzghc0trm4w9
+    protocol: obfsudp
+  stork:
+    connect: 200.64.1.31:12060
+    cookie: 6acaa5f3a8f7341d43339c6b726969b72bc5c040961d79ee7827c40d79a1d313
+    fingerprint: kjxbq9g0kb83c85vndfp8w4haats135c
+    protocol: obfsudp
+  sturgeon:
+    connect: 200.64.1.76:12150
+    cookie: dbae53365a52d1ce68bb08b29e00165714dd7e1f08058193595c25ccd0953968
+    fingerprint: 1rjdv0r4jxyn3487jcghrwz34me3cstv
+    protocol: obfsudp

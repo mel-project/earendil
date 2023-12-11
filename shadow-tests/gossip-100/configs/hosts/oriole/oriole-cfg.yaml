@@ -1,0 +1,23 @@
+# oriole fingerprint: czmtb9zr99sj7e04d7twc1zs4vtqmxda
+identity_seed: group-bamboo-happy-jealous-connect-conduct-stable-ghost-remove-usual-evoke-capital
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12026
+    protocol: obfsudp
+    secret: case-payment-barely-capable-disorder-wealth-oval-airport-dream-sustain-grass-behave
+out_routes:
+  grizzly:
+    connect: 200.64.1.46:12090
+    cookie: 8df10c32c85a7a03fbbfdecaef7c86437abc7042bf8baba80f4bdb2d915e2124
+    fingerprint: 5amxy70cyz48sj89t7exyzmqywhvwqh2
+    protocol: obfsudp
+  locust:
+    connect: 200.64.1.7:12012
+    cookie: 62dedc3476f83f60ff6df7cc97e3ca6c016e6f6b53f8af43ab1423f0793d445c
+    fingerprint: 73zr9d669qvjk9bqe2gpjfq85n6y18k2
+    protocol: obfsudp
+  seasnail:
+    connect: 200.64.1.25:12048
+    cookie: 8de16c00f3191c37806e813456490437fc0ed1651bc2805f5f05687a5f7fb113
+    fingerprint: tnkne88zpr8srnpp18v761z0q8s1f1nm
+    protocol: obfsudp

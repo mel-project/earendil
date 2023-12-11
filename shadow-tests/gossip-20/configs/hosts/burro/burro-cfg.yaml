@@ -1,0 +1,23 @@
+# burro fingerprint: fnef5zpfjbpm7pp5pvjgxrs39z2tpg4y
+identity_seed: depth-grit-lunch-before-abstract-benefit-supreme-civil-awake-gravity-split-code
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12010
+    protocol: obfsudp
+    secret: city-churn-scale-apart-soldier-innocent-survey-envelope-indicate-mask-neck-scatter
+out_routes:
+  cow:
+    connect: 200.64.1.20:12038
+    cookie: f3a8797c89d61718dcda9b511a769b73ea4b15801e103b806dce39b13a346f7c
+    fingerprint: 3850wrrv3a36qermpeh4r39fz3hhpvp1
+    protocol: obfsudp
+  honeybee:
+    connect: 200.64.1.10:12018
+    cookie: ab1822ec6e0b2696462290bc96eae6c685f5cf345a2bc502e833b37037e50c61
+    fingerprint: s0x2aww6w0qaqtfawvdmtgjhqssqs15z
+    protocol: obfsudp
+  wren:
+    connect: 200.64.1.4:12006
+    cookie: 4db091e9247114bdea10bd227bb59479009730684eb8b2ced30616596b8fc835
+    fingerprint: 2efm7f61x808ezad4bkfgrr4c03s4624
+    protocol: obfsudp

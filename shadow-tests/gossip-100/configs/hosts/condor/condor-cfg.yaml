@@ -1,0 +1,23 @@
+# condor fingerprint: hcjba79bds6110rtjrtwcqp9e5n3vnm7
+identity_seed: write-enough-column-noodle-lyrics-exist-venue-fame-truck-category-faint-stage
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12028
+    protocol: obfsudp
+    secret: still-road-property-trap-young-home-enforce-powder-word-furnace-tone-lobster
+out_routes:
+  dane:
+    connect: 200.64.1.44:12086
+    cookie: 388104dcef2cb2c93f59e4305ac351314aeb7628f6428c973302ec6f0fc5c315
+    fingerprint: r4gkv596z1w16c717f0q7je0rrjq2069
+    protocol: obfsudp
+  ghoul:
+    connect: 200.64.1.90:12178
+    cookie: 404dfea77f04c857eb3d4e2f66d84edd8d7567f1450d6ec71fce8cc07d484029
+    fingerprint: nd387swdra9tdves59td36en6xkwmajy
+    protocol: obfsudp
+  squid:
+    connect: 200.64.1.6:12010
+    cookie: 161c2bf23b7efda4ba90aa9823cc475325bab25eb6d089e45d871643e46ae214
+    fingerprint: 9y2bjdp2891p71xakh0e86t4ws8ef055
+    protocol: obfsudp

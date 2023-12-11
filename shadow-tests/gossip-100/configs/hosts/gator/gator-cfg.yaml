@@ -1,0 +1,23 @@
+# gator fingerprint: 126zjycts5nchbv2hdvzvfdwz8q5r96w
+identity_seed: afford-expose-wine-fix-cloth-inherit-salon-ginger-want-lobster-bone-jacket
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12076
+    protocol: obfsudp
+    secret: odor-decrease-acid-inmate-fiction-legend-stem-sun-concert-panel-fold-ceiling
+out_routes:
+  hornet:
+    connect: 200.64.1.17:12032
+    cookie: a98f45e690100532d4e1e96e637843f244b0bce03cf98c231222b6d9040c4e36
+    fingerprint: mc3sbea8m23t5p1mqe6eqf3can6skd46
+    protocol: obfsudp
+  lioness:
+    connect: 200.64.1.18:12034
+    cookie: 23d38d1c9d3ec20366e8f74022b127bc5c0e99a09cbf41c6e20ae47d63326123
+    fingerprint: ser0em4w49qfcwemtd3yv08r6p9nz99t
+    protocol: obfsudp
+  roughy:
+    connect: 200.64.1.32:12062
+    cookie: 32fc1a7a360ebe0ad5181a80b1c397ecae8e3aef87daf34fbcfaa809a1d37842
+    fingerprint: bjgx7ay0a2swmqvs87sdh6m7rs9strzb
+    protocol: obfsudp

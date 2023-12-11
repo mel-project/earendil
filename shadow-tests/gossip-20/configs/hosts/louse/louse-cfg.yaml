@@ -1,0 +1,23 @@
+# louse fingerprint: 5ar84m47wy87j3b8wzr4v861799wq8pk
+identity_seed: kidney-domain-regret-ice-leisure-regular-march-goddess-melody-whisper-general-regular
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12008
+    protocol: obfsudp
+    secret: grain-toss-near-slush-tide-belt-connect-govern-tank-crumble-nest-cherry
+out_routes:
+  honeybee:
+    connect: 200.64.1.10:12018
+    cookie: ab1822ec6e0b2696462290bc96eae6c685f5cf345a2bc502e833b37037e50c61
+    fingerprint: s0x2aww6w0qaqtfawvdmtgjhqssqs15z
+    protocol: obfsudp
+  man:
+    connect: 200.64.1.19:12036
+    cookie: 326ef3d3ae419077bd877a14e4e5f06096e197e938cfe96a6f28fe311806e060
+    fingerprint: nhs86104bctym849zcj4x41261akyk8b
+    protocol: obfsudp
+  mastodon:
+    connect: 200.64.1.15:12028
+    cookie: c8d991d6703971d166e108b36cb90c1bc0de8f4a0d80cf34a627e21215811d0e
+    fingerprint: nxaatjc8qq9dkmvn0wpdxwerbekwfzhb
+    protocol: obfsudp

@@ -1,0 +1,23 @@
+# caribou fingerprint: bcdb950a4ra7a1z96dvs11r2npx0aeey
+identity_seed: dutch-decade-reason-neither-seek-glance-trumpet-put-member-destroy-strong-exotic
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12006
+    protocol: obfsudp
+    secret: already-resource-magnet-come-cube-unknown-square-fly-network-split-trash-there
+out_routes:
+  condor:
+    connect: 200.64.1.15:12028
+    cookie: d81500fad6f76c981ab70bf0959a8dcd67964234ef133b5dcd00241e8b155749
+    fingerprint: hcjba79bds6110rtjrtwcqp9e5n3vnm7
+    protocol: obfsudp
+  grizzly:
+    connect: 200.64.1.46:12090
+    cookie: 8df10c32c85a7a03fbbfdecaef7c86437abc7042bf8baba80f4bdb2d915e2124
+    fingerprint: 5amxy70cyz48sj89t7exyzmqywhvwqh2
+    protocol: obfsudp
+  husky:
+    connect: 200.64.1.34:12066
+    cookie: 187d8ba912f491d127773101d76074607e9d16e2c3773ca71a0b40d79c30f63f
+    fingerprint: efhdqschnn12pze5p2nv3x9jn7y8exmt
+    protocol: obfsudp

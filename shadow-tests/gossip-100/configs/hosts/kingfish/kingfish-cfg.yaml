@@ -1,0 +1,23 @@
+# kingfish fingerprint: azr4mj1ts4qedn9hjbwpnvpr0vtyzvzb
+identity_seed: castle-viable-bind-bar-march-used-cake-claim-sugar-victory-patrol-talent
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12098
+    protocol: obfsudp
+    secret: arm-faint-fragile-doll-island-coconut-gown-screen-staff-prevent-chronic-blur
+out_routes:
+  gopher:
+    connect: 200.64.1.40:12078
+    cookie: 0e0de662d94634069748e4395c61e6b309897c747cb9bcbc019bf11a2b0d4302
+    fingerprint: 7sgzgjq1fnffkh6c5ync7nd75ef7z321
+    protocol: obfsudp
+  muskox:
+    connect: 200.64.1.86:12170
+    cookie: b0885ee4f76bd125a584c2f86503d61a88b29d94c79137efbc91152c85f54151
+    fingerprint: 7m1v679bqqbxw0nm06jahzqrd92w66dq
+    protocol: obfsudp
+  pipefish:
+    connect: 200.64.1.73:12144
+    cookie: 9fbc59d3752f8f6390bfd14a96ce06af7be1f85b16c12813f4e8d6e6036d3b4a
+    fingerprint: 8fvmf7sk3w7mkcqyznzc0ax86qx194h1
+    protocol: obfsudp

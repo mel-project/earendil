@@ -1,0 +1,23 @@
+# adder fingerprint: zcq8wa3x8z8ptbwgq2h6w4mq6v02s0sm
+identity_seed: august-caught-furnace-gym-mushroom-occur-spice-pudding-angle-hawk-guilt-merry
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12122
+    protocol: obfsudp
+    secret: ancient-link-shock-slender-because-now-talk-cover-slender-stable-next-cactus
+out_routes:
+  chigger:
+    connect: 200.64.1.72:12142
+    cookie: 7c12b78e53dd14716dd0512aefabdf8d11b7c5a391ff656f7644634d2e11c05a
+    fingerprint: 6ndbe81yccsh3qeg7m06d31h3p1h6f1v
+    protocol: obfsudp
+  snapper:
+    connect: 200.64.1.69:12136
+    cookie: 40d661d9a3d1730b31d57c7a6bb500b8696fed8aeb56c0b8919ab43912eda205
+    fingerprint: z1z0ks21zgwzsvexmb158x0djymrsd3g
+    protocol: obfsudp
+  sunbeam:
+    connect: 200.64.1.83:12164
+    cookie: 3b5ca2c6a61b747b776ede7f6dc72751f1e87599c4b4033e98e6db3f19717857
+    fingerprint: 5jzv7xy8ng9aytqmay5zf5esbsmhdwjk
+    protocol: obfsudp

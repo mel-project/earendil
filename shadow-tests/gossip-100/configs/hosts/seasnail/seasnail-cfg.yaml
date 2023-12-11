@@ -1,0 +1,23 @@
+# seasnail fingerprint: tnkne88zpr8srnpp18v761z0q8s1f1nm
+identity_seed: lift-cereal-walk-hurt-ecology-glide-depend-six-melody-kiss-flavor-dog
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12048
+    protocol: obfsudp
+    secret: cabbage-reflect-clip-grab-copy-brave-earth-camera-adjust-beef-hard-coral
+out_routes:
+  muskox:
+    connect: 200.64.1.86:12170
+    cookie: b0885ee4f76bd125a584c2f86503d61a88b29d94c79137efbc91152c85f54151
+    fingerprint: 7m1v679bqqbxw0nm06jahzqrd92w66dq
+    protocol: obfsudp
+  muskrat:
+    connect: 200.64.1.58:12114
+    cookie: 6fd4c17b8169c32a6bdcfcf819c263220e56e5df936094abc2e8f59cb494bb23
+    fingerprint: arsgzbxkqczwtch4r33jkz00w35vrgzn
+    protocol: obfsudp
+  roughy:
+    connect: 200.64.1.32:12062
+    cookie: 32fc1a7a360ebe0ad5181a80b1c397ecae8e3aef87daf34fbcfaa809a1d37842
+    fingerprint: bjgx7ay0a2swmqvs87sdh6m7rs9strzb
+    protocol: obfsudp

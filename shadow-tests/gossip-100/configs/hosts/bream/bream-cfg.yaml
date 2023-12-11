@@ -1,0 +1,23 @@
+# bream fingerprint: ajq74w1svhz94dfpz3p928prnveyamp1
+identity_seed: inspire-slam-return-blossom-video-pattern-depend-obvious-soon-smart-hill-tonight
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12120
+    protocol: obfsudp
+    secret: merit-model-foster-replace-symptom-hybrid-deposit-ready-laugh-glare-point-snap
+out_routes:
+  moth:
+    connect: 200.64.1.28:12054
+    cookie: fb07b568ed6552bcf2086c8c73602fef2320389b7552b3e3bc17b389128ae01e
+    fingerprint: sd6h70rwcym6adsyf5dynexenbgy2mhf
+    protocol: obfsudp
+  peacock:
+    connect: 200.64.1.24:12046
+    cookie: d6e7d8e5ad98593fd27577e801b2b39e39a6448bd75c626c4c4e1e3ad0034e5e
+    fingerprint: paefj0zx00xj22ncz1740gp36b243tmf
+    protocol: obfsudp
+  shiner:
+    connect: 200.64.1.57:12112
+    cookie: 749df933ed439a9a321ef9f4e76a09a41cacde24a69fd2f8974982c1184a2744
+    fingerprint: qkwmny0n0zs3nsp4v2efwpbeynx6gxf9
+    protocol: obfsudp

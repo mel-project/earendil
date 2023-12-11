@@ -1,0 +1,23 @@
+# muskox fingerprint: 7m1v679bqqbxw0nm06jahzqrd92w66dq
+identity_seed: calm-call-engage-slide-elite-robust-curtain-faint-paper-program-monkey-arm
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12170
+    protocol: obfsudp
+    secret: crater-project-motion-scrap-grain-thumb-ghost-ill-snow-name-wage-act
+out_routes:
+  gorilla:
+    connect: 200.64.1.27:12052
+    cookie: 35f99052dc1f2daa57d9ce566c8482710bce77201aa083e0b81d3a5f4ac0ad1f
+    fingerprint: g6w6wp1sx6xdg23hh4yh75eab85jf6a2
+    protocol: obfsudp
+  jaybird:
+    connect: 200.64.1.80:12158
+    cookie: bc7902086165b406117ffb103f488c89efaf265915bcefc9397d3731112c656b
+    fingerprint: 73kg92d3as4mgs3x89yp2a779mh15dnj
+    protocol: obfsudp
+  peacock:
+    connect: 200.64.1.24:12046
+    cookie: d6e7d8e5ad98593fd27577e801b2b39e39a6448bd75c626c4c4e1e3ad0034e5e
+    fingerprint: paefj0zx00xj22ncz1740gp36b243tmf
+    protocol: obfsudp

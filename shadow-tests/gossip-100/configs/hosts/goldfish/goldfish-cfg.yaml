@@ -1,0 +1,23 @@
+# goldfish fingerprint: pc0dmyr5yzts734z7n043175a8s1tk80
+identity_seed: rice-voice-good-time-present-body-actress-shield-thumb-husband-royal-dove
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12176
+    protocol: obfsudp
+    secret: often-burst-online-runway-cushion-spice-spray-inquiry-deposit-soft-churn-lyrics
+out_routes:
+  bullfrog:
+    connect: 200.64.1.20:12038
+    cookie: 88e17cdc25dba9798e24329b65554c7a9b31e7b2788e8887ff3984f3d7099725
+    fingerprint: kx81x12858df7sdrkj0f1960735vn3kt
+    protocol: obfsudp
+  locust:
+    connect: 200.64.1.7:12012
+    cookie: 62dedc3476f83f60ff6df7cc97e3ca6c016e6f6b53f8af43ab1423f0793d445c
+    fingerprint: 73zr9d669qvjk9bqe2gpjfq85n6y18k2
+    protocol: obfsudp
+  starling:
+    connect: 200.64.1.65:12128
+    cookie: 207d4450a03ffd5e6fbcd1122a669b666844f4e72c74d778313dd486840f6c5f
+    fingerprint: arh8epn40whthcb76shrta1ajh9b8hnd
+    protocol: obfsudp

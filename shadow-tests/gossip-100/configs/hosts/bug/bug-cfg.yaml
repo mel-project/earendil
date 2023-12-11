@@ -1,0 +1,33 @@
+# bug fingerprint: 8r8gtf3z7mnc61hmrm0zk7962006v6ke
+identity_seed: tail-race-pave-bench-cat-envelope-program-provide-father-fatigue-company-melt
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12002
+    protocol: obfsudp
+    secret: steak-february-ecology-brand-buyer-easy-harbor-differ-cattle-network-calm-old
+out_routes:
+  flamingo:
+    connect: 200.64.1.5:12008
+    cookie: 00809c8dc21f6d64df52b5a8e3d2dcf31db3725d4f7d1f02e4d5aacb564d5507
+    fingerprint: dspq68f5fqgks0vcj9ghcx3mqvsypwvs
+    protocol: obfsudp
+  hornet:
+    connect: 200.64.1.17:12032
+    cookie: a98f45e690100532d4e1e96e637843f244b0bce03cf98c231222b6d9040c4e36
+    fingerprint: mc3sbea8m23t5p1mqe6eqf3can6skd46
+    protocol: obfsudp
+  leech:
+    connect: 200.64.1.53:12104
+    cookie: e49110ea36e4757d1fa587dc1930d29abfe3652527d2e7d696dcd41e9e571324
+    fingerprint: ryz2jf3hw09780ssxs2phft2f1shqgz4
+    protocol: obfsudp
+  pheasant:
+    connect: 200.64.1.77:12152
+    cookie: a71945a6c6cb62816467c23a9e678109d7a56c13b3a8d2b9299911adf155d14d
+    fingerprint: 847gs66v7d5veb0ng29060a0c3s2rank
+    protocol: obfsudp
+  reptile:
+    connect: 200.64.1.42:12082
+    cookie: 569e0f88f9535b08d26c7d9aac46d9a7c0f2d49d37b76fd59a3658093725341b
+    fingerprint: y3ew7xs9bey15zrfk99g2d6nevr20fwd
+    protocol: obfsudp

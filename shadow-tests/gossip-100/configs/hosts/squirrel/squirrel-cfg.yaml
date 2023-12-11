@@ -1,0 +1,23 @@
+# squirrel fingerprint: sddz1n2qjnp0da2en1ksahs5eryp58ak
+identity_seed: tape-corn-false-simple-apart-fiber-arrow-annual-cluster-consider-toast-deputy
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12146
+    protocol: obfsudp
+    secret: spin-usual-memory-love-arch-silly-episode-snack-bulk-banner-way-carbon
+out_routes:
+  impala:
+    connect: 200.64.1.54:12106
+    cookie: d5cc9657f08a0703348b7627d1ec242940ba9437c55f9a31e820026450d19422
+    fingerprint: dne6878hkx6qp2ftq81aky5ecvw3aby1
+    protocol: obfsudp
+  seasnail:
+    connect: 200.64.1.25:12048
+    cookie: 8de16c00f3191c37806e813456490437fc0ed1651bc2805f5f05687a5f7fb113
+    fingerprint: tnkne88zpr8srnpp18v761z0q8s1f1nm
+    protocol: obfsudp
+  weevil:
+    connect: 200.64.1.64:12126
+    cookie: fcde5997f5d2366a11aed013275a9fa34accdc0445e3dc929267f39ce0c9f948
+    fingerprint: yfeeyh8pztmvpv176yhwj3pjh4c5139m
+    protocol: obfsudp

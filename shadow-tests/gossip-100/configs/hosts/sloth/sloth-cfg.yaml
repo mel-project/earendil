@@ -1,0 +1,23 @@
+# sloth fingerprint: 5w42hjytbabgdkadhrqvtzghc0trm4w9
+identity_seed: minimum-normal-fitness-blush-laugh-canvas-load-effort-search-gym-broccoli-turkey
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12124
+    protocol: obfsudp
+    secret: measure-size-rule-whale-oven-west-copy-kingdom-kangaroo-situate-awkward-ramp
+out_routes:
+  dassie:
+    connect: 200.64.1.11:12020
+    cookie: 6abdd881d181a7351938aa6d98d944595b4cd5ab2f1748bd3b006a987d65a01b
+    fingerprint: dg4qn193qpjfdar7xcvtwmha16n5m5ar
+    protocol: obfsudp
+  pipefish:
+    connect: 200.64.1.73:12144
+    cookie: 9fbc59d3752f8f6390bfd14a96ce06af7be1f85b16c12813f4e8d6e6036d3b4a
+    fingerprint: 8fvmf7sk3w7mkcqyznzc0ax86qx194h1
+    protocol: obfsudp
+  serval:
+    connect: 200.64.1.29:12056
+    cookie: d9a1266d6d89e1397d5e03572b646ee850b506dfa9169bd06d06c734beee8357
+    fingerprint: kb4g0tk7c8ggfn7rth1cfsjdcgvnaseg
+    protocol: obfsudp

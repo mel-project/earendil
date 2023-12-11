@@ -1,0 +1,23 @@
+# anemone fingerprint: qm005ezxbetkjpn6nzc4gdh1xwk7d4ee
+identity_seed: then-cherry-scout-copper-analyst-news-bus-layer-panel-buddy-very-slogan
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12064
+    protocol: obfsudp
+    secret: aware-defense-empty-soap-perfect-cushion-gasp-spike-evolve-thought-upper-kidney
+out_routes:
+  bug:
+    connect: 200.64.1.2:12002
+    cookie: 0f72f2e18a39e79cfca8333fdee0cea92f666fbcc2865c0f64d4a8756f62eb6e
+    fingerprint: 8r8gtf3z7mnc61hmrm0zk7962006v6ke
+    protocol: obfsudp
+  gopher:
+    connect: 200.64.1.40:12078
+    cookie: 0e0de662d94634069748e4395c61e6b309897c747cb9bcbc019bf11a2b0d4302
+    fingerprint: 7sgzgjq1fnffkh6c5ync7nd75ef7z321
+    protocol: obfsudp
+  monitor:
+    connect: 200.64.1.67:12132
+    cookie: 98d8545a98ef72e88e1674de08bd4a3fbed19228b8b7449fde0b52c12330fb59
+    fingerprint: ttak033a28gqdf2qsd0csydy47yrrgzb
+    protocol: obfsudp

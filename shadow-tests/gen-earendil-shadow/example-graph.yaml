@@ -1,0 +1,3 @@
+adjacencies:
+  - [alice, rob]
+  - [rob, bob]

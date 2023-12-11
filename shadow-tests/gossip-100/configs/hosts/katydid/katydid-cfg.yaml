@@ -1,0 +1,33 @@
+# katydid fingerprint: gksmy18w78z5xqq9kf4tsvagckzzkk07
+identity_seed: finish-bundle-climb-issue-sort-thrive-concert-table-innocent-history-burger-swap
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12018
+    protocol: obfsudp
+    secret: thing-horn-bulk-spin-despair-two-tiny-accident-inside-example-bar-weekend
+out_routes:
+  dassie:
+    connect: 200.64.1.11:12020
+    cookie: 6abdd881d181a7351938aa6d98d944595b4cd5ab2f1748bd3b006a987d65a01b
+    fingerprint: dg4qn193qpjfdar7xcvtwmha16n5m5ar
+    protocol: obfsudp
+  ghoul:
+    connect: 200.64.1.90:12178
+    cookie: 404dfea77f04c857eb3d4e2f66d84edd8d7567f1450d6ec71fce8cc07d484029
+    fingerprint: nd387swdra9tdves59td36en6xkwmajy
+    protocol: obfsudp
+  meerkat:
+    connect: 200.64.1.79:12156
+    cookie: b8955e87e3e2747a69a86a7037a330c66dd1614a59e5916b8a7dc3785e5fea67
+    fingerprint: gngz2wr0540zamnjw3hnp20sfp8ejncw
+    protocol: obfsudp
+  reptile:
+    connect: 200.64.1.42:12082
+    cookie: 569e0f88f9535b08d26c7d9aac46d9a7c0f2d49d37b76fd59a3658093725341b
+    fingerprint: y3ew7xs9bey15zrfk99g2d6nevr20fwd
+    protocol: obfsudp
+  wildcat:
+    connect: 200.64.1.68:12134
+    cookie: 3101cb06cdf6b9390d16716091e0d401c295855c064dd486916c799b6478157e
+    fingerprint: vmp4qb0bgs8rbbdzh0dh05b9e6jgpg6s
+    protocol: obfsudp

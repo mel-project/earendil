@@ -1,0 +1,18 @@
+# parakeet fingerprint: h133nnen7zx9kny8sdp47p9mzpz0pcg6
+identity_seed: series-chronic-shed-once-airport-fog-prize-armor-limit-online-erosion-vacant
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12030
+    protocol: obfsudp
+    secret: job-wash-patient-siege-boost-coach-favorite-inner-hamster-sand-ball-critic
+out_routes:
+  man:
+    connect: 200.64.1.19:12036
+    cookie: 326ef3d3ae419077bd877a14e4e5f06096e197e938cfe96a6f28fe311806e060
+    fingerprint: nhs86104bctym849zcj4x41261akyk8b
+    protocol: obfsudp
+  wren:
+    connect: 200.64.1.4:12006
+    cookie: 4db091e9247114bdea10bd227bb59479009730684eb8b2ced30616596b8fc835
+    fingerprint: 2efm7f61x808ezad4bkfgrr4c03s4624
+    protocol: obfsudp

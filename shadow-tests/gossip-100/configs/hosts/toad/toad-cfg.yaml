@@ -1,0 +1,23 @@
+# toad fingerprint: 3jw0rgz7hh7jp27njtvdrb4a1h1br07n
+identity_seed: dash-beyond-organ-young-plunge-inquiry-bright-album-sudden-remember-oppose-above
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12130
+    protocol: obfsudp
+    secret: wreck-season-maximum-excuse-lumber-render-vital-actual-amount-sail-attack-napkin
+out_routes:
+  muskox:
+    connect: 200.64.1.86:12170
+    cookie: b0885ee4f76bd125a584c2f86503d61a88b29d94c79137efbc91152c85f54151
+    fingerprint: 7m1v679bqqbxw0nm06jahzqrd92w66dq
+    protocol: obfsudp
+  slug:
+    connect: 200.64.1.75:12148
+    cookie: 8f8c785bc37b1a4a7b3764a7d988149357680b99260b22cda8f4a181778cec69
+    fingerprint: jghhy9d8h3d41d2p32j3wxqb55m7782w
+    protocol: obfsudp
+  stud:
+    connect: 200.64.1.88:12174
+    cookie: 084f10364da5b3647ae88cfdde76c4fc4537240339844a98d8e8e6b3b48fc33f
+    fingerprint: v0twhrndx7kgc33skhj6rg9szgssgfs8
+    protocol: obfsudp

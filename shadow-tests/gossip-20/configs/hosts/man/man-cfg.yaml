@@ -1,0 +1,23 @@
+# man fingerprint: nhs86104bctym849zcj4x41261akyk8b
+identity_seed: wisdom-enroll-umbrella-all-joke-helmet-stem-fatal-siren-universe-broccoli-quantum
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12036
+    protocol: obfsudp
+    secret: inherit-program-hint-copper-diesel-physical-toy-inflict-loop-point-lamp-celery
+out_routes:
+  cow:
+    connect: 200.64.1.20:12038
+    cookie: f3a8797c89d61718dcda9b511a769b73ea4b15801e103b806dce39b13a346f7c
+    fingerprint: 3850wrrv3a36qermpeh4r39fz3hhpvp1
+    protocol: obfsudp
+  honeybee:
+    connect: 200.64.1.10:12018
+    cookie: ab1822ec6e0b2696462290bc96eae6c685f5cf345a2bc502e833b37037e50c61
+    fingerprint: s0x2aww6w0qaqtfawvdmtgjhqssqs15z
+    protocol: obfsudp
+  moth:
+    connect: 200.64.1.11:12020
+    cookie: e79180b93df166ddd9db693ceec84678797c561cd5e5b93f9660b7ea54bd046f
+    fingerprint: 6c8bghanhkmyzamxqyz9n8edm9b3b1vv
+    protocol: obfsudp

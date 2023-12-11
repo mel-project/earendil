@@ -1,0 +1,23 @@
+# dolphin fingerprint: rr884wnxzpcybvh0p5jnxddjrzthj8ps
+identity_seed: monitor-alpha-canvas-saddle-brush-lady-sorry-egg-client-chronic-deny-lecture
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12092
+    protocol: obfsudp
+    secret: mad-company-laundry-kitten-blur-video-brown-swear-milk-rich-report-fly
+out_routes:
+  lobster:
+    connect: 200.64.1.52:12102
+    cookie: 497ad505e276db9a13565c069fe03feb26b53af2de724dab7b5836c2c34e0551
+    fingerprint: yvmt3dyathc6zq4xbs1qrhmzdxxer6hv
+    protocol: obfsudp
+  muskrat:
+    connect: 200.64.1.58:12114
+    cookie: 6fd4c17b8169c32a6bdcfcf819c263220e56e5df936094abc2e8f59cb494bb23
+    fingerprint: arsgzbxkqczwtch4r33jkz00w35vrgzn
+    protocol: obfsudp
+  snail:
+    connect: 200.64.1.60:12118
+    cookie: d29df5e4a914ceff860dfa5710053edce8d3e7aa932ae04d39e0b136a5dd7f68
+    fingerprint: 4d1rz52aww75vk9mb9q9w2ac8cecy254
+    protocol: obfsudp

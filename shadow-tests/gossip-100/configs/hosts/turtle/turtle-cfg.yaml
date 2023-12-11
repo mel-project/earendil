@@ -1,0 +1,23 @@
+# turtle fingerprint: njt1gwzd8shtxs1dac2g0rkenx3ae64e
+identity_seed: horror-surround-peace-inspire-goddess-wrong-about-hip-airport-utility-rely-adult
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12042
+    protocol: obfsudp
+    secret: eternal-ozone-nasty-object-dynamic-jungle-noble-flip-ketchup-kit-obtain-correct
+out_routes:
+  flamingo:
+    connect: 200.64.1.5:12008
+    cookie: 00809c8dc21f6d64df52b5a8e3d2dcf31db3725d4f7d1f02e4d5aacb564d5507
+    fingerprint: dspq68f5fqgks0vcj9ghcx3mqvsypwvs
+    protocol: obfsudp
+  moray:
+    connect: 200.64.1.84:12166
+    cookie: 3b5658329871b58f52ab1b72fd67a23ca7dd69bd659a2502c795c319cc273662
+    fingerprint: ssp7mkh4g712wdt92fpcezw8zrj58daa
+    protocol: obfsudp
+  roughy:
+    connect: 200.64.1.32:12062
+    cookie: 32fc1a7a360ebe0ad5181a80b1c397ecae8e3aef87daf34fbcfaa809a1d37842
+    fingerprint: bjgx7ay0a2swmqvs87sdh6m7rs9strzb
+    protocol: obfsudp

@@ -1,0 +1,23 @@
+# cheetah fingerprint: hnnbtf5068jn1cj6emr61g7mhek2k78g
+identity_seed: idle-income-truth-among-smoke-kit-multiply-toy-habit-poverty-ostrich-next
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12096
+    protocol: obfsudp
+    secret: picture-enact-inside-boost-allow-attack-pumpkin-craft-balance-illness-neutral-decline
+out_routes:
+  grizzly:
+    connect: 200.64.1.46:12090
+    cookie: 8df10c32c85a7a03fbbfdecaef7c86437abc7042bf8baba80f4bdb2d915e2124
+    fingerprint: 5amxy70cyz48sj89t7exyzmqywhvwqh2
+    protocol: obfsudp
+  pipefish:
+    connect: 200.64.1.73:12144
+    cookie: 9fbc59d3752f8f6390bfd14a96ce06af7be1f85b16c12813f4e8d6e6036d3b4a
+    fingerprint: 8fvmf7sk3w7mkcqyznzc0ax86qx194h1
+    protocol: obfsudp
+  toad:
+    connect: 200.64.1.66:12130
+    cookie: 88a1df8122790b2a652e91312c4d6abaa7e0e4c5eed914440b6066cc0e621a4e
+    fingerprint: 3jw0rgz7hh7jp27njtvdrb4a1h1br07n
+    protocol: obfsudp

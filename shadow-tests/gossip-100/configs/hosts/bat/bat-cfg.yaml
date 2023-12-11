@@ -1,0 +1,23 @@
+# bat fingerprint: dtprzzgm0e0z07pj68d3q89br906ejnz
+identity_seed: army-picnic-shy-word-assist-weekend-monster-essence-squirrel-guess-faint-glove
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12080
+    protocol: obfsudp
+    secret: token-share-patch-razor-december-stable-ice-subway-gesture-vacuum-blade-hurry
+out_routes:
+  leech:
+    connect: 200.64.1.53:12104
+    cookie: e49110ea36e4757d1fa587dc1930d29abfe3652527d2e7d696dcd41e9e571324
+    fingerprint: ryz2jf3hw09780ssxs2phft2f1shqgz4
+    protocol: obfsudp
+  snapper:
+    connect: 200.64.1.69:12136
+    cookie: 40d661d9a3d1730b31d57c7a6bb500b8696fed8aeb56c0b8919ab43912eda205
+    fingerprint: z1z0ks21zgwzsvexmb158x0djymrsd3g
+    protocol: obfsudp
+  whippet:
+    connect: 200.64.1.37:12072
+    cookie: 77792e43f54ce3d73529cee003979f89b9f30244aedaafd6f86ae9e54ee7b666
+    fingerprint: sdygdmpv0za276bgwnxhyhcp8n04kkmh
+    protocol: obfsudp

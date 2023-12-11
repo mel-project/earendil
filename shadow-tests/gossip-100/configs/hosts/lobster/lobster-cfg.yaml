@@ -1,0 +1,23 @@
+# lobster fingerprint: yvmt3dyathc6zq4xbs1qrhmzdxxer6hv
+identity_seed: rigid-jaguar-diesel-immune-chest-room-word-nothing-long-social-permit-nuclear
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12102
+    protocol: obfsudp
+    secret: expand-fresh-slight-satisfy-twice-practice-neglect-double-master-vague-oyster-trumpet
+out_routes:
+  grackle:
+    connect: 200.64.1.87:12172
+    cookie: 9eb55c01622e8720facf8a64b0757316fcb421242636cb978e8a5e7fba6e1c59
+    fingerprint: 0pqfmgs7fgp5z5gws602df0gdt4y3rab
+    protocol: obfsudp
+  husky:
+    connect: 200.64.1.34:12066
+    cookie: 187d8ba912f491d127773101d76074607e9d16e2c3773ca71a0b40d79c30f63f
+    fingerprint: efhdqschnn12pze5p2nv3x9jn7y8exmt
+    protocol: obfsudp
+  lioness:
+    connect: 200.64.1.18:12034
+    cookie: 23d38d1c9d3ec20366e8f74022b127bc5c0e99a09cbf41c6e20ae47d63326123
+    fingerprint: ser0em4w49qfcwemtd3yv08r6p9nz99t
+    protocol: obfsudp
