@@ -1,0 +1,23 @@
+# jaybird fingerprint: 73kg92d3as4mgs3x89yp2a779mh15dnj
+identity_seed: similar-weasel-rely-edge-file-neglect-attitude-wealth-eternal-dress-minimum-allow
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12158
+    protocol: obfsudp
+    secret: stove-zebra-soul-luggage-poet-tongue-infant-boy-west-lava-run-can
+out_routes:
+  gopher:
+    connect: 200.64.1.40:12078
+    cookie: 0e0de662d94634069748e4395c61e6b309897c747cb9bcbc019bf11a2b0d4302
+    fingerprint: 7sgzgjq1fnffkh6c5ync7nd75ef7z321
+    protocol: obfsudp
+  snail:
+    connect: 200.64.1.60:12118
+    cookie: d29df5e4a914ceff860dfa5710053edce8d3e7aa932ae04d39e0b136a5dd7f68
+    fingerprint: 4d1rz52aww75vk9mb9q9w2ac8cecy254
+    protocol: obfsudp
+  stud:
+    connect: 200.64.1.88:12174
+    cookie: 084f10364da5b3647ae88cfdde76c4fc4537240339844a98d8e8e6b3b48fc33f
+    fingerprint: v0twhrndx7kgc33skhj6rg9szgssgfs8
+    protocol: obfsudp

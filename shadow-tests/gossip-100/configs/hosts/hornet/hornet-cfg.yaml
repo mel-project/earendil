@@ -1,0 +1,23 @@
+# hornet fingerprint: mc3sbea8m23t5p1mqe6eqf3can6skd46
+identity_seed: guilt-country-cluster-brother-family-little-reflect-insane-dose-situate-update-glare
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12032
+    protocol: obfsudp
+    secret: seat-amused-lava-hammer-update-edge-owner-hungry-light-strategy-blame-cotton
+out_routes:
+  orca:
+    connect: 200.64.1.12:12022
+    cookie: c73969aac4ea516e45d782be0a0fc2e6eb08a52723cfc779f5762dcf0c410134
+    fingerprint: jwqngs9hekvy4m0apxez48gffnptzgea
+    protocol: obfsudp
+  peacock:
+    connect: 200.64.1.24:12046
+    cookie: d6e7d8e5ad98593fd27577e801b2b39e39a6448bd75c626c4c4e1e3ad0034e5e
+    fingerprint: paefj0zx00xj22ncz1740gp36b243tmf
+    protocol: obfsudp
+  pipefish:
+    connect: 200.64.1.73:12144
+    cookie: 9fbc59d3752f8f6390bfd14a96ce06af7be1f85b16c12813f4e8d6e6036d3b4a
+    fingerprint: 8fvmf7sk3w7mkcqyznzc0ax86qx194h1
+    protocol: obfsudp

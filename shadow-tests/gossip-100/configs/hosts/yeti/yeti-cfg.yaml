@@ -1,0 +1,23 @@
+# yeti fingerprint: bw1v3rztvrh49cyxaqzn42719rjj2mj2
+identity_seed: laugh-price-fold-excess-behave-plug-version-honey-history-hard-patch-ability
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12036
+    protocol: obfsudp
+    secret: forward-media-census-parrot-system-apology-slab-betray-outdoor-bind-october-bachelor
+out_routes:
+  caribou:
+    connect: 200.64.1.4:12006
+    cookie: 997646482d793b9619a2f3871eca4e148afa338288932e3990f3332e9ccf511b
+    fingerprint: bcdb950a4ra7a1z96dvs11r2npx0aeey
+    protocol: obfsudp
+  dassie:
+    connect: 200.64.1.11:12020
+    cookie: 6abdd881d181a7351938aa6d98d944595b4cd5ab2f1748bd3b006a987d65a01b
+    fingerprint: dg4qn193qpjfdar7xcvtwmha16n5m5ar
+    protocol: obfsudp
+  sloth:
+    connect: 200.64.1.63:12124
+    cookie: f69316c0957fd97faefce2b230a042cf98a4f6567ebae526d73fdace74539c22
+    fingerprint: 5w42hjytbabgdkadhrqvtzghc0trm4w9
+    protocol: obfsudp

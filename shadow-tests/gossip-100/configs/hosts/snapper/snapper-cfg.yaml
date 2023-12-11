@@ -1,0 +1,23 @@
+# snapper fingerprint: z1z0ks21zgwzsvexmb158x0djymrsd3g
+identity_seed: wood-divert-answer-convince-lonely-relax-spin-solid-vehicle-gravity-cat-conduct
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12136
+    protocol: obfsudp
+    secret: craft-salad-cancel-neck-defense-raw-meadow-oven-runway-cage-dust-aim
+out_routes:
+  dolphin:
+    connect: 200.64.1.47:12092
+    cookie: 53eb2d8c8b1bc809e32a69fde09df44f350028ec68cb1831e117f7667196fb50
+    fingerprint: rr884wnxzpcybvh0p5jnxddjrzthj8ps
+    protocol: obfsudp
+  ghoul:
+    connect: 200.64.1.90:12178
+    cookie: 404dfea77f04c857eb3d4e2f66d84edd8d7567f1450d6ec71fce8cc07d484029
+    fingerprint: nd387swdra9tdves59td36en6xkwmajy
+    protocol: obfsudp
+  weevil:
+    connect: 200.64.1.64:12126
+    cookie: fcde5997f5d2366a11aed013275a9fa34accdc0445e3dc929267f39ce0c9f948
+    fingerprint: yfeeyh8pztmvpv176yhwj3pjh4c5139m
+    protocol: obfsudp

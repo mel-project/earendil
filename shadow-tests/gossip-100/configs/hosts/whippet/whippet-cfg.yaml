@@ -1,0 +1,23 @@
+# whippet fingerprint: sdygdmpv0za276bgwnxhyhcp8n04kkmh
+identity_seed: empower-nurse-common-half-jeans-allow-slam-sorry-cheap-maple-match-beef
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12072
+    protocol: obfsudp
+    secret: purpose-release-normal-cream-cheap-other-certain-expect-cram-grape-claw-solid
+out_routes:
+  flamingo:
+    connect: 200.64.1.5:12008
+    cookie: 00809c8dc21f6d64df52b5a8e3d2dcf31db3725d4f7d1f02e4d5aacb564d5507
+    fingerprint: dspq68f5fqgks0vcj9ghcx3mqvsypwvs
+    protocol: obfsudp
+  jaybird:
+    connect: 200.64.1.80:12158
+    cookie: bc7902086165b406117ffb103f488c89efaf265915bcefc9397d3731112c656b
+    fingerprint: 73kg92d3as4mgs3x89yp2a779mh15dnj
+    protocol: obfsudp
+  monitor:
+    connect: 200.64.1.67:12132
+    cookie: 98d8545a98ef72e88e1674de08bd4a3fbed19228b8b7449fde0b52c12330fb59
+    fingerprint: ttak033a28gqdf2qsd0csydy47yrrgzb
+    protocol: obfsudp

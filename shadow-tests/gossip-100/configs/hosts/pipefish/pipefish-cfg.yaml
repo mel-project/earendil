@@ -1,0 +1,23 @@
+# pipefish fingerprint: 8fvmf7sk3w7mkcqyznzc0ax86qx194h1
+identity_seed: gaze-project-oven-green-sword-paddle-blossom-fitness-casino-tongue-menu-shove
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12144
+    protocol: obfsudp
+    secret: duck-hold-buffalo-march-nut-glow-detect-universe-loan-pigeon-genre-toilet
+out_routes:
+  lioness:
+    connect: 200.64.1.18:12034
+    cookie: 23d38d1c9d3ec20366e8f74022b127bc5c0e99a09cbf41c6e20ae47d63326123
+    fingerprint: ser0em4w49qfcwemtd3yv08r6p9nz99t
+    protocol: obfsudp
+  reptile:
+    connect: 200.64.1.42:12082
+    cookie: 569e0f88f9535b08d26c7d9aac46d9a7c0f2d49d37b76fd59a3658093725341b
+    fingerprint: y3ew7xs9bey15zrfk99g2d6nevr20fwd
+    protocol: obfsudp
+  tahr:
+    connect: 200.64.1.35:12068
+    cookie: a2b7b4f6be193b86c7c695b5e7e49e865adb04d6b98477cbb93387dd0c23df3e
+    fingerprint: r5eda9b6nrw3abd02wxrxqxwvdkgebqs
+    protocol: obfsudp

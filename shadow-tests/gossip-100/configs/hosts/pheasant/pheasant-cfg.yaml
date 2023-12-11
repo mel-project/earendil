@@ -1,0 +1,23 @@
+# pheasant fingerprint: 847gs66v7d5veb0ng29060a0c3s2rank
+identity_seed: seat-few-chalk-timber-shrimp-dance-pink-tackle-sister-oxygen-fine-profit
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12152
+    protocol: obfsudp
+    secret: tell-shaft-base-boy-add-board-desk-resist-ritual-air-siege-save
+out_routes:
+  duck:
+    connect: 200.64.1.45:12088
+    cookie: 49c9fbbf772d33807e6d1fe79521e9b311174d116188f943a12c3099dc29d96d
+    fingerprint: 45d7m87zq3qa76559r4gkjhtyy7pwen8
+    protocol: obfsudp
+  phoenix:
+    connect: 200.64.1.55:12108
+    cookie: e7f0e4feb977454f0d04d5917922fcb45cb0e1ad56e9aa44e156cd1578eccb37
+    fingerprint: tjqrqncpz917hnzs4cann9r998bwf6pe
+    protocol: obfsudp
+  wolf:
+    connect: 200.64.1.43:12084
+    cookie: f8886d213b86d3878ad5fb3fabd403b3f8f6e884bff84ef8470f4af148886131
+    fingerprint: rphdzr3bmt5j3spjy2rbtewtndk6rmst
+    protocol: obfsudp

@@ -1,0 +1,23 @@
+# meerkat fingerprint: gngz2wr0540zamnjw3hnp20sfp8ejncw
+identity_seed: improve-relief-three-credit-human-keen-sustain-two-average-install-universe-can
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12156
+    protocol: obfsudp
+    secret: chicken-accident-sustain-snow-obey-box-main-satisfy-useless-weird-churn-ostrich
+out_routes:
+  dane:
+    connect: 200.64.1.44:12086
+    cookie: 388104dcef2cb2c93f59e4305ac351314aeb7628f6428c973302ec6f0fc5c315
+    fingerprint: r4gkv596z1w16c717f0q7je0rrjq2069
+    protocol: obfsudp
+  pipefish:
+    connect: 200.64.1.73:12144
+    cookie: 9fbc59d3752f8f6390bfd14a96ce06af7be1f85b16c12813f4e8d6e6036d3b4a
+    fingerprint: 8fvmf7sk3w7mkcqyznzc0ax86qx194h1
+    protocol: obfsudp
+  stud:
+    connect: 200.64.1.88:12174
+    cookie: 084f10364da5b3647ae88cfdde76c4fc4537240339844a98d8e8e6b3b48fc33f
+    fingerprint: v0twhrndx7kgc33skhj6rg9szgssgfs8
+    protocol: obfsudp

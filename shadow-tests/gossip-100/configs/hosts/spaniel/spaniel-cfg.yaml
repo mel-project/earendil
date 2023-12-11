@@ -1,0 +1,23 @@
+# spaniel fingerprint: yc335n101e08gkeq5qgpnnf00q4mz57e
+identity_seed: this-bounce-ancient-once-slab-salad-beyond-peace-denial-useful-holiday-donkey
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12140
+    protocol: obfsudp
+    secret: grow-wonder-decorate-prepare-gain-speed-today-vacant-spice-chicken-august-must
+out_routes:
+  katydid:
+    connect: 200.64.1.10:12018
+    cookie: 62c10ebbc1ffb0624eb3c8eb70dcaa7b142f60d45080e29b5659ba97695d7e0e
+    fingerprint: gksmy18w78z5xqq9kf4tsvagckzzkk07
+    protocol: obfsudp
+  lioness:
+    connect: 200.64.1.18:12034
+    cookie: 23d38d1c9d3ec20366e8f74022b127bc5c0e99a09cbf41c6e20ae47d63326123
+    fingerprint: ser0em4w49qfcwemtd3yv08r6p9nz99t
+    protocol: obfsudp
+  oriole:
+    connect: 200.64.1.14:12026
+    cookie: 4b3c1cfdf87219ac3028d5c0913f9a8a66d0b19b9bd95c2b9e2132603ce4503f
+    fingerprint: czmtb9zr99sj7e04d7twc1zs4vtqmxda
+    protocol: obfsudp

@@ -1,0 +1,14 @@
+# fingerprint: 7wrkhwar5kj3hybwaf9pe996eydzc969
+identity_seed: alice
+state_cache: alice_cache.db
+
+in_routes:
+  # arbitrary names, used for diagnositics and logging
+  main_udp:
+    protocol: obfsudp
+    listen: 0.0.0.0:19999
+    secret: correct horse battery staple
+
+tcp_forwards:
+  - forward_to: 4444
+    remote_ep: pm3atrnq6awfp96qrjg5rmxp39d1bqfh:69421

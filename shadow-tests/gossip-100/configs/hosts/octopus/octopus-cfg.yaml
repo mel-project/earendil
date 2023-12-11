@@ -1,0 +1,23 @@
+# octopus fingerprint: 856rqtrwqcezra2sng4x4q0xg8tn0rc1
+identity_seed: hard-eyebrow-silly-vote-soccer-outdoor-normal-minimum-era-copy-margin-erode
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12024
+    protocol: obfsudp
+    secret: parent-tiny-live-web-wink-total-struggle-poem-brief-ill-spot-art
+out_routes:
+  gorilla:
+    connect: 200.64.1.27:12052
+    cookie: 35f99052dc1f2daa57d9ce566c8482710bce77201aa083e0b81d3a5f4ac0ad1f
+    fingerprint: g6w6wp1sx6xdg23hh4yh75eab85jf6a2
+    protocol: obfsudp
+  locust:
+    connect: 200.64.1.7:12012
+    cookie: 62dedc3476f83f60ff6df7cc97e3ca6c016e6f6b53f8af43ab1423f0793d445c
+    fingerprint: 73zr9d669qvjk9bqe2gpjfq85n6y18k2
+    protocol: obfsudp
+  sunbeam:
+    connect: 200.64.1.83:12164
+    cookie: 3b5ca2c6a61b747b776ede7f6dc72751f1e87599c4b4033e98e6db3f19717857
+    fingerprint: 5jzv7xy8ng9aytqmay5zf5esbsmhdwjk
+    protocol: obfsudp

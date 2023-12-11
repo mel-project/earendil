@@ -1,0 +1,23 @@
+# poodle fingerprint: v6pyghf2pn8ffn2w2gn9zgtgg74g1hjw
+identity_seed: chat-ski-weasel-apple-junior-bid-slush-soft-prevent-wash-chest-palm
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12032
+    protocol: obfsudp
+    secret: market-panther-siege-result-service-swift-swear-eye-extend-sick-guitar-pull
+out_routes:
+  parakeet:
+    connect: 200.64.1.16:12030
+    cookie: 9ead3e46c05b5f36c662afdb9fbd0ab3d9a9e5a562703f3f6852db0e3ac52f1a
+    fingerprint: h133nnen7zx9kny8sdp47p9mzpz0pcg6
+    protocol: obfsudp
+  phoenix:
+    connect: 200.64.1.3:12004
+    cookie: a344f0bb2f1853eec55a62e960f2e9cbc6ea71daae6fd542f05ab40cf7897958
+    fingerprint: hgqmxycs7s75d8gzm4w1a4v7nb98nb3k
+    protocol: obfsudp
+  wren:
+    connect: 200.64.1.4:12006
+    cookie: 4db091e9247114bdea10bd227bb59479009730684eb8b2ced30616596b8fc835
+    fingerprint: 2efm7f61x808ezad4bkfgrr4c03s4624
+    protocol: obfsudp

@@ -1,0 +1,23 @@
+# serval fingerprint: kb4g0tk7c8ggfn7rth1cfsjdcgvnaseg
+identity_seed: cloud-base-patient-setup-slogan-nut-flee-actual-narrow-trumpet-book-pact
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12056
+    protocol: obfsudp
+    secret: guilt-creek-genuine-spend-detect-erase-sphere-glide-rule-napkin-town-idle
+out_routes:
+  gator:
+    connect: 200.64.1.39:12076
+    cookie: a644956227de8569015b2a8e081a79a8c3674780d818f8b98e80c46cc2c77238
+    fingerprint: 126zjycts5nchbv2hdvzvfdwz8q5r96w
+    protocol: obfsudp
+  orca:
+    connect: 200.64.1.12:12022
+    cookie: c73969aac4ea516e45d782be0a0fc2e6eb08a52723cfc779f5762dcf0c410134
+    fingerprint: jwqngs9hekvy4m0apxez48gffnptzgea
+    protocol: obfsudp
+  phoenix:
+    connect: 200.64.1.55:12108
+    cookie: e7f0e4feb977454f0d04d5917922fcb45cb0e1ad56e9aa44e156cd1578eccb37
+    fingerprint: tjqrqncpz917hnzs4cann9r998bwf6pe
+    protocol: obfsudp

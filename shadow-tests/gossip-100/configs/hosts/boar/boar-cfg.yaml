@@ -1,0 +1,23 @@
+# boar fingerprint: w8seyfhgw2shjks5t9wt7w1ek8znnqw2
+identity_seed: concert-smooth-parent-stable-share-foil-man-resist-worth-test-sad-culture
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12004
+    protocol: obfsudp
+    secret: survey-library-idea-daring-coyote-bicycle-come-school-weird-kiwi-shock-flush
+out_routes:
+  locust:
+    connect: 200.64.1.7:12012
+    cookie: 62dedc3476f83f60ff6df7cc97e3ca6c016e6f6b53f8af43ab1423f0793d445c
+    fingerprint: 73zr9d669qvjk9bqe2gpjfq85n6y18k2
+    protocol: obfsudp
+  sturgeon:
+    connect: 200.64.1.76:12150
+    cookie: dbae53365a52d1ce68bb08b29e00165714dd7e1f08058193595c25ccd0953968
+    fingerprint: 1rjdv0r4jxyn3487jcghrwz34me3cstv
+    protocol: obfsudp
+  whippet:
+    connect: 200.64.1.37:12072
+    cookie: 77792e43f54ce3d73529cee003979f89b9f30244aedaafd6f86ae9e54ee7b666
+    fingerprint: sdygdmpv0za276bgwnxhyhcp8n04kkmh
+    protocol: obfsudp

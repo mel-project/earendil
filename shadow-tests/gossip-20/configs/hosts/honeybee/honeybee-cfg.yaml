@@ -1,0 +1,23 @@
+# honeybee fingerprint: s0x2aww6w0qaqtfawvdmtgjhqssqs15z
+identity_seed: snow-mystery-still-combine-sustain-fine-feature-fancy-capital-film-coach-ensure
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12018
+    protocol: obfsudp
+    secret: audit-leopard-immune-cover-middle-call-hybrid-attack-crystal-danger-damage-head
+out_routes:
+  hyena:
+    connect: 200.64.1.1:12000
+    cookie: 27870923204e22071942ccd8cb431fe96788a9ad8139db609fe66b35b1cadb06
+    fingerprint: 19zfwkfyy885dhm0nthz5rvwwkv62pj4
+    protocol: obfsudp
+  moth:
+    connect: 200.64.1.11:12020
+    cookie: e79180b93df166ddd9db693ceec84678797c561cd5e5b93f9660b7ea54bd046f
+    fingerprint: 6c8bghanhkmyzamxqyz9n8edm9b3b1vv
+    protocol: obfsudp
+  poodle:
+    connect: 200.64.1.17:12032
+    cookie: 8b9169d6fc5e2e6705b1d8f261dd9c0d39c3cd8c284263da4ca3fb42164e1b0e
+    fingerprint: v6pyghf2pn8ffn2w2gn9zgtgg74g1hjw
+    protocol: obfsudp

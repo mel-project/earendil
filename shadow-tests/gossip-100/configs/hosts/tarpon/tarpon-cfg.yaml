@@ -1,0 +1,23 @@
+# tarpon fingerprint: 01exq5syqzhcqg627drsm8ga6rpm4hhg
+identity_seed: topple-prosper-excuse-prefer-drama-visit-love-mercy-wire-benefit-imitate-rapid
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12000
+    protocol: obfsudp
+    secret: water-pink-bind-brick-improve-list-verb-increase-pelican-start-second-design
+out_routes:
+  gopher:
+    connect: 200.64.1.40:12078
+    cookie: 0e0de662d94634069748e4395c61e6b309897c747cb9bcbc019bf11a2b0d4302
+    fingerprint: 7sgzgjq1fnffkh6c5ync7nd75ef7z321
+    protocol: obfsudp
+  gorilla:
+    connect: 200.64.1.27:12052
+    cookie: 35f99052dc1f2daa57d9ce566c8482710bce77201aa083e0b81d3a5f4ac0ad1f
+    fingerprint: g6w6wp1sx6xdg23hh4yh75eab85jf6a2
+    protocol: obfsudp
+  hornet:
+    connect: 200.64.1.17:12032
+    cookie: a98f45e690100532d4e1e96e637843f244b0bce03cf98c231222b6d9040c4e36
+    fingerprint: mc3sbea8m23t5p1mqe6eqf3can6skd46
+    protocol: obfsudp

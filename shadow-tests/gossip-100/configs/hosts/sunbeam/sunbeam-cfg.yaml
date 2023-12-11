@@ -1,0 +1,23 @@
+# sunbeam fingerprint: 5jzv7xy8ng9aytqmay5zf5esbsmhdwjk
+identity_seed: grid-prevent-sure-frog-zoo-stomach-frequent-toss-tell-weather-level-kind
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12164
+    protocol: obfsudp
+    secret: onion-venture-winner-dune-icon-genius-famous-wrong-genuine-elder-strike-climb
+out_routes:
+  bug:
+    connect: 200.64.1.2:12002
+    cookie: 0f72f2e18a39e79cfca8333fdee0cea92f666fbcc2865c0f64d4a8756f62eb6e
+    fingerprint: 8r8gtf3z7mnc61hmrm0zk7962006v6ke
+    protocol: obfsudp
+  gorilla:
+    connect: 200.64.1.27:12052
+    cookie: 35f99052dc1f2daa57d9ce566c8482710bce77201aa083e0b81d3a5f4ac0ad1f
+    fingerprint: g6w6wp1sx6xdg23hh4yh75eab85jf6a2
+    protocol: obfsudp
+  yeti:
+    connect: 200.64.1.19:12036
+    cookie: c83eaa3f7d25b34a9e20b32df4da82928f7678a704149a9b991dab345005c90d
+    fingerprint: bw1v3rztvrh49cyxaqzn42719rjj2mj2
+    protocol: obfsudp

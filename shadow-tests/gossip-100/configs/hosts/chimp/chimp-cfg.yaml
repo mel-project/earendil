@@ -1,0 +1,23 @@
+# chimp fingerprint: fqjtasvgw228e8phchy8eb3s57vad6q5
+identity_seed: culture-blush-shed-labor-sand-wash-apology-type-aspect-satoshi-nation-bread
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12168
+    protocol: obfsudp
+    secret: horn-word-inch-example-route-mom-wife-lunar-door-fiber-october-concert
+out_routes:
+  grackle:
+    connect: 200.64.1.87:12172
+    cookie: 9eb55c01622e8720facf8a64b0757316fcb421242636cb978e8a5e7fba6e1c59
+    fingerprint: 0pqfmgs7fgp5z5gws602df0gdt4y3rab
+    protocol: obfsudp
+  kingfish:
+    connect: 200.64.1.50:12098
+    cookie: c31e1d72e97697cec17a1ef26984502d1f241fc64751456f2438c0055800680d
+    fingerprint: azr4mj1ts4qedn9hjbwpnvpr0vtyzvzb
+    protocol: obfsudp
+  midge:
+    connect: 200.64.1.36:12070
+    cookie: 7529f428c843705995244cbce1d0faba95060baa60c3fac4023885d6611d354f
+    fingerprint: atf9kaj0m8xtwd6byeskw56dzpsza66r
+    protocol: obfsudp

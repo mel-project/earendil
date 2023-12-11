@@ -1,0 +1,23 @@
+# elephant fingerprint: 68z1fk63sxdbp0zx7qhqtccp9t60w9sg
+identity_seed: crop-castle-capable-unhappy-floor-chief-silk-stereo-term-version-palm-define
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12116
+    protocol: obfsudp
+    secret: possible-cruise-census-goddess-any-pyramid-stem-rally-baby-drop-net-wolf
+out_routes:
+  bee:
+    connect: 200.64.1.30:12058
+    cookie: e6f5c8f1aa31892383820c7889b3340912d4607e217cf573e2f3a8ddcd3f9c75
+    fingerprint: zqxwhwahpjp5dj8jrcfx9e1bn04h9tsz
+    protocol: obfsudp
+  boar:
+    connect: 200.64.1.3:12004
+    cookie: 196803a00763037f3ebdcc6a833d2442d03695573d1cb3175983190988f4f917
+    fingerprint: w8seyfhgw2shjks5t9wt7w1ek8znnqw2
+    protocol: obfsudp
+  shiner:
+    connect: 200.64.1.57:12112
+    cookie: 749df933ed439a9a321ef9f4e76a09a41cacde24a69fd2f8974982c1184a2744
+    fingerprint: qkwmny0n0zs3nsp4v2efwpbeynx6gxf9
+    protocol: obfsudp

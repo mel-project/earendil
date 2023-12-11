@@ -1,0 +1,23 @@
+# koala fingerprint: 8e5xb14twfcjp35atxcs7ezf5wveap6s
+identity_seed: sad-sure-slim-inner-design-dizzy-squeeze-gadget-pottery-song-glove-renew
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12100
+    protocol: obfsudp
+    secret: minimum-duck-carry-kidney-pass-balcony-involve-mouse-surprise-monkey-soap-armor
+out_routes:
+  midge:
+    connect: 200.64.1.36:12070
+    cookie: 7529f428c843705995244cbce1d0faba95060baa60c3fac4023885d6611d354f
+    fingerprint: atf9kaj0m8xtwd6byeskw56dzpsza66r
+    protocol: obfsudp
+  moray:
+    connect: 200.64.1.84:12166
+    cookie: 3b5658329871b58f52ab1b72fd67a23ca7dd69bd659a2502c795c319cc273662
+    fingerprint: ssp7mkh4g712wdt92fpcezw8zrj58daa
+    protocol: obfsudp
+  stork:
+    connect: 200.64.1.31:12060
+    cookie: 6acaa5f3a8f7341d43339c6b726969b72bc5c040961d79ee7827c40d79a1d313
+    fingerprint: kjxbq9g0kb83c85vndfp8w4haats135c
+    protocol: obfsudp

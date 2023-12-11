@@ -1,0 +1,23 @@
+# dassie fingerprint: dg4qn193qpjfdar7xcvtwmha16n5m5ar
+identity_seed: quality-wait-wrestle-wall-since-wife-target-sail-civil-horn-peace-upgrade
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12020
+    protocol: obfsudp
+    secret: door-group-party-layer-stereo-vehicle-nice-pool-casino-town-trumpet-weapon
+out_routes:
+  gopher:
+    connect: 200.64.1.40:12078
+    cookie: 0e0de662d94634069748e4395c61e6b309897c747cb9bcbc019bf11a2b0d4302
+    fingerprint: 7sgzgjq1fnffkh6c5ync7nd75ef7z321
+    protocol: obfsudp
+  joey:
+    connect: 200.64.1.23:12044
+    cookie: 034efc21671fc352b6f801ad925f840e49fd30345a976fea8f63aaa59cac7b5a
+    fingerprint: 06f05dzj20wy1whq3wc1qmnzct4c2amc
+    protocol: obfsudp
+  stud:
+    connect: 200.64.1.88:12174
+    cookie: 084f10364da5b3647ae88cfdde76c4fc4537240339844a98d8e8e6b3b48fc33f
+    fingerprint: v0twhrndx7kgc33skhj6rg9szgssgfs8
+    protocol: obfsudp

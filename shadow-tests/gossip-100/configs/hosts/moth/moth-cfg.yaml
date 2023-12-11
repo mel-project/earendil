@@ -1,0 +1,23 @@
+# moth fingerprint: sd6h70rwcym6adsyf5dynexenbgy2mhf
+identity_seed: cross-logic-segment-caught-cloth-such-onion-enjoy-wrong-wheel-romance-vacuum
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12054
+    protocol: obfsudp
+    secret: advance-fun-ship-school-cup-amateur-slender-siren-flock-harsh-ecology-bridge
+out_routes:
+  hornet:
+    connect: 200.64.1.17:12032
+    cookie: a98f45e690100532d4e1e96e637843f244b0bce03cf98c231222b6d9040c4e36
+    fingerprint: mc3sbea8m23t5p1mqe6eqf3can6skd46
+    protocol: obfsudp
+  stork:
+    connect: 200.64.1.31:12060
+    cookie: 6acaa5f3a8f7341d43339c6b726969b72bc5c040961d79ee7827c40d79a1d313
+    fingerprint: kjxbq9g0kb83c85vndfp8w4haats135c
+    protocol: obfsudp
+  turtle:
+    connect: 200.64.1.22:12042
+    cookie: c722a0d9ee07c3f1a54eea7b694294ae4fdbd2d1408e718722661ab3c31e2812
+    fingerprint: njt1gwzd8shtxs1dac2g0rkenx3ae64e
+    protocol: obfsudp

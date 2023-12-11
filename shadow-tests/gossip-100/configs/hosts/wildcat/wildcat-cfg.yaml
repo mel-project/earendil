@@ -1,0 +1,23 @@
+# wildcat fingerprint: vmp4qb0bgs8rbbdzh0dh05b9e6jgpg6s
+identity_seed: minute-essence-inmate-swift-shrimp-deer-beyond-circle-relief-cloud-icon-inherit
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12134
+    protocol: obfsudp
+    secret: hungry-inch-replace-endorse-happy-machine-arena-opera-lemon-gift-industry-cause
+out_routes:
+  muskrat:
+    connect: 200.64.1.58:12114
+    cookie: 6fd4c17b8169c32a6bdcfcf819c263220e56e5df936094abc2e8f59cb494bb23
+    fingerprint: arsgzbxkqczwtch4r33jkz00w35vrgzn
+    protocol: obfsudp
+  parrot:
+    connect: 200.64.1.16:12030
+    cookie: 99e0547538e253641e406a907f96f55dd7564e31095aba3debff9ae7e0ae8c40
+    fingerprint: 2s03aj3jq05jfv6nnzpby4g1vxg6snkq
+    protocol: obfsudp
+  snapper:
+    connect: 200.64.1.69:12136
+    cookie: 40d661d9a3d1730b31d57c7a6bb500b8696fed8aeb56c0b8919ab43912eda205
+    fingerprint: z1z0ks21zgwzsvexmb158x0djymrsd3g
+    protocol: obfsudp

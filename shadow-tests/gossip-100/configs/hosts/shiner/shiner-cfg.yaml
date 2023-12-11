@@ -1,0 +1,23 @@
+# shiner fingerprint: qkwmny0n0zs3nsp4v2efwpbeynx6gxf9
+identity_seed: dwarf-feed-south-topple-oxygen-hood-fruit-casual-release-dial-monitor-magnet
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12112
+    protocol: obfsudp
+    secret: soon-october-sting-slot-broccoli-canal-junior-deer-tattoo-choose-vote-inspire
+out_routes:
+  moray:
+    connect: 200.64.1.84:12166
+    cookie: 3b5658329871b58f52ab1b72fd67a23ca7dd69bd659a2502c795c319cc273662
+    fingerprint: ssp7mkh4g712wdt92fpcezw8zrj58daa
+    protocol: obfsudp
+  pipefish:
+    connect: 200.64.1.73:12144
+    cookie: 9fbc59d3752f8f6390bfd14a96ce06af7be1f85b16c12813f4e8d6e6036d3b4a
+    fingerprint: 8fvmf7sk3w7mkcqyznzc0ax86qx194h1
+    protocol: obfsudp
+  spaniel:
+    connect: 200.64.1.71:12140
+    cookie: 7f4135e5a4ff2e26a63888a69e49939a686af39f0f32824ab12fecc4b06c9c35
+    fingerprint: yc335n101e08gkeq5qgpnnf00q4mz57e
+    protocol: obfsudp

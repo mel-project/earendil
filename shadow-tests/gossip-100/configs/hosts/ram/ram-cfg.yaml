@@ -1,0 +1,38 @@
+# ram fingerprint: wyagc2atjbs5mpxcz7atra30mr8n2cpp
+identity_seed: know-bullet-absurd-fence-doll-crucial-daring-celery-mix-moral-make-blast
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12138
+    protocol: obfsudp
+    secret: trend-rifle-appear-chest-slow-canoe-book-initial-day-bless-slide-arch
+out_routes:
+  bat:
+    connect: 200.64.1.41:12080
+    cookie: a067284db4e2369355478edf21d5d18eef66dff29b237792fba30f983c312d70
+    fingerprint: dtprzzgm0e0z07pj68d3q89br906ejnz
+    protocol: obfsudp
+  flamingo:
+    connect: 200.64.1.5:12008
+    cookie: 00809c8dc21f6d64df52b5a8e3d2dcf31db3725d4f7d1f02e4d5aacb564d5507
+    fingerprint: dspq68f5fqgks0vcj9ghcx3mqvsypwvs
+    protocol: obfsudp
+  impala:
+    connect: 200.64.1.54:12106
+    cookie: d5cc9657f08a0703348b7627d1ec242940ba9437c55f9a31e820026450d19422
+    fingerprint: dne6878hkx6qp2ftq81aky5ecvw3aby1
+    protocol: obfsudp
+  pipefish:
+    connect: 200.64.1.73:12144
+    cookie: 9fbc59d3752f8f6390bfd14a96ce06af7be1f85b16c12813f4e8d6e6036d3b4a
+    fingerprint: 8fvmf7sk3w7mkcqyznzc0ax86qx194h1
+    protocol: obfsudp
+  squid:
+    connect: 200.64.1.6:12010
+    cookie: 161c2bf23b7efda4ba90aa9823cc475325bab25eb6d089e45d871643e46ae214
+    fingerprint: 9y2bjdp2891p71xakh0e86t4ws8ef055
+    protocol: obfsudp
+  sunbeam:
+    connect: 200.64.1.83:12164
+    cookie: 3b5ca2c6a61b747b776ede7f6dc72751f1e87599c4b4033e98e6db3f19717857
+    fingerprint: 5jzv7xy8ng9aytqmay5zf5esbsmhdwjk
+    protocol: obfsudp

@@ -1,0 +1,23 @@
+# phoenix fingerprint: tjqrqncpz917hnzs4cann9r998bwf6pe
+identity_seed: label-economy-sadness-ceiling-exile-chaos-erosion-chest-pen-wire-august-dune
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12108
+    protocol: obfsudp
+    secret: clown-coconut-gauge-junk-reason-later-excite-latin-brand-nose-merry-play
+out_routes:
+  dane:
+    connect: 200.64.1.44:12086
+    cookie: 388104dcef2cb2c93f59e4305ac351314aeb7628f6428c973302ec6f0fc5c315
+    fingerprint: r4gkv596z1w16c717f0q7je0rrjq2069
+    protocol: obfsudp
+  grackle:
+    connect: 200.64.1.87:12172
+    cookie: 9eb55c01622e8720facf8a64b0757316fcb421242636cb978e8a5e7fba6e1c59
+    fingerprint: 0pqfmgs7fgp5z5gws602df0gdt4y3rab
+    protocol: obfsudp
+  jaybird:
+    connect: 200.64.1.80:12158
+    cookie: bc7902086165b406117ffb103f488c89efaf265915bcefc9397d3731112c656b
+    fingerprint: 73kg92d3as4mgs3x89yp2a779mh15dnj
+    protocol: obfsudp

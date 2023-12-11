@@ -1,0 +1,23 @@
+# joey fingerprint: 06f05dzj20wy1whq3wc1qmnzct4c2amc
+identity_seed: engage-fashion-endorse-friend-evolve-welcome-luxury-mansion-mansion-rapid-social-gasp
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12044
+    protocol: obfsudp
+    secret: few-indicate-cherry-stable-title-fade-mansion-better-episode-gossip-tuna-witness
+out_routes:
+  impala:
+    connect: 200.64.1.54:12106
+    cookie: d5cc9657f08a0703348b7627d1ec242940ba9437c55f9a31e820026450d19422
+    fingerprint: dne6878hkx6qp2ftq81aky5ecvw3aby1
+    protocol: obfsudp
+  orca:
+    connect: 200.64.1.12:12022
+    cookie: c73969aac4ea516e45d782be0a0fc2e6eb08a52723cfc779f5762dcf0c410134
+    fingerprint: jwqngs9hekvy4m0apxez48gffnptzgea
+    protocol: obfsudp
+  wolf:
+    connect: 200.64.1.43:12084
+    cookie: f8886d213b86d3878ad5fb3fabd403b3f8f6e884bff84ef8470f4af148886131
+    fingerprint: rphdzr3bmt5j3spjy2rbtewtndk6rmst
+    protocol: obfsudp

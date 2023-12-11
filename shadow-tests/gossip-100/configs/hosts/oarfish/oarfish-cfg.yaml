@@ -1,0 +1,23 @@
+# oarfish fingerprint: 2y7g969ta3rbmtr4kxv19pswjd2d60a7
+identity_seed: meadow-horse-torch-host-choice-audit-grid-develop-deal-seat-parrot-zero
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12014
+    protocol: obfsudp
+    secret: pair-always-ask-zone-athlete-another-alley-endless-easily-turn-lock-act
+out_routes:
+  caribou:
+    connect: 200.64.1.4:12006
+    cookie: 997646482d793b9619a2f3871eca4e148afa338288932e3990f3332e9ccf511b
+    fingerprint: bcdb950a4ra7a1z96dvs11r2npx0aeey
+    protocol: obfsudp
+  lioness:
+    connect: 200.64.1.18:12034
+    cookie: 23d38d1c9d3ec20366e8f74022b127bc5c0e99a09cbf41c6e20ae47d63326123
+    fingerprint: ser0em4w49qfcwemtd3yv08r6p9nz99t
+    protocol: obfsudp
+  serval:
+    connect: 200.64.1.29:12056
+    cookie: d9a1266d6d89e1397d5e03572b646ee850b506dfa9169bd06d06c734beee8357
+    fingerprint: kb4g0tk7c8ggfn7rth1cfsjdcgvnaseg
+    protocol: obfsudp

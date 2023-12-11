@@ -1,0 +1,23 @@
+# muskrat fingerprint: arsgzbxkqczwtch4r33jkz00w35vrgzn
+identity_seed: rubber-there-ankle-similar-tool-joy-crop-water-mosquito-visit-name-time
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12114
+    protocol: obfsudp
+    secret: doctor-much-file-potato-middle-cruel-deposit-trade-panther-phone-visa-dentist
+out_routes:
+  flamingo:
+    connect: 200.64.1.5:12008
+    cookie: 00809c8dc21f6d64df52b5a8e3d2dcf31db3725d4f7d1f02e4d5aacb564d5507
+    fingerprint: dspq68f5fqgks0vcj9ghcx3mqvsypwvs
+    protocol: obfsudp
+  koala:
+    connect: 200.64.1.51:12100
+    cookie: 333cd736128ecccd2d9cf4bcb3bcb74fbe721c0d3b5541a55234b7a06104ef7a
+    fingerprint: 8e5xb14twfcjp35atxcs7ezf5wveap6s
+    protocol: obfsudp
+  turtle:
+    connect: 200.64.1.22:12042
+    cookie: c722a0d9ee07c3f1a54eea7b694294ae4fdbd2d1408e718722661ab3c31e2812
+    fingerprint: njt1gwzd8shtxs1dac2g0rkenx3ae64e
+    protocol: obfsudp

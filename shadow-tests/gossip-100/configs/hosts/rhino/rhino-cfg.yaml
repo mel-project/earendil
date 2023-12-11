@@ -1,0 +1,23 @@
+# rhino fingerprint: 54wp8pnksmqyzyc1t605879y7gb6x1f7
+identity_seed: bitter-scrap-kiwi-deliver-garbage-pottery-say-alter-rough-health-pool-arrest
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12074
+    protocol: obfsudp
+    secret: motor-conduct-cake-school-height-virtual-any-garage-garage-diesel-busy-update
+out_routes:
+  pheasant:
+    connect: 200.64.1.77:12152
+    cookie: a71945a6c6cb62816467c23a9e678109d7a56c13b3a8d2b9299911adf155d14d
+    fingerprint: 847gs66v7d5veb0ng29060a0c3s2rank
+    protocol: obfsudp
+  serval:
+    connect: 200.64.1.29:12056
+    cookie: d9a1266d6d89e1397d5e03572b646ee850b506dfa9169bd06d06c734beee8357
+    fingerprint: kb4g0tk7c8ggfn7rth1cfsjdcgvnaseg
+    protocol: obfsudp
+  slug:
+    connect: 200.64.1.75:12148
+    cookie: 8f8c785bc37b1a4a7b3764a7d988149357680b99260b22cda8f4a181778cec69
+    fingerprint: jghhy9d8h3d41d2p32j3wxqb55m7782w
+    protocol: obfsudp

@@ -1,0 +1,23 @@
+# husky fingerprint: efhdqschnn12pze5p2nv3x9jn7y8exmt
+identity_seed: issue-planet-brisk-vapor-jar-mule-blame-polar-play-outer-anger-document
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12066
+    protocol: obfsudp
+    secret: gallery-clarify-lecture-awake-common-seek-mimic-fitness-fury-finish-have-suit
+out_routes:
+  joey:
+    connect: 200.64.1.23:12044
+    cookie: 034efc21671fc352b6f801ad925f840e49fd30345a976fea8f63aaa59cac7b5a
+    fingerprint: 06f05dzj20wy1whq3wc1qmnzct4c2amc
+    protocol: obfsudp
+  moray:
+    connect: 200.64.1.84:12166
+    cookie: 3b5658329871b58f52ab1b72fd67a23ca7dd69bd659a2502c795c319cc273662
+    fingerprint: ssp7mkh4g712wdt92fpcezw8zrj58daa
+    protocol: obfsudp
+  whippet:
+    connect: 200.64.1.37:12072
+    cookie: 77792e43f54ce3d73529cee003979f89b9f30244aedaafd6f86ae9e54ee7b666
+    fingerprint: sdygdmpv0za276bgwnxhyhcp8n04kkmh
+    protocol: obfsudp

@@ -1,0 +1,23 @@
+# fish fingerprint: pp50c0d1ewyadpva4cr7ss3hrqh9hzea
+identity_seed: buffalo-monkey-delay-assault-prefer-attract-total-squeeze-always-then-drip-weekend
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12002
+    protocol: obfsudp
+    secret: view-correct-elbow-abuse-chimney-dizzy-host-critic-priority-airport-border-radio
+out_routes:
+  burro:
+    connect: 200.64.1.6:12010
+    cookie: fc760624957edf838ee9387bff13d67b6ab5c30f6507ffe008a5d59a85be367d
+    fingerprint: fnef5zpfjbpm7pp5pvjgxrs39z2tpg4y
+    protocol: obfsudp
+  doe:
+    connect: 200.64.1.12:12022
+    cookie: 21d91f4767656c65d30c4d3f55e0702f5f60de9e2c68a2166c03648c462ddd15
+    fingerprint: xkfdd4q0h6pd8544kf78vhrck540czrh
+    protocol: obfsudp
+  dory:
+    connect: 200.64.1.18:12034
+    cookie: dec686402c4c0e5791cdc0f8513ebeebb4004bbc7d814a2d317d0da51f8dda78
+    fingerprint: w742x18w872v2gd9fgd5bpxd1990g7e2
+    protocol: obfsudp

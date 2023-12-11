@@ -1,0 +1,23 @@
+# sturgeon fingerprint: 1rjdv0r4jxyn3487jcghrwz34me3cstv
+identity_seed: swing-penalty-network-whip-bag-luggage-edit-behind-fox-busy-fit-faint
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12150
+    protocol: obfsudp
+    secret: pulp-law-cool-accuse-pretty-slow-custom-sell-usage-truck-exercise-giggle
+out_routes:
+  gator:
+    connect: 200.64.1.39:12076
+    cookie: a644956227de8569015b2a8e081a79a8c3674780d818f8b98e80c46cc2c77238
+    fingerprint: 126zjycts5nchbv2hdvzvfdwz8q5r96w
+    protocol: obfsudp
+  katydid:
+    connect: 200.64.1.10:12018
+    cookie: 62c10ebbc1ffb0624eb3c8eb70dcaa7b142f60d45080e29b5659ba97695d7e0e
+    fingerprint: gksmy18w78z5xqq9kf4tsvagckzzkk07
+    protocol: obfsudp
+  muskox:
+    connect: 200.64.1.86:12170
+    cookie: b0885ee4f76bd125a584c2f86503d61a88b29d94c79137efbc91152c85f54151
+    fingerprint: 7m1v679bqqbxw0nm06jahzqrd92w66dq
+    protocol: obfsudp

@@ -1,0 +1,23 @@
+# reindeer fingerprint: jmca4nm7tnp2ygxg6fn4j7r96vdm3wtp
+identity_seed: step-remember-ethics-range-smoke-illegal-clog-pyramid-gas-lawn-episode-credit
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12160
+    protocol: obfsudp
+    secret: sting-crisp-scrap-give-real-sleep-oblige-subject-run-marine-lady-citizen
+out_routes:
+  bug:
+    connect: 200.64.1.2:12002
+    cookie: 0f72f2e18a39e79cfca8333fdee0cea92f666fbcc2865c0f64d4a8756f62eb6e
+    fingerprint: 8r8gtf3z7mnc61hmrm0zk7962006v6ke
+    protocol: obfsudp
+  orca:
+    connect: 200.64.1.12:12022
+    cookie: c73969aac4ea516e45d782be0a0fc2e6eb08a52723cfc779f5762dcf0c410134
+    fingerprint: jwqngs9hekvy4m0apxez48gffnptzgea
+    protocol: obfsudp
+  snail:
+    connect: 200.64.1.60:12118
+    cookie: d29df5e4a914ceff860dfa5710053edce8d3e7aa932ae04d39e0b136a5dd7f68
+    fingerprint: 4d1rz52aww75vk9mb9q9w2ac8cecy254
+    protocol: obfsudp

@@ -1,0 +1,23 @@
+# slug fingerprint: jghhy9d8h3d41d2p32j3wxqb55m7782w
+identity_seed: vacuum-oblige-slice-trophy-mercy-gallery-modify-holiday-sister-buyer-salmon-program
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12148
+    protocol: obfsudp
+    secret: solution-cave-hood-lumber-enroll-cloth-because-stumble-update-small-crush-office
+out_routes:
+  dane:
+    connect: 200.64.1.44:12086
+    cookie: 388104dcef2cb2c93f59e4305ac351314aeb7628f6428c973302ec6f0fc5c315
+    fingerprint: r4gkv596z1w16c717f0q7je0rrjq2069
+    protocol: obfsudp
+  moth:
+    connect: 200.64.1.28:12054
+    cookie: fb07b568ed6552bcf2086c8c73602fef2320389b7552b3e3bc17b389128ae01e
+    fingerprint: sd6h70rwcym6adsyf5dynexenbgy2mhf
+    protocol: obfsudp
+  starling:
+    connect: 200.64.1.65:12128
+    cookie: 207d4450a03ffd5e6fbcd1122a669b666844f4e72c74d778313dd486840f6c5f
+    fingerprint: arh8epn40whthcb76shrta1ajh9b8hnd
+    protocol: obfsudp

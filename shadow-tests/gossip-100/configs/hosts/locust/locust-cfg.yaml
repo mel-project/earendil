@@ -1,0 +1,23 @@
+# locust fingerprint: 73zr9d669qvjk9bqe2gpjfq85n6y18k2
+identity_seed: floor-taxi-tongue-assume-purchase-vocal-inch-crazy-letter-bottom-forget-museum
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12012
+    protocol: obfsudp
+    secret: describe-win-gift-predict-grab-effort-north-swallow-cliff-thing-mosquito-tank
+out_routes:
+  flamingo:
+    connect: 200.64.1.5:12008
+    cookie: 00809c8dc21f6d64df52b5a8e3d2dcf31db3725d4f7d1f02e4d5aacb564d5507
+    fingerprint: dspq68f5fqgks0vcj9ghcx3mqvsypwvs
+    protocol: obfsudp
+  midge:
+    connect: 200.64.1.36:12070
+    cookie: 7529f428c843705995244cbce1d0faba95060baa60c3fac4023885d6611d354f
+    fingerprint: atf9kaj0m8xtwd6byeskw56dzpsza66r
+    protocol: obfsudp
+  oarfish:
+    connect: 200.64.1.8:12014
+    cookie: bdd88791bc2993c12db6ef93f275de35a4929a07f65e3b3b779b51a498be6528
+    fingerprint: 2y7g969ta3rbmtr4kxv19pswjd2d60a7
+    protocol: obfsudp

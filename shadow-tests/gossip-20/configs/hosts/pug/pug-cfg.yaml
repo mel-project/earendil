@@ -1,0 +1,23 @@
+# pug fingerprint: p56n010gbdf9aqxpzjjmx59hhr4gst8b
+identity_seed: grunt-flame-basic-pigeon-pudding-service-climb-immune-across-like-unit-joy
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12014
+    protocol: obfsudp
+    secret: height-woman-tool-ticket-inject-slender-powder-scorpion-another-medal-glory-bicycle
+out_routes:
+  gorilla:
+    connect: 200.64.1.13:12024
+    cookie: dd66aede59fd0540f5ebe9ed8fa73e027aebd696622d091a6542f754db1fc57f
+    fingerprint: 8nvvqmx2m16haw897y1c2d5f26gdpb92
+    protocol: obfsudp
+  mammoth:
+    connect: 200.64.1.7:12012
+    cookie: 3491042dd1601a8ced1353e85a8e4219617a44f112eda8577e8bb3e01d08a310
+    fingerprint: n49w089fpsy97t80p7vvvkbvnh2jvhqb
+    protocol: obfsudp
+  sawfish:
+    connect: 200.64.1.9:12016
+    cookie: 94f52a95e26f6925a51103777be9074f51e726e4ffd9c475f4929d1f039b153b
+    fingerprint: 0a6r82xs3g7xephae89bt673qznm5ycq
+    protocol: obfsudp

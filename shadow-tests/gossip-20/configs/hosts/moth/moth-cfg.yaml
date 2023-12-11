@@ -1,0 +1,23 @@
+# moth fingerprint: 6c8bghanhkmyzamxqyz9n8edm9b3b1vv
+identity_seed: youth-arrange-buddy-wave-exercise-moral-dutch-casino-joke-swear-apart-twenty
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12020
+    protocol: obfsudp
+    secret: sword-viable-office-lawsuit-tourist-outside-quote-coil-protect-voice-faculty-test
+out_routes:
+  doe:
+    connect: 200.64.1.12:12022
+    cookie: 21d91f4767656c65d30c4d3f55e0702f5f60de9e2c68a2166c03648c462ddd15
+    fingerprint: xkfdd4q0h6pd8544kf78vhrck540czrh
+    protocol: obfsudp
+  mammoth:
+    connect: 200.64.1.7:12012
+    cookie: 3491042dd1601a8ced1353e85a8e4219617a44f112eda8577e8bb3e01d08a310
+    fingerprint: n49w089fpsy97t80p7vvvkbvnh2jvhqb
+    protocol: obfsudp
+  man:
+    connect: 200.64.1.19:12036
+    cookie: 326ef3d3ae419077bd877a14e4e5f06096e197e938cfe96a6f28fe311806e060
+    fingerprint: nhs86104bctym849zcj4x41261akyk8b
+    protocol: obfsudp

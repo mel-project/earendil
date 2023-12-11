@@ -1,0 +1,23 @@
+# fowl fingerprint: xtmz9eyfc4tgpvpessjx5762s4fzjnvb
+identity_seed: panda-wine-possible-label-actual-amused-hold-become-service-pill-deputy-frozen
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12026
+    protocol: obfsudp
+    secret: pink-wedding-carpet-close-advice-gold-river-club-receive-cause-coin-tenant
+out_routes:
+  honeybee:
+    connect: 200.64.1.10:12018
+    cookie: ab1822ec6e0b2696462290bc96eae6c685f5cf345a2bc502e833b37037e50c61
+    fingerprint: s0x2aww6w0qaqtfawvdmtgjhqssqs15z
+    protocol: obfsudp
+  hyena:
+    connect: 200.64.1.1:12000
+    cookie: 27870923204e22071942ccd8cb431fe96788a9ad8139db609fe66b35b1cadb06
+    fingerprint: 19zfwkfyy885dhm0nthz5rvwwkv62pj4
+    protocol: obfsudp
+  parakeet:
+    connect: 200.64.1.16:12030
+    cookie: 9ead3e46c05b5f36c662afdb9fbd0ab3d9a9e5a562703f3f6852db0e3ac52f1a
+    fingerprint: h133nnen7zx9kny8sdp47p9mzpz0pcg6
+    protocol: obfsudp

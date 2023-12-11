@@ -1,0 +1,23 @@
+# marmoset fingerprint: tts5q8gb066v6cgfd7y8rc7ba6qcta57
+identity_seed: host-gaze-normal-blame-comic-worth-sea-immune-movie-garment-note-same
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12110
+    protocol: obfsudp
+    secret: march-trumpet-hedgehog-kit-cloud-cloud-update-primary-moral-merry-flower-upper
+out_routes:
+  parrot:
+    connect: 200.64.1.16:12030
+    cookie: 99e0547538e253641e406a907f96f55dd7564e31095aba3debff9ae7e0ae8c40
+    fingerprint: 2s03aj3jq05jfv6nnzpby4g1vxg6snkq
+    protocol: obfsudp
+  whippet:
+    connect: 200.64.1.37:12072
+    cookie: 77792e43f54ce3d73529cee003979f89b9f30244aedaafd6f86ae9e54ee7b666
+    fingerprint: sdygdmpv0za276bgwnxhyhcp8n04kkmh
+    protocol: obfsudp
+  wildcat:
+    connect: 200.64.1.68:12134
+    cookie: 3101cb06cdf6b9390d16716091e0d401c295855c064dd486916c799b6478157e
+    fingerprint: vmp4qb0bgs8rbbdzh0dh05b9e6jgpg6s
+    protocol: obfsudp

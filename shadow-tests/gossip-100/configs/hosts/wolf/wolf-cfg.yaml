@@ -1,0 +1,23 @@
+# wolf fingerprint: rphdzr3bmt5j3spjy2rbtewtndk6rmst
+identity_seed: humor-invite-remain-elbow-wonder-woman-yard-assault-convince-asset-mail-into
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12084
+    protocol: obfsudp
+    secret: when-sweet-decide-law-leopard-rug-famous-million-resemble-predict-celery-zoo
+out_routes:
+  husky:
+    connect: 200.64.1.34:12066
+    cookie: 187d8ba912f491d127773101d76074607e9d16e2c3773ca71a0b40d79c30f63f
+    fingerprint: efhdqschnn12pze5p2nv3x9jn7y8exmt
+    protocol: obfsudp
+  pangolin:
+    connect: 200.64.1.21:12040
+    cookie: ddd8005bfa7235c0bbc63fc92afe4e7393891ecdc030e0a70bf388a766a1ff25
+    fingerprint: 462957764kyg76j8dyjcf44q6hfcwvje
+    protocol: obfsudp
+  snail:
+    connect: 200.64.1.60:12118
+    cookie: d29df5e4a914ceff860dfa5710053edce8d3e7aa932ae04d39e0b136a5dd7f68
+    fingerprint: 4d1rz52aww75vk9mb9q9w2ac8cecy254
+    protocol: obfsudp

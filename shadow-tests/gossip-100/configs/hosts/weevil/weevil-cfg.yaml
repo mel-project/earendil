@@ -1,0 +1,23 @@
+# weevil fingerprint: yfeeyh8pztmvpv176yhwj3pjh4c5139m
+identity_seed: diary-armor-other-moon-brief-cactus-rice-spawn-right-measure-office-square
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12126
+    protocol: obfsudp
+    secret: divorce-eye-verify-box-mention-speak-walk-jump-endless-hunt-child-letter
+out_routes:
+  chigger:
+    connect: 200.64.1.72:12142
+    cookie: 7c12b78e53dd14716dd0512aefabdf8d11b7c5a391ff656f7644634d2e11c05a
+    fingerprint: 6ndbe81yccsh3qeg7m06d31h3p1h6f1v
+    protocol: obfsudp
+  katydid:
+    connect: 200.64.1.10:12018
+    cookie: 62c10ebbc1ffb0624eb3c8eb70dcaa7b142f60d45080e29b5659ba97695d7e0e
+    fingerprint: gksmy18w78z5xqq9kf4tsvagckzzkk07
+    protocol: obfsudp
+  moray:
+    connect: 200.64.1.84:12166
+    cookie: 3b5658329871b58f52ab1b72fd67a23ca7dd69bd659a2502c795c319cc273662
+    fingerprint: ssp7mkh4g712wdt92fpcezw8zrj58daa
+    protocol: obfsudp

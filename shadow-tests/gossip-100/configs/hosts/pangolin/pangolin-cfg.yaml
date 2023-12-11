@@ -1,0 +1,38 @@
+# pangolin fingerprint: 462957764kyg76j8dyjcf44q6hfcwvje
+identity_seed: satisfy-strike-walnut-outer-grid-great-fox-build-always-laptop-mass-bundle
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12040
+    protocol: obfsudp
+    secret: hood-load-print-trial-little-license-grant-neutral-try-shine-cycle-position
+out_routes:
+  elephant:
+    connect: 200.64.1.59:12116
+    cookie: d20d2369751d10635601b424a941fe09d5bff67458f9ac26c6d334d60f9eb92b
+    fingerprint: 68z1fk63sxdbp0zx7qhqtccp9t60w9sg
+    protocol: obfsudp
+  koala:
+    connect: 200.64.1.51:12100
+    cookie: 333cd736128ecccd2d9cf4bcb3bcb74fbe721c0d3b5541a55234b7a06104ef7a
+    fingerprint: 8e5xb14twfcjp35atxcs7ezf5wveap6s
+    protocol: obfsudp
+  parrot:
+    connect: 200.64.1.16:12030
+    cookie: 99e0547538e253641e406a907f96f55dd7564e31095aba3debff9ae7e0ae8c40
+    fingerprint: 2s03aj3jq05jfv6nnzpby4g1vxg6snkq
+    protocol: obfsudp
+  pheasant:
+    connect: 200.64.1.77:12152
+    cookie: a71945a6c6cb62816467c23a9e678109d7a56c13b3a8d2b9299911adf155d14d
+    fingerprint: 847gs66v7d5veb0ng29060a0c3s2rank
+    protocol: obfsudp
+  pipefish:
+    connect: 200.64.1.73:12144
+    cookie: 9fbc59d3752f8f6390bfd14a96ce06af7be1f85b16c12813f4e8d6e6036d3b4a
+    fingerprint: 8fvmf7sk3w7mkcqyznzc0ax86qx194h1
+    protocol: obfsudp
+  weevil:
+    connect: 200.64.1.64:12126
+    cookie: fcde5997f5d2366a11aed013275a9fa34accdc0445e3dc929267f39ce0c9f948
+    fingerprint: yfeeyh8pztmvpv176yhwj3pjh4c5139m
+    protocol: obfsudp
