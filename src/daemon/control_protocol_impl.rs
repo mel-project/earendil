@@ -10,11 +10,12 @@ use moka::sync::Cache;
 use nanorpc::RpcTransport;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sosistab2_obfsudp::ObfsUdpSecret;
 use thiserror::Error;
 
 use crate::{
-    config::{InRouteConfig, OutRouteConfig},
+    config::InRouteConfig,
     control_protocol::{ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs},
     daemon::DaemonContext,
     global_rpc::transport::GlobalRpcTransport,
@@ -125,7 +126,7 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn my_routes(&self) -> serde_json::Value {
-        let lala: BTreeMap<String, OutRouteConfig> = self
+        let lala: BTreeMap<String, serde_json::Value> = self
             .ctx
             .config
             .in_routes
@@ -136,11 +137,11 @@ impl ControlProtocol for ControlProtocolImpl {
                         ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes());
                     (
                         k.clone(),
-                        OutRouteConfig::Obfsudp {
-                            fingerprint: self.ctx.identity.public().fingerprint(),
-                            connect: *listen,
-                            cookie: *secret.to_public().as_bytes(),
-                        },
+                        json!( {
+                            "fingerprint": format!("{}", self.ctx.identity.public().fingerprint()),
+                            "connect": format!("<YOUR_IP>:{}", listen.port()),
+                            "cookie": hex::encode(secret.to_public().as_bytes()),
+                        }),
                     )
                 }
             })
