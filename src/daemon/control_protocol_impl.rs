@@ -169,6 +169,20 @@ impl ControlProtocol for ControlProtocolImpl {
                 .relay_graph
                 .read()
                 .all_adjacencies()
+                .filter(|adj| {
+                    // only display relays
+                    self.ctx
+                        .relay_graph
+                        .read()
+                        .identity(&adj.left)
+                        .map_or(false, |id| id.is_relay)
+                        && self
+                            .ctx
+                            .relay_graph
+                            .read()
+                            .identity(&adj.right)
+                            .map_or(false, |id| id.is_relay)
+                })
                 .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
                 .fold(String::new(), |acc, adj| {
                     acc + &format!(
