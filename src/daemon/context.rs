@@ -10,7 +10,7 @@ use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
-use earendil_topology::{IdentityDescriptor, RelayGraph};
+use earendil_topology::{RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};
@@ -289,22 +289,27 @@ impl DaemonContext {
                 )
             })
         }
+        let mut retval = Ok(None);
         while let Some(result) = gatherer.next().await {
             match result {
-                Err(err) => log::warn!("error while dht_get: {:?}", err),
-                Ok(Err(err)) => log::warn!("error while dht_get: {:?}", err),
+                Err(err) => retval = Err(DhtError::NetworkFailure(err.to_string())),
+                Ok(Err(err)) => retval = Err(err),
                 Ok(Ok(None)) => continue,
                 Ok(Ok(Some(locator))) => {
                     let id_pk = locator.identity_pk;
                     let payload = locator.to_sign();
                     if id_pk.fingerprint() == fingerprint {
-                        id_pk.verify(&payload, &locator.signature)?;
+                        id_pk
+                            .verify(&payload, &locator.signature)
+                            .map_err(|_| DhtError::VerifyFailed);
                         self.rdht_cache.insert(fingerprint, locator.clone());
                         return Ok(Some(locator));
+                    } else {
+                        return Err(DhtError::VerifyFailed);
                     }
                 }
             }
         }
-        Ok(None)
+        retval
     }
 }

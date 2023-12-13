@@ -4,7 +4,7 @@ use crate::{daemon::ControlProtErr, haven::HavenLocator};
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
-use earendil_crypt::{Fingerprint, IdentitySecret, VerifyError};
+use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
     Dock, PacketConstructError,
@@ -193,8 +193,10 @@ pub enum SendMessageError {
 
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum DhtError {
-    #[error(transparent)]
-    Verification(#[from] VerifyError),
+    #[error("failed to verify descriptor retrieved from DHT")]
+    VerifyFailed,
+    #[error("network failed: {0}")]
+    NetworkFailure(String),
 }
 
 #[serde_as]
