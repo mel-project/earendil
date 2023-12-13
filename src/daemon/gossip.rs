@@ -13,6 +13,15 @@ use super::{link_connection::LinkConnection, DaemonContext};
 pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let mut sleep_timer = smol::Timer::interval(Duration::from_secs(5));
     loop {
+        // first insert ourselves
+        let am_i_relay = !ctx.config.in_routes.is_empty();
+        ctx.relay_graph
+            .write()
+            .insert_identity(IdentityDescriptor::new(
+                &ctx.identity,
+                &ctx.onion_sk,
+                am_i_relay,
+            ))?;
         let once = async {
             let neighs = ctx.table.all_neighs();
             if neighs.is_empty() {
@@ -39,16 +48,6 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 /// One round of gossip with a particular neighbor.
 async fn gossip_once(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
-    // first insert ourselves
-    let am_i_relay = !ctx.config.in_routes.is_empty();
-    ctx.relay_graph
-        .write()
-        .insert_identity(IdentityDescriptor::new(
-            &ctx.identity,
-            &ctx.onion_sk,
-            am_i_relay,
-        ))?;
-
     fetch_identity(ctx, conn).await?;
     sign_adjacency(ctx, conn).await?;
     gossip_graph(ctx, conn).await?;
