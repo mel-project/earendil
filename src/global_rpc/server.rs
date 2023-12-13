@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use anyhow::Context;
 use async_trait::async_trait;
 use smol_timeout::TimeoutExt;
 
@@ -55,7 +54,17 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             return Ok(Some(val));
         } else if recurse {
             log::debug!("searching DHT for {key}");
-            return self.ctx.dht_get(key).await;
+            return self
+                .ctx
+                .dht_get(key)
+                .timeout(Duration::from_secs(30))
+                .await
+                .map_or(
+                    Err(DhtError::NetworkFailure(
+                        "dht_get({key}) timed out".to_owned(),
+                    )),
+                    |res| res,
+                );
         }
         Ok(None)
     }

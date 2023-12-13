@@ -10,14 +10,13 @@ use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
-use earendil_topology::{RelayGraph};
+use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};
 use once_cell::sync::Lazy;
 use parking_lot::{Mutex, RwLock};
 use smol::channel::Sender;
-use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 
 use crate::{
@@ -313,7 +312,7 @@ impl DaemonContext {
                     if id_pk.fingerprint() == fingerprint {
                         id_pk
                             .verify(&payload, &locator.signature)
-                            .map_err(|_| DhtError::VerifyFailed);
+                            .map_err(|_| DhtError::VerifyFailed)?;
                         self.rdht_cache.insert(fingerprint, locator.clone());
                         return Ok(Some(locator));
                     } else {

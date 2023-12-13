@@ -1,4 +1,5 @@
 use std::convert::Infallible;
+use std::time::Duration;
 
 use anyhow::Context;
 use bytes::Bytes;
@@ -12,8 +13,10 @@ use smol::{
     channel::{Receiver, Sender},
     Task,
 };
+use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 
+use crate::control_protocol::DhtError;
 use crate::{daemon::context::DaemonContext, haven::HAVEN_FORWARD_DOCK};
 
 use super::{n2r_socket::N2rSocket, Endpoint};
@@ -121,7 +124,14 @@ async fn enc_task(
                 // We're the client: look up Rob's addr in rendezvous dht
                 let bob_locator = ctx
                     .dht_get(remote_ep.fingerprint)
+                    .timeout(Duration::from_secs(30))
                     .await
+                    .map_or(
+                        Err(DhtError::NetworkFailure(
+                            "dht_get({key}) timed out".to_owned(),
+                        )),
+                        |res| res,
+                    )
                     .context(format!("DHT failed for {}", remote_ep.fingerprint))?
                     .context(format!("DHT returned None for {}", remote_ep.fingerprint))?;
                 Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
