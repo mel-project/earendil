@@ -37,7 +37,8 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         } else {
             locator
                 .identity_pk
-                .verify(&locator.to_sign(), &locator.signature)?;
+                .verify(&locator.to_sign(), &locator.signature)
+                .map_err(|_| DhtError::VerifyFailed)?;
 
             log::debug!("inserting key {key} locally");
             self.ctx.local_rdht_shard.insert(key, locator.clone());
