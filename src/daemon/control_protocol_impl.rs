@@ -11,6 +11,7 @@ use nanorpc::RpcTransport;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use smol_timeout::TimeoutExt;
 use sosistab2_obfsudp::ObfsUdpSecret;
 use thiserror::Error;
 
@@ -289,7 +290,16 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        self.ctx.dht_get(fingerprint).await
+        self.ctx
+            .dht_get(fingerprint)
+            .timeout(Duration::from_secs(30))
+            .await
+            .map_or(
+                Err(DhtError::NetworkFailure(
+                    "dht_get({key}) timed out".to_owned(),
+                )),
+                |res| res,
+            )
     }
 }
 

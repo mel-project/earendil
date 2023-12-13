@@ -10,14 +10,13 @@ use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
-use earendil_topology::{IdentityDescriptor, RelayGraph};
+use earendil_topology::RelayGraph;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};
 use once_cell::sync::Lazy;
 use parking_lot::{Mutex, RwLock};
 use smol::channel::Sender;
-use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 
 use crate::{
@@ -241,7 +240,17 @@ impl DaemonContext {
     }
 
     fn dht_key_to_fps(&self, key: &str) -> Vec<Fingerprint> {
-        let mut all_nodes: Vec<Fingerprint> = self.relay_graph.read().all_nodes().collect();
+        let mut all_nodes: Vec<Fingerprint> = self
+            .relay_graph
+            .read()
+            .all_nodes()
+            .filter(|fp| {
+                self.relay_graph
+                    .read()
+                    .identity(fp)
+                    .map_or(false, |id| id.is_relay)
+            })
+            .collect();
         all_nodes.sort_unstable_by_key(|fp| *blake3::hash(&(key, fp).stdcode()).as_bytes());
         all_nodes
     }
@@ -250,18 +259,26 @@ impl DaemonContext {
         let key = locator.identity_pk.fingerprint();
         let replicas = self.dht_key_to_fps(&key.to_string());
         let anon_isk = IdentitySecret::generate();
+        let mut gatherer = FuturesUnordered::new();
 
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-            log::trace!("key {key} inserting into remote replica {replica}");
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
-            match gclient
-                .dht_insert(locator.clone(), false)
-                .timeout(Duration::from_secs(60))
-                .await
-            {
-                Some(Err(e)) => log::debug!("inserting {key} into {replica} failed: {:?}", e),
-                None => log::debug!("inserting {key} into {replica} timed out"),
-                _ => {}
+            let locator = locator.clone();
+            gatherer.push(async move {
+                log::trace!("key {key} inserting into remote replica {replica}");
+                let gclient =
+                    GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
+                anyhow::Ok(
+                    gclient
+                        .dht_insert(locator.clone(), false)
+                        .await
+                        .context("DHT insert failed")??,
+                )
+            })
+        }
+        while let Some(res) = gatherer.next().await {
+            match res {
+                Ok(_) => log::debug!("DHT insert succeeded!"),
+                Err(e) => log::debug!("DHT insert failed! {e}"),
             }
         }
     }
@@ -280,31 +297,30 @@ impl DaemonContext {
             gatherer.push(async move {
                 let gclient =
                     GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
-                anyhow::Ok(
-                    gclient
-                        .dht_get(fingerprint, false)
-                        .timeout(Duration::from_secs(30))
-                        .await
-                        .context("timed out")??,
-                )
+                anyhow::Ok(gclient.dht_get(fingerprint, false).await?)
             })
         }
+        let mut retval = Ok(None);
         while let Some(result) = gatherer.next().await {
             match result {
-                Err(err) => log::warn!("error while dht_get: {:?}", err),
-                Ok(Err(err)) => log::warn!("error while dht_get: {:?}", err),
+                Err(err) => retval = Err(DhtError::NetworkFailure(err.to_string())),
+                Ok(Err(err)) => retval = Err(err),
                 Ok(Ok(None)) => continue,
                 Ok(Ok(Some(locator))) => {
                     let id_pk = locator.identity_pk;
                     let payload = locator.to_sign();
                     if id_pk.fingerprint() == fingerprint {
-                        id_pk.verify(&payload, &locator.signature)?;
+                        id_pk
+                            .verify(&payload, &locator.signature)
+                            .map_err(|_| DhtError::VerifyFailed)?;
                         self.rdht_cache.insert(fingerprint, locator.clone());
                         return Ok(Some(locator));
+                    } else {
+                        return Err(DhtError::VerifyFailed);
                     }
                 }
             }
         }
-        Ok(None)
+        retval
     }
 }
