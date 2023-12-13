@@ -260,18 +260,26 @@ impl DaemonContext {
         let key = locator.identity_pk.fingerprint();
         let replicas = self.dht_key_to_fps(&key.to_string());
         let anon_isk = IdentitySecret::generate();
+        let mut gatherer = FuturesUnordered::new();
 
         for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-            log::trace!("key {key} inserting into remote replica {replica}");
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
-            match gclient
-                .dht_insert(locator.clone(), false)
-                .timeout(Duration::from_secs(60))
-                .await
-            {
-                Some(Err(e)) => log::debug!("inserting {key} into {replica} failed: {:?}", e),
-                None => log::debug!("inserting {key} into {replica} timed out"),
-                _ => {}
+            let locator = locator.clone();
+            gatherer.push(async move {
+                log::trace!("key {key} inserting into remote replica {replica}");
+                let gclient =
+                    GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
+                anyhow::Ok(
+                    gclient
+                        .dht_insert(locator.clone(), false)
+                        .await
+                        .context("DHT insert failed")??,
+                )
+            })
+        }
+        while let Some(res) = gatherer.next().await {
+            match res {
+                Ok(_) => log::debug!("DHT insert succeeded!"),
+                Err(e) => log::debug!("DHT insert failed! {e}"),
             }
         }
     }
@@ -290,13 +298,7 @@ impl DaemonContext {
             gatherer.push(async move {
                 let gclient =
                     GlobalRpcClient(GlobalRpcTransport::new(self.clone(), anon_isk, replica));
-                anyhow::Ok(
-                    gclient
-                        .dht_get(fingerprint, false)
-                        .timeout(Duration::from_secs(30))
-                        .await
-                        .context("timed out")??,
-                )
+                anyhow::Ok(gclient.dht_get(fingerprint, false).await?)
             })
         }
         while let Some(result) = gatherer.next().await {
