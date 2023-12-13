@@ -241,7 +241,17 @@ impl DaemonContext {
     }
 
     fn dht_key_to_fps(&self, key: &str) -> Vec<Fingerprint> {
-        let mut all_nodes: Vec<Fingerprint> = self.relay_graph.read().all_nodes().collect();
+        let mut all_nodes: Vec<Fingerprint> = self
+            .relay_graph
+            .read()
+            .all_nodes()
+            .filter(|fp| {
+                self.relay_graph
+                    .read()
+                    .identity(fp)
+                    .map_or(false, |id| id.is_relay)
+            })
+            .collect();
         all_nodes.sort_unstable_by_key(|fp| *blake3::hash(&(key, fp).stdcode()).as_bytes());
         all_nodes
     }
