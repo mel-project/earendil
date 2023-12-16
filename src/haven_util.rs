@@ -23,7 +23,6 @@ use crate::{
     daemon::context::DaemonContext,
     socket::{Endpoint, Socket},
     stream::StreamListener,
-    utils::id_from_seed,
 };
 
 pub const HAVEN_FORWARD_DOCK: Dock = 100002;
@@ -140,7 +139,7 @@ async fn udp_forward(
         }
     }
 
-    let haven_id = id_from_seed(&haven_cfg.identity_seed);
+    let haven_id = IdentitySecret::from_seed(&haven_cfg.identity_seed);
     log::debug!(
         "UDP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
@@ -186,7 +185,7 @@ async fn tcp_forward(
     from_dock: Dock,
     to_port: u16,
 ) -> anyhow::Result<()> {
-    let haven_id = id_from_seed(&haven_cfg.identity_seed);
+    let haven_id = IdentitySecret::from_seed(&haven_cfg.identity_seed);
     log::debug!(
         "TCP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
@@ -222,7 +221,7 @@ async fn simple_proxy(
     haven_cfg: HavenForwardConfig,
     listen_dock: u32,
 ) -> Result<(), anyhow::Error> {
-    let haven_id = id_from_seed(&haven_cfg.identity_seed);
+    let haven_id = IdentitySecret::from_seed(&haven_cfg.identity_seed);
     log::debug!(
         "simple proxy haven fingerprint: {}",
         haven_id.public().fingerprint()

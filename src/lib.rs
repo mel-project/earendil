@@ -6,7 +6,6 @@ mod global_rpc;
 mod haven_util;
 pub mod socket;
 pub mod stream;
-pub mod utils;
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
 where

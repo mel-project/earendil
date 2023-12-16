@@ -74,6 +74,13 @@ impl IdentityPublic {
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq, Copy, Hash)]
 pub struct IdentitySecret([u8; 32]);
 
+impl IdentitySecret {
+    /// Derive an identity from a human-readable seed.
+    pub fn from_seed(id_seed: &str) -> Self {
+        IdentitySecret::from_bytes(&kdf_from_human(id_seed, "identity_kdf_salt"))
+    }
+}
+
 impl FromStr for IdentitySecret {
     type Err = base64::DecodeError;
 
