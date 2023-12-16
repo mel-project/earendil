@@ -1,4 +1,5 @@
 use std::{
+    net::SocketAddr,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -107,12 +108,14 @@ impl RegisterHavenReq {
 /// forwards it back to the earnedil network.
 pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
     match haven_cfg.handler {
-        ForwardHandler::UdpForward { from_dock, to_port } => {
-            udp_forward(ctx, haven_cfg, from_dock, to_port).await
-        }
-        ForwardHandler::TcpForward { from_dock, to_port } => {
-            tcp_forward(ctx, haven_cfg, from_dock, to_port).await
-        }
+        ForwardHandler::UdpService {
+            listen: from_dock,
+            upstream,
+        } => udp_forward(ctx, haven_cfg, from_dock, upstream).await,
+        ForwardHandler::TcpService {
+            listen: from_dock,
+            upstream,
+        } => tcp_forward(ctx, haven_cfg, from_dock, upstream).await,
         ForwardHandler::SimpleProxy { listen_dock } => {
             simple_proxy(ctx, haven_cfg, listen_dock).await
         }
@@ -123,7 +126,7 @@ async fn udp_forward(
     ctx: DaemonContext,
     haven_cfg: HavenForwardConfig,
     from_dock: Dock,
-    to_port: u16,
+    upstream: SocketAddr,
 ) -> anyhow::Result<()> {
     // down loop forwards packets back down to the source Earendil endpoints
     async fn down_loop(
@@ -161,7 +164,7 @@ async fn udp_forward(
         let udp_socket = if let Some((socket, _)) = dmux_table.get(&src_endpoint) {
             socket
         } else {
-            let socket = Arc::new(UdpSocket::bind("127.0.0.1:0").await?);
+            let socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
             let down_task = Immortal::respawn(
                 smolscale::immortal::RespawnStrategy::Immediate,
                 clone!([earendil_skt, socket], move || {
@@ -173,9 +176,7 @@ async fn udp_forward(
             socket
         };
 
-        udp_socket
-            .send_to(&message, format!("127.0.0.1:{to_port}"))
-            .await?;
+        udp_socket.send_to(&message, upstream).await?;
     }
 }
 
@@ -183,7 +184,7 @@ async fn tcp_forward(
     ctx: DaemonContext,
     haven_cfg: HavenForwardConfig,
     from_dock: Dock,
-    to_port: u16,
+    upstream: SocketAddr,
 ) -> anyhow::Result<()> {
     let haven_id = IdentitySecret::from_seed(&haven_cfg.identity_seed);
     log::debug!(
@@ -204,7 +205,7 @@ async fn tcp_forward(
 
     loop {
         let earendil_stream = listener.accept().await?;
-        let tcp_stream = TcpStream::connect(format!("127.0.0.1:{to_port}")).await?;
+        let tcp_stream = TcpStream::connect(upstream).await?;
 
         log::debug!("TCP forward earendil stream accepted");
         reaper.attach(smolscale::spawn(async move {
