@@ -118,7 +118,15 @@ pub struct HavenForwardConfig {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ForwardHandler {
-    UdpService { listen: Dock, upstream: SocketAddr },
-    TcpService { listen: Dock, upstream: SocketAddr },
-    SimpleProxy { listen_dock: Dock },
+    UdpService {
+        listen_dock: Dock,
+        upstream: SocketAddr,
+    },
+    TcpService {
+        listen_dock: Dock,
+        upstream: SocketAddr,
+    },
+    SimpleProxy {
+        listen_dock: Dock,
+    },
 }

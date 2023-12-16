@@ -109,11 +109,11 @@ impl RegisterHavenReq {
 pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
     match haven_cfg.handler {
         ForwardHandler::UdpService {
-            listen: from_dock,
+            listen_dock: from_dock,
             upstream,
         } => udp_forward(ctx, haven_cfg, from_dock, upstream).await,
         ForwardHandler::TcpService {
-            listen: from_dock,
+            listen_dock: from_dock,
             upstream,
         } => tcp_forward(ctx, haven_cfg, from_dock, upstream).await,
         ForwardHandler::SimpleProxy { listen_dock } => {
