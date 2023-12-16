@@ -14,7 +14,7 @@ use std::time::Duration;
 use crate::{
     daemon::context::DaemonContext,
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
-    haven::{HavenLocator, RegisterHavenReq},
+    haven_util::{HavenLocator, RegisterHavenReq},
 };
 
 use super::{

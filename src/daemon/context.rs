@@ -24,7 +24,7 @@ use crate::{
     control_protocol::{DhtError, SendMessageError},
     daemon::route_to_instructs,
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
-    haven::HavenLocator,
+    haven_util::HavenLocator,
     socket::Endpoint,
 };
 

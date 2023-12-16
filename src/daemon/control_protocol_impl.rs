@@ -20,7 +20,7 @@ use crate::{
     control_protocol::{ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs},
     daemon::DaemonContext,
     global_rpc::transport::GlobalRpcTransport,
-    haven::HavenLocator,
+    haven_util::HavenLocator,
     socket::{Endpoint, Socket, SocketRecvError, SocketSendError},
 };
 

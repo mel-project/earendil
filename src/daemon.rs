@@ -32,7 +32,7 @@ use std::thread::available_parallelism;
 
 use std::{sync::Arc, time::Duration};
 
-use crate::haven::{haven_loop, HAVEN_FORWARD_DOCK};
+use crate::haven_util::{haven_loop, HAVEN_FORWARD_DOCK};
 use crate::socket::n2r_socket::N2rSocket;
 use crate::socket::Endpoint;
 use crate::{config::ConfigFile, global_rpc::GLOBAL_RPC_DOCK};

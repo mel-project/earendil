@@ -1,4 +1,5 @@
-pub mod listener;
+mod listener;
+pub use listener::StreamListener;
 
 use std::{pin::Pin, sync::Arc, time::Duration};
 

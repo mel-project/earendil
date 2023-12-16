@@ -3,7 +3,7 @@ pub mod config;
 pub mod control_protocol;
 pub mod daemon;
 mod global_rpc;
-mod haven;
+mod haven_util;
 pub mod socket;
 pub mod stream;
 pub mod utils;

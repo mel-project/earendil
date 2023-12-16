@@ -22,7 +22,7 @@ use crate::{
     config::{ForwardHandler, HavenForwardConfig},
     daemon::context::DaemonContext,
     socket::{Endpoint, Socket},
-    stream::listener::StreamListener,
+    stream::StreamListener,
     utils::id_from_seed,
 };
 
