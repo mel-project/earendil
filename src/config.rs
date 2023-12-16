@@ -71,18 +71,18 @@ pub enum OutRouteConfig {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct UdpForwardConfig {
-    pub forward_to: u16,
+    pub listen: SocketAddr,
     #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub remote_ep: Endpoint,
+    pub remote: Endpoint,
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct TcpForwardConfig {
-    pub forward_to: u16,
+    pub listen: SocketAddr,
     #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub remote_ep: Endpoint,
+    pub remote: Endpoint,
 }
 
 #[serde_as]
@@ -101,7 +101,7 @@ pub enum Fallback {
     PassThrough,
     SimpleProxy {
         #[serde_as(as = "serde_with::DisplayFromStr")]
-        remote_ep: Endpoint,
+        remote: Endpoint,
     },
 }
 

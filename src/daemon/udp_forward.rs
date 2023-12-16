@@ -1,8 +1,4 @@
-use std::{
-    net::{SocketAddr, SocketAddrV4},
-    sync::Arc,
-    time::Duration,
-};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use clone_macro::clone;
 use earendil_crypt::IdentitySecret;
@@ -33,13 +29,7 @@ pub async fn udp_forward_loop(
     let demux_table: Cache<SocketAddr, (Arc<Socket>, Arc<Immortal>)> = CacheBuilder::default()
         .time_to_idle(Duration::from_secs(60 * 60))
         .build();
-    let udp_socket = Arc::new(
-        UdpSocket::bind(SocketAddrV4::new(
-            "127.0.0.1".parse()?,
-            udp_fwd_cfg.forward_to,
-        ))
-        .await?,
-    );
+    let udp_socket = Arc::new(UdpSocket::bind(udp_fwd_cfg.listen).await?);
     let mut buf = [0; 10_000];
 
     loop {
@@ -70,7 +60,7 @@ pub async fn udp_forward_loop(
         // using the earendil socket associated with the src_udp_addr
         src_earendil_skt
             .0
-            .send_to(msg.into(), udp_fwd_cfg.remote_ep)
+            .send_to(msg.into(), udp_fwd_cfg.remote)
             .await?;
     }
 }
