@@ -17,5 +17,5 @@ havens:
     rendezvous: 0k28pjf5qa8nwbt7cn8138xetxdknhz3
     handler:
       type: tcp_forward
-      from_dock: 69421
-      to_port: 8888
+      listen_dock: 69421
+      upstream: 127.0.0.1:8888

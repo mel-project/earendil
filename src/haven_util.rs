@@ -109,13 +109,13 @@ impl RegisterHavenReq {
 pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> anyhow::Result<()> {
     match haven_cfg.handler {
         ForwardHandler::UdpService {
-            listen_dock: from_dock,
+            listen_dock: listen_dock,
             upstream,
-        } => udp_forward(ctx, haven_cfg, from_dock, upstream).await,
+        } => udp_forward(ctx, haven_cfg, listen_dock, upstream).await,
         ForwardHandler::TcpService {
-            listen_dock: from_dock,
+            listen_dock: listen_dock,
             upstream,
-        } => tcp_forward(ctx, haven_cfg, from_dock, upstream).await,
+        } => tcp_forward(ctx, haven_cfg, listen_dock, upstream).await,
         ForwardHandler::SimpleProxy { listen_dock } => {
             simple_proxy(ctx, haven_cfg, listen_dock).await
         }
@@ -125,7 +125,7 @@ pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> an
 async fn udp_forward(
     ctx: DaemonContext,
     haven_cfg: HavenForwardConfig,
-    from_dock: Dock,
+    listen_dock: Dock,
     upstream: SocketAddr,
 ) -> anyhow::Result<()> {
     // down loop forwards packets back down to the source Earendil endpoints
@@ -151,7 +151,7 @@ async fn udp_forward(
     let earendil_skt = Arc::new(Socket::bind_haven_internal(
         ctx.clone(),
         haven_id,
-        Some(from_dock),
+        Some(listen_dock),
         Some(haven_cfg.rendezvous),
     ));
     let dmux_table: Cache<Endpoint, (Arc<UdpSocket>, Arc<Immortal>)> = CacheBuilder::default()
@@ -183,7 +183,7 @@ async fn udp_forward(
 async fn tcp_forward(
     ctx: DaemonContext,
     haven_cfg: HavenForwardConfig,
-    from_dock: Dock,
+    listen_dock: Dock,
     upstream: SocketAddr,
 ) -> anyhow::Result<()> {
     let haven_id = IdentitySecret::from_seed(&haven_cfg.identity_seed);
@@ -195,7 +195,7 @@ async fn tcp_forward(
     let earendil_skt = Socket::bind_haven_internal(
         ctx.clone(),
         haven_id,
-        Some(from_dock),
+        Some(listen_dock),
         Some(haven_cfg.rendezvous),
     );
 

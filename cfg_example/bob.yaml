@@ -17,16 +17,16 @@ havens:
     rendezvous: 0k28pjf5qa8nwbt7cn8138xetxdknhz3
     handler:
       type: udp_forward
-      from_dock: 69420
-      to_port: 8814 # e.g. listening port of geph4-exit
+      listen_dock: 69420
+      upstream: 127.0.0.1:8814 # e.g. listening port of geph4-exit
 
   # fingerprint: pm3atrnq6awfp96qrjg5rmxp39d1bqfh
   - identity_seed: TCP_haven
     rendezvous: 0k28pjf5qa8nwbt7cn8138xetxdknhz3
     handler:
       type: tcp_forward
-      from_dock: 69421
-      to_port: 8815
+      listen_dock: 69421
+      upstream: 127.0.0.1:8815
 
   # fingerprint: jm21nbaf4c8ejg25yq9mc7bg6sdeksja
   - identity_seed: simple_proxy_haven

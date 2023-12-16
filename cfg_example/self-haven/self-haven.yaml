@@ -10,8 +10,8 @@ in_routes:
 
 # client config
 udp_forwards:
-  - forward_to: 8080
-    remote_ep: cxvc52ndnzvy2kq1x9ajr2ft0tn5wk6n:10000
+  - listen: 127.0.0.1:8080
+    remote: cxvc52ndnzvy2kq1x9ajr2ft0tn5wk6n:10000
 
 # server config
 havens:
@@ -19,5 +19,5 @@ havens:
     rendezvous: bnjmrmw1kvjf7jmx5fa6a9x1hjtq7qh3
     handler:
       type: udp_forward
-      from_dock: 10000
-      to_port: 10000
+      listen_dock: 10000
+      upstream: 127.0.0.1:10000
