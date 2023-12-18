@@ -181,25 +181,25 @@ async fn recv_task(
 ) -> anyhow::Result<()> {
     loop {
         let (n2r_msg, _rendezvous_ep) = n2r_skt.recv_from().await?;
-        let (body, remote_ep): (Bytes, Endpoint) = stdcode::deserialize(&n2r_msg)?;
+        let (body, remote): (Bytes, Endpoint) = stdcode::deserialize(&n2r_msg)?;
         let haven_msg: HavenMsg = stdcode::deserialize(&body)?;
 
-        let encrypter = encrypters.get(&remote_ep);
+        let encrypter = encrypters.get(&remote);
         match haven_msg.clone() {
             HavenMsg::ServerHs(_) => match encrypter {
                 Some(enc) => enc.send_incoming(haven_msg).await?,
                 None => anyhow::bail!("stray msg; dropping"),
             },
             HavenMsg::ClientHs(hs) => encrypters.insert(
-                remote_ep,
+                remote,
                 CryptSession::new(
                     isk,
-                    remote_ep,
+                    remote,
                     rob,
                     n2r_skt.clone(),
                     send_incoming_decrypted.clone(),
                     ctx.clone(),
-                    Some((hs, remote_ep.fingerprint)),
+                    Some((hs, remote.fingerprint)),
                 )?,
             ),
             HavenMsg::Regular { nonce: _, inner: _ } => match encrypter {

@@ -85,19 +85,19 @@ impl ControlProtocol for ControlProtocolImpl {
                 .public()
                 .fingerprint();
                 match haven_cfg.handler {
-                    crate::config::ForwardHandler::UdpForward {
-                        from_dock,
-                        to_port: _,
+                    crate::config::ForwardHandler::UdpService {
+                        listen_dock,
+                        upstream: _,
                     } => (
-                        "UdpForward".to_string(),
-                        fp.to_string() + ":" + &from_dock.to_string(),
+                        "UdpService".to_string(),
+                        fp.to_string() + ":" + &listen_dock.to_string(),
                     ),
-                    crate::config::ForwardHandler::TcpForward {
-                        from_dock,
-                        to_port: _,
+                    crate::config::ForwardHandler::TcpService {
+                        listen_dock,
+                        upstream: _,
                     } => (
-                        "TcpForward".to_string(),
-                        fp.to_string() + ":" + &from_dock.to_string(),
+                        "TcpService".to_string(),
+                        fp.to_string() + ":" + &listen_dock.to_string(),
                     ),
                     crate::config::ForwardHandler::SimpleProxy { listen_dock } => (
                         "SimpleProxy".to_string(),

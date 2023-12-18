@@ -10,5 +10,5 @@ in_routes:
     secret: correct horse battery staple
 
 tcp_forwards:
-  - forward_to: 4444
-    remote_ep: pm3atrnq6awfp96qrjg5rmxp39d1bqfh:69421
+  - listen: 127.0.0.1:4444
+    remote: pm3atrnq6awfp96qrjg5rmxp39d1bqfh:69421
