@@ -15,7 +15,11 @@ use rand::Rng;
 use smol::channel::{Receiver, Sender};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
-use crate::{daemon::context::DaemonContext, log_error, socket::SocketRecvError};
+use crate::{
+    daemon::context::{send_n2r, DaemonContext, SOCKET_RECV_QUEUES},
+    log_error,
+    socket::SocketRecvError,
+};
 
 use super::{Endpoint, SocketSendError};
 
@@ -45,7 +49,7 @@ impl N2rSocket {
             let mut rand_dock: Dock;
             loop {
                 rand_dock = rand::thread_rng().gen();
-                if !ctx.socket_recv_queues.contains_key(&Endpoint {
+                if !ctx.get(SOCKET_RECV_QUEUES).contains_key(&Endpoint {
                     fingerprint: our_fingerprint,
                     dock: rand_dock,
                 }) {
@@ -60,7 +64,7 @@ impl N2rSocket {
             ctx: ctx.clone(),
         });
         let (send_incoming, recv_incoming) = smol::channel::bounded(1000);
-        ctx.socket_recv_queues.insert(
+        ctx.get(SOCKET_RECV_QUEUES).insert(
             Endpoint {
                 fingerprint: our_fingerprint,
                 dock,
@@ -156,7 +160,8 @@ async fn send_batcher_loop(
                 }
                 log::trace!("subbatch of size {}", subbatch.len());
                 // send the message
-                ctx.send_message(
+                send_n2r(
+                    &ctx,
                     isk,
                     dock,
                     endpoint.fingerprint,
@@ -172,7 +177,7 @@ async fn send_batcher_loop(
 impl Drop for BoundDock {
     fn drop(&mut self) {
         self.ctx
-            .socket_recv_queues
+            .get(SOCKET_RECV_QUEUES)
             .remove(&Endpoint::new(self.fp, self.dock));
     }
 }

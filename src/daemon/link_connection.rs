@@ -28,6 +28,7 @@ use smolscale::{
 use sosistab2::{Multiplex, MuxSecret, Pipe};
 
 use super::{
+    context::{GLOBAL_IDENTITY, NEIGH_TABLE, RELAY_GRAPH},
     link_protocol::{AuthResponse, InfoResponse, LinkClient, LinkProtocol, LinkService},
     DaemonContext,
 };
@@ -236,7 +237,7 @@ struct LinkProtocolImpl {
 impl LinkProtocol for LinkProtocolImpl {
     async fn authenticate(&self) -> AuthResponse {
         let local_pk = self.mplex.local_pk();
-        AuthResponse::new(&self.ctx.identity, &local_pk)
+        AuthResponse::new(self.ctx.get(GLOBAL_IDENTITY), &local_pk)
     }
 
     async fn info(&self) -> InfoResponse {
@@ -251,18 +252,25 @@ impl LinkProtocol for LinkProtocolImpl {
     ) -> Option<AdjacencyDescriptor> {
         // This must be a neighbor that is "left" of us
         let valid = left_incomplete.left < left_incomplete.right
-            && left_incomplete.right == self.ctx.identity.public().fingerprint()
-            && self.ctx.table.lookup(&left_incomplete.left).is_some();
+            && left_incomplete.right == self.ctx.get(GLOBAL_IDENTITY).public().fingerprint()
+            && self
+                .ctx
+                .get(NEIGH_TABLE)
+                .lookup(&left_incomplete.left)
+                .is_some();
         if !valid {
             log::debug!("neighbor not right of us! Refusing to sign adjacency x_x");
             return None;
         }
         // Fill in the right-hand-side
-        let signature = self.ctx.identity.sign(left_incomplete.to_sign().as_bytes());
+        let signature = self
+            .ctx
+            .get(GLOBAL_IDENTITY)
+            .sign(left_incomplete.to_sign().as_bytes());
         left_incomplete.right_sig = signature;
 
         self.ctx
-            .relay_graph
+            .get(RELAY_GRAPH)
             .write()
             .insert_adjacency(left_incomplete.clone())
             .map_err(|e| {
@@ -274,11 +282,11 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     async fn identity(&self, fp: Fingerprint) -> Option<IdentityDescriptor> {
-        self.ctx.relay_graph.read().identity(&fp)
+        self.ctx.get(RELAY_GRAPH).read().identity(&fp)
     }
 
     async fn adjacencies(&self, fps: Vec<Fingerprint>) -> Vec<AdjacencyDescriptor> {
-        let rg = self.ctx.relay_graph.read();
+        let rg = self.ctx.get(RELAY_GRAPH).read();
         fps.into_iter()
             .flat_map(|fp| {
                 rg.adjacencies(&fp).into_iter().flatten().filter(|adj| {

@@ -96,7 +96,7 @@ async fn socks5_once(
                         ))
                         .await?;
                 }
-                Fallback::SimpleProxy { remote: remote } => {
+                Fallback::SimpleProxy { remote } => {
                     let remote_skt = Socket::bind_haven_internal(
                         ctx.clone(),
                         IdentitySecret::generate(),

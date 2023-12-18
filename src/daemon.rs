@@ -1,6 +1,7 @@
 pub(crate) mod context;
 mod control_protocol_impl;
 
+pub(crate) mod dht;
 mod gossip;
 mod inout_route;
 mod link_connection;
@@ -8,6 +9,7 @@ mod link_protocol;
 mod neightable;
 mod peel_forward;
 mod reply_block_store;
+mod rrb_balance;
 mod socks5;
 mod tcp_forward;
 mod udp_forward;
@@ -22,7 +24,6 @@ use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
-use parking_lot::RwLock;
 
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
@@ -32,8 +33,6 @@ use std::thread::available_parallelism;
 
 use std::{sync::Arc, time::Duration};
 
-use crate::haven_util::{haven_loop, HAVEN_FORWARD_DOCK};
-use crate::socket::n2r_socket::N2rSocket;
 use crate::socket::Endpoint;
 use crate::{config::ConfigFile, global_rpc::GLOBAL_RPC_DOCK};
 use crate::{
@@ -46,6 +45,7 @@ use crate::{
 };
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
 use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
+use crate::{daemon::context::NEIGH_TABLE, socket::n2r_socket::N2rSocket};
 use crate::{
     daemon::{
         peel_forward::peel_forward_loop, socks5::socks5_loop, tcp_forward::tcp_forward_loop,
@@ -53,10 +53,14 @@ use crate::{
     },
     log_error,
 };
+use crate::{
+    global_rpc::server::REGISTERED_HAVENS,
+    haven_util::{haven_loop, HAVEN_FORWARD_DOCK},
+};
 
 pub use self::control_protocol_impl::ControlProtErr;
 
-use self::control_protocol_impl::ControlProtocolImpl;
+use self::{context::GLOBAL_IDENTITY, control_protocol_impl::ControlProtocolImpl};
 
 pub struct Daemon {
     pub(crate) ctx: DaemonContext,
@@ -66,7 +70,7 @@ pub struct Daemon {
 impl Daemon {
     /// Initializes the daemon and starts all background loops
     pub fn init(config: ConfigFile) -> anyhow::Result<Daemon> {
-        let ctx = DaemonContext::new(config)?;
+        let ctx = DaemonContext::new(config);
         let context = ctx.clone();
         log::info!("starting background task for main_daemon");
         let task = Immortal::spawn(async move {
@@ -77,29 +81,28 @@ impl Daemon {
     }
 
     pub fn identity(&self) -> IdentitySecret {
-        self.ctx.identity
+        *self.ctx.get(GLOBAL_IDENTITY)
     }
 }
 
 pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     log::info!(
         "daemon starting with fingerprint {}",
-        ctx.identity.public().fingerprint()
+        ctx.get(GLOBAL_IDENTITY).public().fingerprint()
     );
 
     scopeguard::defer!({
         log::info!(
             "daemon with fingerprint {} is now DROPPED!",
-            ctx.identity.public().fingerprint()
+            ctx.get(GLOBAL_IDENTITY).public().fingerprint()
         )
     });
 
-    let table = ctx.table.clone();
     // Run the loops
-    let _table_gc = Immortal::spawn(clone!([table], async move {
+    let _table_gc = Immortal::spawn(clone!([ctx], async move {
         loop {
             smol::Timer::after(Duration::from_secs(60)).await;
-            table.garbage_collect();
+            ctx.get(NEIGH_TABLE).garbage_collect();
         }
     }));
 
@@ -139,7 +142,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     );
 
     let _haven_loops: Vec<Immortal> = ctx
-        .config
+        .init()
         .havens
         .clone()
         .into_iter()
@@ -154,7 +157,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 
     // app-level traffic tasks/processes
     let _udp_forward_loops: Vec<Immortal> = ctx
-        .config
+        .init()
         .udp_forwards
         .clone()
         .into_iter()
@@ -171,7 +174,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         .collect();
 
     let _tcp_forward_loops: Vec<Immortal> = ctx
-        .config
+        .init()
         .tcp_forwards
         .clone()
         .into_iter()
@@ -187,7 +190,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         })
         .collect();
 
-    let _socks5_loop = ctx.config.socks5.clone().map(|config| {
+    let _socks5_loop = ctx.init().socks5.clone().map(|config| {
         Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx], move || socks5_loop(ctx.clone(), config.clone(),)),
@@ -197,7 +200,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     let mut route_tasks = FuturesUnordered::new();
 
     // For every in_routes block, spawn a task to handle incoming stuff
-    for (in_route_name, config) in ctx.config.in_routes.iter() {
+    for (in_route_name, config) in ctx.init().in_routes.iter() {
         let context = InRouteContext {
             in_route_name: in_route_name.clone(),
             daemon_ctx: ctx.clone(),
@@ -210,7 +213,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 
     // For every out_routes block, spawn a task to handle outgoing stuff
-    for (out_route_name, config) in ctx.config.out_routes.iter() {
+    for (out_route_name, config) in ctx.init().out_routes.iter() {
         match config {
             OutRouteConfig::Obfsudp {
                 fingerprint,
@@ -238,7 +241,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 
 /// Loop that handles the control protocol
 async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let http = HttpRpcServer::bind(ctx.config.control_listen).await?;
+    let http = HttpRpcServer::bind(ctx.init().control_listen).await?;
     let service = ControlService(ControlProtocolImpl::new(ctx));
     http.run(service).await?;
     Ok(())
@@ -248,7 +251,7 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let socket = Arc::new(N2rSocket::bind(
         ctx.clone(),
-        ctx.identity,
+        *ctx.get(GLOBAL_IDENTITY),
         Some(GLOBAL_RPC_DOCK),
     ));
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
@@ -283,7 +286,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
     let socket = Arc::new(N2rSocket::bind(
         ctx.clone(),
-        ctx.identity,
+        *ctx.get(GLOBAL_IDENTITY),
         Some(HAVEN_FORWARD_DOCK),
     ));
 
@@ -293,7 +296,9 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             let (inner, dest_ep): (Bytes, Endpoint) = stdcode::deserialize(&msg)?;
             log::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
 
-            let is_valid_dest = ctx.registered_havens.contains_key(&dest_ep.fingerprint);
+            let is_valid_dest = ctx
+                .get(REGISTERED_HAVENS)
+                .contains_key(&dest_ep.fingerprint);
             let is_seen_src = seen_srcs.contains_key(&(dest_ep, src_ep));
 
             if is_valid_dest {
@@ -311,7 +316,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 fn route_to_instructs(
     route: Vec<Fingerprint>,
-    relay_graph: Arc<RwLock<RelayGraph>>,
+    relay_graph: &RelayGraph,
 ) -> Result<Vec<ForwardInstruction>, SendMessageError> {
     route
         .windows(2)
@@ -319,7 +324,6 @@ fn route_to_instructs(
             let this = wind[0];
             let next = wind[1];
             let this_pubkey = relay_graph
-                .read()
                 .identity(&this)
                 .ok_or(SendMessageError::NoOnionPublic(this))?
                 .onion_pk;

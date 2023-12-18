@@ -8,7 +8,7 @@ use serde_with::serde_as;
 use crate::socket::Endpoint;
 
 /// A YAML-serializable configuration file
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFile {
     /// Seed of the long-term identity. Must be long and difficult to guess!
     ///
@@ -54,7 +54,7 @@ pub enum InRouteConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "protocol", rename_all = "snake_case")]
 pub enum OutRouteConfig {
     Obfsudp {
