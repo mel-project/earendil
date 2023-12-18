@@ -1,7 +1,4 @@
-use std::{
-    net::{Ipv4Addr, SocketAddrV4},
-    str::FromStr,
-};
+use std::{net::Ipv4Addr, str::FromStr};
 
 use anyhow::Context;
 use earendil_crypt::{Fingerprint, IdentitySecret};
@@ -24,11 +21,7 @@ use super::DaemonContext;
 
 pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Result<()> {
     log::debug!("socks5 loop started");
-    let tcp_listener = TcpListener::bind(SocketAddrV4::new(
-        "127.0.0.1".parse()?,
-        socks5_cfg.listen_port,
-    ))
-    .await?;
+    let tcp_listener = TcpListener::bind(socks5_cfg.listen).await?;
     let fallback = socks5_cfg.fallback;
     let reaper = TaskReaper::new();
 
@@ -103,14 +96,14 @@ async fn socks5_once(
                         ))
                         .await?;
                 }
-                Fallback::SimpleProxy { remote_ep } => {
+                Fallback::SimpleProxy { remote: remote } => {
                     let remote_skt = Socket::bind_haven_internal(
                         ctx.clone(),
                         IdentitySecret::generate(),
                         None,
                         None,
                     );
-                    let mut remote_stream = Stream::connect(remote_skt, remote_ep).await?;
+                    let mut remote_stream = Stream::connect(remote_skt, remote).await?;
                     let prepend = (addr.len() as u16).to_be_bytes();
                     remote_stream.write(&prepend).await?;
 

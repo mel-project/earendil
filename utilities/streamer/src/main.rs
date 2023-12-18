@@ -6,7 +6,7 @@ use earendil::{
     config::ConfigFile,
     daemon::Daemon,
     socket::Socket,
-    stream::{listener::StreamListener, Stream},
+    stream::{Stream, StreamListener},
 };
 use earendil_crypt::IdentitySecret;
 use futures_util::{io::AsyncWriteExt, AsyncReadExt};

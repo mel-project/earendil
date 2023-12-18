@@ -17,7 +17,7 @@ use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 
 use crate::control_protocol::DhtError;
-use crate::{daemon::context::DaemonContext, haven::HAVEN_FORWARD_DOCK};
+use crate::{daemon::context::DaemonContext, haven_util::HAVEN_FORWARD_DOCK};
 
 use super::{n2r_socket::N2rSocket, Endpoint};
 
@@ -45,7 +45,7 @@ pub struct Handshake {
 impl CryptSession {
     pub fn new(
         my_isk: IdentitySecret,
-        remote_ep: Endpoint,
+        remote: Endpoint,
         rendezvous_fp: Option<Fingerprint>,
         n2r_skt: N2rSocket,
         send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
@@ -64,7 +64,7 @@ impl CryptSession {
             enc_task(
                 my_isk,
                 n2r_skt,
-                remote_ep,
+                remote,
                 rendezvous_fp,
                 recv_in,
                 recv_out,
@@ -105,7 +105,7 @@ impl CryptSession {
 async fn enc_task(
     my_isk: IdentitySecret,
     n2r_skt: N2rSocket,
-    remote_ep: Endpoint,
+    remote: Endpoint,
     rendezvous_fp: Option<Fingerprint>,
     recv_incoming: Receiver<HavenMsg>,
     recv_outgoing: Receiver<Bytes>,
@@ -114,7 +114,7 @@ async fn enc_task(
     ctx: DaemonContext,
 ) -> anyhow::Result<Infallible> {
     let send_to_rendezvous = |msg: Bytes| async {
-        let fwd_body = (msg, remote_ep).stdcode();
+        let fwd_body = (msg, remote).stdcode();
         let rendezvous_ep = match rendezvous_fp {
             Some(rob) => {
                 // We're the server
@@ -123,7 +123,7 @@ async fn enc_task(
             None => {
                 // We're the client: look up Rob's addr in rendezvous dht
                 let bob_locator = ctx
-                    .dht_get(remote_ep.fingerprint)
+                    .dht_get(remote.fingerprint)
                     .timeout(Duration::from_secs(30))
                     .await
                     .map_or(
@@ -132,8 +132,8 @@ async fn enc_task(
                         )),
                         |res| res,
                     )
-                    .context(format!("DHT failed for {}", remote_ep.fingerprint))?
-                    .context(format!("DHT returned None for {}", remote_ep.fingerprint))?;
+                    .context(format!("DHT failed for {}", remote.fingerprint))?
+                    .context(format!("DHT returned None for {}", remote.fingerprint))?;
                 Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
             }
         };
@@ -197,9 +197,7 @@ async fn enc_task(
             if let HavenMsg::Regular { nonce, inner } = msg {
                 if rf.add(nonce) {
                     let plain = dec_key.open(&pad_nonce(nonce), &inner)?;
-                    send_incoming_decrypted
-                        .send((plain.into(), remote_ep))
-                        .await?
+                    send_incoming_decrypted.send((plain.into(), remote)).await?
                 } else {
                     log::debug!("received pkt with duplicate nonce! dropping...")
                 }

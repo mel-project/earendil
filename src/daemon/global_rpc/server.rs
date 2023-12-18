@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use crate::{
     control_protocol::DhtError,
     daemon::context::DaemonContext,
-    haven_util::{HavenLocator, RegisterHavenReq},
+    haven::{HavenLocator, RegisterHavenReq},
 };
 use earendil_crypt::{Fingerprint, VerifyError};
 

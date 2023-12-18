@@ -71,25 +71,25 @@ pub enum OutRouteConfig {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct UdpForwardConfig {
-    pub forward_to: u16,
+    pub listen: SocketAddr,
     #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub remote_ep: Endpoint,
+    pub remote: Endpoint,
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct TcpForwardConfig {
-    pub forward_to: u16,
+    pub listen: SocketAddr,
     #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub remote_ep: Endpoint,
+    pub remote: Endpoint,
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct Socks5 {
-    pub listen_port: u16,
+    pub listen: SocketAddr,
     pub fallback: Fallback,
 }
 
@@ -101,7 +101,7 @@ pub enum Fallback {
     PassThrough,
     SimpleProxy {
         #[serde_as(as = "serde_with::DisplayFromStr")]
-        remote_ep: Endpoint,
+        remote: Endpoint,
     },
 }
 
@@ -118,7 +118,15 @@ pub struct HavenForwardConfig {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ForwardHandler {
-    UdpForward { from_dock: Dock, to_port: u16 },
-    TcpForward { from_dock: Dock, to_port: u16 },
-    SimpleProxy { listen_dock: Dock },
+    UdpService {
+        listen_dock: Dock,
+        upstream: SocketAddr,
+    },
+    TcpService {
+        listen_dock: Dock,
+        upstream: SocketAddr,
+    },
+    SimpleProxy {
+        listen_dock: Dock,
+    },
 }

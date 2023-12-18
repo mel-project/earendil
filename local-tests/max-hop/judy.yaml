@@ -16,9 +16,9 @@ havens:
     rendezvous: 7wrkhwar5kj3hybwaf9pe996eydzc969 # alice
     handler:
       type: tcp_forward
-      from_dock: 6666
-      to_port: 8888
+      listen_dock: 6666
+      upstream: 127.0.0.1:8888
 
 tcp_forwards:
-  - forward_to: 4444
-    remote_ep: pm3atrnq6awfp96qrjg5rmxp39d1bqfh:6666
+  - listen: 127.0.0.1:4444
+    remote: pm3atrnq6awfp96qrjg5rmxp39d1bqfh:6666
