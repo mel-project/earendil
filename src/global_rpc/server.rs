@@ -1,8 +1,14 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
+use moka::sync::Cache;
 
 use crate::{
     control_protocol::DhtError,
-    daemon::context::DaemonContext,
+    daemon::{
+        context::{CtxField, DaemonContext},
+        dht::{dht_get, dht_insert},
+    },
     haven_util::{HavenLocator, RegisterHavenReq},
 };
 use earendil_crypt::{Fingerprint, VerifyError};
@@ -19,6 +25,18 @@ impl GlobalRpcImpl {
     }
 }
 
+static LOCAL_DHT_SHARD: CtxField<Cache<Fingerprint, HavenLocator>> = |_| {
+    Cache::builder()
+        .time_to_live(Duration::from_secs(600))
+        .build()
+};
+
+pub static REGISTERED_HAVENS: CtxField<Cache<Fingerprint, ()>> = |_| {
+    Cache::builder()
+        .time_to_live(Duration::from_secs(3600))
+        .build()
+};
+
 #[async_trait]
 impl GlobalRpcProtocol for GlobalRpcImpl {
     async fn ping(&self, i: u64) -> u64 {
@@ -29,7 +47,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         let key = locator.identity_pk.fingerprint();
 
         if recurse {
-            self.ctx.dht_insert(locator).await
+            dht_insert(&self.ctx, locator).await
         } else {
             locator
                 .identity_pk
@@ -37,7 +55,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
                 .map_err(|_| DhtError::VerifyFailed)?;
 
             log::debug!("inserting key {key} locally");
-            self.ctx.local_rdht_shard.insert(key, locator.clone());
+            self.ctx.get(LOCAL_DHT_SHARD).insert(key, locator.clone());
         }
         Ok(())
     }
@@ -47,11 +65,11 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         key: Fingerprint,
         recurse: bool,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        if let Some(val) = self.ctx.local_rdht_shard.get(&key) {
+        if let Some(val) = self.ctx.get(LOCAL_DHT_SHARD).get(&key) {
             return Ok(Some(val));
         } else if recurse {
             log::debug!("searching DHT for {key}");
-            return self.ctx.dht_get(key).await;
+            return dht_get(&self.ctx, key).await;
         }
         Ok(None)
     }
@@ -61,7 +79,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             .identity_pk
             .verify(registration.to_sign().as_bytes(), &registration.sig)?;
         self.ctx
-            .registered_havens
+            .get(REGISTERED_HAVENS)
             .insert(registration.identity_pk.fingerprint(), ());
         Ok(())
     }

@@ -16,7 +16,7 @@ use smol::{
 use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 
-use crate::control_protocol::DhtError;
+use crate::{control_protocol::DhtError, daemon::dht::dht_get};
 use crate::{daemon::context::DaemonContext, haven_util::HAVEN_FORWARD_DOCK};
 
 use super::{n2r_socket::N2rSocket, Endpoint};
@@ -122,8 +122,7 @@ async fn enc_task(
             }
             None => {
                 // We're the client: look up Rob's addr in rendezvous dht
-                let bob_locator = ctx
-                    .dht_get(remote.fingerprint)
+                let bob_locator = dht_get(&ctx, remote.fingerprint)
                     .timeout(Duration::from_secs(30))
                     .await
                     .map_or(

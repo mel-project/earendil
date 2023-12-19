@@ -12,7 +12,7 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use std::time::Duration;
 
 use crate::{
-    daemon::context::DaemonContext,
+    daemon::{context::DaemonContext, dht::dht_insert},
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
     haven_util::{HavenLocator, RegisterHavenReq},
 };
@@ -97,10 +97,12 @@ impl HavenSocket {
                             Timer::after(Duration::from_secs(3)).await;
                         }
                         _ => {
-                            context
-                                .dht_insert(HavenLocator::new(registration_isk, onion_pk, rob))
-                                .timeout(Duration::from_secs(30))
-                                .await;
+                            dht_insert(
+                                &context,
+                                HavenLocator::new(registration_isk, onion_pk, rob),
+                            )
+                            .timeout(Duration::from_secs(30))
+                            .await;
                             log::debug!("registering haven rendezvous relay SUCCEEDED!");
                             Timer::after(Duration::from_secs(5)).await;
                         }

@@ -18,10 +18,18 @@ use thiserror::Error;
 use crate::{
     config::InRouteConfig,
     control_protocol::{ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs},
-    daemon::DaemonContext,
+    daemon::{
+        context::{NEIGH_TABLE, RELAY_GRAPH},
+        DaemonContext,
+    },
     global_rpc::transport::GlobalRpcTransport,
     haven_util::HavenLocator,
     socket::{Endpoint, Socket, SocketRecvError, SocketSendError},
+};
+
+use super::{
+    context::GLOBAL_IDENTITY,
+    dht::{dht_get, dht_insert},
 };
 
 pub struct ControlProtocolImpl {
@@ -45,7 +53,7 @@ impl ControlProtocol for ControlProtocolImpl {
     async fn bind_n2r(&self, socket_id: String, anon_id: Option<String>, dock: Option<Dock>) {
         let anon_id = anon_id
             .map(|id| self.anon_identities.lock().get(&id))
-            .unwrap_or_else(|| self.ctx.identity);
+            .unwrap_or_else(|| *self.ctx.get(GLOBAL_IDENTITY));
         let socket = Socket::bind_n2r_internal(self.ctx.clone(), anon_id, dock);
         self.sockets.insert(socket_id, socket);
     }
@@ -59,7 +67,7 @@ impl ControlProtocol for ControlProtocolImpl {
     ) {
         let isk = anon_id
             .map(|id| self.anon_identities.lock().get(&id))
-            .unwrap_or_else(|| self.ctx.identity);
+            .unwrap_or_else(|| *self.ctx.get(GLOBAL_IDENTITY));
         let socket = Socket::bind_haven_internal(self.ctx.clone(), isk, dock, rendezvous_point);
         self.sockets.insert(socket_id, socket);
     }
@@ -74,7 +82,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn havens_info(&self) -> Vec<(String, String)> {
         self.ctx
-            .config
+            .init()
             .havens
             .iter()
             .map(|haven_cfg| {
@@ -128,8 +136,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn my_routes(&self) -> serde_json::Value {
         let lala: BTreeMap<String, serde_json::Value> = self
-            .ctx
-            .config
+            .ctx.init()
             .in_routes
             .iter()
             .map(|(k, v)| match v {
@@ -139,7 +146,7 @@ impl ControlProtocol for ControlProtocolImpl {
                     (
                         k.clone(),
                         json!( {
-                            "fingerprint": format!("{}", self.ctx.identity.public().fingerprint()),
+                            "fingerprint": format!("{}", self.ctx.get(GLOBAL_IDENTITY).public().fingerprint()),
                             "connect": format!("<YOUR_IP>:{}", listen.port()),
                             "cookie": hex::encode(secret.to_public().as_bytes()),
                         }),
@@ -151,8 +158,13 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn graph_dump(&self, human: bool) -> String {
-        let my_fp = self.ctx.identity.public().fingerprint().to_string();
-        let relay_or_client = if self.ctx.config.in_routes.is_empty() {
+        let my_fp = self
+            .ctx
+            .get(GLOBAL_IDENTITY)
+            .public()
+            .fingerprint()
+            .to_string();
+        let relay_or_client = if self.ctx.init().in_routes.is_empty() {
             "client"
         } else {
             "relay"
@@ -160,7 +172,7 @@ impl ControlProtocol for ControlProtocolImpl {
         if human {
             let all_neighs =
                 self.ctx
-                    .table
+                    .get(NEIGH_TABLE)
                     .all_neighs()
                     .iter()
                     .fold(String::new(), |acc, neigh| {
@@ -168,19 +180,19 @@ impl ControlProtocol for ControlProtocolImpl {
                     });
             let all_adjs = self
                 .ctx
-                .relay_graph
+                .get(RELAY_GRAPH)
                 .read()
                 .all_adjacencies()
                 .filter(|adj| {
                     // only display relays
                     self.ctx
-                        .relay_graph
+                        .get(RELAY_GRAPH)
                         .read()
                         .identity(&adj.left)
                         .map_or(false, |id| id.is_relay)
                         && self
                             .ctx
-                            .relay_graph
+                            .get(RELAY_GRAPH)
                             .read()
                             .identity(&adj.right)
                             .map_or(false, |id| id.is_relay)
@@ -200,7 +212,7 @@ impl ControlProtocol for ControlProtocolImpl {
         } else {
             let all_neighs =
                 self.ctx
-                    .table
+                    .get(NEIGH_TABLE)
                     .all_neighs()
                     .iter()
                     .fold(String::new(), |acc, neigh| {
@@ -208,7 +220,7 @@ impl ControlProtocol for ControlProtocolImpl {
                     });
             let all_adjs = self
                 .ctx
-                .relay_graph
+                .get(RELAY_GRAPH)
                 .read()
                 .all_adjacencies()
                 .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
@@ -221,7 +233,7 @@ impl ControlProtocol for ControlProtocolImpl {
                 });
             let all_nodes: String =
                 self.ctx
-                    .relay_graph
+                    .get(RELAY_GRAPH)
                     .read()
                     .all_nodes()
                     .fold(String::new(), |acc, node| {
@@ -282,7 +294,7 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError> {
-        self.ctx.dht_insert(locator).await;
+        dht_insert(&self.ctx, locator).await;
         Ok(())
     }
 
@@ -290,8 +302,7 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        self.ctx
-            .dht_get(fingerprint)
+        dht_get(&self.ctx, fingerprint)
             .timeout(Duration::from_secs(30))
             .await
             .map_or(

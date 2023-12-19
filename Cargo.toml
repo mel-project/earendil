@@ -9,6 +9,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyctx={git="https://github.com/nullchinchilla/anyctx.git"}
 serde = { version = "1.0.188", features = ["derive"] }
 serde_with = { version = "3.3.0", features = ["hex", "base64"] }
 earendil_packet = { path = "libraries/earendil_packet" }

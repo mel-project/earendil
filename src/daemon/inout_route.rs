@@ -5,7 +5,7 @@ use smol::future::FutureExt;
 use smolscale::reaper::TaskReaper;
 use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
 
-use crate::daemon::link_connection::LinkConnection;
+use crate::daemon::{context::NEIGH_TABLE, link_connection::LinkConnection};
 
 use super::DaemonContext;
 
@@ -38,7 +38,7 @@ pub async fn in_route_obfsudp(
                 context.in_route_name,
                 connection.remote_idpk().fingerprint()
             );
-            context.daemon_ctx.table.insert(
+            context.daemon_ctx.get(NEIGH_TABLE).insert(
                 connection.remote_idpk().fingerprint(),
                 connection,
                 Duration::from_secs(300),
@@ -82,7 +82,7 @@ pub async fn out_route_obfsudp(
             }
             context
                 .daemon_ctx
-                .table
+                .get(NEIGH_TABLE)
                 .insert_pinned(context.remote_fingerprint, connection);
             log::info!("obfsudp out_route {} successful", context.out_route_name);
             anyhow::Ok(())
