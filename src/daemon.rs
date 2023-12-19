@@ -14,6 +14,7 @@ mod socks5;
 mod tcp_forward;
 mod udp_forward;
 
+use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentitySecret};
@@ -27,12 +28,18 @@ use nanorpc_http::server::HttpRpcServer;
 
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
+use sosistab2::{Multiplex, MuxSecret, Pipe};
+use sosistab2_obfsudp::{ObfsUdpPipe, ObfsUdpPublic};
 use stdcode::StdcodeSerializeExt;
 
 use std::thread::available_parallelism;
 
 use std::{sync::Arc, time::Duration};
 
+use crate::daemon::link_connection::{
+    connection_loop, LinkConnection, LinkProtocolImpl, MultiplexRpcTransport,
+};
+use crate::daemon::link_protocol::{LinkClient, LinkService};
 use crate::socket::Endpoint;
 use crate::{config::ConfigFile, global_rpc::GLOBAL_RPC_DOCK};
 use crate::{
@@ -117,12 +124,6 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             })
             .collect();
 
-    let _gossip = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([ctx], move || gossip_loop(ctx.clone())
-            .map_err(log_error("gossip"))),
-    );
-
     let _control_protocol = Immortal::respawn(
         RespawnStrategy::Immediate,
         clone!([ctx], move || control_protocol_loop(ctx.clone())
@@ -205,9 +206,14 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             in_route_name: in_route_name.clone(),
             daemon_ctx: ctx.clone(),
         };
+
         match config.clone() {
             InRouteConfig::Obfsudp { listen, secret } => {
-                route_tasks.push(smolscale::spawn(in_route_obfsudp(context, listen, secret)));
+                let listener = in_route_obfsudp(context, listen, secret).await?;
+                loop {
+                    let pipe = listener.accept().await?;
+                    route_tasks.push(smolscale::spawn(per_route_loop(ctx.clone(), pipe, None)));
+                }
             }
         }
     }
@@ -225,8 +231,11 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                     remote_fingerprint: *fingerprint,
                     daemon_ctx: ctx.clone(),
                 };
-                route_tasks.push(smolscale::spawn(out_route_obfsudp(
-                    context, *connect, *cookie,
+                let pipe = out_route_obfsudp(context, *connect, *cookie).await?;
+                route_tasks.push(smolscale::spawn(per_route_loop(
+                    ctx.clone(),
+                    pipe,
+                    Some(*fingerprint),
                 )));
             }
         }
@@ -237,6 +246,61 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         next?;
     }
     Ok(())
+}
+
+// NOTE: Do these concurrently:
+// Host LinkRPC, using the existing helper structs (LinkProtocol’s generated structs, MultiplexRpcTransport, LinkProtocolImpl, etc)
+// Do gossip logic
+// Do debt-accounting logic
+// Read and write from appropriately added channels in the context to handle incoming and outgoing packets
+async fn per_route_loop(
+    ctx: DaemonContext,
+    pipe: impl Pipe,
+    their_fp: Option<Fingerprint>,
+) -> anyhow::Result<()> {
+    // create link service, call authenticate, get `their_public_key` from the AuthResponse
+    let my_mux_sk = MuxSecret::generate();
+    let mplex = Arc::new(Multiplex::new(my_mux_sk, None));
+    mplex.add_pipe(pipe);
+
+    let (send_outgoing, recv_outgoing) = smol::channel::bounded(1);
+    let (send_incoming, recv_incoming) = smol::channel::bounded(1);
+    let rpc = MultiplexRpcTransport::new(mplex.clone());
+    let link = LinkClient::from(rpc);
+    let resp = link
+        .authenticate()
+        .await
+        .context("did not respond to authenticate")?;
+    resp.verify(&mplex.peer_pk().context("could not obtain peer_pk")?)
+        .context("did not authenticated correctly")?;
+
+    let neighbor_idpk = resp.full_pk;
+
+    // TODO: is this correct? they should be the same anyways (we should error if not)
+    let their_fp = if let Some(fp) = their_fp {
+        fp
+    } else {
+        neighbor_idpk.fingerprint()
+    };
+
+    let link_client = Arc::new(link);
+    let _gossip = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([ctx], move || gossip_loop(
+            ctx.clone(),
+            neighbor_idpk,
+            link_client.clone(),
+        )
+        .map_err(log_error("gossip"))),
+    );
+
+    // TODO: debt accounting
+
+    let task = Arc::new(Immortal::spawn(
+        connection_loop(ctx, mplex.clone(), send_incoming, recv_outgoing, their_fp)
+            .unwrap_or_else(|e| panic!("connection_loop died with {:?}", e)),
+    ));
+    todo!()
 }
 
 /// Loop that handles the control protocol
