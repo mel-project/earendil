@@ -97,6 +97,7 @@ async fn per_route_tasks(
     their_fp: Option<Fingerprint>,
 ) -> anyhow::Result<()> {
     log::info!("about to connect link_conn");
+
     let link = LinkConnection::connect(ctx.clone(), pipe, their_fp).await?;
     let _conn_task = link.connection_task;
 

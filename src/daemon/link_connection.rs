@@ -15,6 +15,7 @@ use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use futures_util::TryFutureExt;
 use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
+use parking_lot::Mutex;
 use smol::{
     channel::{Receiver, Sender},
     future::FutureExt,
@@ -62,9 +63,12 @@ impl LinkConnection {
         let rpc = MultiplexRpcTransport::new(mplex.clone());
         let link = LinkClient::from(rpc);
 
+        let remote_pk_shared = Arc::new(Mutex::new(None));
+
         let service = Arc::new(LinkService(LinkProtocolImpl {
             ctx: ctx.clone(),
             mplex: mplex.clone(),
+            remote_pk: remote_pk_shared.clone(),
         }));
 
         let task = Immortal::spawn(
@@ -80,7 +84,10 @@ impl LinkConnection {
         resp.verify(&mplex.peer_pk().context("could not obtain peer_pk")?)
             .context("did not authenticated correctly")?;
 
-        let remote_pk = resp.full_pk;
+        let remote_fp = resp.full_pk.fingerprint();
+
+        let mut remote_pk = remote_pk_shared.lock();
+        *remote_pk = Some(resp.full_pk);
 
         let conn = Self {
             send_outgoing,
@@ -91,11 +98,11 @@ impl LinkConnection {
         if let Some(fp) = their_fp {
             log::info!("about to insert into neightable for fp: {}", fp);
 
-            if fp != remote_pk.fingerprint() {
+            if fp != remote_fp {
                 anyhow::bail!(
                     "out route fingerprint in config ({}), does not match link fingerprint: {}",
                     fp,
-                    remote_pk.fingerprint()
+                    remote_fp
                 );
             }
 
@@ -268,6 +275,7 @@ impl RpcTransport for MultiplexRpcTransport {
 pub struct LinkProtocolImpl {
     pub ctx: DaemonContext,
     pub mplex: Arc<Multiplex>,
+    pub remote_pk: Arc<Mutex<Option<IdentityPublic>>>,
 }
 
 #[async_trait]
