@@ -16,7 +16,7 @@ havens:
   - identity_seed: UDP_haven
     rendezvous: 0k28pjf5qa8nwbt7cn8138xetxdknhz3
     handler:
-      type: udp_forward
+      type: udp_service
       listen_dock: 69420
       upstream: 127.0.0.1:8814 # e.g. listening port of geph4-exit
 
@@ -24,7 +24,7 @@ havens:
   - identity_seed: TCP_haven
     rendezvous: 0k28pjf5qa8nwbt7cn8138xetxdknhz3
     handler:
-      type: tcp_forward
+      type: tcp_service
       listen_dock: 69421
       upstream: 127.0.0.1:8815
 

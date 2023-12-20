@@ -36,58 +36,94 @@ use super::{
 /// Encapsulates a single node-to-node connection (may be relay-relay or client-relay).
 #[derive(Clone)]
 pub struct LinkConnection {
-    mplex: Arc<Multiplex>,
     send_outgoing: Sender<RawPacket>,
     recv_incoming: Receiver<RawPacket>,
     remote_idpk: IdentityPublic,
 }
 
-type ConnectionTask = Arc<Immortal>;
+pub struct LinkInfo {
+    pub client: Arc<LinkClient>,
+    pub connection_task: Immortal,
+    pub remote_pk: IdentityPublic,
+}
 
 impl LinkConnection {
     /// Creates a new Connection, from a single Pipe. Unlike in Geph, n2n Multiplexes in earendil all contain one pipe each.
     pub async fn connect(
         ctx: DaemonContext,
         pipe: impl Pipe,
-    ) -> anyhow::Result<(Self, ConnectionTask)> {
-        // First, we construct the Multiplex.
+        their_fp: Option<Fingerprint>,
+    ) -> anyhow::Result<LinkInfo> {
         let my_mux_sk = MuxSecret::generate();
         let mplex = Arc::new(Multiplex::new(my_mux_sk, None));
         mplex.add_pipe(pipe);
         let (send_outgoing, recv_outgoing) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
-        let task = Arc::new(Immortal::spawn(
-            connection_loop(ctx, mplex.clone(), send_incoming, recv_outgoing)
-                .unwrap_or_else(|e| panic!("connection_loop died with {:?}", e)),
-        ));
         let rpc = MultiplexRpcTransport::new(mplex.clone());
         let link = LinkClient::from(rpc);
+
+        let service = Arc::new(LinkService(LinkProtocolImpl {
+            ctx: ctx.clone(),
+            mplex: mplex.clone(),
+        }));
+
+        let task = Immortal::spawn(
+            connection_loop(mplex.clone(), send_incoming, recv_outgoing, service)
+                .unwrap_or_else(|e| panic!("connection_loop died with {:?}", e)),
+        );
+
         let resp = link
             .authenticate()
             .await
             .context("did not respond to authenticate")?;
+
         resp.verify(&mplex.peer_pk().context("could not obtain peer_pk")?)
             .context("did not authenticated correctly")?;
 
-        Ok((
-            Self {
-                mplex,
-                send_outgoing,
-                recv_incoming,
-                remote_idpk: resp.full_pk,
-            },
-            task,
-        ))
+        let remote_pk = resp.full_pk;
+
+        let conn = Self {
+            send_outgoing,
+            recv_incoming,
+            remote_idpk: resp.full_pk,
+        };
+
+        if let Some(fp) = their_fp {
+            log::info!("about to insert into neightable for fp: {}", fp);
+
+            if fp != remote_pk.fingerprint() {
+                anyhow::bail!(
+                    "out route fingerprint in config ({}), does not match link fingerprint: {}",
+                    fp,
+                    remote_pk.fingerprint()
+                );
+            }
+
+            // add out_route entry into neightable
+            ctx.get(NEIGH_TABLE).insert_pinned(fp, conn);
+            log::info!("inserted out_route link for {}", fp);
+        } else {
+            ctx.get(NEIGH_TABLE).insert(
+                conn.remote_idpk().fingerprint().clone(),
+                conn.clone(),
+                Duration::from_secs(300),
+            );
+            log::info!(
+                "inserted in_route link for {}",
+                conn.remote_idpk.fingerprint()
+            ); // add in_route entry into neightable
+        }
+
+        Ok(LinkInfo {
+            client: Arc::new(link),
+            connection_task: task,
+            remote_pk,
+        })
     }
 
     /// Returns the identity publickey presented by the other side.
     pub fn remote_idpk(&self) -> IdentityPublic {
         self.remote_idpk
-    }
-
-    /// Returns a handle to the N2N RPC.
-    pub fn link_rpc(&self) -> LinkClient {
-        LinkClient::from(MultiplexRpcTransport::new(self.mplex.clone()))
     }
 
     /// Sends an onion-routing packet down this connection.
@@ -103,11 +139,10 @@ impl LinkConnection {
 
 /// Main loop for the connection.
 pub async fn connection_loop(
-    ctx: DaemonContext,
     mplex: Arc<Multiplex>,
     send_incoming: Sender<RawPacket>,
     recv_outgoing: Receiver<RawPacket>,
-    their_fp: Fingerprint,
+    service: Arc<LinkService<LinkProtocolImpl>>,
 ) -> anyhow::Result<Infallible> {
     let _onion_keepalive = Immortal::respawn(
         RespawnStrategy::Immediate,
@@ -115,12 +150,6 @@ pub async fn connection_loop(
             onion_keepalive(mplex.clone(), send_incoming.clone(), recv_outgoing.clone())
         }),
     );
-
-    let service = Arc::new(LinkService(LinkProtocolImpl {
-        ctx: ctx.clone(),
-        mplex: mplex.clone(),
-        their_fp,
-    }));
 
     let group: TaskReaper<anyhow::Result<()>> = TaskReaper::new();
     loop {
@@ -239,7 +268,6 @@ impl RpcTransport for MultiplexRpcTransport {
 pub struct LinkProtocolImpl {
     pub ctx: DaemonContext,
     pub mplex: Arc<Multiplex>,
-    pub their_fp: Fingerprint,
 }
 
 #[async_trait]
