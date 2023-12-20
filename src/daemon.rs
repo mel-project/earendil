@@ -14,7 +14,6 @@ mod socks5;
 mod tcp_forward;
 mod udp_forward;
 
-use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentitySecret};
@@ -28,27 +27,18 @@ use nanorpc_http::server::HttpRpcServer;
 
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
-use sosistab2::{Multiplex, MuxSecret, Pipe};
-use sosistab2_obfsudp::{ObfsUdpPipe, ObfsUdpPublic};
 use stdcode::StdcodeSerializeExt;
 
 use std::thread::available_parallelism;
 
 use std::{sync::Arc, time::Duration};
 
-use crate::daemon::link_connection::{
-    connection_loop, LinkConnection, LinkProtocolImpl, MultiplexRpcTransport,
-};
-use crate::daemon::link_protocol::{LinkClient, LinkService};
 use crate::socket::Endpoint;
 use crate::{config::ConfigFile, global_rpc::GLOBAL_RPC_DOCK};
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::ControlService,
-    daemon::{
-        gossip::gossip_loop,
-        inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
-    },
+    daemon::inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
 };
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
 use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
@@ -198,8 +188,6 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         )
     });
 
-    let (send_tasks, recv_tasks) = smol::channel::bounded(5);
-
     let mut route_tasks = FuturesUnordered::new();
 
     // For every in_routes block, spawn a task to handle incoming stuff
@@ -215,7 +203,6 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                     context.clone(),
                     listen,
                     secret,
-                    send_tasks.clone(),
                 )));
             }
         }
@@ -236,63 +223,18 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                 };
 
                 route_tasks.push(smolscale::spawn(out_route_obfsudp(
-                    context,
-                    *connect,
-                    *cookie,
-                    send_tasks.clone(),
+                    context, *connect, *cookie,
                 )));
             }
         }
     }
-
-    // TODO: better name for this
-    let mut per_route_immortals = Vec::new();
-    // Collect the per_route_tasks from the channel
-    let collectors = smolscale::spawn(async move {
-        while let Ok(task) = recv_tasks.recv().await {
-            per_route_immortals.push(task);
-        }
-    });
-    collectors.await;
 
     // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
     while let Some(next) = route_tasks.next().await {
         next?;
     }
 
-    log::warn!("am I about to die...?");
-
     Ok(())
-}
-
-// NOTE: Do these concurrently:
-// Host LinkRPC, using the existing helper structs (LinkProtocol’s generated structs, MultiplexRpcTransport, LinkProtocolImpl, etc)
-// Do gossip logic
-// Do debt-accounting logic
-// Read and write from appropriately added channels in the context to handle incoming and outgoing packets
-pub async fn per_route_tasks(
-    ctx: DaemonContext,
-    pipe: impl Pipe,
-    their_fp: Option<Fingerprint>,
-) -> anyhow::Result<Vec<Immortal>> {
-    log::info!("about to connect link_conn");
-    let link = LinkConnection::connect(ctx.clone(), pipe, their_fp).await?;
-    let conn_task = link.connection_task;
-
-    log::info!("starting gossip loop");
-    let gossip_task = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([ctx], move || gossip_loop(
-            ctx.clone(),
-            link.remote_pk,
-            link.client.clone(),
-        )
-        .map_err(log_error("gossip"))),
-    );
-
-    // TODO: debt accounting
-
-    Ok(vec![conn_task, gossip_task])
 }
 
 /// Loop that handles the control protocol

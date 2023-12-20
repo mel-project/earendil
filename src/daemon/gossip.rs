@@ -8,13 +8,11 @@ use bytes::Bytes;
 use earendil_crypt::IdentityPublic;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use itertools::Itertools;
-use rand::{seq::SliceRandom, thread_rng, Rng};
+use rand::{seq::SliceRandom, thread_rng};
 use smol_timeout::TimeoutExt;
-use sosistab2::Multiplex;
 
 use super::{
     context::{GLOBAL_IDENTITY, GLOBAL_ONION_SK, RELAY_GRAPH},
-    link_connection::LinkConnection,
     link_protocol::LinkClient,
     DaemonContext,
 };
