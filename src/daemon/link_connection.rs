@@ -124,7 +124,7 @@ impl LinkConnection {
         Ok(LinkInfo {
             client: Arc::new(link),
             connection_task: task,
-            remote_pk,
+            remote_pk: resp.full_pk,
         })
     }
 
