@@ -1,17 +1,12 @@
 use std::{net::SocketAddr, time::Duration};
 
-use clone_macro::clone;
 use earendil_crypt::Fingerprint;
-use futures_util::TryFutureExt;
 use smol::future::FutureExt;
-use smolscale::immortal::{Immortal, RespawnStrategy};
+use smolscale::reaper::TaskReaper;
 use sosistab2::Pipe;
 use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
 
-use crate::{
-    daemon::{context::NEIGH_TABLE, gossip::gossip_loop, link_connection::LinkConnection},
-    log_error,
-};
+use crate::daemon::{context::NEIGH_TABLE, gossip::gossip_loop, link_connection::LinkConnection};
 
 use super::DaemonContext;
 
@@ -33,10 +28,15 @@ pub async fn in_route_obfsudp(
         hex::encode(secret.to_public().as_bytes())
     );
     let listener = ObfsUdpListener::bind(listen, secret).await?;
+    let tasks = TaskReaper::new();
     loop {
         let pipe = listener.accept().await?;
         let context = context.clone();
-        smolscale::spawn(per_route_tasks(context.daemon_ctx.clone(), pipe, None)).detach();
+        tasks.attach(smolscale::spawn(per_route_tasks(
+            context.daemon_ctx.clone(),
+            pipe,
+            None,
+        )));
     }
 }
 
@@ -56,6 +56,7 @@ pub async fn out_route_obfsudp(
 
     let mut timer1 = smol::Timer::interval(CONNECTION_LIFETIME);
     let mut timer2 = smol::Timer::interval(CONNECTION_LIFETIME);
+    let tasks = TaskReaper::new();
     loop {
         let fallible = async {
             log::debug!("obfsudp out_route {} trying...", context.out_route_name);
@@ -65,12 +66,11 @@ pub async fn out_route_obfsudp(
                 context.out_route_name
             );
 
-            smolscale::spawn(per_route_tasks(
+            tasks.attach(smolscale::spawn(per_route_tasks(
                 context.daemon_ctx.clone(),
                 pipe,
                 Some(context.remote_fingerprint),
-            ))
-            .detach();
+            )));
 
             anyhow::Ok(())
         };
@@ -99,7 +99,7 @@ async fn per_route_tasks(
     let link_info = LinkConnection::connect(ctx.clone(), pipe).await?;
 
     if let Some(fp) = their_fp {
-        let remote_fp = link_info.remote_pk.fingerprint();
+        let remote_fp = link_info.conn.remote_idpk.fingerprint();
         log::info!("about to insert into neightable for fp: {}", fp);
 
         if fp != remote_fp {
@@ -110,7 +110,8 @@ async fn per_route_tasks(
             );
         }
 
-        ctx.get(NEIGH_TABLE).insert_pinned(fp, link_info.conn);
+        ctx.get(NEIGH_TABLE)
+            .insert_pinned(fp, link_info.conn.clone());
         log::info!("inserted out_route link for {}", fp);
     } else {
         ctx.get(NEIGH_TABLE).insert(
@@ -126,21 +127,15 @@ async fn per_route_tasks(
 
     // Race the connection task against the gossip loop
     let connection_task = async {
-        link_info.connection_task.await;
-        anyhow::Ok(())
-    };
-
-    // Wrap the gossip loop in an async block
-    let gossip_task = async {
-        gossip_loop(ctx.clone(), link_info.remote_pk, link_info.client.clone()).await?;
+        link_info.task.await;
         anyhow::Ok(())
     };
 
     connection_task
         .race(gossip_loop(
             ctx.clone(),
-            link_info.remote_pk,
-            link_info.client.clone(),
+            link_info.conn.remote_idpk,
+            link_info.client,
         ))
         .await?;
 

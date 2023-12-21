@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use bytes::Bytes;
@@ -21,7 +18,7 @@ use super::{
 pub async fn gossip_loop(
     ctx: DaemonContext,
     neighbor_idpk: IdentityPublic,
-    link_client: Arc<LinkClient>,
+    link_client: LinkClient,
 ) -> anyhow::Result<()> {
     let mut sleep_timer = smol::Timer::interval(Duration::from_secs(5));
     loop {
@@ -35,7 +32,7 @@ pub async fn gossip_loop(
                 am_i_relay,
             ))?;
         let once = async {
-            if let Err(err) = gossip_once(&ctx, neighbor_idpk, link_client.clone()).await {
+            if let Err(err) = gossip_once(&ctx, neighbor_idpk, &link_client).await {
                 log::warn!(
                     "gossip with {} failed: {:?}",
                     neighbor_idpk.fingerprint(),
@@ -55,11 +52,11 @@ pub async fn gossip_loop(
 async fn gossip_once(
     ctx: &DaemonContext,
     neighbor_idpk: IdentityPublic,
-    link_client: Arc<LinkClient>,
+    link_client: &LinkClient,
 ) -> anyhow::Result<()> {
-    fetch_identity(ctx, &neighbor_idpk, link_client.clone()).await?;
-    sign_adjacency(ctx, &neighbor_idpk, link_client.clone()).await?;
-    gossip_graph(ctx, &neighbor_idpk, link_client.clone()).await?;
+    fetch_identity(ctx, &neighbor_idpk, link_client).await?;
+    sign_adjacency(ctx, &neighbor_idpk, link_client).await?;
+    gossip_graph(ctx, &neighbor_idpk, link_client).await?;
     Ok(())
 }
 
@@ -67,11 +64,11 @@ async fn gossip_once(
 async fn fetch_identity(
     ctx: &DaemonContext,
     neighbor_idpk: &IdentityPublic,
-    link_client: Arc<LinkClient>,
+    link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
-
     log::trace!("getting identity of {remote_fingerprint}");
+
     let their_id = link_client
         .identity(remote_fingerprint)
         .await?
@@ -85,7 +82,7 @@ async fn fetch_identity(
 async fn sign_adjacency(
     ctx: &DaemonContext,
     neighbor_idpk: &IdentityPublic,
-    link_client: Arc<LinkClient>,
+    link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
     if ctx.get(GLOBAL_IDENTITY).public().fingerprint() < remote_fingerprint {
@@ -113,7 +110,7 @@ async fn sign_adjacency(
 async fn gossip_graph(
     ctx: &DaemonContext,
     neighbor_idpk: &IdentityPublic,
-    link_client: Arc<LinkClient>,
+    link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
     let all_known_nodes = ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();

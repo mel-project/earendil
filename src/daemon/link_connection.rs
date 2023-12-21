@@ -45,9 +45,8 @@ pub struct LinkConnection {
 
 pub struct LinkInfo {
     pub conn: LinkConnection,
-    pub client: Arc<LinkClient>,
-    pub connection_task: Task<Infallible>,
-    pub remote_pk: IdentityPublic,
+    pub client: LinkClient,
+    pub task: Task<Infallible>,
 }
 
 impl LinkConnection {
@@ -59,7 +58,7 @@ impl LinkConnection {
         let (send_outgoing, recv_outgoing) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
         let rpc = MultiplexRpcTransport::new(mplex.clone());
-        let link = LinkClient::from(rpc);
+        let client = LinkClient::from(rpc);
 
         let remote_pk_shared = Arc::new(Mutex::new(None));
 
@@ -75,7 +74,7 @@ impl LinkConnection {
                 .unwrap_or_else(|e| panic!("connection_loop died with {:?}", e)),
         );
 
-        let resp = link
+        let resp = client
             .authenticate()
             .await
             .context("did not respond to authenticate")?;
@@ -92,12 +91,7 @@ impl LinkConnection {
             remote_idpk: resp.full_pk,
         };
 
-        Ok(LinkInfo {
-            conn,
-            client: Arc::new(link),
-            connection_task: task,
-            remote_pk: resp.full_pk,
-        })
+        Ok(LinkInfo { conn, client, task })
     }
 
     /// Returns the identity publickey presented by the other side.
@@ -320,7 +314,6 @@ impl LinkProtocol for LinkProtocolImpl {
         if price > self.max_outgoing_price {
             // disconnect from this neighbor
             let table = self.ctx.get(NEIGH_TABLE);
-        } else {
         }
     }
 }
