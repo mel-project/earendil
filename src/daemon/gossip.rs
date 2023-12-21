@@ -57,7 +57,6 @@ async fn gossip_once(
     neighbor_idpk: IdentityPublic,
     link_client: Arc<LinkClient>,
 ) -> anyhow::Result<()> {
-    log::info!("in gossip_once");
     fetch_identity(ctx, &neighbor_idpk, link_client.clone()).await?;
     sign_adjacency(ctx, &neighbor_idpk, link_client.clone()).await?;
     gossip_graph(ctx, &neighbor_idpk, link_client.clone()).await?;

@@ -21,6 +21,7 @@ use smol::{
     future::FutureExt,
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     stream::StreamExt,
+    Task,
 };
 use smolscale::{
     immortal::{Immortal, RespawnStrategy},
@@ -39,22 +40,19 @@ use super::{
 pub struct LinkConnection {
     send_outgoing: Sender<RawPacket>,
     recv_incoming: Receiver<RawPacket>,
-    remote_idpk: IdentityPublic,
+    pub remote_idpk: IdentityPublic,
 }
 
 pub struct LinkInfo {
+    pub conn: LinkConnection,
     pub client: Arc<LinkClient>,
-    pub connection_task: Immortal,
+    pub connection_task: Task<Infallible>,
     pub remote_pk: IdentityPublic,
 }
 
 impl LinkConnection {
     /// Creates a new Connection, from a single Pipe. Unlike in Geph, n2n Multiplexes in earendil all contain one pipe each.
-    pub async fn connect(
-        ctx: DaemonContext,
-        pipe: impl Pipe,
-        their_fp: Option<Fingerprint>,
-    ) -> anyhow::Result<LinkInfo> {
+    pub async fn connect(ctx: DaemonContext, pipe: impl Pipe) -> anyhow::Result<LinkInfo> {
         let my_mux_sk = MuxSecret::generate();
         let mplex = Arc::new(Multiplex::new(my_mux_sk, None));
         mplex.add_pipe(pipe);
@@ -69,9 +67,10 @@ impl LinkConnection {
             ctx: ctx.clone(),
             mplex: mplex.clone(),
             remote_pk: remote_pk_shared.clone(),
+            max_outgoing_price: 1000, // TODO: get this value properly
         }));
 
-        let task = Immortal::spawn(
+        let task = smolscale::spawn(
             connection_loop(mplex.clone(), send_incoming, recv_outgoing, service)
                 .unwrap_or_else(|e| panic!("connection_loop died with {:?}", e)),
         );
@@ -84,8 +83,6 @@ impl LinkConnection {
         resp.verify(&mplex.peer_pk().context("could not obtain peer_pk")?)
             .context("did not authenticated correctly")?;
 
-        let remote_fp = resp.full_pk.fingerprint();
-
         let mut remote_pk = remote_pk_shared.lock();
         *remote_pk = Some(resp.full_pk);
 
@@ -95,33 +92,8 @@ impl LinkConnection {
             remote_idpk: resp.full_pk,
         };
 
-        if let Some(fp) = their_fp {
-            log::info!("about to insert into neightable for fp: {}", fp);
-
-            if fp != remote_fp {
-                anyhow::bail!(
-                    "out route fingerprint in config ({}), does not match link fingerprint: {}",
-                    fp,
-                    remote_fp
-                );
-            }
-
-            // add out_route entry into neightable
-            ctx.get(NEIGH_TABLE).insert_pinned(fp, conn);
-            log::info!("inserted out_route link for {}", fp);
-        } else {
-            ctx.get(NEIGH_TABLE).insert(
-                conn.remote_idpk().fingerprint().clone(),
-                conn.clone(),
-                Duration::from_secs(300),
-            );
-            log::info!(
-                "inserted in_route link for {}",
-                conn.remote_idpk.fingerprint()
-            ); // add in_route entry into neightable
-        }
-
         Ok(LinkInfo {
+            conn,
             client: Arc::new(link),
             connection_task: task,
             remote_pk: resp.full_pk,
@@ -276,6 +248,7 @@ pub struct LinkProtocolImpl {
     pub ctx: DaemonContext,
     pub mplex: Arc<Multiplex>,
     pub remote_pk: Arc<Mutex<Option<IdentityPublic>>>,
+    pub max_outgoing_price: u64,
 }
 
 #[async_trait]
@@ -341,5 +314,13 @@ impl LinkProtocol for LinkProtocolImpl {
             })
             .dedup()
             .collect()
+    }
+
+    async fn push_price(&self, price: u64, debt_limit: u64) {
+        if price > self.max_outgoing_price {
+            // disconnect from this neighbor
+            let table = self.ctx.get(NEIGH_TABLE);
+        } else {
+        }
     }
 }

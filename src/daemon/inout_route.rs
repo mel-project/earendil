@@ -9,7 +9,7 @@ use sosistab2::Pipe;
 use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
 
 use crate::{
-    daemon::{gossip::gossip_loop, link_connection::LinkConnection},
+    daemon::{context::NEIGH_TABLE, gossip::gossip_loop, link_connection::LinkConnection},
     log_error,
 };
 
@@ -96,23 +96,55 @@ async fn per_route_tasks(
     pipe: impl Pipe,
     their_fp: Option<Fingerprint>,
 ) -> anyhow::Result<()> {
-    log::info!("about to connect link_conn");
+    let link_info = LinkConnection::connect(ctx.clone(), pipe).await?;
 
-    let link = LinkConnection::connect(ctx.clone(), pipe, their_fp).await?;
-    let _conn_task = link.connection_task;
+    if let Some(fp) = their_fp {
+        let remote_fp = link_info.remote_pk.fingerprint();
+        log::info!("about to insert into neightable for fp: {}", fp);
 
-    log::info!("starting gossip loop");
-    let _gossip_task = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([ctx], move || gossip_loop(
-            ctx.clone(),
-            link.remote_pk,
-            link.client.clone(),
-        )
-        .map_err(log_error("gossip"))),
-    );
+        if fp != remote_fp {
+            anyhow::bail!(
+                "out route fingerprint in config ({}), does not match link fingerprint: {}",
+                fp,
+                remote_fp,
+            );
+        }
 
-    loop {
-        futures_util::future::pending::<()>().await;
+        ctx.get(NEIGH_TABLE).insert_pinned(fp, link_info.conn);
+        log::info!("inserted out_route link for {}", fp);
+    } else {
+        ctx.get(NEIGH_TABLE).insert(
+            link_info.conn.remote_idpk().fingerprint(),
+            link_info.conn.clone(),
+            Duration::from_secs(300),
+        );
+        log::info!(
+            "inserted in_route link for {}",
+            link_info.conn.remote_idpk.fingerprint()
+        );
     }
+
+    // Race the connection task against the gossip loop
+    let connection_task = async {
+        link_info.connection_task.await;
+        anyhow::Ok(())
+    };
+
+    // Wrap the gossip loop in an async block
+    let gossip_task = async {
+        gossip_loop(ctx.clone(), link_info.remote_pk, link_info.client.clone()).await?;
+        anyhow::Ok(())
+    };
+
+    connection_task
+        .race(gossip_loop(
+            ctx.clone(),
+            link_info.remote_pk,
+            link_info.client.clone(),
+        ))
+        .await?;
+
+    // connection_task.race(gossip_task).await?;
+
+    Ok(())
 }
