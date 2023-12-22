@@ -83,7 +83,7 @@ pub async fn dht_get(
                     ctx.get(DHT_CACHE).insert(fingerprint, locator.clone());
                     return Ok(Some(locator));
                 } else {
-                    return Err(DhtError::VerifyFailed);
+                    retval = Err(DhtError::VerifyFailed);
                 }
             }
         }

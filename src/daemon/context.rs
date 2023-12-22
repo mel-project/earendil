@@ -40,7 +40,7 @@ pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBl
 pub static NEIGH_TABLE: CtxField<NeighTable> = |_| NeighTable::new();
 pub static SOCKET_RECV_QUEUES: CtxField<DashMap<Endpoint, Sender<(Message, Fingerprint)>>> =
     |_| Default::default();
-pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| Cache::new(10000);
+pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| Cache::new(100_000);
 
 /// Sends a raw N2R message with the given parameters.
 pub async fn send_n2r(
