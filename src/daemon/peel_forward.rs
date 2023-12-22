@@ -46,7 +46,7 @@ pub async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 log::trace!("received garbled packet");
                 let reply_degarbler = ctx
                     .get(DEGARBLERS)
-                    .get(&id)
+                    .remove(&id)
                     .context(format!("no degarbler for this garbled pkt with id {id}, despite {} items in the degarbler", ctx.get(DEGARBLERS).entry_count()))?;
                 let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
                 log::trace!("packet has been degarbled!");
