@@ -61,7 +61,6 @@ async fn gossip_once(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Resu
 // Step 1: Fetch the identity of the neighbor.
 async fn fetch_identity(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
     let remote_fingerprint = conn.remote_idpk().fingerprint();
-
     log::trace!("getting identity of {remote_fingerprint}");
     let their_id = conn
         .link_rpc()
@@ -101,16 +100,16 @@ async fn sign_adjacency(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::R
 
 // Step 3: Gossip the relay graph, by asking info about random nodes.
 async fn gossip_graph(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
-    let remote_fingerprint = conn.remote_idpk().fingerprint();
+    // let remote_fingerprint = conn.remote_idpk().fingerprint();
     let all_known_nodes = ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();
     let random_sample = all_known_nodes
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
         .copied()
         .collect_vec();
-    log::debug!(
-        "asking {remote_fingerprint} for neighbors of {} neighbors!",
-        random_sample.len()
-    );
+    // log::debug!(
+    //     "asking {remote_fingerprint} for neighbors of {} neighbors!",
+    //     random_sample.len()
+    // );
     let adjacencies = conn.link_rpc().adjacencies(random_sample).await?;
     for adjacency in adjacencies {
         let left_fp = adjacency.left;
