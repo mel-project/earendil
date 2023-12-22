@@ -59,7 +59,7 @@ impl Stream {
             }
         };
         send_syn.race(wait_synack).await?;
-        log::debug!("received SYNACK");
+        log::trace!("received SYNACK");
 
         // construct sosistab2::Stream & sosistab2::StreamStates
         let (send_tick, recv_tick) = smol::channel::unbounded::<()>();
