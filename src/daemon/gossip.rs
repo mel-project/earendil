@@ -103,7 +103,6 @@ async fn sign_adjacency(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::R
 async fn gossip_graph(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
     let remote_fingerprint = conn.remote_idpk().fingerprint();
     let all_known_nodes = ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();
-    log::info!("num known nodes: {}", all_known_nodes.len());
     let random_sample = all_known_nodes
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
         .copied()

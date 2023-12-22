@@ -44,7 +44,7 @@ pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator) {
     }
     while let Some(res) = gatherer.next().await {
         match res {
-            Ok(_) => log::debug!("DHT insert succeeded!"),
+            Ok(_) => (),
             Err(e) => log::debug!("DHT insert failed! {e}"),
         }
     }
