@@ -50,6 +50,7 @@ pub enum InRouteConfig {
         #[serde_as(as = "serde_with::DisplayFromStr")]
         listen: SocketAddr,
         secret: String,
+        link_price: LinkPrice,
     },
 }
 
@@ -64,6 +65,7 @@ pub enum OutRouteConfig {
         connect: SocketAddr,
         #[serde_as(as = "serde_with::hex::Hex")]
         cookie: [u8; 32],
+        link_price: LinkPrice,
     },
 }
 
@@ -129,4 +131,12 @@ pub enum ForwardHandler {
     SimpleProxy {
         listen_dock: Dock,
     },
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct LinkPrice {
+    /// in micromels
+    pub max_outgoing_price: u64,
+    pub incoming_price: u64,
+    pub incoming_debt_limit: u64,
 }

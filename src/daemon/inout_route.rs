@@ -6,7 +6,14 @@ use smolscale::reaper::TaskReaper;
 use sosistab2::Pipe;
 use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
 
-use crate::daemon::{context::NEIGH_TABLE, gossip::gossip_loop, link_connection::LinkConnection};
+use crate::{
+    config::LinkPrice,
+    daemon::{
+        context::{DEBTS, NEIGH_TABLE},
+        gossip::gossip_loop,
+        link_connection::LinkConnection,
+    },
+};
 
 use super::DaemonContext;
 
@@ -20,6 +27,7 @@ pub async fn in_route_obfsudp(
     context: InRouteContext,
     listen: SocketAddr,
     secret: String,
+    link_price: LinkPrice,
 ) -> anyhow::Result<()> {
     let secret = ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes());
     log::debug!(
@@ -36,6 +44,7 @@ pub async fn in_route_obfsudp(
             context.daemon_ctx.clone(),
             pipe,
             None,
+            link_price.clone(),
         )));
     }
 }
@@ -51,6 +60,7 @@ pub async fn out_route_obfsudp(
     context: OutRouteContext,
     connect: SocketAddr,
     cookie: [u8; 32],
+    link_price: LinkPrice,
 ) -> anyhow::Result<()> {
     const CONNECTION_LIFETIME: Duration = Duration::from_secs(60);
 
@@ -70,6 +80,7 @@ pub async fn out_route_obfsudp(
                 context.daemon_ctx.clone(),
                 pipe,
                 Some(context.remote_fingerprint),
+                link_price.clone(),
             )));
 
             anyhow::Ok(())
@@ -95,8 +106,10 @@ async fn per_route_tasks(
     ctx: DaemonContext,
     pipe: impl Pipe,
     their_fp: Option<Fingerprint>,
+    link_price: LinkPrice,
 ) -> anyhow::Result<()> {
-    let link_info = LinkConnection::connect(ctx.clone(), pipe).await?;
+    let link_info =
+        LinkConnection::connect(ctx.clone(), pipe, link_price.max_outgoing_price).await?;
 
     if let Some(fp) = their_fp {
         let remote_fp = link_info.conn.remote_idpk.fingerprint();
@@ -109,6 +122,16 @@ async fn per_route_tasks(
                 remote_fp,
             );
         }
+
+        link_info
+            .client
+            .push_price(link_price.incoming_price, link_price.incoming_debt_limit)
+            .await?;
+        ctx.get(DEBTS).insert_incoming_price(
+            link_info.conn.remote_idpk().fingerprint(),
+            link_price.incoming_price,
+            link_price.incoming_debt_limit,
+        );
 
         ctx.get(NEIGH_TABLE)
             .insert_pinned(fp, link_info.conn.clone());

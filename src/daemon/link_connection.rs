@@ -12,14 +12,14 @@ use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentityPublic};
 use earendil_packet::RawPacket;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
-use futures_util::TryFutureExt;
+use futures_util::{AsyncWriteExt, TryFutureExt};
 use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use parking_lot::Mutex;
 use smol::{
     channel::{Receiver, Sender},
     future::FutureExt,
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, BufReader},
     stream::StreamExt,
     Task,
 };
@@ -30,7 +30,7 @@ use smolscale::{
 use sosistab2::{Multiplex, MuxSecret, Pipe};
 
 use super::{
-    context::{GLOBAL_IDENTITY, NEIGH_TABLE, RELAY_GRAPH},
+    context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE, RELAY_GRAPH},
     link_protocol::{AuthResponse, InfoResponse, LinkClient, LinkProtocol, LinkService},
     DaemonContext,
 };
@@ -51,7 +51,11 @@ pub struct LinkInfo {
 
 impl LinkConnection {
     /// Creates a new Connection, from a single Pipe. Unlike in Geph, n2n Multiplexes in earendil all contain one pipe each.
-    pub async fn connect(ctx: DaemonContext, pipe: impl Pipe) -> anyhow::Result<LinkInfo> {
+    pub async fn connect(
+        ctx: DaemonContext,
+        pipe: impl Pipe,
+        max_outgoing_price: u64,
+    ) -> anyhow::Result<LinkInfo> {
         let my_mux_sk = MuxSecret::generate();
         let mplex = Arc::new(Multiplex::new(my_mux_sk, None));
         mplex.add_pipe(pipe);
@@ -66,7 +70,7 @@ impl LinkConnection {
             ctx: ctx.clone(),
             mplex: mplex.clone(),
             remote_pk: remote_pk_shared.clone(),
-            max_outgoing_price: 1000, // TODO: get this value properly
+            max_outgoing_price,
         }));
 
         let task = smolscale::spawn(
@@ -311,9 +315,21 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     async fn push_price(&self, price: u64, debt_limit: u64) {
+        let remote_fp = self.remote_pk.lock().unwrap().fingerprint();
+
+        log::debug!("received push_price!!!");
         if price > self.max_outgoing_price {
-            // disconnect from this neighbor
-            let table = self.ctx.get(NEIGH_TABLE);
+            // disconnect from this neighbor, ie kick them out of our neightable
+            // add a `remove` fn to neightable
+            log::warn!("Neigh {} price too high!", remote_fp);
+        } else {
+            self.ctx.get(DEBTS).insert_outgoing_price(
+                remote_fp,
+                price,
+                debt_limit,
+                self.max_outgoing_price,
+            );
+            log::debug!("Successfully registered {} price!", remote_fp);
         }
     }
 }

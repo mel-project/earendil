@@ -12,8 +12,8 @@ use super::link_connection::LinkConnection;
 #[allow(clippy::type_complexity)]
 pub struct NeighTable {
     table: DashMap<Fingerprint, (LinkConnection, Option<Instant>, Immortal)>,
-    send_incoming: Sender<RawPacket>,
-    recv_incoming: Receiver<RawPacket>,
+    send_incoming: Sender<(Fingerprint, RawPacket)>,
+    recv_incoming: Receiver<(Fingerprint, RawPacket)>,
 }
 
 impl Default for NeighTable {
@@ -34,13 +34,13 @@ impl NeighTable {
     }
 
     /// Receive the next incoming packet from neighbors.
-    pub async fn recv_raw_packet(&self) -> RawPacket {
+    pub async fn recv_raw_packet(&self) -> (Fingerprint, RawPacket) {
         self.recv_incoming.recv().await.unwrap()
     }
 
     /// Inject a packet *as if* it came from another node.
-    pub async fn inject_asif_incoming(&self, pkt: RawPacket) {
-        let _ = self.send_incoming.send(pkt).await;
+    pub async fn inject_asif_incoming(&self, last_hop: Fingerprint, pkt: RawPacket) {
+        let _ = self.send_incoming.send((last_hop, pkt)).await;
     }
 
     /// Insert a fingerprint-connection mapping with a TTL.
@@ -61,6 +61,7 @@ impl NeighTable {
     ) {
         let expiry = ttl.map(|ttl| Instant::now() + ttl);
         let send_incoming = self.send_incoming.clone();
+        let remote_fp = connection.remote_idpk.fingerprint();
         self.table.insert(
             fingerprint,
             (
@@ -69,7 +70,7 @@ impl NeighTable {
                 Immortal::spawn(async move {
                     loop {
                         let pkt = connection.recv_raw_packet().await;
-                        let _ = send_incoming.send(pkt).await;
+                        let _ = send_incoming.send((remote_fp, pkt)).await;
                     }
                 }),
             ),

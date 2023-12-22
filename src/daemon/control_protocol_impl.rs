@@ -19,7 +19,7 @@ use crate::{
     config::InRouteConfig,
     control_protocol::{ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs},
     daemon::{
-        context::{NEIGH_TABLE, RELAY_GRAPH},
+        context::{DEBTS, NEIGH_TABLE, RELAY_GRAPH},
         DaemonContext,
     },
     global_rpc::transport::GlobalRpcTransport,
@@ -140,7 +140,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .in_routes
             .iter()
             .map(|(k, v)| match v {
-                InRouteConfig::Obfsudp { listen, secret } => {
+                InRouteConfig::Obfsudp { listen, secret, link_price } => {
                     let secret =
                         ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes());
                     (
@@ -149,6 +149,7 @@ impl ControlProtocol for ControlProtocolImpl {
                             "fingerprint": format!("{}", self.ctx.get(GLOBAL_IDENTITY).public().fingerprint()),
                             "connect": format!("<YOUR_IP>:{}", listen.port()),
                             "cookie": hex::encode(secret.to_public().as_bytes()),
+                            "link_price": link_price,
                         }),
                     )
                 }
@@ -176,7 +177,13 @@ impl ControlProtocol for ControlProtocolImpl {
                     .all_neighs()
                     .iter()
                     .fold(String::new(), |acc, neigh| {
-                        acc + &format!("{:?}\n", neigh.remote_idpk().fingerprint().to_string())
+                        let fp = neigh.remote_idpk().fingerprint();
+                        acc + &format!(
+                            "{:?} [label=\"{}\nnet_debt={:?}\"]\n",
+                            fp.to_string(),
+                            get_node_label(&fp),
+                            self.ctx.get(DEBTS).net_debt_est(&fp)
+                        )
                     });
             let all_adjs = self
                 .ctx
@@ -237,13 +244,8 @@ impl ControlProtocol for ControlProtocolImpl {
                     .read()
                     .all_nodes()
                     .fold(String::new(), |acc, node| {
-                        let node = node.to_string();
-                        acc + &format!(
-                            "{:?} [label=\"{}..{}\"]\n",
-                            node,
-                            &node[..4],
-                            &node[node.len() - 4..node.len()]
-                        )
+                        let node_str = node.to_string();
+                        acc + &format!("{:?} [label={:?}]\n", node_str, get_node_label(&node))
                     });
             format!(
                 "digraph G {{
@@ -312,6 +314,16 @@ impl ControlProtocol for ControlProtocolImpl {
                 |res| res,
             )
     }
+}
+
+fn get_node_label(fp: &Fingerprint) -> String {
+    let node = fp.to_string();
+    format!(
+        "{:?} [label=\"{}..{}\"]\n",
+        node,
+        &node[..4],
+        &node[node.len() - 4..node.len()]
+    )
 }
 
 struct AnonIdentities {

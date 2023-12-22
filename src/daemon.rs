@@ -1,6 +1,7 @@
 pub(crate) mod context;
 mod control_protocol_impl;
 
+mod debts;
 pub(crate) mod dht;
 mod gossip;
 mod inout_route;
@@ -198,11 +199,16 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         };
 
         match config.clone() {
-            InRouteConfig::Obfsudp { listen, secret } => {
+            InRouteConfig::Obfsudp {
+                listen,
+                secret,
+                link_price,
+            } => {
                 route_tasks.push(smolscale::spawn(in_route_obfsudp(
                     context.clone(),
                     listen,
                     secret,
+                    link_price,
                 )));
             }
         }
@@ -215,6 +221,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                 fingerprint,
                 connect,
                 cookie,
+                link_price,
             } => {
                 let context = OutRouteContext {
                     out_route_name: out_route_name.clone(),
@@ -223,7 +230,10 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                 };
 
                 route_tasks.push(smolscale::spawn(out_route_obfsudp(
-                    context, *connect, *cookie,
+                    context,
+                    *connect,
+                    *cookie,
+                    link_price.clone(),
                 )));
             }
         }

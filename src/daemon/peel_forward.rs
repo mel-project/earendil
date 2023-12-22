@@ -6,7 +6,7 @@ use earendil_packet::{InnerPacket, PeeledPacket};
 
 use crate::{
     daemon::{
-        context::{ANON_DESTS, DEGARBLERS, GLOBAL_IDENTITY, GLOBAL_ONION_SK, NEIGH_TABLE},
+        context::{ANON_DESTS, DEBTS, DEGARBLERS, GLOBAL_IDENTITY, GLOBAL_ONION_SK, NEIGH_TABLE},
         rrb_balance::{decrement_rrb_balance, replenish_rrb},
     },
     socket::Endpoint,
@@ -17,7 +17,17 @@ use super::context::{DaemonContext, SOCKET_RECV_QUEUES};
 /// Loop that takes incoming packets, peels them, and processes them
 pub async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
-        let pkt = ctx.get(NEIGH_TABLE).recv_raw_packet().await;
+        let (last_hop_fp, pkt) = ctx.get(NEIGH_TABLE).recv_raw_packet().await;
+        if !ctx.get(DEBTS).is_within_debt_limit(&last_hop_fp) {
+            log::warn!("received pkt from neighbor who owes us too much money -_-");
+            continue;
+        }
+        log::debug!("INSIDE peel_forward loop; processing packet from good neigh!");
+        if last_hop_fp != ctx.get(GLOBAL_IDENTITY).public().fingerprint() {
+            ctx.get(DEBTS).incr_incoming(last_hop_fp);
+            log::debug!("incr'ed ddeeeebbbbtttt");
+        }
+
         let now = Instant::now();
         let peeled = pkt.peel(ctx.get(GLOBAL_ONION_SK))?;
 
@@ -32,6 +42,9 @@ pub async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     .lookup(&next_hop)
                     .context("could not find this next hop")?;
                 conn.send_raw_packet(inner).await;
+                if next_hop != ctx.get(GLOBAL_IDENTITY).public().fingerprint() {
+                    ctx.get(DEBTS).incr_outgoing(next_hop)
+                }
             }
             PeeledPacket::Received {
                 from: src_fp,
