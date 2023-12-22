@@ -50,11 +50,19 @@ impl LinkConnection {
         let my_mux_sk = MuxSecret::generate();
         let mplex = Arc::new(Multiplex::new(my_mux_sk, None));
         mplex.add_pipe(pipe);
-        let (send_outgoing, recv_outgoing) = smol::channel::bounded(1);
-        let (send_incoming, recv_incoming) = smol::channel::bounded(1);
-        let _task = Arc::new(Immortal::spawn(
-            connection_loop(ctx, mplex.clone(), send_incoming, recv_outgoing)
-                .unwrap_or_else(|e| panic!("connection_loop died with {:?}", e)),
+        let (send_outgoing, recv_outgoing) = smol::channel::bounded(100);
+        let (send_incoming, recv_incoming) = smol::channel::bounded(100);
+        let _task = Arc::new(Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([ctx, mplex, send_incoming, recv_outgoing], move || {
+                connection_loop(
+                    ctx.clone(),
+                    mplex.clone(),
+                    send_incoming.clone(),
+                    recv_outgoing.clone(),
+                )
+                .map_err(|e| log::warn!("connection_loop died with {:?}", e))
+            }),
         ));
         let rpc = MultiplexRpcTransport::new(mplex.clone());
         let link = LinkClient::from(rpc);
@@ -86,12 +94,12 @@ impl LinkConnection {
 
     /// Sends an onion-routing packet down this connection.
     pub async fn send_raw_packet(&self, pkt: RawPacket) {
-        self.send_outgoing.send(pkt).await.unwrap();
+        let _ = self.send_outgoing.try_send(pkt);
     }
 
     /// Sends an onion-routing packet down this connection.
-    pub async fn recv_raw_packet(&self) -> RawPacket {
-        self.recv_incoming.recv().await.unwrap()
+    pub async fn recv_raw_packet(&self) -> anyhow::Result<RawPacket> {
+        Ok(self.recv_incoming.recv().await?)
     }
 }
 
@@ -173,7 +181,7 @@ async fn handle_onion_packets(
             let pkt: RawPacket = *bytemuck::try_from_bytes(&pkt)
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
-            send_incoming.send(pkt).await?;
+            send_incoming.try_send(pkt)?;
         }
     };
     up.race(dn).await

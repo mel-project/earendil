@@ -52,8 +52,7 @@ pub async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 log::trace!("packet has been degarbled!");
                 decrement_rrb_balance(&ctx, reply_degarbler.my_anon_isk(), src_fp);
                 replenish_rrb(&ctx, reply_degarbler.my_anon_isk(), src_fp).await?;
-                // ctx.send_reply_blocks(2, reply_degarbler.my_anon_isk(), src_fp)
-                //     .await?;
+
                 process_inner_pkt(
                     &ctx,
                     inner,

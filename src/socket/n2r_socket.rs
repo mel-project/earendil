@@ -95,7 +95,7 @@ impl N2rSocket {
     }
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
-        let _ = self.send_outgoing.send((body, endpoint)).await;
+        let _ = self.send_outgoing.try_send((body, endpoint));
         Ok(())
     }
 

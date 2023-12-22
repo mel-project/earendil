@@ -1,4 +1,7 @@
-use std::{ops::Deref, time::Instant};
+use std::{
+    ops::Deref,
+    time::{Duration, Instant},
+};
 
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -9,7 +12,7 @@ use earendil_packet::{
 use earendil_topology::RelayGraph;
 
 use itertools::Itertools;
-use moka::sync::Cache;
+use moka::sync::{Cache, CacheBuilder};
 use once_cell::sync::Lazy;
 use parking_lot::{Mutex, RwLock};
 use smol::channel::Sender;
@@ -40,7 +43,11 @@ pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBl
 pub static NEIGH_TABLE: CtxField<NeighTable> = |_| NeighTable::new();
 pub static SOCKET_RECV_QUEUES: CtxField<DashMap<Endpoint, Sender<(Message, Fingerprint)>>> =
     |_| Default::default();
-pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| Cache::new(100_000);
+pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {
+    CacheBuilder::default()
+        .time_to_live(Duration::from_secs(60))
+        .build()
+};
 
 /// Sends a raw N2R message with the given parameters.
 pub async fn send_n2r(

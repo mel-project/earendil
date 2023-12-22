@@ -58,8 +58,8 @@ impl CryptSession {
                 anyhow::bail!("spoofed src fingerprint for ClientHandshake!")
             }
         }
-        let (send_out, recv_out) = smol::channel::bounded(1);
-        let (send_in, recv_in) = smol::channel::bounded(1);
+        let (send_out, recv_out) = smol::channel::unbounded();
+        let (send_in, recv_in) = smol::channel::unbounded();
         let task = smolscale::spawn(
             enc_task(
                 my_isk,
@@ -87,6 +87,7 @@ impl CryptSession {
 
     pub async fn send_outgoing(&self, msg: Bytes) -> anyhow::Result<()> {
         if self.send_outgoing.send(msg).await.is_err() {
+            // channel is unbounded
             self.wait_error().await
         } else {
             Ok(())
@@ -95,6 +96,7 @@ impl CryptSession {
 
     pub async fn send_incoming(&self, msg: HavenMsg) -> anyhow::Result<()> {
         if self.send_incoming.send(msg).await.is_err() {
+            // channel is unbounded
             self.wait_error().await
         } else {
             Ok(())
@@ -196,7 +198,7 @@ async fn enc_task(
             if let HavenMsg::Regular { nonce, inner } = msg {
                 if rf.add(nonce) {
                     let plain = dec_key.open(&pad_nonce(nonce), &inner)?;
-                    send_incoming_decrypted.send((plain.into(), remote)).await?
+                    let _ = send_incoming_decrypted.try_send((plain.into(), remote));
                 } else {
                     log::debug!("received pkt with duplicate nonce! dropping...")
                 }
