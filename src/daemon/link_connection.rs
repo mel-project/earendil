@@ -319,9 +319,8 @@ impl LinkProtocol for LinkProtocolImpl {
 
         log::debug!("received push_price!!!");
         if price > self.max_outgoing_price {
-            // disconnect from this neighbor, ie kick them out of our neightable
-            // add a `remove` fn to neightable
             log::warn!("Neigh {} price too high!", remote_fp);
+            self.ctx.get(NEIGH_TABLE).remove(&remote_fp);
         } else {
             self.ctx.get(DEBTS).insert_outgoing_price(
                 remote_fp,

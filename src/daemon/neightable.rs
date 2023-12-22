@@ -98,4 +98,12 @@ impl NeighTable {
                 None => true,
             });
     }
+
+    /// Remove an entry from the table.
+    pub fn remove(
+        &self,
+        fingerprint: &Fingerprint,
+    ) -> Option<(Fingerprint, (LinkConnection, Option<Instant>, Immortal))> {
+        self.table.remove(fingerprint)
+    }
 }
