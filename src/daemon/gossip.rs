@@ -17,6 +17,7 @@ use super::{
 pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let mut sleep_timer = smol::Timer::interval(Duration::from_secs(5));
     loop {
+        (&mut sleep_timer).await;
         // first insert ourselves
         let am_i_relay = !ctx.init().in_routes.is_empty();
         ctx.get(RELAY_GRAPH)
@@ -26,14 +27,14 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 ctx.get(GLOBAL_ONION_SK),
                 am_i_relay,
             ))?;
+        let neighs = ctx.get(NEIGH_TABLE).all_neighs();
+        if neighs.is_empty() {
+            log::debug!("skipping gossip due to no neighs");
+            continue;
+        }
+        // pick a random neighbor and do sync stuff
+        let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
         let once = async {
-            let neighs = ctx.get(NEIGH_TABLE).all_neighs();
-            if neighs.is_empty() {
-                log::debug!("skipping gossip due to no neighs");
-                return;
-            }
-            // pick a random neighbor and do sync stuff
-            let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
             if let Err(err) = gossip_once(&ctx, rand_neigh).await {
                 log::warn!(
                     "gossip with {} failed: {:?}",
@@ -44,9 +45,11 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         };
         // pin_mut!(once);
         if once.timeout(Duration::from_secs(5)).await.is_none() {
-            log::warn!("gossip once timed out");
+            log::warn!(
+                "gossip once with {} timed out",
+                rand_neigh.remote_idpk().fingerprint()
+            );
         };
-        (&mut sleep_timer).await;
     }
 }
 
