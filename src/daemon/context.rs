@@ -30,11 +30,14 @@ pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
 pub type CtxField<T> = fn(&DaemonContext) -> T;
 
 pub static GLOBAL_IDENTITY: CtxField<IdentitySecret> = |ctx| {
-    if let Some(seed) = &ctx.init().identity_seed {
-        IdentitySecret::from_seed(seed)
-    } else {
-        IdentitySecret::generate()
-    }
+    ctx.init()
+        .identity
+        .as_ref()
+        .map(|id| {
+            id.actualize()
+                .expect("failed to initialize global identity")
+        })
+        .unwrap_or_else(IdentitySecret::generate)
 };
 
 pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();

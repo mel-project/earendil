@@ -142,7 +142,7 @@ async fn udp_forward(
         }
     }
 
-    let haven_id = IdentitySecret::from_seed(&haven_cfg.identity_seed);
+    let haven_id = haven_cfg.identity.actualize()?;
     log::debug!(
         "UDP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
@@ -186,7 +186,7 @@ async fn tcp_forward(
     listen_dock: Dock,
     upstream: SocketAddr,
 ) -> anyhow::Result<()> {
-    let haven_id = IdentitySecret::from_seed(&haven_cfg.identity_seed);
+    let haven_id = haven_cfg.identity.actualize()?;
     log::debug!(
         "TCP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
@@ -221,7 +221,7 @@ async fn simple_proxy(
     haven_cfg: HavenForwardConfig,
     listen_dock: u32,
 ) -> Result<(), anyhow::Error> {
-    let haven_id = IdentitySecret::from_seed(&haven_cfg.identity_seed);
+    let haven_id = haven_cfg.identity.actualize()?;
     log::debug!(
         "simple proxy haven fingerprint: {}",
         haven_id.public().fingerprint()
