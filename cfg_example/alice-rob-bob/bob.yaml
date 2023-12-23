@@ -27,6 +27,6 @@ havens:
   - identity_seed: i-am-a-haven-pls-no-eat-me
     rendezvous: q29wsm1jpvg6j494kfdyf3wad5m92331 # rob's fingerprint
     handler:
-      type: tcp_forward
+      type: tcp_service
       listen_dock: 69421
       upstream: 127.0.0.1:8815 # e.g. listening port of geph4-exit

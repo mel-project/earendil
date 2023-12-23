@@ -1,4 +1,4 @@
-identity: identity.asc
+identity_file: identity.asc
 state_cache: state_cache.db
 
 in_routes:
@@ -19,9 +19,9 @@ udp_forwards:
 
 # server config
 havens:
-  - identity: haven.asc
-    rendezvous: bnjmrmw1kvjf7jmx5fa6a9x1hjtq7qh3
+  - identity_file: haven.asc
+    rendezvous: 6dskym46q2kyqrsf7ttzjx08adgmem9r
     handler:
-      type: udp_forward
+      type: udp_service
       listen_dock: 10000
       upstream: 127.0.0.1:10000

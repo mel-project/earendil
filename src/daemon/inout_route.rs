@@ -180,6 +180,7 @@ async fn link_service_loop(
                         .timeout(Duration::from_secs(60))
                         .await
                         .context("push_price timed out")??;
+                    smol::Timer::after(Duration::from_secs(300)).await;
                 }
             };
             gossip_loop.race(price_loop).await
