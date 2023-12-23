@@ -1,4 +1,7 @@
-use std::{ops::Deref, os::linux::raw, time::Instant};
+use std::{
+    ops::Deref,
+    time::{Duration, Instant},
+};
 
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -9,7 +12,7 @@ use earendil_packet::{
 use earendil_topology::RelayGraph;
 
 use itertools::Itertools;
-use moka::sync::Cache;
+use moka::sync::{Cache, CacheBuilder};
 use once_cell::sync::Lazy;
 use parking_lot::{Mutex, RwLock};
 use smol::channel::Sender;
@@ -28,21 +31,29 @@ pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
 pub type CtxField<T> = fn(&DaemonContext) -> T;
 
 pub static GLOBAL_IDENTITY: CtxField<IdentitySecret> = |ctx| {
-    if let Some(seed) = &ctx.init().identity_seed {
-        IdentitySecret::from_seed(seed)
-    } else {
-        IdentitySecret::generate()
-    }
+    ctx.init()
+        .identity
+        .as_ref()
+        .map(|id| {
+            id.actualize()
+                .expect("failed to initialize global identity")
+        })
+        .unwrap_or_else(IdentitySecret::generate)
 };
 
 pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
 pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |_| RwLock::new(RelayGraph::new());
 pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBlockStore::new());
 pub static NEIGH_TABLE: CtxField<NeighTable> = |_| NeighTable::new();
-pub static DEBTS: CtxField<Debts> = |_| Debts::new();
 pub static SOCKET_RECV_QUEUES: CtxField<DashMap<Endpoint, Sender<(Message, Fingerprint)>>> =
     |_| Default::default();
-pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| Cache::new(10000);
+pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {
+    CacheBuilder::default()
+        .time_to_live(Duration::from_secs(60))
+        .build()
+};
+
+pub static DEBTS: CtxField<Debts> = |_| Debts::new();
 
 /// Sends a raw N2R message with the given parameters.
 pub async fn send_n2r(

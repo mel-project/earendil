@@ -59,8 +59,8 @@ impl LinkConnection {
         let my_mux_sk = MuxSecret::generate();
         let mplex = Arc::new(Multiplex::new(my_mux_sk, None));
         mplex.add_pipe(pipe);
-        let (send_outgoing, recv_outgoing) = smol::channel::bounded(1);
-        let (send_incoming, recv_incoming) = smol::channel::bounded(1);
+        let (send_outgoing, recv_outgoing) = smol::channel::bounded(100);
+        let (send_incoming, recv_incoming) = smol::channel::bounded(100);
         let rpc = MultiplexRpcTransport::new(mplex.clone());
         let client = LinkClient::from(rpc);
 
@@ -187,7 +187,7 @@ async fn handle_onion_packets(
             let pkt: RawPacket = *bytemuck::try_from_bytes(&pkt)
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
-            send_incoming.send(pkt).await?;
+            send_incoming.try_send(pkt)?;
         }
     };
     up.race(dn).await

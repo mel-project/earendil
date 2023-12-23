@@ -59,14 +59,13 @@ pub async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 log::trace!("received garbled packet");
                 let reply_degarbler = ctx
                     .get(DEGARBLERS)
-                    .get(&id)
-                    .context("no degarbler for this garbled pkt")?;
+                    .remove(&id)
+                    .context(format!("no degarbler for this garbled pkt with id {id}, despite {} items in the degarbler", ctx.get(DEGARBLERS).entry_count()))?;
                 let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
                 log::trace!("packet has been degarbled!");
                 decrement_rrb_balance(&ctx, reply_degarbler.my_anon_isk(), src_fp);
                 replenish_rrb(&ctx, reply_degarbler.my_anon_isk(), src_fp).await?;
-                // ctx.send_reply_blocks(2, reply_degarbler.my_anon_isk(), src_fp)
-                //     .await?;
+
                 process_inner_pkt(
                     &ctx,
                     inner,

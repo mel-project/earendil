@@ -53,8 +53,6 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
                 .identity_pk
                 .verify(&locator.to_sign(), &locator.signature)
                 .map_err(|_| DhtError::VerifyFailed)?;
-
-            log::debug!("inserting key {key} locally");
             self.ctx.get(LOCAL_DHT_SHARD).insert(key, locator.clone());
         }
         Ok(())

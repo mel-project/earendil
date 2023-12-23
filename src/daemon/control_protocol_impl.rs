@@ -86,12 +86,12 @@ impl ControlProtocol for ControlProtocolImpl {
             .havens
             .iter()
             .map(|haven_cfg| {
-                let fp = IdentitySecret::from_bytes(&earendil_crypt::kdf_from_human(
-                    &haven_cfg.identity_seed,
-                    "identity_kdf_salt",
-                ))
-                .public()
-                .fingerprint();
+                let fp = haven_cfg
+                    .identity
+                    .actualize()
+                    .unwrap()
+                    .public()
+                    .fingerprint();
                 match haven_cfg.handler {
                     crate::config::ForwardHandler::UdpService {
                         listen_dock,

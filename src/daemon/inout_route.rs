@@ -44,7 +44,7 @@ pub async fn in_route_obfsudp(
             context.daemon_ctx.clone(),
             pipe,
             None,
-            link_price.clone(),
+            link_price,
         )));
     }
 }
@@ -80,7 +80,7 @@ pub async fn out_route_obfsudp(
                 context.daemon_ctx.clone(),
                 pipe,
                 Some(context.remote_fingerprint),
-                link_price.clone(),
+                link_price,
             )));
 
             anyhow::Ok(())

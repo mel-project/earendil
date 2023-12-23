@@ -43,6 +43,10 @@ fn main() -> anyhow::Result<()> {
                 serde_yaml::from_slice(&std::fs::read(config).context("cannot read config file")?)
                     .context("syntax error in config file")?;
             let config_parsed: ConfigFile = serde_json::from_value(json)?;
+            log::debug!(
+                "parsed config file: {}",
+                serde_json::to_string_pretty(&config_parsed)?
+            );
             log::info!("about to init daemon!");
             let _daemon = Daemon::init(config_parsed)?;
             loop {

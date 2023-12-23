@@ -233,7 +233,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                     context,
                     *connect,
                     *cookie,
-                    link_price.clone(),
+                    *link_price,
                 )));
             }
         }
