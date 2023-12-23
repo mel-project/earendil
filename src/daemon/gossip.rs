@@ -6,6 +6,7 @@ use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use itertools::Itertools;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use smol_timeout::TimeoutExt;
+use smolscale::reaper::TaskReaper;
 
 use super::{
     context::{GLOBAL_IDENTITY, GLOBAL_ONION_SK, NEIGH_TABLE, RELAY_GRAPH},
@@ -15,7 +16,8 @@ use super::{
 
 /// Loop that gossips things around
 pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let mut sleep_timer = smol::Timer::interval(Duration::from_secs(5));
+    let mut sleep_timer = smol::Timer::interval(Duration::from_secs(1));
+    let reaper = TaskReaper::new();
     loop {
         (&mut sleep_timer).await;
         // first insert ourselves
@@ -32,24 +34,28 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             log::debug!("skipping gossip due to no neighs");
             continue;
         }
-        // pick a random neighbor and do sync stuff
-        let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
-        let once = async {
-            if let Err(err) = gossip_once(&ctx, rand_neigh).await {
+        // pick a random neighbor and do sync stuff.
+        // we spawn a new task to prevent head-of-line blocking stuff
+        let rand_neigh = neighs[rand::thread_rng().gen_range(0..neighs.len())].clone();
+        let ctx = ctx.clone();
+        reaper.attach(smolscale::spawn(async move {
+            let once = async {
+                if let Err(err) = gossip_once(&ctx, &rand_neigh).await {
+                    log::warn!(
+                        "gossip with {} failed: {:?}",
+                        rand_neigh.remote_idpk().fingerprint(),
+                        err
+                    );
+                }
+            };
+            // pin_mut!(once);
+            if once.timeout(Duration::from_secs(60)).await.is_none() {
                 log::warn!(
-                    "gossip with {} failed: {:?}",
-                    rand_neigh.remote_idpk().fingerprint(),
-                    err
+                    "gossip once with {} timed out",
+                    rand_neigh.remote_idpk().fingerprint()
                 );
-            }
-        };
-        // pin_mut!(once);
-        if once.timeout(Duration::from_secs(5)).await.is_none() {
-            log::warn!(
-                "gossip once with {} timed out",
-                rand_neigh.remote_idpk().fingerprint()
-            );
-        };
+            };
+        }));
     }
 }
 
