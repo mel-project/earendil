@@ -32,13 +32,7 @@ impl Debts {
             .insert(neigh_fp, PriceInfo { price, debt_limit });
     }
 
-    pub fn insert_outgoing_price(
-        &self,
-        neigh_fp: Fingerprint,
-        price: u64,
-        debt_limit: u64,
-        max_outgoing_price: u64,
-    ) {
+    pub fn insert_outgoing_price(&self, neigh_fp: Fingerprint, price: u64, debt_limit: u64) {
         let _ = self
             .outgoing_prices
             .insert(neigh_fp, PriceInfo { price, debt_limit });
@@ -65,7 +59,7 @@ impl Debts {
     }
 
     pub fn is_within_debt_limit(&self, their_fp: &Fingerprint) -> bool {
-        if let Some(b) = self.incoming_prices.get(&their_fp) {
+        if let Some(b) = self.incoming_prices.get(their_fp) {
             if let Some(net) = self.net_debt_est(their_fp) {
                 if net > b.debt_limit as i128 {
                     return false;

@@ -61,7 +61,7 @@ impl NeighTable {
     ) {
         let expiry = ttl.map(|ttl| Instant::now() + ttl);
         let send_incoming = self.send_incoming.clone();
-        let remote_fp = connection.remote_idpk.fingerprint();
+        let remote_fp = connection.remote_idpk().fingerprint();
         self.table.insert(
             fingerprint,
             (

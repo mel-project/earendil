@@ -3,6 +3,16 @@ identity_seed: rob
 state_cache: rob_cache.db
 control_listen: 127.0.0.1:33333
 
+in_routes:
+  main_udp:
+    protocol: obfsudp
+    listen: 0.0.0.0:19998
+    secret: correct horse battery staple
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000
+
 out_routes:
   alice:
     fingerprint: 7wrkhwar5kj3hybwaf9pe996eydzc969

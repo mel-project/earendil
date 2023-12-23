@@ -179,9 +179,8 @@ impl ControlProtocol for ControlProtocolImpl {
                     .fold(String::new(), |acc, neigh| {
                         let fp = neigh.remote_idpk().fingerprint();
                         acc + &format!(
-                            "{:?} [label=\"{}\nnet_debt={:?}\"]\n",
+                            "\n{:?}\nnet debt: {:?}\n",
                             fp.to_string(),
-                            get_node_label(&fp),
                             self.ctx.get(DEBTS).net_debt_est(&fp)
                         )
                     });
@@ -213,7 +212,7 @@ impl ControlProtocol for ControlProtocolImpl {
                     )
                 });
             format!(
-                "My fingerprint:\n{}    [{}]\n\nMy neighbors:\n{}\nRelay graph:\n{}",
+                "My fingerprint:\n{}\t[{}]\n\nMy neighbors:{}\nRelay graph:\n{}",
                 my_fp, relay_or_client, all_neighs, all_adjs
             )
         } else {

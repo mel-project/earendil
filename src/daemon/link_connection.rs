@@ -40,7 +40,7 @@ use super::{
 pub struct LinkConnection {
     send_outgoing: Sender<RawPacket>,
     recv_incoming: Receiver<RawPacket>,
-    pub remote_idpk: IdentityPublic,
+    remote_idpk: IdentityPublic,
 }
 
 pub struct LinkInfo {
@@ -315,19 +315,21 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     async fn push_price(&self, price: u64, debt_limit: u64) {
-        let remote_fp = self.remote_pk.lock().unwrap().fingerprint();
+        log::debug!("received push price");
+        let remote_fp = match *self.remote_pk.lock() {
+            Some(rpk) => rpk.fingerprint(),
+            None => {
+                return;
+            }
+        };
 
-        log::debug!("received push_price!!!");
         if price > self.max_outgoing_price {
-            log::warn!("Neigh {} price too high!", remote_fp);
+            log::warn!("neigh {} price too high!", remote_fp);
             self.ctx.get(NEIGH_TABLE).remove(&remote_fp);
         } else {
-            self.ctx.get(DEBTS).insert_outgoing_price(
-                remote_fp,
-                price,
-                debt_limit,
-                self.max_outgoing_price,
-            );
+            self.ctx
+                .get(DEBTS)
+                .insert_outgoing_price(remote_fp, price, debt_limit);
             log::debug!("Successfully registered {} price!", remote_fp);
         }
     }

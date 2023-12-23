@@ -112,7 +112,7 @@ async fn per_route_tasks(
         LinkConnection::connect(ctx.clone(), pipe, link_price.max_outgoing_price).await?;
 
     if let Some(fp) = their_fp {
-        let remote_fp = link_info.conn.remote_idpk.fingerprint();
+        let remote_fp = link_info.conn.remote_idpk().fingerprint();
         log::info!("about to insert into neightable for fp: {}", fp);
 
         if fp != remote_fp {
@@ -144,7 +144,7 @@ async fn per_route_tasks(
         );
         log::info!(
             "inserted in_route link for {}",
-            link_info.conn.remote_idpk.fingerprint()
+            link_info.conn.remote_idpk().fingerprint()
         );
     }
 
@@ -157,12 +157,10 @@ async fn per_route_tasks(
     connection_task
         .race(gossip_loop(
             ctx.clone(),
-            link_info.conn.remote_idpk,
+            link_info.conn.remote_idpk(),
             link_info.client,
         ))
         .await?;
-
-    // connection_task.race(gossip_task).await?;
 
     Ok(())
 }

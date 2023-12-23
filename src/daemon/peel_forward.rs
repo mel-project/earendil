@@ -22,10 +22,10 @@ pub async fn peel_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             log::warn!("received pkt from neighbor who owes us too much money -_-");
             continue;
         }
-        log::debug!("INSIDE peel_forward loop; processing packet from good neigh!");
+        log::trace!("INSIDE peel_forward loop; processing packet from good neigh!");
         if last_hop_fp != ctx.get(GLOBAL_IDENTITY).public().fingerprint() {
             ctx.get(DEBTS).incr_incoming(last_hop_fp);
-            log::debug!("incr'ed ddeeeebbbbtttt");
+            log::trace!("incr'ed debt");
         }
 
         let now = Instant::now();
@@ -86,7 +86,7 @@ fn process_inner_pkt(
 ) -> anyhow::Result<()> {
     match inner {
         InnerPacket::Message(msg) => {
-            // log::debug!("received InnerPacket::Message: {:?}", msg);
+            log::trace!("received InnerPacket::Message");
             let dest = Endpoint::new(dest_fp, msg.dest_dock);
             if let Some(send_incoming) = ctx.get(SOCKET_RECV_QUEUES).get(&dest) {
                 send_incoming.try_send((msg, src_fp))?;
