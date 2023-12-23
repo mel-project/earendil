@@ -6,9 +6,17 @@ in_routes:
     listen: 0.0.0.0:12004
     protocol: obfsudp
     secret: kiss-item-edge-insect-adult-nephew-learn-gentle-obscure-reveal-miracle-electric
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000
 out_routes: 
   derek:
     connect: 127.0.0.1:12005
     cookie: af94d097dbef71bd748abcc229b14b0665f7e59a078f34424d5c68ec8101300e
     fingerprint: bk6c3s76dzs8exna5vpcxwy92p49v0qt
     protocol: obfsudp
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000

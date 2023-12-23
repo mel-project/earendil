@@ -15,6 +15,10 @@ out_routes:
     protocol: obfsudp
     connect: 127.0.0.1:34567
     cookie: 11deaee1eb5b796e416d54ad56522083938ea38218e8e7ea00e7466a04b5b750
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000
 
 # udp_forwards:
 #   - listen: 127.0.0.1:8080

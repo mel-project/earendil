@@ -7,3 +7,7 @@ out_routes:
     cookie: 8221034c5c46eac58756e5d4650059465931333c4b9808a9395ad570793fcd0f
     fingerprint: xh6tsvafwbgd2wc9akckc8pdwbv4arqw
     protocol: obfsudp
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000

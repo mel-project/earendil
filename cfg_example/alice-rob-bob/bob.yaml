@@ -9,6 +9,10 @@ in_routes:
     protocol: obfsudp
     listen: 0.0.0.0:12345
     secret: correct horse battery staple
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000
 
 # server config
 havens:
