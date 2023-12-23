@@ -23,7 +23,7 @@ use crate::{
 };
 
 use super::{
-    debts::Debts, neightable::NeighTable, reply_block_store::ReplyBlockStore,
+    debts::Debts, peel_forward::peel_forward, reply_block_store::ReplyBlockStore,
     rrb_balance::replenish_rrb,
 };
 
@@ -44,7 +44,8 @@ pub static GLOBAL_IDENTITY: CtxField<IdentitySecret> = |ctx| {
 pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
 pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |_| RwLock::new(RelayGraph::new());
 pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBlockStore::new());
-pub static NEIGH_TABLE: CtxField<NeighTable> = |_| NeighTable::new();
+
+pub static NEIGH_TABLE_NEW: CtxField<DashMap<Fingerprint, Sender<RawPacket>>> = |_| DashMap::new();
 pub static SOCKET_RECV_QUEUES: CtxField<DashMap<Endpoint, Sender<(Message, Fingerprint)>>> =
     |_| Default::default();
 pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {
@@ -79,9 +80,12 @@ pub async fn send_n2r(
         }
         let inner = InnerPacket::Message(Message::new(src_dock, dst_dock, content));
         let raw_packet = RawPacket::new_reply(&reply_block, inner, &src_idsk)?;
-        ctx.get(NEIGH_TABLE)
-            .inject_asif_incoming(ctx.get(GLOBAL_IDENTITY).public().fingerprint(), raw_packet)
-            .await;
+        let _ = peel_forward(
+            ctx,
+            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+            raw_packet,
+        )
+        .await;
     } else {
         let route = ctx
             .get(RELAY_GRAPH)
@@ -107,16 +111,16 @@ pub async fn send_n2r(
 
         // if anon source, send RBs
         if src_anon {
-            replenish_rrb(ctx, src_idsk, dst_fp).await?;
+            replenish_rrb(ctx, src_idsk, dst_fp)?;
         }
 
         // we send the onion by treating it as a message addressed to ourselves
-        ctx.get(NEIGH_TABLE)
-            .inject_asif_incoming(
-                ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-                wrapped_onion,
-            )
-            .await;
+        peel_forward(
+            ctx,
+            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+            wrapped_onion,
+        )
+        .await;
     }
     Ok(())
 }
@@ -178,11 +182,11 @@ pub async fn send_reply_blocks(
         route.iter().map(|s| s.to_string()).collect_vec()
     );
     // we send the onion by treating it as a message addressed to ourselves
-    ctx.get(NEIGH_TABLE)
-        .inject_asif_incoming(
-            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-            wrapped_rb_onion,
-        )
-        .await;
+    peel_forward(
+        ctx,
+        ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+        wrapped_rb_onion,
+    )
+    .await;
     Ok(())
 }

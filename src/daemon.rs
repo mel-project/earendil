@@ -3,11 +3,9 @@ mod control_protocol_impl;
 
 mod debts;
 pub(crate) mod dht;
-mod gossip;
-mod inout_route;
-mod link_connection;
-mod link_protocol;
-mod neightable;
+
+mod link;
+
 mod peel_forward;
 mod reply_block_store;
 mod rrb_balance;
@@ -30,27 +28,19 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
 use stdcode::StdcodeSerializeExt;
 
-use std::thread::available_parallelism;
-
 use std::{sync::Arc, time::Duration};
 
-use crate::socket::Endpoint;
 use crate::{config::ConfigFile, global_rpc::GLOBAL_RPC_DOCK};
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::ControlService,
-    daemon::inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
+    daemon::link::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
 };
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
 use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
-use crate::{daemon::context::NEIGH_TABLE, socket::n2r_socket::N2rSocket};
-use crate::{
-    daemon::{
-        peel_forward::peel_forward_loop, socks5::socks5_loop, tcp_forward::tcp_forward_loop,
-        udp_forward::udp_forward_loop,
-    },
-    log_error,
-};
+use crate::{daemon::socks5::socks5_loop, socket::Endpoint};
+use crate::{daemon::tcp_forward::tcp_forward_loop, socket::n2r_socket::N2rSocket};
+use crate::{daemon::udp_forward::udp_forward_loop, log_error};
 use crate::{
     global_rpc::server::REGISTERED_HAVENS,
     haven_util::{haven_loop, HAVEN_FORWARD_DOCK},
@@ -97,23 +87,6 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     });
 
     // Run the loops
-    let _table_gc = Immortal::spawn(clone!([ctx], async move {
-        loop {
-            smol::Timer::after(Duration::from_secs(60)).await;
-            ctx.get(NEIGH_TABLE).garbage_collect();
-        }
-    }));
-
-    let _peel_forward_loops: Vec<Immortal> =
-        (0..available_parallelism().map(|s| s.into()).unwrap_or(1))
-            .map(|_| {
-                Immortal::respawn(
-                    RespawnStrategy::Immediate,
-                    clone!([ctx], move || peel_forward_loop(ctx.clone())
-                        .map_err(log_error("peel_forward"))),
-                )
-            })
-            .collect();
 
     let _control_protocol = Immortal::respawn(
         RespawnStrategy::Immediate,

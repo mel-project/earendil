@@ -19,7 +19,7 @@ use crate::{
     config::InRouteConfig,
     control_protocol::{ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs},
     daemon::{
-        context::{DEBTS, NEIGH_TABLE, RELAY_GRAPH},
+        context::{DEBTS, NEIGH_TABLE_NEW, RELAY_GRAPH},
         DaemonContext,
     },
     global_rpc::transport::GlobalRpcTransport,
@@ -171,19 +171,17 @@ impl ControlProtocol for ControlProtocolImpl {
             "relay"
         };
         if human {
-            let all_neighs =
-                self.ctx
-                    .get(NEIGH_TABLE)
-                    .all_neighs()
-                    .iter()
-                    .fold(String::new(), |acc, neigh| {
-                        let fp = neigh.remote_idpk().fingerprint();
-                        acc + &format!(
-                            "\n{:?}\nnet debt: {:?}\n",
-                            fp.to_string(),
-                            self.ctx.get(DEBTS).net_debt_est(&fp)
-                        )
-                    });
+            let all_neighs = self.ctx.get(NEIGH_TABLE_NEW).iter().map(|s| *s.key()).fold(
+                String::new(),
+                |acc, neigh| {
+                    let fp = neigh;
+                    acc + &format!(
+                        "\n{:?}\nnet debt: {:?}\n",
+                        fp.to_string(),
+                        self.ctx.get(DEBTS).net_debt_est(&fp)
+                    )
+                },
+            );
             let all_adjs = self
                 .ctx
                 .get(RELAY_GRAPH)
@@ -216,14 +214,12 @@ impl ControlProtocol for ControlProtocolImpl {
                 my_fp, relay_or_client, all_neighs, all_adjs
             )
         } else {
-            let all_neighs =
-                self.ctx
-                    .get(NEIGH_TABLE)
-                    .all_neighs()
-                    .iter()
-                    .fold(String::new(), |acc, neigh| {
-                        acc + &format!("{:?}\n", neigh.remote_idpk().fingerprint().to_string())
-                    });
+            let all_neighs = self
+                .ctx
+                .get(NEIGH_TABLE_NEW)
+                .iter()
+                .map(|s| *s.key())
+                .fold(String::new(), |acc, neigh| acc + &format!("{:?}\n", neigh));
             let all_adjs = self
                 .ctx
                 .get(RELAY_GRAPH)

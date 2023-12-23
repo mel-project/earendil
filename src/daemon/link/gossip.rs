@@ -8,11 +8,9 @@ use itertools::Itertools;
 use rand::{seq::SliceRandom, thread_rng};
 use smol_timeout::TimeoutExt;
 
-use super::{
-    context::{GLOBAL_IDENTITY, GLOBAL_ONION_SK, RELAY_GRAPH},
-    link_protocol::LinkClient,
-    DaemonContext,
-};
+use crate::daemon::context::{GLOBAL_IDENTITY, GLOBAL_ONION_SK, RELAY_GRAPH};
+
+use super::{link_protocol::LinkClient, DaemonContext};
 
 /// Loop that gossips things around
 pub async fn gossip_loop(

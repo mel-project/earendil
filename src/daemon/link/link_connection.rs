@@ -1,5 +1,4 @@
 use std::{
-    convert::Infallible,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -15,116 +14,68 @@ use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use futures_util::{AsyncWriteExt, TryFutureExt};
 use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
-use parking_lot::Mutex;
+use once_cell::sync::OnceCell;
+
 use smol::{
-    channel::{Receiver, Sender},
+    channel::Receiver,
     future::FutureExt,
     io::{AsyncBufReadExt, BufReader},
     stream::StreamExt,
-    Task,
 };
+
 use smolscale::{
     immortal::{Immortal, RespawnStrategy},
     reaper::TaskReaper,
 };
-use sosistab2::{Multiplex, MuxSecret, Pipe};
+use sosistab2::{Multiplex, Pipe};
+
+use crate::daemon::{
+    context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH},
+    peel_forward::peel_forward,
+};
 
 use super::{
-    context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE, RELAY_GRAPH},
     link_protocol::{AuthResponse, InfoResponse, LinkClient, LinkProtocol, LinkService},
     DaemonContext,
 };
 
-/// Encapsulates a single node-to-node connection (may be relay-relay or client-relay).
-#[derive(Clone)]
-pub struct LinkConnection {
-    send_outgoing: Sender<RawPacket>,
-    recv_incoming: Receiver<RawPacket>,
-    remote_idpk: IdentityPublic,
-}
+/// Authenticates the other side of the link, from a single Pipe. Unlike in Geph, n2n Multiplexes in earendil all contain one pipe each.
+pub async fn link_authenticate(
+    mplex: Arc<Multiplex>,
+    their_fp: Option<Fingerprint>,
+) -> anyhow::Result<IdentityPublic> {
+    let rpc = LinkRpcTransport::new(mplex.clone());
+    let client = LinkClient::from(rpc);
 
-pub struct LinkInfo {
-    pub conn: LinkConnection,
-    pub client: LinkClient,
-    pub task: Task<Infallible>,
-}
+    let resp = client
+        .authenticate()
+        .await
+        .context("did not respond to authenticate")?;
 
-impl LinkConnection {
-    /// Creates a new Connection, from a single Pipe. Unlike in Geph, n2n Multiplexes in earendil all contain one pipe each.
-    pub async fn connect(
-        ctx: DaemonContext,
-        pipe: impl Pipe,
-        max_outgoing_price: u64,
-    ) -> anyhow::Result<LinkInfo> {
-        let my_mux_sk = MuxSecret::generate();
-        let mplex = Arc::new(Multiplex::new(my_mux_sk, None));
-        mplex.add_pipe(pipe);
-        let (send_outgoing, recv_outgoing) = smol::channel::bounded(100);
-        let (send_incoming, recv_incoming) = smol::channel::bounded(100);
-        let rpc = MultiplexRpcTransport::new(mplex.clone());
-        let client = LinkClient::from(rpc);
-
-        let remote_pk_shared = Arc::new(Mutex::new(None));
-
-        let service = Arc::new(LinkService(LinkProtocolImpl {
-            ctx: ctx.clone(),
-            mplex: mplex.clone(),
-            remote_pk: remote_pk_shared.clone(),
-            max_outgoing_price,
-        }));
-
-        let task = smolscale::spawn(
-            connection_loop(mplex.clone(), send_incoming, recv_outgoing, service)
-                .unwrap_or_else(|e| panic!("connection_loop died with {:?}", e)),
-        );
-
-        let resp = client
-            .authenticate()
-            .await
-            .context("did not respond to authenticate")?;
-
-        resp.verify(&mplex.peer_pk().context("could not obtain peer_pk")?)
-            .context("did not authenticated correctly")?;
-
-        let mut remote_pk = remote_pk_shared.lock();
-        *remote_pk = Some(resp.full_pk);
-
-        let conn = Self {
-            send_outgoing,
-            recv_incoming,
-            remote_idpk: resp.full_pk,
-        };
-
-        Ok(LinkInfo { conn, client, task })
+    resp.verify(&mplex.peer_pk().context("could not obtain peer_pk")?)
+        .context("did not authenticated correctly")?;
+    if let Some(their_fp) = their_fp {
+        if their_fp != resp.full_pk.fingerprint() {
+            anyhow::bail!(
+                "neighbor fingerprint {} different from configured {}",
+                resp.full_pk.fingerprint(),
+                their_fp
+            )
+        }
     }
-
-    /// Returns the identity publickey presented by the other side.
-    pub fn remote_idpk(&self) -> IdentityPublic {
-        self.remote_idpk
-    }
-
-    /// Sends an onion-routing packet down this connection.
-    pub async fn send_raw_packet(&self, pkt: RawPacket) {
-        self.send_outgoing.send(pkt).await.unwrap();
-    }
-
-    /// Sends an onion-routing packet down this connection.
-    pub async fn recv_raw_packet(&self) -> RawPacket {
-        self.recv_incoming.recv().await.unwrap()
-    }
+    Ok(resp.full_pk)
 }
 
 /// Main loop for the connection.
 pub async fn connection_loop(
-    mplex: Arc<Multiplex>,
-    send_incoming: Sender<RawPacket>,
-    recv_outgoing: Receiver<RawPacket>,
     service: Arc<LinkService<LinkProtocolImpl>>,
-) -> anyhow::Result<Infallible> {
+    mplex: Arc<Multiplex>,
+    recv_outgoing: Receiver<RawPacket>,
+) -> anyhow::Result<()> {
     let _onion_keepalive = Immortal::respawn(
         RespawnStrategy::Immediate,
-        clone!([mplex, send_incoming, recv_outgoing], move || {
-            onion_keepalive(mplex.clone(), send_incoming.clone(), recv_outgoing.clone())
+        clone!([mplex, recv_outgoing, service], move || {
+            onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
         }),
     );
 
@@ -147,8 +98,8 @@ pub async fn connection_loop(
                 Ok(())
             })),
             "onion_packets" => group.attach(smolscale::spawn(handle_onion_packets(
+                service.clone(),
                 stream,
-                send_incoming.clone(),
                 recv_outgoing.clone(),
             ))),
             other => {
@@ -159,19 +110,19 @@ pub async fn connection_loop(
 }
 
 async fn onion_keepalive(
+    service: Arc<LinkService<LinkProtocolImpl>>,
     mplex: Arc<Multiplex>,
-    send_incoming: Sender<RawPacket>,
     recv_outgoing: Receiver<RawPacket>,
 ) -> anyhow::Result<()> {
     loop {
         let stream = mplex.open_conn("onion_packets").await?;
-        handle_onion_packets(stream, send_incoming.clone(), recv_outgoing.clone()).await?;
+        handle_onion_packets(service.clone(), stream, recv_outgoing.clone()).await?;
     }
 }
 
 async fn handle_onion_packets(
+    service: Arc<LinkService<LinkProtocolImpl>>,
     conn: sosistab2::Stream,
-    send_incoming: Sender<RawPacket>,
     recv_outgoing: Receiver<RawPacket>,
 ) -> anyhow::Result<()> {
     let up = async {
@@ -187,7 +138,9 @@ async fn handle_onion_packets(
             let pkt: RawPacket = *bytemuck::try_from_bytes(&pkt)
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
-            send_incoming.try_send(pkt)?;
+            if let Some(other_fp) = service.0.remote_pk.get() {
+                peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt).await?;
+            }
         }
     };
     up.race(dn).await
@@ -197,12 +150,12 @@ const POOL_TIMEOUT: Duration = Duration::from_secs(60);
 
 type PooledConn = (BufReader<sosistab2::Stream>, sosistab2::Stream);
 
-pub struct MultiplexRpcTransport {
+pub struct LinkRpcTransport {
     mplex: Arc<Multiplex>,
     conn_pool: ConcurrentQueue<(PooledConn, Instant)>,
 }
 
-impl MultiplexRpcTransport {
+impl LinkRpcTransport {
     /// Constructs a Multiplex-backed RpcTransport.
     pub fn new(mplex: Arc<Multiplex>) -> Self {
         Self {
@@ -224,7 +177,7 @@ impl MultiplexRpcTransport {
 }
 
 #[async_trait]
-impl RpcTransport for MultiplexRpcTransport {
+impl RpcTransport for LinkRpcTransport {
     type Error = anyhow::Error;
 
     async fn call_raw(&self, req: JrpcRequest) -> Result<JrpcResponse, Self::Error> {
@@ -245,7 +198,7 @@ impl RpcTransport for MultiplexRpcTransport {
 pub struct LinkProtocolImpl {
     pub ctx: DaemonContext,
     pub mplex: Arc<Multiplex>,
-    pub remote_pk: Arc<Mutex<Option<IdentityPublic>>>,
+    pub remote_pk: Arc<OnceCell<IdentityPublic>>,
     pub max_outgoing_price: u64,
 }
 
@@ -271,8 +224,8 @@ impl LinkProtocol for LinkProtocolImpl {
             && left_incomplete.right == self.ctx.get(GLOBAL_IDENTITY).public().fingerprint()
             && self
                 .ctx
-                .get(NEIGH_TABLE)
-                .lookup(&left_incomplete.left)
+                .get(NEIGH_TABLE_NEW)
+                .get(&left_incomplete.left)
                 .is_some();
         if !valid {
             log::debug!("neighbor not right of us! Refusing to sign adjacency x_x");
@@ -316,7 +269,7 @@ impl LinkProtocol for LinkProtocolImpl {
 
     async fn push_price(&self, price: u64, debt_limit: u64) {
         log::debug!("received push price");
-        let remote_fp = match *self.remote_pk.lock() {
+        let remote_fp = match self.remote_pk.get() {
             Some(rpk) => rpk.fingerprint(),
             None => {
                 return;
@@ -324,8 +277,7 @@ impl LinkProtocol for LinkProtocolImpl {
         };
 
         if price > self.max_outgoing_price {
-            log::warn!("neigh {} price too high!", remote_fp);
-            self.ctx.get(NEIGH_TABLE).remove(&remote_fp);
+            log::warn!("neigh {} price too high! YOU SHOULD MANUALLY REMOVE THIS UNTIL YOU RESOLVE THE ISSUE", remote_fp);
         } else {
             self.ctx
                 .get(DEBTS)
