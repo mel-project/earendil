@@ -17,6 +17,7 @@ use super::{
 pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let mut sleep_timer = smol::Timer::interval(Duration::from_secs(5));
     loop {
+        (&mut sleep_timer).await;
         // first insert ourselves
         let am_i_relay = !ctx.init().in_routes.is_empty();
         ctx.get(RELAY_GRAPH)
@@ -26,14 +27,14 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 ctx.get(GLOBAL_ONION_SK),
                 am_i_relay,
             ))?;
+        let neighs = ctx.get(NEIGH_TABLE).all_neighs();
+        if neighs.is_empty() {
+            log::debug!("skipping gossip due to no neighs");
+            continue;
+        }
+        // pick a random neighbor and do sync stuff
+        let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
         let once = async {
-            let neighs = ctx.get(NEIGH_TABLE).all_neighs();
-            if neighs.is_empty() {
-                log::debug!("skipping gossip due to no neighs");
-                return;
-            }
-            // pick a random neighbor and do sync stuff
-            let rand_neigh = &neighs[rand::thread_rng().gen_range(0..neighs.len())];
             if let Err(err) = gossip_once(&ctx, rand_neigh).await {
                 log::warn!(
                     "gossip with {} failed: {:?}",
@@ -44,9 +45,11 @@ pub async fn gossip_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         };
         // pin_mut!(once);
         if once.timeout(Duration::from_secs(5)).await.is_none() {
-            log::warn!("gossip once timed out");
+            log::warn!(
+                "gossip once with {} timed out",
+                rand_neigh.remote_idpk().fingerprint()
+            );
         };
-        (&mut sleep_timer).await;
     }
 }
 
@@ -61,7 +64,6 @@ async fn gossip_once(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Resu
 // Step 1: Fetch the identity of the neighbor.
 async fn fetch_identity(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
     let remote_fingerprint = conn.remote_idpk().fingerprint();
-
     log::trace!("getting identity of {remote_fingerprint}");
     let their_id = conn
         .link_rpc()
@@ -101,17 +103,16 @@ async fn sign_adjacency(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::R
 
 // Step 3: Gossip the relay graph, by asking info about random nodes.
 async fn gossip_graph(ctx: &DaemonContext, conn: &LinkConnection) -> anyhow::Result<()> {
-    let remote_fingerprint = conn.remote_idpk().fingerprint();
+    // let remote_fingerprint = conn.remote_idpk().fingerprint();
     let all_known_nodes = ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();
-    log::info!("num known nodes: {}", all_known_nodes.len());
     let random_sample = all_known_nodes
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
         .copied()
         .collect_vec();
-    log::debug!(
-        "asking {remote_fingerprint} for neighbors of {} neighbors!",
-        random_sample.len()
-    );
+    // log::debug!(
+    //     "asking {remote_fingerprint} for neighbors of {} neighbors!",
+    //     random_sample.len()
+    // );
     let adjacencies = conn.link_rpc().adjacencies(random_sample).await?;
     for adjacency in adjacencies {
         let left_fp = adjacency.left;

@@ -40,7 +40,7 @@ impl NeighTable {
 
     /// Inject a packet *as if* it came from another node.
     pub async fn inject_asif_incoming(&self, pkt: RawPacket) {
-        let _ = self.send_incoming.send(pkt).await;
+        let _ = self.send_incoming.try_send(pkt);
     }
 
     /// Insert a fingerprint-connection mapping with a TTL.
@@ -68,8 +68,9 @@ impl NeighTable {
                 expiry,
                 Immortal::spawn(async move {
                     loop {
-                        let pkt = connection.recv_raw_packet().await;
-                        let _ = send_incoming.send(pkt).await;
+                        if let Ok(pkt) = connection.recv_raw_packet().await {
+                            let _ = send_incoming.try_send(pkt);
+                        }
                     }
                 }),
             ),

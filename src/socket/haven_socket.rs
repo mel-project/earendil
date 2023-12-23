@@ -103,7 +103,6 @@ impl HavenSocket {
                             )
                             .timeout(Duration::from_secs(30))
                             .await;
-                            log::debug!("registering haven rendezvous relay SUCCEEDED!");
                             Timer::after(Duration::from_secs(5)).await;
                         }
                     }

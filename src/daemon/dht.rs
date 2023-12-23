@@ -44,7 +44,7 @@ pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator) {
     }
     while let Some(res) = gatherer.next().await {
         match res {
-            Ok(_) => log::debug!("DHT insert succeeded!"),
+            Ok(_) => (),
             Err(e) => log::debug!("DHT insert failed! {e}"),
         }
     }
@@ -83,7 +83,7 @@ pub async fn dht_get(
                     ctx.get(DHT_CACHE).insert(fingerprint, locator.clone());
                     return Ok(Some(locator));
                 } else {
-                    return Err(DhtError::VerifyFailed);
+                    retval = Err(DhtError::VerifyFailed);
                 }
             }
         }
