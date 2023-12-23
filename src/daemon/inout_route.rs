@@ -16,7 +16,7 @@ use crate::{
     config::LinkPrice,
     daemon::{
         context::{DEBTS, NEIGH_TABLE_NEW},
-        link::{gossip::gossip_loop, link_connection::link_authenticate},
+        inout_route::{gossip::gossip_loop, link_connection::link_authenticate},
     },
 };
 

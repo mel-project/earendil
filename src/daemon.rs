@@ -4,7 +4,7 @@ mod control_protocol_impl;
 mod debts;
 pub(crate) mod dht;
 
-mod link;
+mod inout_route;
 
 mod peel_forward;
 mod reply_block_store;
@@ -34,7 +34,7 @@ use crate::{config::ConfigFile, global_rpc::GLOBAL_RPC_DOCK};
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::ControlService,
-    daemon::link::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
+    daemon::inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
 };
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
 use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
