@@ -139,7 +139,7 @@ async fn handle_onion_packets(
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
             if let Some(other_fp) = service.0.remote_pk.get() {
-                peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt).await?;
+                let _ = peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt);
             }
         }
     };

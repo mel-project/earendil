@@ -2,16 +2,20 @@ use std::time::Duration;
 
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use moka::sync::Cache;
+use parking_lot::Mutex;
 
 use crate::{control_protocol::SendMessageError, daemon::context::send_reply_blocks};
 
 use super::context::{CtxField, DaemonContext};
+
+static LAWK: Mutex<()> = Mutex::new(());
 
 pub fn replenish_rrb(
     ctx: &DaemonContext,
     my_anon_isk: IdentitySecret,
     dst_fp: Fingerprint,
 ) -> Result<(), SendMessageError> {
+    let _guard = LAWK.lock();
     const BATCH_SIZE: usize = 10;
     while rb_balance(ctx, my_anon_isk, dst_fp) < 100.0 {
         // we conservatively assume half get there

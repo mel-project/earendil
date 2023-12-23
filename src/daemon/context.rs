@@ -9,7 +9,7 @@ use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
-use earendil_topology::RelayGraph;
+use earendil_topology::{IdentityDescriptor, RelayGraph};
 
 use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};
@@ -42,7 +42,10 @@ pub static GLOBAL_IDENTITY: CtxField<IdentitySecret> = |ctx| {
 };
 
 pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
-pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |_| RwLock::new(RelayGraph::new());
+pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |_| {
+    log::warn!("**** INIT RELAY GRAPH****");
+    RwLock::new(RelayGraph::new())
+};
 pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBlockStore::new());
 
 pub static NEIGH_TABLE_NEW: CtxField<DashMap<Fingerprint, Sender<RawPacket>>> = |_| DashMap::new();
@@ -84,8 +87,7 @@ pub async fn send_n2r(
             ctx,
             ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             raw_packet,
-        )
-        .await;
+        );
     } else {
         let route = ctx
             .get(RELAY_GRAPH)
@@ -119,8 +121,7 @@ pub async fn send_n2r(
             ctx,
             ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             wrapped_onion,
-        )
-        .await;
+        );
     }
     Ok(())
 }
@@ -186,7 +187,6 @@ pub async fn send_reply_blocks(
         ctx,
         ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
         wrapped_rb_onion,
-    )
-    .await;
+    );
     Ok(())
 }

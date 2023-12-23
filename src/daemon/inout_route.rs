@@ -2,6 +2,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use earendil_crypt::Fingerprint;
+use futures_util::TryFutureExt;
 use once_cell::sync::OnceCell;
 use smol::future::FutureExt;
 use smol_timeout::TimeoutExt;
@@ -124,7 +125,12 @@ async fn per_link_loop(
     let _client = LinkClient::from(rpc);
     // service loop
     let service_loop = link_service_loop(ctx.clone(), mplex, their_fp, link_price);
-    service_loop.await?;
+    service_loop
+        .map_err(|e| {
+            log::warn!("link_service_loop for {:?} died: {:?}", their_fp, e);
+            e
+        })
+        .await?;
 
     Ok(())
 }
@@ -175,11 +181,13 @@ async fn link_service_loop(
                         link_info.incoming_debt_limit,
                     );
                     // attempt to push the price
-                    client
-                        .push_price(link_info.incoming_price, link_info.incoming_debt_limit)
-                        .timeout(Duration::from_secs(60))
-                        .await
-                        .context("push_price timed out")??;
+                    if link_info.incoming_price > 0 {
+                        client
+                            .push_price(link_info.incoming_price, link_info.incoming_debt_limit)
+                            .timeout(Duration::from_secs(60))
+                            .await
+                            .context("push_price timed out")??;
+                    }
                     smol::Timer::after(Duration::from_secs(300)).await;
                 }
             };

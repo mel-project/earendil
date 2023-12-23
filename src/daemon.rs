@@ -18,7 +18,7 @@ use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::ForwardInstruction;
 
-use earendil_topology::RelayGraph;
+use earendil_topology::{IdentityDescriptor, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
 use nanorpc::{JrpcRequest, RpcService};
@@ -30,7 +30,11 @@ use stdcode::StdcodeSerializeExt;
 
 use std::{sync::Arc, time::Duration};
 
-use crate::{config::ConfigFile, global_rpc::GLOBAL_RPC_DOCK};
+use crate::{
+    config::ConfigFile,
+    daemon::context::{GLOBAL_ONION_SK, RELAY_GRAPH},
+    global_rpc::GLOBAL_RPC_DOCK,
+};
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::ControlService,
@@ -88,6 +92,22 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 
     // Run the loops
 
+    let _identity_refresh_loop = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([ctx], move || clone!([ctx], async move {
+            // first insert ourselves
+            let am_i_relay = !ctx.init().in_routes.is_empty();
+            ctx.get(RELAY_GRAPH)
+                .write()
+                .insert_identity(IdentityDescriptor::new(
+                    ctx.get(GLOBAL_IDENTITY),
+                    ctx.get(GLOBAL_ONION_SK),
+                    am_i_relay,
+                ))?;
+            smol::Timer::after(Duration::from_secs(60)).await;
+            anyhow::Ok(())
+        })),
+    );
     let _control_protocol = Immortal::respawn(
         RespawnStrategy::Immediate,
         clone!([ctx], move || control_protocol_loop(ctx.clone())

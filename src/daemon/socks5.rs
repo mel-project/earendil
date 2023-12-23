@@ -17,7 +17,7 @@ use crate::{
     stream::Stream,
 };
 
-use super::DaemonContext;
+use super::{context::CtxField, DaemonContext};
 
 pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Result<()> {
     log::debug!("socks5 loop started");
@@ -34,6 +34,9 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
         ));
     }
 }
+
+// this makes reply block handling a bit more efficient at the cost of some anonymity --- we should investigate a better way
+static SOCKS5_LOCAL_IDSK: CtxField<IdentitySecret> = |_| IdentitySecret::generate();
 
 async fn socks5_once(
     ctx: DaemonContext,
@@ -75,7 +78,7 @@ async fn socks5_once(
                 port.into(),
             );
             let earendil_skt =
-                Socket::bind_haven_internal(ctx.clone(), IdentitySecret::generate(), None, None);
+                Socket::bind_haven_internal(ctx.clone(), *ctx.get(SOCKS5_LOCAL_IDSK), None, None);
             let earendil_stream = Stream::connect(earendil_skt, endpoint).await?;
 
             io::copy(client_stream.clone(), &mut earendil_stream.clone())
@@ -99,7 +102,7 @@ async fn socks5_once(
                 Fallback::SimpleProxy { remote } => {
                     let remote_skt = Socket::bind_haven_internal(
                         ctx.clone(),
-                        IdentitySecret::generate(),
+                        *ctx.get(SOCKS5_LOCAL_IDSK),
                         None,
                         None,
                     );

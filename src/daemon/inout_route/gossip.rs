@@ -3,12 +3,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::Context;
 use bytes::Bytes;
 use earendil_crypt::IdentityPublic;
-use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
+use earendil_topology::AdjacencyDescriptor;
 use itertools::Itertools;
 use rand::{seq::SliceRandom, thread_rng};
 use smol_timeout::TimeoutExt;
 
-use crate::daemon::context::{GLOBAL_IDENTITY, GLOBAL_ONION_SK, RELAY_GRAPH};
+use crate::daemon::context::{GLOBAL_IDENTITY, RELAY_GRAPH};
 
 use super::{link_protocol::LinkClient, DaemonContext};
 
@@ -18,17 +18,12 @@ pub async fn gossip_loop(
     neighbor_idpk: IdentityPublic,
     link_client: LinkClient,
 ) -> anyhow::Result<()> {
-    let mut sleep_timer = smol::Timer::interval(Duration::from_secs(5));
+    let mut sleep_timer = smol::Timer::interval(Duration::from_secs(10));
+    scopeguard::defer!(log::info!(
+        "gossip loop for {} stopped",
+        neighbor_idpk.fingerprint()
+    ));
     loop {
-        // first insert ourselves
-        let am_i_relay = !ctx.init().in_routes.is_empty();
-        ctx.get(RELAY_GRAPH)
-            .write()
-            .insert_identity(IdentityDescriptor::new(
-                ctx.get(GLOBAL_IDENTITY),
-                ctx.get(GLOBAL_ONION_SK),
-                am_i_relay,
-            ))?;
         let once = async {
             if let Err(err) = gossip_once(&ctx, neighbor_idpk, &link_client).await {
                 log::warn!(
@@ -39,9 +34,10 @@ pub async fn gossip_loop(
             }
         };
         // pin_mut!(once);
-        if once.timeout(Duration::from_secs(5)).await.is_none() {
+        if once.timeout(Duration::from_secs(10)).await.is_none() {
             log::warn!("gossip once timed out");
         };
+        log::debug!("GONNA SLEEP");
         (&mut sleep_timer).await;
     }
 }
@@ -52,6 +48,7 @@ async fn gossip_once(
     neighbor_idpk: IdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
+    log::debug!("gossip_once to {}", neighbor_idpk.fingerprint());
     fetch_identity(ctx, &neighbor_idpk, link_client).await?;
     sign_adjacency(ctx, &neighbor_idpk, link_client).await?;
     gossip_graph(ctx, &neighbor_idpk, link_client).await?;
@@ -99,7 +96,10 @@ async fn sign_adjacency(
             .sign_adjacency(left_incomplete)
             .await?
             .context("remote refused to sign off")?;
-        ctx.get(RELAY_GRAPH).write().insert_adjacency(complete)?;
+        ctx.get(RELAY_GRAPH)
+            .write()
+            .insert_adjacency(complete.clone())?;
+        log::trace!("inserted the new adjacency {:?} into the graph", complete);
     }
     Ok(())
 }

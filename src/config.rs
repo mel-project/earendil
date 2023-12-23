@@ -53,6 +53,7 @@ pub enum InRouteConfig {
         #[serde_as(as = "serde_with::DisplayFromStr")]
         listen: SocketAddr,
         secret: String,
+        #[serde(default)]
         link_price: LinkPrice,
     },
 }
@@ -68,6 +69,7 @@ pub enum OutRouteConfig {
         connect: SocketAddr,
         #[serde_as(as = "serde_with::hex::Hex")]
         cookie: [u8; 32],
+        #[serde(default)]
         link_price: LinkPrice,
     },
 }
@@ -183,7 +185,7 @@ impl Identity {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
 pub struct LinkPrice {
     /// in micromels
     pub max_outgoing_price: u64,
