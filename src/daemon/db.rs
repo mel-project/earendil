@@ -1,21 +1,45 @@
-use super::context::DaemonContext;
-use crate::daemon::context::CtxField;
-use sqlx::{sqlite::SqliteConnectOptions, Pool, SqlitePool};
-use std::future::Future;
+use sqlx::sqlite::SqliteConnectOptions;
+use sqlx::Pool;
+use sqlx::Row;
+use sqlx::SqlitePool;
 use std::str::FromStr;
 
-static DATABASE: CtxField<Box<dyn Future<Output = Result<SqlitePool, sqlx::Error>>>> = |ctx| {
-    let options = match &ctx.init().db_path {
-        Some(path) => SqliteConnectOptions::from_str(path.to_str().unwrap())
-            .unwrap()
-            .create_if_missing(true),
-        None => SqliteConnectOptions::from_str(":memory:").unwrap(),
-    };
-    Box::new(Pool::connect_with(options))
+use super::context::{CtxField, DaemonContext};
+
+static DATABASE: CtxField<SqlitePool> = |ctx| {
+    let options = SqliteConnectOptions::from_str(ctx.init().db_path.to_str().unwrap())
+        .unwrap()
+        .create_if_missing(true);
+
+    smolscale::block_on(async move {
+        let pool = Pool::connect_with(options).await.unwrap();
+        let _ = sqlx::query(
+            "CREATE TABLE IF NOT EXISTS misc (
+            key TEXT PRIMARY KEY,
+            value BLOB NOT NULL
+        );",
+        )
+        .execute(&pool)
+        .await;
+        pool
+    })
 };
 
-async fn db_write<T>(ctx: DaemonContext, key: &str, value: T) -> anyhow::Result<()> {
+pub async fn db_write(ctx: &DaemonContext, key: &str, value: Vec<u8>) -> Result<(), sqlx::Error> {
+    sqlx::query("INSERT INTO misc (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+        .bind(key)
+        .bind(value)
+        .execute(ctx.get(DATABASE))
+        .await?;
     Ok(())
 }
 
-fn db_read(ctx: DaemonContext, key: &str) {}
+pub async fn db_read(ctx: &DaemonContext, key: &str) -> Result<Option<Vec<u8>>, sqlx::Error> {
+    let pool = ctx.get(DATABASE);
+    let result = sqlx::query("SELECT value FROM misc WHERE key = ?")
+        .bind(key)
+        .fetch_optional(pool)
+        .await?
+        .map(|row| row.get("value"));
+    Ok(result)
+}

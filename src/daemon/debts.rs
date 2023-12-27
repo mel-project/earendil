@@ -1,17 +1,22 @@
+use std::collections::HashMap;
+
 use dashmap::DashMap;
 use earendil_crypt::Fingerprint;
+use serde::{Deserialize, Serialize};
 
 pub struct Debts {
     incoming_prices: DashMap<Fingerprint, PriceInfo>,
     outgoing_prices: DashMap<Fingerprint, PriceInfo>,
     balances: DashMap<Fingerprint, Balances>,
 }
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PriceInfo {
     pub price: u64,
     pub debt_limit: u64,
 }
 
-#[derive(Default)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 pub struct Balances {
     incoming_balance: u64,
     outgoing_balance: u64,
@@ -67,5 +72,49 @@ impl Debts {
             }
         }
         true
+    }
+
+    pub fn as_bytes(&self) -> anyhow::Result<Vec<u8>> {
+        let incoming_prices: HashMap<Fingerprint, PriceInfo> = self
+            .incoming_prices
+            .iter()
+            .map(|item| (*item.key(), item.value().clone()))
+            .collect();
+        let outgoing_prices: HashMap<Fingerprint, PriceInfo> = self
+            .outgoing_prices
+            .iter()
+            .map(|item| (*item.key(), item.value().clone()))
+            .collect();
+        let balances: HashMap<Fingerprint, Balances> = self
+            .balances
+            .iter()
+            .map(|item| (*item.key(), item.value().clone()))
+            .collect();
+
+        Ok(stdcode::serialize(&(
+            incoming_prices,
+            outgoing_prices,
+            balances,
+        ))?)
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> anyhow::Result<Debts> {
+        let (incoming_prices, outgoing_prices, balances): (
+            HashMap<Fingerprint, PriceInfo>,
+            HashMap<Fingerprint, PriceInfo>,
+            HashMap<Fingerprint, Balances>,
+        ) = stdcode::deserialize(&bytes)?;
+
+        let incoming_prices: DashMap<Fingerprint, PriceInfo> =
+            incoming_prices.into_iter().collect();
+        let outgoing_prices: DashMap<Fingerprint, PriceInfo> =
+            outgoing_prices.into_iter().collect();
+        let balances: DashMap<Fingerprint, Balances> = balances.into_iter().collect();
+
+        Ok(Debts {
+            incoming_prices,
+            outgoing_prices,
+            balances,
+        })
     }
 }
