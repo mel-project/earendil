@@ -40,7 +40,7 @@ enum Commands {
 fn main() -> anyhow::Result<()> {
     // initialize tracing subscriber that displays to output
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().compact())
         .with(
             EnvFilter::builder()
                 .with_default_directive("earendil=debug".parse()?)

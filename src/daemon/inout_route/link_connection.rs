@@ -67,6 +67,7 @@ pub async fn link_authenticate(
 }
 
 /// Main loop for the connection.
+#[tracing::instrument(skip(service, mplex, recv_outgoing))]
 pub async fn connection_loop(
     service: Arc<LinkService<LinkProtocolImpl>>,
     mplex: Arc<Multiplex>,
@@ -79,36 +80,46 @@ pub async fn connection_loop(
         }),
     );
 
-    let group: TaskReaper<anyhow::Result<()>> = TaskReaper::new();
-    loop {
-        let service = service.clone();
-        let mut stream = mplex.accept_conn().await?;
+    let group = smol::Executor::new();
+    group
+        .run(async {
+            loop {
+                let service = service.clone();
+                let mut stream = mplex.accept_conn().await?;
 
-        match stream.label() {
-            "n2n_control" => group.attach(smolscale::spawn(async move {
-                let mut stream_lines = BufReader::new(stream.clone()).lines();
-                while let Some(line) = stream_lines.next().await {
-                    let line = line?;
-                    let req: JrpcRequest = serde_json::from_str(&line)?;
-                    let resp = service.respond_raw(req).await;
-                    stream
-                        .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
-                        .await?;
+                match stream.label() {
+                    "n2n_control" => group
+                        .spawn(async move {
+                            let mut stream_lines = BufReader::new(stream.clone()).lines();
+                            while let Some(line) = stream_lines.next().await {
+                                let line = line?;
+                                let req: JrpcRequest = serde_json::from_str(&line)?;
+                                tracing::debug!(method = req.method, "LinkRPC request received");
+                                let resp = service.respond_raw(req).await;
+                                stream
+                                    .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
+                                    .await?;
+                            }
+                            anyhow::Ok(())
+                        })
+                        .detach(),
+                    "onion_packets" => group
+                        .spawn(handle_onion_packets(
+                            service.clone(),
+                            stream,
+                            recv_outgoing.clone(),
+                        ))
+                        .detach(),
+                    other => {
+                        log::error!("could not handle {other}");
+                    }
                 }
-                Ok(())
-            })),
-            "onion_packets" => group.attach(smolscale::spawn(handle_onion_packets(
-                service.clone(),
-                stream,
-                recv_outgoing.clone(),
-            ))),
-            other => {
-                log::error!("could not handle {other}");
             }
-        }
-    }
+        })
+        .await
 }
 
+#[tracing::instrument(skip(service, mplex, recv_outgoing))]
 async fn onion_keepalive(
     service: Arc<LinkService<LinkProtocolImpl>>,
     mplex: Arc<Multiplex>,
@@ -120,6 +131,7 @@ async fn onion_keepalive(
     }
 }
 
+#[tracing::instrument(skip(service, conn, recv_outgoing))]
 async fn handle_onion_packets(
     service: Arc<LinkService<LinkProtocolImpl>>,
     conn: sosistab2::Stream,

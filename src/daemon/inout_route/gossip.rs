@@ -13,6 +13,7 @@ use crate::daemon::context::{GLOBAL_IDENTITY, RELAY_GRAPH};
 use super::{link_protocol::LinkClient, DaemonContext};
 
 /// Loop that gossips things around
+#[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 pub async fn gossip_loop(
     ctx: DaemonContext,
     neighbor_idpk: IdentityPublic,
@@ -41,6 +42,7 @@ pub async fn gossip_loop(
 }
 
 /// One round of gossip with a particular neighbor.
+#[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 async fn gossip_once(
     ctx: &DaemonContext,
     neighbor_idpk: IdentityPublic,
@@ -54,13 +56,14 @@ async fn gossip_once(
 }
 
 // Step 1: Fetch the identity of the neighbor.
+#[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 async fn fetch_identity(
     ctx: &DaemonContext,
     neighbor_idpk: &IdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
-    log::trace!("getting identity of {remote_fingerprint}");
+    log::debug!("getting identity of {remote_fingerprint}");
 
     let their_id = link_client
         .identity(remote_fingerprint)
@@ -72,6 +75,7 @@ async fn fetch_identity(
 }
 
 // Step 2: Sign an adjacency descriptor with the neighbor if the local node is "left" of the neighbor.
+#[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 async fn sign_adjacency(
     ctx: &DaemonContext,
     neighbor_idpk: &IdentityPublic,
@@ -79,7 +83,7 @@ async fn sign_adjacency(
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
     if ctx.get(GLOBAL_IDENTITY).public().fingerprint() < remote_fingerprint {
-        log::trace!("signing adjacency with {remote_fingerprint}");
+        log::debug!("signing adjacency with {remote_fingerprint}");
         let mut left_incomplete = AdjacencyDescriptor {
             left: ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             right: remote_fingerprint,
@@ -103,6 +107,7 @@ async fn sign_adjacency(
 }
 
 // Step 3: Gossip the relay graph, by asking info about random nodes.
+#[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 async fn gossip_graph(
     ctx: &DaemonContext,
     neighbor_idpk: &IdentityPublic,

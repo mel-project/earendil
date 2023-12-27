@@ -112,7 +112,7 @@ pub async fn out_route_obfsudp(
     }
 }
 
-#[tracing::instrument(skip(pipe, link_price))]
+#[tracing::instrument(skip(ctx, pipe, link_price))]
 async fn per_link_loop(
     ctx: DaemonContext,
     pipe: impl Pipe,
@@ -141,11 +141,7 @@ async fn link_service_loop(
     their_fp: Option<Fingerprint>,
     link_info: LinkPrice,
 ) -> anyhow::Result<()> {
-    tracing::event!(
-        Level::DEBUG,
-        their_fp = ?their_fp,
-        "starting link_service_loop",
-    );
+    tracing::debug!("starting link_service_loop",);
     scopeguard::defer!(tracing::event!(
         Level::DEBUG,
         their_fp = ?their_fp,
