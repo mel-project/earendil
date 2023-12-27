@@ -37,7 +37,6 @@ fn daemon_from_yaml(yaml: &str) -> Daemon {
 // 3 hop, anon
 #[test]
 fn n2r() {
-    let _ = env_logger::try_init();
     env::set_var("SOSISTAB2_NO_SLEEP", "1");
     Lazy::force(&START_DAEMONS);
 
@@ -89,7 +88,6 @@ fn n2r() {
 
 #[test]
 fn haven() {
-    let _ = env_logger::try_init();
     env::set_var("SOSISTAB2_NO_SLEEP", "1");
     Lazy::force(&START_DAEMONS);
 

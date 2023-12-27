@@ -6,6 +6,9 @@ use earendil::config::ConfigFile;
 use earendil::control_protocol::main_control;
 use earendil::daemon::Daemon;
 use std::{net::SocketAddr, path::PathBuf};
+use tracing::metadata::LevelFilter;
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 /// Official implementation of an Earendil node
 #[derive(Parser)]
@@ -33,8 +36,16 @@ enum Commands {
     GenerateSeed,
 }
 
+#[tracing::instrument]
 fn main() -> anyhow::Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=debug"))
+    // initialize tracing subscriber that displays to output
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(
+            EnvFilter::builder()
+                .with_default_directive("earendil=debug".parse()?)
+                .from_env_lossy(),
+        )
         .init();
 
     match Args::parse().command {

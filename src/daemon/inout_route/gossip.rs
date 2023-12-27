@@ -18,7 +18,6 @@ pub async fn gossip_loop(
     neighbor_idpk: IdentityPublic,
     link_client: LinkClient,
 ) -> anyhow::Result<()> {
-    let mut sleep_timer = smol::Timer::interval(Duration::from_secs(10));
     scopeguard::defer!(log::info!(
         "gossip loop for {} stopped",
         neighbor_idpk.fingerprint()
@@ -37,8 +36,7 @@ pub async fn gossip_loop(
         if once.timeout(Duration::from_secs(10)).await.is_none() {
             log::warn!("gossip once timed out");
         };
-        log::debug!("GONNA SLEEP");
-        (&mut sleep_timer).await;
+        smol::Timer::after(Duration::from_secs(10)).await;
     }
 }
 

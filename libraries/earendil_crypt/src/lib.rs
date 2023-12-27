@@ -1,4 +1,7 @@
-use std::{fmt::Display, str::FromStr};
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 use anyhow::Context;
 use argon2::Argon2;
@@ -128,10 +131,17 @@ impl IdentitySecret {
 }
 
 /// An Earendil node fingerprint, uniquely identifying a relay or client.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct Fingerprint([u8; 20]);
 
 impl Display for Fingerprint {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let b64 = base32::encode(Alphabet::Crockford, &self.0).to_lowercase();
+        write!(f, "{}", b64)
+    }
+}
+
+impl Debug for Fingerprint {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let b64 = base32::encode(Alphabet::Crockford, &self.0).to_lowercase();
         write!(f, "{}", b64)

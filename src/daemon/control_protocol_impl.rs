@@ -219,7 +219,9 @@ impl ControlProtocol for ControlProtocolImpl {
                 .get(NEIGH_TABLE_NEW)
                 .iter()
                 .map(|s| *s.key())
-                .fold(String::new(), |acc, neigh| acc + &format!("{:?}\n", neigh));
+                .fold(String::new(), |acc, neigh| {
+                    acc + &format!("{:?}\n", neigh.to_string())
+                });
             let all_adjs = self
                 .ctx
                 .get(RELAY_GRAPH)
@@ -228,7 +230,7 @@ impl ControlProtocol for ControlProtocolImpl {
                 .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
                 .fold(String::new(), |acc, adj| {
                     acc + &format!(
-                        "{:?} -> {:?};\n",
+                        "{:?} -- {:?};\n",
                         adj.left.to_string(),
                         adj.right.to_string()
                     )
@@ -243,7 +245,7 @@ impl ControlProtocol for ControlProtocolImpl {
                         acc + &format!("{:?} [label={:?}]\n", node_str, get_node_label(&node))
                     });
             format!(
-                "digraph G {{
+                "graph G {{
                 subgraph cluster_0 {{
                     color=lightblue;
                     label=\"myself      [{}]\";
@@ -313,12 +315,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
 fn get_node_label(fp: &Fingerprint) -> String {
     let node = fp.to_string();
-    format!(
-        "{:?} [label=\"{}..{}\"]\n",
-        node,
-        &node[..4],
-        &node[node.len() - 4..node.len()]
-    )
+    format!("{}..{}", &node[..4], &node[node.len() - 4..node.len()])
 }
 
 struct AnonIdentities {

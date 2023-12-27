@@ -9,6 +9,7 @@ use smol_timeout::TimeoutExt;
 use smolscale::reaper::TaskReaper;
 use sosistab2::{Multiplex, MuxSecret, Pipe};
 use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
+use tracing::Level;
 mod gossip;
 mod link_connection;
 mod link_protocol;
@@ -16,7 +17,7 @@ mod link_protocol;
 use crate::{
     config::LinkPrice,
     daemon::{
-        context::{DEBTS, NEIGH_TABLE_NEW},
+        context::{DEBTS, NEIGH_TABLE_NEW, RELAY_GRAPH},
         inout_route::{gossip::gossip_loop, link_connection::link_authenticate},
     },
 };
@@ -77,7 +78,6 @@ pub async fn out_route_obfsudp(
 
     let mut timer1 = smol::Timer::interval(CONNECTION_LIFETIME);
     let mut timer2 = smol::Timer::interval(CONNECTION_LIFETIME);
-    let tasks = TaskReaper::new();
     loop {
         let fallible = async {
             log::debug!("obfsudp out_route {} trying...", context.out_route_name);
@@ -87,14 +87,13 @@ pub async fn out_route_obfsudp(
                 context.out_route_name
             );
 
-            tasks.attach(smolscale::spawn(per_link_loop(
+            per_link_loop(
                 context.daemon_ctx.clone(),
                 pipe,
                 Some(context.remote_fingerprint),
                 link_price,
-            )));
-
-            anyhow::Ok(())
+            )
+            .await
         };
         async {
             if let Err(err) = fallible.await {
@@ -113,6 +112,7 @@ pub async fn out_route_obfsudp(
     }
 }
 
+#[tracing::instrument(skip(pipe, link_price))]
 async fn per_link_loop(
     ctx: DaemonContext,
     pipe: impl Pipe,
@@ -141,6 +141,16 @@ async fn link_service_loop(
     their_fp: Option<Fingerprint>,
     link_info: LinkPrice,
 ) -> anyhow::Result<()> {
+    tracing::event!(
+        Level::DEBUG,
+        their_fp = ?their_fp,
+        "starting link_service_loop",
+    );
+    scopeguard::defer!(tracing::event!(
+        Level::DEBUG,
+        their_fp = ?their_fp,
+        "stopping link_service_loop",
+    ));
     let remote_pk_shared = Arc::new(OnceCell::new());
     let service = Arc::new(LinkService(LinkProtocolImpl {
         ctx: ctx.clone(),
