@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, io::Write, net::SocketAddr, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    io::Write,
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 use earendil_crypt::{Fingerprint, IdentitySecret};
@@ -17,6 +22,9 @@ pub struct ConfigFile {
     /// If this is not provided, then we default to randomly creating an identity.
     #[serde(flatten)]
     pub identity: Option<Identity>,
+
+    /// Path to database file.
+    pub db_path: Option<PathBuf>,
 
     /// Where to listen for the local control protocol.
     #[serde(default = "default_control_listen")]
