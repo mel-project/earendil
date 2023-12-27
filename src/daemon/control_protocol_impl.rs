@@ -166,9 +166,9 @@ impl ControlProtocol for ControlProtocolImpl {
             .fingerprint()
             .to_string();
         let relay_or_client = if self.ctx.init().in_routes.is_empty() {
-            "client"
+            "oval"
         } else {
-            "relay"
+            "rect"
         };
         if human {
             let all_neighs = self.ctx.get(NEIGH_TABLE_NEW).iter().map(|s| *s.key()).fold(
@@ -214,14 +214,6 @@ impl ControlProtocol for ControlProtocolImpl {
                 my_fp, relay_or_client, all_neighs, all_adjs
             )
         } else {
-            let all_neighs = self
-                .ctx
-                .get(NEIGH_TABLE_NEW)
-                .iter()
-                .map(|s| *s.key())
-                .fold(String::new(), |acc, neigh| {
-                    acc + &format!("{:?}\n", neigh.to_string())
-                });
             let all_adjs = self
                 .ctx
                 .get(RELAY_GRAPH)
@@ -242,26 +234,27 @@ impl ControlProtocol for ControlProtocolImpl {
                     .all_nodes()
                     .fold(String::new(), |acc, node| {
                         let node_str = node.to_string();
-                        acc + &format!("{:?} [label={:?}]\n", node_str, get_node_label(&node))
+                        let desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
+                        acc + &format!(
+                            "{:?} [label={:?}, shape={}]\n",
+                            node_str,
+                            get_node_label(&node),
+                            (if desc.is_relay { "oval" } else { "rect" }).to_string()
+                                + (if self.ctx.get(NEIGH_TABLE_NEW).contains_key(&node) {
+                                    ", color=lightpink,style=filled"
+                                } else {
+                                    ""
+                                })
+                        )
                     });
             format!(
                 "graph G {{
-                subgraph cluster_0 {{
-                    color=lightblue;
-                    label=\"myself      [{}]\";
-                    node [shape=Mdiamond,color=lightblue,style=filled];
-                    {:?}
-                }}
-                subgraph cluster_1 {{
-                    color=lightpink
-                    label=\"my neighbors\";
-                    node [color=lightpink,style=filled]
-                    {}
-                }}
+                    rankdir=\"LR\"
+                    {:?} [shape={},color=lightblue,style=filled]
                 {}
                 {}
             }}",
-                relay_or_client, my_fp, all_neighs, all_nodes, all_adjs
+                my_fp, relay_or_client, all_nodes, all_adjs
             )
         }
     }
