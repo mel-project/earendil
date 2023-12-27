@@ -48,7 +48,11 @@ pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |_| {
 };
 pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBlockStore::new());
 
-pub static NEIGH_TABLE_NEW: CtxField<DashMap<Fingerprint, Sender<RawPacket>>> = |_| DashMap::new();
+pub static NEIGH_TABLE_NEW: CtxField<Cache<Fingerprint, Sender<RawPacket>>> = |_| {
+    CacheBuilder::default()
+        .time_to_live(Duration::from_secs(120))
+        .build()
+}; // TODO a better solution for deletion
 pub static SOCKET_RECV_QUEUES: CtxField<DashMap<Endpoint, Sender<(Message, Fingerprint)>>> =
     |_| Default::default();
 pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {

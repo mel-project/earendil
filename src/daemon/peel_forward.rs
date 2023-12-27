@@ -39,7 +39,7 @@ pub fn peel_forward(ctx: &DaemonContext, last_hop_fp: Fingerprint, pkt: RawPacke
                 let conn = ctx
                     .get(NEIGH_TABLE_NEW)
                     .get(&next_hop)
-                    .context("could not find this next hop")?;
+                    .context(format!("could not find this next hop {next_hop}"))?;
                 let _ = conn.try_send(inner);
                 if next_hop != ctx.get(GLOBAL_IDENTITY).public().fingerprint() {
                     ctx.get(DEBTS).incr_outgoing(next_hop);
