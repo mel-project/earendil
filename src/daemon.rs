@@ -251,14 +251,14 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 /// Loop that handles the persistence of contex state
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
-        smol::Timer::after(Duration::from_secs(10)).await;
-
         log::debug!("syncing DB...");
         let graph_bytes = ctx.clone().get(RELAY_GRAPH).read().stdcode();
 
         db_write(&ctx, "global_identity", ctx.get(GLOBAL_IDENTITY).stdcode()).await?;
         db_write(&ctx, "relay_graph", graph_bytes).await?;
         db_write(&ctx, "debts", ctx.get(DEBTS).as_bytes()?).await?;
+
+        smol::Timer::after(Duration::from_secs(10)).await;
     }
 }
 
