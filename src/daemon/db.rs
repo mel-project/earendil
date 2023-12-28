@@ -14,14 +14,15 @@ static DATABASE: CtxField<Option<SqlitePool>> = |ctx| {
 
         smol::future::block_on(async move {
             let pool = Pool::connect_with(options).await.unwrap();
-            let _ = sqlx::query(
+            sqlx::query(
                 "CREATE TABLE IF NOT EXISTS misc (
                 key TEXT PRIMARY KEY,
                 value BLOB NOT NULL
             );",
             )
             .execute(&pool)
-            .await;
+            .await
+            .unwrap();
 
             Some(pool)
         })

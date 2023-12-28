@@ -48,12 +48,6 @@ fn default_control_listen() -> SocketAddr {
     "127.0.0.1:18964".parse().unwrap()
 }
 
-// fn default_db_path() -> PathBuf {
-//     let mut path = dirs::cache_dir().unwrap();
-//     path.push("earendil.db");
-//     path
-// }
-
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "protocol", rename_all = "snake_case")]
