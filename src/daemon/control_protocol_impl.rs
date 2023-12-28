@@ -171,7 +171,7 @@ impl ControlProtocol for ControlProtocolImpl {
             "rect"
         };
         if human {
-            let all_neighs = self.ctx.get(NEIGH_TABLE_NEW).iter().map(|s| *s.key()).fold(
+            let all_neighs = self.ctx.get(NEIGH_TABLE_NEW).iter().map(|s| *s.0).fold(
                 String::new(),
                 |acc, neigh| {
                     let fp = neigh;

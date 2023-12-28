@@ -29,6 +29,8 @@ use self::{
 
 use super::DaemonContext;
 
+const CONNECTION_LIFETIME: Duration = Duration::from_secs(60);
+
 #[derive(Clone)]
 pub struct InRouteContext {
     pub daemon_ctx: DaemonContext,
@@ -52,12 +54,10 @@ pub async fn in_route_obfsudp(
     loop {
         let pipe = listener.accept().await?;
         let context = context.clone();
-        tasks.attach(smolscale::spawn(per_link_loop(
-            context.daemon_ctx.clone(),
-            pipe,
-            None,
-            link_price,
-        )));
+        tasks.attach(smolscale::spawn(
+            per_link_loop(context.daemon_ctx.clone(), pipe, None, link_price)
+                .timeout(CONNECTION_LIFETIME),
+        ));
     }
 }
 
@@ -74,8 +74,6 @@ pub async fn out_route_obfsudp(
     cookie: [u8; 32],
     link_price: LinkPrice,
 ) -> anyhow::Result<()> {
-    const CONNECTION_LIFETIME: Duration = Duration::from_secs(60);
-
     let mut timer1 = smol::Timer::interval(CONNECTION_LIFETIME);
     let mut timer2 = smol::Timer::interval(CONNECTION_LIFETIME);
     loop {
@@ -163,12 +161,10 @@ async fn link_service_loop(
             let idpk = link_authenticate(mplex.clone(), their_fp).await?;
             remote_pk_shared.set(idpk).unwrap();
 
-            // register the outgoing channel, and deregister when we die
+            // register the outgoing channel. This registration eventually expires, but we'll die before that so it's fine.
+            // Note that this will overwrite any existing entry, which will close their send_outgoing, which will stop their loop. That is a good thing!
             ctx.get(NEIGH_TABLE_NEW)
                 .insert(idpk.fingerprint(), send_outgoing);
-            scopeguard::defer!({
-                ctx.get(NEIGH_TABLE_NEW).remove(&idpk.fingerprint());
-            });
 
             let gossip_loop = {
                 let rpc = LinkRpcTransport::new(mplex.clone());
