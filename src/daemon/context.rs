@@ -53,13 +53,14 @@ pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
 pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
     let ctx = ctx.clone();
     smol::future::block_on(async move {
-        match db_read(&ctx, "relay_graph").await {
-            Ok(Some(g)) => {
-                log::warn!("retrieving persisted relay graph");
-                let graph: RelayGraph = stdcode::deserialize(&g).unwrap();
-                RwLock::new(graph)
-            }
-            _ => {
+        match db_read(&ctx, "relay_graph")
+            .await
+            .ok()
+            .flatten()
+            .and_then(|s| stdcode::deserialize(&s).ok())
+        {
+            Some(g) => RwLock::new(g),
+            None => {
                 log::warn!("**** INIT RELAY GRAPH****");
                 RwLock::new(RelayGraph::new())
             }
