@@ -250,6 +250,10 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 
 /// Loop that handles the persistence of contex state
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    if ctx.init().db_path.is_none() {
+        return Ok(());
+    }
+
     loop {
         log::debug!("syncing DB...");
         let graph_bytes = ctx.clone().get(RELAY_GRAPH).read().stdcode();
