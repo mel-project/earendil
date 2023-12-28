@@ -11,7 +11,7 @@ static DATABASE: CtxField<SqlitePool> = |ctx| {
         .unwrap()
         .create_if_missing(true);
 
-    smolscale::block_on(async move {
+    smol::future::block_on(async move {
         let pool = Pool::connect_with(options).await.unwrap();
         let _ = sqlx::query(
             "CREATE TABLE IF NOT EXISTS misc (

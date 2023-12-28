@@ -40,7 +40,7 @@ pub static GLOBAL_IDENTITY: CtxField<IdentitySecret> = |ctx| {
         })
         .unwrap_or_else(|| {
             let ctx = ctx.clone();
-            smolscale::block_on(async move {
+            smol::future::block_on(async move {
                 match db_read(&ctx, "global_identity").await {
                     Ok(Some(id)) => IdentitySecret::from_bytes(&id.try_into().unwrap()),
                     _ => IdentitySecret::generate(),
@@ -52,7 +52,7 @@ pub static GLOBAL_IDENTITY: CtxField<IdentitySecret> = |ctx| {
 pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
 pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
     let ctx = ctx.clone();
-    smolscale::block_on(async move {
+    smol::future::block_on(async move {
         match db_read(&ctx, "relay_graph").await {
             Ok(Some(g)) => {
                 log::warn!("retrieving persisted relay graph");
@@ -79,7 +79,7 @@ pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {
 
 pub static DEBTS: CtxField<Debts> = |ctx| {
     let ctx = ctx.clone();
-    smolscale::block_on(async move {
+    smol::future::block_on(async move {
         match db_read(&ctx, "debts").await {
             Ok(Some(debts)) => {
                 log::warn!("retrieving persisted debts");
