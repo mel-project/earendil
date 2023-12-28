@@ -1,9 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    io::Write,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, io::Write, net::SocketAddr, path::PathBuf};
 
 use anyhow::Context;
 use earendil_crypt::{Fingerprint, IdentitySecret};

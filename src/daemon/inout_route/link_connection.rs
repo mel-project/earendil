@@ -11,7 +11,7 @@ use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentityPublic};
 use earendil_packet::RawPacket;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
-use futures_util::{AsyncWriteExt, TryFutureExt};
+use futures_util::AsyncWriteExt;
 use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use once_cell::sync::OnceCell;
@@ -27,7 +27,7 @@ use smolscale::{
     immortal::{Immortal, RespawnStrategy},
     reaper::TaskReaper,
 };
-use sosistab2::{Multiplex, Pipe};
+use sosistab2::Multiplex;
 
 use crate::daemon::{
     context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH},
@@ -139,7 +139,7 @@ async fn handle_onion_packets(
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
             if let Some(other_fp) = service.0.remote_pk.get() {
-                let _ = peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt);
+                peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt);
             }
         }
     };

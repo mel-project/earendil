@@ -17,7 +17,7 @@ mod link_protocol;
 use crate::{
     config::LinkPrice,
     daemon::{
-        context::{DEBTS, NEIGH_TABLE_NEW, RELAY_GRAPH},
+        context::{DEBTS, NEIGH_TABLE_NEW},
         inout_route::{gossip::gossip_loop, link_connection::link_authenticate},
     },
 };
