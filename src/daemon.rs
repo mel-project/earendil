@@ -24,8 +24,9 @@ use moka::sync::Cache;
 use nanorpc::{JrpcRequest, RpcService};
 use nanorpc_http::server::HttpRpcServer;
 
+use nursery_macro::nursery;
 use smolscale::immortal::{Immortal, RespawnStrategy};
-use smolscale::reaper::TaskReaper;
+
 use stdcode::StdcodeSerializeExt;
 
 use std::{sync::Arc, time::Duration};
@@ -175,10 +176,10 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         })
         .collect();
 
-    let _socks5_loop = ctx.init().socks5.clone().map(|config| {
+    let _socks5_loop = ctx.init().socks5.map(|config| {
         Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([ctx], move || socks5_loop(ctx.clone(), config.clone(),)),
+            clone!([ctx], move || socks5_loop(ctx.clone(), config)),
         )
     });
 
@@ -256,13 +257,11 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         Some(GLOBAL_RPC_DOCK),
     ));
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
-    let group: TaskReaper<anyhow::Result<()>> = TaskReaper::new();
-
-    loop {
+    nursery!(loop {
         let socket = socket.clone();
         if let Ok((req, endpoint)) = socket.recv_from().await {
             let service = service.clone();
-            group.attach(smolscale::spawn(async move {
+            spawn!(async move {
                 let req: JrpcRequest = serde_json::from_str(&String::from_utf8(req.to_vec())?)?;
                 let resp = service.respond_raw(req).await;
                 socket
@@ -272,10 +271,11 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     )
                     .await?;
 
-                Ok(())
-            }));
+                anyhow::Ok(())
+            })
+            .detach();
         }
-    }
+    })
 }
 
 /// Loop that listens to and handles incoming haven forwarding requests

@@ -9,7 +9,7 @@ use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
-use earendil_topology::{IdentityDescriptor, RelayGraph};
+use earendil_topology::RelayGraph;
 
 use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};
@@ -87,7 +87,7 @@ pub async fn send_n2r(
         }
         let inner = InnerPacket::Message(Message::new(src_dock, dst_dock, content));
         let raw_packet = RawPacket::new_reply(&reply_block, inner, &src_idsk)?;
-        let _ = peel_forward(
+        peel_forward(
             ctx,
             ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             raw_packet,

@@ -6,7 +6,7 @@ use earendil::config::ConfigFile;
 use earendil::control_protocol::main_control;
 use earendil::daemon::Daemon;
 use std::{net::SocketAddr, path::PathBuf};
-use tracing::metadata::LevelFilter;
+
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 

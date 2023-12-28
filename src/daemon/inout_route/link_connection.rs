@@ -11,9 +11,10 @@ use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentityPublic};
 use earendil_packet::RawPacket;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
-use futures_util::{AsyncWriteExt, TryFutureExt};
+use futures_util::AsyncWriteExt;
 use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
+use nursery_macro::nursery;
 use once_cell::sync::OnceCell;
 
 use smol::{
@@ -23,11 +24,8 @@ use smol::{
     stream::StreamExt,
 };
 
-use smolscale::{
-    immortal::{Immortal, RespawnStrategy},
-    reaper::TaskReaper,
-};
-use sosistab2::{Multiplex, Pipe};
+use smolscale::immortal::{Immortal, RespawnStrategy};
+use sosistab2::Multiplex;
 
 use crate::daemon::{
     context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH},
@@ -80,43 +78,38 @@ pub async fn connection_loop(
         }),
     );
 
-    let group = smol::Executor::new();
-    group
-        .run(async {
-            loop {
-                let service = service.clone();
-                let mut stream = mplex.accept_conn().await?;
+    nursery!({
+        loop {
+            let service = service.clone();
+            let mut stream = mplex.accept_conn().await?;
 
-                match stream.label() {
-                    "n2n_control" => group
-                        .spawn(async move {
-                            let mut stream_lines = BufReader::new(stream.clone()).lines();
-                            while let Some(line) = stream_lines.next().await {
-                                let line = line?;
-                                let req: JrpcRequest = serde_json::from_str(&line)?;
-                                tracing::debug!(method = req.method, "LinkRPC request received");
-                                let resp = service.respond_raw(req).await;
-                                stream
-                                    .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
-                                    .await?;
-                            }
-                            anyhow::Ok(())
-                        })
-                        .detach(),
-                    "onion_packets" => group
-                        .spawn(handle_onion_packets(
-                            service.clone(),
-                            stream,
-                            recv_outgoing.clone(),
-                        ))
-                        .detach(),
-                    other => {
-                        log::error!("could not handle {other}");
+            match stream.label() {
+                "n2n_control" => spawn!(async move {
+                    let mut stream_lines = BufReader::new(stream.clone()).lines();
+                    while let Some(line) = stream_lines.next().await {
+                        let line = line?;
+                        let req: JrpcRequest = serde_json::from_str(&line)?;
+                        tracing::debug!(method = req.method, "LinkRPC request received");
+                        let resp = service.respond_raw(req).await;
+                        stream
+                            .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
+                            .await?;
                     }
+                    anyhow::Ok(())
+                })
+                .detach(),
+                "onion_packets" => spawn!(handle_onion_packets(
+                    service.clone(),
+                    stream,
+                    recv_outgoing.clone(),
+                ))
+                .detach(),
+                other => {
+                    log::error!("could not handle {other}");
                 }
             }
-        })
-        .await
+        }
+    })
 }
 
 #[tracing::instrument(skip(service, mplex, recv_outgoing))]
@@ -151,7 +144,7 @@ async fn handle_onion_packets(
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
             if let Some(other_fp) = service.0.remote_pk.get() {
-                let _ = peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt);
+                peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt);
             }
         }
     };
