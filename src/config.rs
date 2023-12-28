@@ -19,8 +19,7 @@ pub struct ConfigFile {
     pub identity: Option<Identity>,
 
     /// Path to database file.
-    #[serde(default = "default_db_path")]
-    pub db_path: PathBuf,
+    pub db_path: Option<PathBuf>,
 
     /// Where to listen for the local control protocol.
     #[serde(default = "default_control_listen")]
@@ -49,11 +48,11 @@ fn default_control_listen() -> SocketAddr {
     "127.0.0.1:18964".parse().unwrap()
 }
 
-fn default_db_path() -> PathBuf {
-    let mut path = dirs::cache_dir().unwrap();
-    path.push("earendil.db");
-    path
-}
+// fn default_db_path() -> PathBuf {
+//     let mut path = dirs::cache_dir().unwrap();
+//     path.push("earendil.db");
+//     path
+// }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
