@@ -41,9 +41,9 @@ pub static GLOBAL_IDENTITY: CtxField<IdentitySecret> = |ctx| {
         .unwrap_or_else(|| {
             let ctx = ctx.clone();
             smolscale::block_on(async move {
-                match db_read(&ctx, "global_identity").await.unwrap() {
-                    Some(id) => IdentitySecret::from_bytes(&id.try_into().unwrap()),
-                    None => IdentitySecret::generate(),
+                match db_read(&ctx, "global_identity").await {
+                    Ok(Some(id)) => IdentitySecret::from_bytes(&id.try_into().unwrap()),
+                    _ => IdentitySecret::generate(),
                 }
             })
         })
@@ -80,12 +80,12 @@ pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {
 pub static DEBTS: CtxField<Debts> = |ctx| {
     let ctx = ctx.clone();
     smolscale::block_on(async move {
-        match db_read(&ctx, "debts").await.unwrap() {
-            Some(d) => {
+        match db_read(&ctx, "debts").await {
+            Ok(Some(debts)) => {
                 log::warn!("retrieving persisted debts");
-                Debts::from_bytes(d).unwrap()
+                Debts::from_bytes(debts).unwrap()
             }
-            None => {
+            _ => {
                 log::warn!("initializing debts");
                 Debts::new()
             }
