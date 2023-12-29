@@ -9,7 +9,7 @@ use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
-use earendil_topology::{IdentityDescriptor, RelayGraph};
+use earendil_topology::RelayGraph;
 
 use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};
@@ -23,7 +23,7 @@ use crate::{
 };
 
 use super::{
-    debts::Debts, peel_forward::peel_forward, reply_block_store::ReplyBlockStore,
+    db::db_read, debts::Debts, peel_forward::peel_forward, reply_block_store::ReplyBlockStore,
     rrb_balance::replenish_rrb,
 };
 
@@ -38,13 +38,34 @@ pub static GLOBAL_IDENTITY: CtxField<IdentitySecret> = |ctx| {
             id.actualize()
                 .expect("failed to initialize global identity")
         })
-        .unwrap_or_else(IdentitySecret::generate)
+        .unwrap_or_else(|| {
+            let ctx = ctx.clone();
+            smol::future::block_on(async move {
+                match db_read(&ctx, "global_identity").await {
+                    Ok(Some(id)) => IdentitySecret::from_bytes(&id.try_into().unwrap()),
+                    _ => IdentitySecret::generate(),
+                }
+            })
+        })
 };
 
 pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
-pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |_| {
-    log::warn!("**** INIT RELAY GRAPH****");
-    RwLock::new(RelayGraph::new())
+pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
+    let ctx = ctx.clone();
+    smol::future::block_on(async move {
+        match db_read(&ctx, "relay_graph")
+            .await
+            .ok()
+            .flatten()
+            .and_then(|s| stdcode::deserialize(&s).ok())
+        {
+            Some(g) => RwLock::new(g),
+            None => {
+                log::warn!("**** INIT RELAY GRAPH****");
+                RwLock::new(RelayGraph::new())
+            }
+        }
+    })
 };
 pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBlockStore::new());
 
@@ -61,7 +82,21 @@ pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {
         .build()
 };
 
-pub static DEBTS: CtxField<Debts> = |_| Debts::new();
+pub static DEBTS: CtxField<Debts> = |ctx| {
+    let ctx = ctx.clone();
+    smol::future::block_on(async move {
+        match db_read(&ctx, "debts").await {
+            Ok(Some(debts)) => {
+                log::warn!("retrieving persisted debts");
+                Debts::from_bytes(debts).unwrap()
+            }
+            _ => {
+                log::warn!("initializing debts");
+                Debts::new()
+            }
+        }
+    })
+};
 
 /// Sends a raw N2R message with the given parameters.
 pub async fn send_n2r(
@@ -87,7 +122,7 @@ pub async fn send_n2r(
         }
         let inner = InnerPacket::Message(Message::new(src_dock, dst_dock, content));
         let raw_packet = RawPacket::new_reply(&reply_block, inner, &src_idsk)?;
-        let _ = peel_forward(
+        peel_forward(
             ctx,
             ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             raw_packet,

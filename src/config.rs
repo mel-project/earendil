@@ -18,6 +18,9 @@ pub struct ConfigFile {
     #[serde(flatten)]
     pub identity: Option<Identity>,
 
+    /// Path to database file.
+    pub db_path: Option<PathBuf>,
+
     /// Where to listen for the local control protocol.
     #[serde(default = "default_control_listen")]
     pub control_listen: SocketAddr,

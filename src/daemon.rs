@@ -6,6 +6,7 @@ pub(crate) mod dht;
 
 mod inout_route;
 
+mod db;
 mod peel_forward;
 mod reply_block_store;
 mod rrb_balance;
@@ -50,8 +51,10 @@ use crate::{
     haven_util::{haven_loop, HAVEN_FORWARD_DOCK},
 };
 
+use self::context::DEBTS;
 pub use self::control_protocol_impl::ControlProtErr;
 
+use self::db::db_write;
 use self::{context::GLOBAL_IDENTITY, control_protocol_impl::ControlProtocolImpl};
 
 pub struct Daemon {
@@ -91,6 +94,13 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     });
 
     // Run the loops
+    let _db_sync_loop = ctx.init().db_path.clone().map(|_| {
+        Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([ctx], move || db_sync_loop(ctx.clone())
+                .map_err(log_error("db_sync_loop"))),
+        )
+    });
 
     let _identity_refresh_loop = Immortal::respawn(
         RespawnStrategy::Immediate,
@@ -238,6 +248,20 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Loop that handles the persistence of contex state
+async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    loop {
+        log::debug!("syncing DB...");
+        let graph_bytes = ctx.clone().get(RELAY_GRAPH).read().stdcode();
+
+        db_write(&ctx, "global_identity", ctx.get(GLOBAL_IDENTITY).stdcode()).await?;
+        db_write(&ctx, "relay_graph", graph_bytes).await?;
+        db_write(&ctx, "debts", ctx.get(DEBTS).as_bytes()?).await?;
+
+        smol::Timer::after(Duration::from_secs(10)).await;
+    }
 }
 
 /// Loop that handles the control protocol

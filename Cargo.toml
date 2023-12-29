@@ -56,6 +56,7 @@ tracing = "0.1.40"
 
 tracing-subscriber = {version="0.3.18", features=["env-filter"]}
 tap = "1.0.1"
+sqlx = { version = "0.7.3", features = ["sqlite", "runtime-async-std"] }
 
 [profile.dev]
 panic = 'abort'
