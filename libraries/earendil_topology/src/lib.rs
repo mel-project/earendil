@@ -14,7 +14,7 @@ use stdcode::StdcodeSerializeExt;
 /// A full, indexed representation of the Earendil relay graph. Includes info about:
 /// - Which fingerprints are adjacent to which fingerprints
 /// - What signing keys and midterm keys do each fingerprint have
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct RelayGraph {
     unalloc_id: u64,
     fp_to_id: HashMap<Fingerprint, u64>,

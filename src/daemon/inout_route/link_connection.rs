@@ -23,7 +23,10 @@ use smol::{
     stream::StreamExt,
 };
 
-use smolscale::immortal::{Immortal, RespawnStrategy};
+use smolscale::{
+    immortal::{Immortal, RespawnStrategy},
+    reaper::TaskReaper,
+};
 use sosistab2::Multiplex;
 
 use crate::daemon::{
@@ -148,7 +151,7 @@ async fn handle_onion_packets(
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
             if let Some(other_fp) = service.0.remote_pk.get() {
-                let _ = peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt);
+                peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt);
             }
         }
     };
