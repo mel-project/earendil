@@ -86,18 +86,22 @@ pub async fn send_chat_msg(ctx: &DaemonContext, dest: Fingerprint, msg: String) 
     }
 }
 
+pub fn serialize_chats(ctx: &DaemonContext) -> anyhow::Result<Vec<u8>> {
+    ctx.get(CHATS).clone().into_bytes()
+}
+
 #[derive(Clone)]
-pub struct Chats {
+struct Chats {
     history: DashMap<Fingerprint, VecDeque<ChatEntry>>,
     clients: DashMap<Fingerprint, Arc<LinkClient>>,
     max_chat_len: usize,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct ChatEntry {
-    pub is_mine: bool,
-    pub text: String,
-    pub time: SystemTime,
+struct ChatEntry {
+    is_mine: bool,
+    text: String,
+    time: SystemTime,
 }
 
 impl Chats {
@@ -144,7 +148,7 @@ impl Chats {
 }
 
 impl ChatEntry {
-    pub fn new(text: String) -> Self {
+    fn new(text: String) -> Self {
         Self {
             is_mine: true,
             text,
