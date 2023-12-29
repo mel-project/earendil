@@ -30,12 +30,12 @@ use smolscale::{
 use sosistab2::Multiplex;
 
 use crate::daemon::{
-    chat::{incoming_chat, ChatEntry},
     context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH},
     peel_forward::peel_forward,
 };
 
 use super::{
+    chat::incoming_chat,
     link_protocol::{AuthResponse, InfoResponse, LinkClient, LinkProtocol, LinkService},
     DaemonContext,
 };
@@ -289,11 +289,7 @@ impl LinkProtocol for LinkProtocolImpl {
 
     async fn push_chat(&self, msg: String) {
         if let Some(neighbor) = self.remote_pk.get() {
-            incoming_chat(
-                self.ctx.clone(),
-                neighbor.fingerprint(),
-                ChatEntry::new(msg),
-            );
+            incoming_chat(&self.ctx, neighbor.fingerprint(), msg);
         }
     }
 }

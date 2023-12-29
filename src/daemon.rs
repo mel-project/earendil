@@ -6,7 +6,6 @@ pub(crate) mod dht;
 
 mod inout_route;
 
-mod chat;
 mod db;
 mod peel_forward;
 mod reply_block_store;

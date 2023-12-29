@@ -4,6 +4,7 @@ use crate::{daemon::ControlProtErr, haven_util::HavenLocator};
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
+use chrono::{DateTime, Utc};
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
@@ -15,6 +16,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::marker::Send;
+use std::time::SystemTime;
 use std::{net::SocketAddr, str::FromStr};
 use thiserror::Error;
 
@@ -132,8 +134,30 @@ pub async fn main_control(
         ControlCommands::HavensInfo => {
             let havens_info = client.havens_info().await?;
             for info in havens_info {
-                println!("{} - {}", info.0, info.1)
+                println!("{} - {}", info.0, info.1);
             }
+        }
+        ControlCommands::ListChats => {
+            println!("Fingerprint\t\tLastActivity\tLast Message");
+            let res = client.list_chats().await?;
+            println!("{res}");
+        }
+        ControlCommands::GetChat { neighbor } => {
+            let entries = client.get_chat(neighbor).await?;
+            for (is_mine, text, time) in entries {
+                let arrow = if is_mine { "->" } else { "<-" };
+                let datetime: DateTime<Utc> = time.into();
+
+                println!(
+                    "[{}] {} {}",
+                    datetime.format("%Y-%m-%d %H:%M:%S"),
+                    arrow,
+                    text
+                );
+            }
+        }
+        ControlCommands::SendChatMsg { dest, msg } => {
+            client.send_chat_msg(dest, msg).await?;
         }
     }
     Ok(())
@@ -175,6 +199,12 @@ pub trait ControlProtocol {
         &self,
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError>;
+
+    async fn list_chats(&self) -> String;
+
+    async fn get_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)>;
+
+    async fn send_chat_msg(&self, dest: Fingerprint, msg: String);
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]

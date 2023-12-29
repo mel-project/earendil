@@ -101,4 +101,19 @@ pub enum ControlCommands {
 
     /// Dumps my own routes.
     MyRoutes,
+
+    /// Dumps a mapping of neighbor fingerprints to metadata
+    ListChats,
+
+    GetChat {
+        #[arg(short, long)]
+        neighbor: Fingerprint,
+    },
+
+    SendChatMsg {
+        #[arg(short, long)]
+        dest: Fingerprint,
+        #[arg(short, long)]
+        msg: String,
+    },
 }
