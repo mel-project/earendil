@@ -51,18 +51,13 @@ fn n2r() {
     // spin up alice, bob, and charlie daemons
     let alice_isk = IdentitySecret::generate();
     let alice_skt = Socket::bind_n2r(&ALICE_DAEMON, alice_isk, None);
-    eprintln!("oooooo ALICE_SKT = {} oooooo", alice_skt.local_endpoint());
     let charlie_isk = CHARLIE_DAEMON.identity();
     let charlie_skt = Socket::bind_n2r(&CHARLIE_DAEMON, charlie_isk, None);
-    eprintln!(
-        "oooooo CHARLIE_SKT = {} oooooo",
-        charlie_skt.local_endpoint()
-    );
 
     // alice sends charlie a msg
     smolscale::block_on(async move {
         // sleep to give the nodes time to connect
-        Timer::after(Duration::from_secs(40)).await;
+        Timer::after(Duration::from_secs(5)).await;
         let alice_msg = Bytes::from_static("Hello, dear Charlie!".as_bytes());
         alice_skt
             .send_to(alice_msg.clone(), charlie_skt.local_endpoint())
@@ -81,7 +76,7 @@ fn n2r() {
         assert_eq!(ep, alice_skt.local_endpoint());
         eprintln!("------------N2R: 1st ASSERT SUCCEEDED!!!------------");
         // charlie responds to alice after waiting 10 secs for the reply blocks
-        Timer::after(Duration::from_secs(5)).await;
+        Timer::after(Duration::from_secs_f32(0.1)).await;
         let charlie_msg = Bytes::from_static("Hello, dear Alice!".as_bytes());
         charlie_skt
             .send_to(charlie_msg.clone(), alice_skt.local_endpoint())

@@ -23,10 +23,7 @@ use smol::{
     stream::StreamExt,
 };
 
-use smolscale::{
-    immortal::{Immortal, RespawnStrategy},
-    reaper::TaskReaper,
-};
+use smolscale::immortal::{Immortal, RespawnStrategy};
 use sosistab2::Multiplex;
 
 use crate::daemon::{
@@ -53,7 +50,7 @@ pub async fn link_authenticate(
         .context("did not respond to authenticate")?;
 
     resp.verify(&mplex.peer_pk().context("could not obtain peer_pk")?)
-        .context("did not authenticated correctly")?;
+        .context("did not authenticate correctly")?;
     if let Some(their_fp) = their_fp {
         if their_fp != resp.full_pk.fingerprint() {
             anyhow::bail!(

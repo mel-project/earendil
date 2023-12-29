@@ -1,16 +1,18 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use bytes::Bytes;
 use earendil_crypt::IdentityPublic;
 use earendil_topology::AdjacencyDescriptor;
 use itertools::Itertools;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{seq::SliceRandom, thread_rng, Rng};
 use smol_timeout::TimeoutExt;
 
-use crate::daemon::context::{GLOBAL_IDENTITY, RELAY_GRAPH};
+use crate::daemon::context::{CtxField, GLOBAL_IDENTITY, RELAY_GRAPH};
 
 use super::{link_protocol::LinkClient, DaemonContext};
+
+pub static STARTUP_TIME: CtxField<Instant> = |_| Instant::now();
 
 /// Loop that gossips things around
 #[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
@@ -37,7 +39,7 @@ pub async fn gossip_loop(
         if once.timeout(Duration::from_secs(10)).await.is_none() {
             log::warn!("gossip once timed out");
         };
-        smol::Timer::after(Duration::from_secs(10)).await;
+        smol::Timer::after(gossip_interval(ctx.get(STARTUP_TIME))).await;
     }
 }
 
@@ -141,4 +143,14 @@ async fn gossip_graph(
         ctx.get(RELAY_GRAPH).write().insert_adjacency(adjacency)?
     }
     Ok(())
+}
+
+fn gossip_interval(start_time: &Instant) -> Duration {
+    let elapsed_secs = start_time.elapsed().as_secs_f64();
+    // logistic function that stabilizes to ~10-sec at ~70 secs
+    let interval_secs = 10. / (1. + 50. * (-0.15 * elapsed_secs).exp());
+    let mut rng = rand::thread_rng();
+    let with_jitter = rng.gen_range(interval_secs..(interval_secs * 2.));
+    log::debug!("GOSSIP_INTERVAL = {with_jitter}");
+    Duration::from_secs_f64(with_jitter)
 }
