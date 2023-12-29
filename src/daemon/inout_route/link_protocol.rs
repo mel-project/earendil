@@ -28,10 +28,12 @@ pub trait LinkProtocol {
 
     /// Gets all the adjacency-descriptors adjacent to the given fingerprints. This is called repeatedly to eventually discover the entire graph.
     async fn adjacencies(&self, fps: Vec<Fingerprint>) -> Vec<AdjacencyDescriptor>;
-
     /// pushes how much it will cost the neighbor to send me a packet, denominated in microMEL/packet
     /// debt_limit = max amount neighbor is allowed to owe me before I stop forwarding their packets
     async fn push_price(&self, price: u64, debt_limit: u64);
+
+    /// Send a chat message to the other end of the link.
+    async fn push_chat(&self, msg: String);
 }
 
 /// Response to an authentication challenge.

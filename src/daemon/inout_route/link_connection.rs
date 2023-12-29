@@ -30,6 +30,7 @@ use smolscale::{
 use sosistab2::Multiplex;
 
 use crate::daemon::{
+    chat::{incoming_chat, ChatEntry},
     context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH},
     peel_forward::peel_forward,
 };
@@ -283,6 +284,16 @@ impl LinkProtocol for LinkProtocolImpl {
                 .get(DEBTS)
                 .insert_outgoing_price(remote_fp, price, debt_limit);
             log::debug!("Successfully registered {} price!", remote_fp);
+        }
+    }
+
+    async fn push_chat(&self, msg: String) {
+        if let Some(neighbor) = self.remote_pk.get() {
+            incoming_chat(
+                self.ctx.clone(),
+                neighbor.fingerprint(),
+                ChatEntry::new(msg),
+            );
         }
     }
 }
