@@ -90,7 +90,7 @@ fn process_inner_pkt(
 ) -> anyhow::Result<()> {
     match inner {
         InnerPacket::Message(msg) => {
-            log::trace!("received InnerPacket::Message");
+            log::debug!("received InnerPacket::Message");
             let dest = Endpoint::new(dest_fp, msg.dest_dock);
             if let Some(send_incoming) = ctx.get(SOCKET_RECV_QUEUES).get(&dest) {
                 send_incoming.try_send((msg, src_fp))?;
@@ -99,7 +99,7 @@ fn process_inner_pkt(
             }
         }
         InnerPacket::ReplyBlocks(reply_blocks) => {
-            log::trace!("received a batch of ReplyBlocks");
+            log::debug!("received a batch of ReplyBlocks");
             for reply_block in reply_blocks {
                 ctx.get(ANON_DESTS).lock().insert(src_fp, reply_block);
             }

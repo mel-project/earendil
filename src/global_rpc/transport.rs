@@ -47,12 +47,12 @@ impl RpcTransport for GlobalRpcTransport {
             socket
                 .send_to(serde_json::to_string(&req)?.into(), endpoint)
                 .await?;
-            log::debug!(
-                "=====> x{retries} {}/{} ({:?})",
-                self.dest_fp,
-                req.method,
-                req.id
-            );
+            // log::debug!(
+            //     "=====> x{retries} {}/{} ({:?})",
+            //     self.dest_fp,
+            //     req.method,
+            //     req.id
+            // );
 
             timeout = Duration::from_secs(2u64.pow(retries + 1));
             let when = Instant::now() + timeout;
@@ -64,7 +64,7 @@ impl RpcTransport for GlobalRpcTransport {
                     Ok((res, _endpoint)) => {
                         let jrpc_res: JrpcResponse =
                             serde_json::from_str(&String::from_utf8(res.to_vec())?)?;
-                        log::debug!("<===== {}/{} ({:?})", self.dest_fp, req.method, req.id);
+                        // log::debug!("<===== {}/{} ({:?})", self.dest_fp, req.method, req.id);
                         return Ok(jrpc_res);
                     }
                     Err(_) => {

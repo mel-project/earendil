@@ -11,7 +11,7 @@ use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentityPublic};
 use earendil_packet::RawPacket;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
-use futures_util::{AsyncWriteExt, TryFutureExt};
+use futures_util::AsyncWriteExt;
 use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use once_cell::sync::OnceCell;
@@ -23,11 +23,8 @@ use smol::{
     stream::StreamExt,
 };
 
-use smolscale::{
-    immortal::{Immortal, RespawnStrategy},
-    reaper::TaskReaper,
-};
-use sosistab2::{Multiplex, Pipe};
+use smolscale::immortal::{Immortal, RespawnStrategy};
+use sosistab2::Multiplex;
 
 use crate::daemon::{
     context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH},
@@ -94,7 +91,7 @@ pub async fn connection_loop(
                             while let Some(line) = stream_lines.next().await {
                                 let line = line?;
                                 let req: JrpcRequest = serde_json::from_str(&line)?;
-                                tracing::debug!(method = req.method, "LinkRPC request received");
+                                // tracing::debug!(method = req.method, "LinkRPC request received");
                                 let resp = service.respond_raw(req).await;
                                 stream
                                     .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
@@ -280,7 +277,7 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     async fn push_price(&self, price: u64, debt_limit: u64) {
-        log::debug!("received push price");
+        log::trace!("received push price");
         let remote_fp = match self.remote_pk.get() {
             Some(rpk) => rpk.fingerprint(),
             None => {
@@ -289,12 +286,12 @@ impl LinkProtocol for LinkProtocolImpl {
         };
 
         if price > self.max_outgoing_price {
-            log::warn!("neigh {} price too high! YOU SHOULD MANUALLY REMOVE THIS UNTIL YOU RESOLVE THE ISSUE", remote_fp);
+            log::warn!("neigh {} price too high! YOU SHOULD MANUALLY REMOVE THIS NEIGHBOR UNTIL YOU RESOLVE THE ISSUE", remote_fp);
         } else {
             self.ctx
                 .get(DEBTS)
                 .insert_outgoing_price(remote_fp, price, debt_limit);
-            log::debug!("Successfully registered {} price!", remote_fp);
+            log::trace!("Successfully registered {} price!", remote_fp);
         }
     }
 }

@@ -9,7 +9,7 @@ use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
-use earendil_topology::{IdentityDescriptor, RelayGraph};
+use earendil_topology::RelayGraph;
 
 use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};

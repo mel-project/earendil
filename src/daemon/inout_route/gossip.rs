@@ -48,7 +48,7 @@ async fn gossip_once(
     neighbor_idpk: IdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
-    log::debug!("gossip_once to {}", neighbor_idpk.fingerprint());
+    log::trace!("gossip_once to {}", neighbor_idpk.fingerprint());
     fetch_identity(ctx, &neighbor_idpk, link_client).await?;
     sign_adjacency(ctx, &neighbor_idpk, link_client).await?;
     gossip_graph(ctx, &neighbor_idpk, link_client).await?;
@@ -63,7 +63,7 @@ async fn fetch_identity(
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
-    log::debug!("getting identity of {remote_fingerprint}");
+    // log::debug!("getting identity of {remote_fingerprint}");
 
     let their_id = link_client
         .identity(remote_fingerprint)
@@ -83,7 +83,7 @@ async fn sign_adjacency(
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
     if ctx.get(GLOBAL_IDENTITY).public().fingerprint() < remote_fingerprint {
-        log::debug!("signing adjacency with {remote_fingerprint}");
+        // log::debug!("signing adjacency with {remote_fingerprint}");
         let mut left_incomplete = AdjacencyDescriptor {
             left: ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             right: remote_fingerprint,
@@ -120,7 +120,7 @@ async fn gossip_graph(
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
         .copied()
         .collect_vec();
-    log::debug!(
+    log::trace!(
         "asking {remote_fingerprint} for neighbors of {} neighbors!",
         random_sample.len()
     );
