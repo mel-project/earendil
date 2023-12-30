@@ -57,7 +57,11 @@ tracing = "0.1.40"
 tracing-subscriber = {version="0.3.18", features=["env-filter"]}
 tap = "1.0.1"
 sqlx = { version = "0.7.3", features = ["sqlite", "runtime-async-std"] }
+<<<<<<< Updated upstream
 chrono = "0.4.31"
+=======
+colored = "2.1.0"
+>>>>>>> Stashed changes
 
 [profile.dev]
 panic = 'abort'

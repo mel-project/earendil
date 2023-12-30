@@ -1,6 +1,7 @@
 use anyhow::Context;
 use bip39::Mnemonic;
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 use earendil::commands::ControlCommands;
 use earendil::config::ConfigFile;
 use earendil::control_protocol::main_control;
@@ -33,6 +34,24 @@ enum Commands {
         control_command: ControlCommands,
     },
     GenerateSeed,
+
+    /// Earendil's chat interface
+    Chat {
+        #[command(subcommand)]
+        chat_command: ChatCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ChatCommands {
+    /// Lists all chats with their last activity and message.
+    List,
+
+    /// Starts a chat with a specified user.
+    Start {
+        /// The fingerprint (or partial fingerprint) of the user to start a chat with.
+        fingerprint: String,
+    },
 }
 
 #[tracing::instrument]
@@ -70,6 +89,17 @@ fn main() -> anyhow::Result<()> {
         Commands::GenerateSeed => {
             let seed_phrase = gen_seed()?;
             println!("{}", seed_phrase);
+            Ok(())
+        }
+        Commands::Chat { chat_command } => {
+            match chat_command {
+                ChatCommands::List => {
+                    println!("listing chatterz")
+                }
+                ChatCommands::Start { fingerprint } => {
+                    println!("starting chat with {}", "gavin".blue().bold())
+                }
+            }
             Ok(())
         }
     }
