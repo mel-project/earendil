@@ -10,14 +10,14 @@ use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
     Dock, PacketConstructError,
 };
+use futures_util::io::BufReader;
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
-use parking_lot::Mutex;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use smol::channel::Sender;
-use smol::Timer;
+use smol::future::FutureExt;
+use smol::{Async, Timer};
 use smolscale::reaper::TaskReaper;
 use std::io::{stdin, stdout, Write};
 use std::marker::Send;
@@ -171,58 +171,80 @@ pub async fn main_control(
                 let res = client.list_chats().await?;
                 println!("{res}");
             }
-            ChatCommands::Start { fingerprint } => {
+            ChatCommands::Start {
+                fingerprint: neighbor,
+            } => {
+                println!("<starting chat with {}>", neighbor);
+
                 // TODO: first, list stored chat history in the correct format (maybe use a
                 // modified get_chat)
 
-                // start accepting new messages
-                println!("<starting chat with {}>", fingerprint);
+                let (send_incoming, recv_incoming) = smol::channel::bounded(1000);
 
-                let (request_tx, request_rx) = channel::unbounded::<ControlClientRequest>();
+                let reaper = TaskReaper::new();
 
-                let client = Arc::new(Mutex::new(client));
-
-                thread::spawn(move || {
-                    while let Ok(request) = request_rx.recv() {
-                        match request {
-                            ControlClientRequest::GetChat(fingerprint, response_tx) => {
-                                let result = control_client.lock().unwrap().get_chat(fingerprint);
-                                // Send the result back through the provided response channel
-                                let _ = response_tx.send(result);
-                            } // Other request variants could be added here
+                let c = Arc::new(client);
+                let listen_client = c.clone();
+                reaper.attach(smolscale::spawn(async move {
+                    loop {
+                        let history = listen_client.get_chat(neighbor).await?;
+                        for (is_mine, msg, time) in history {
+                            send_incoming.send((is_mine, msg, time)).await?;
                         }
+
+                        Timer::after(Duration::from_secs(1)).await;
                     }
-                });
+                    anyhow::Ok(())
+                }));
 
-                loop {
-                    // Print the prompt
-                    print!("-> ");
-                    stdout().flush().unwrap(); // Make sure the prompt is displayed
+                let input_client = c.clone();
 
-                    // Read a line of input from the user
-                    let mut message = String::new();
-                    stdin()
-                        .read_line(&mut message)
-                        .expect("Failed to read line");
+                reaper.attach(smolscale::spawn(async move {
+                    let user_input_loop = async {
+                        loop {
+                            print!("-> ");
+                            stdout().flush().unwrap(); // Make sure the prompt is displayed
 
-                    // Trim the newline character from the input
-                    let message = message.trim();
+                            // Read a line of input from the user
+                            let mut message = String::new();
+                            stdin()
+                                .read_line(&mut message)
+                                .expect("Failed to read line");
 
-                    // If the user has entered a message, process and display it
-                    if !message.is_empty() {
-                        // Get the current timestamp
-                        let timestamp = current_time_stamp();
+                            let message = message.trim();
 
-                        // Display the message with the timestamp
-                        println!("{} [{}]", message, timestamp);
+                            if !message.is_empty() {
+                                let timestamp = current_time_stamp();
 
-                        // send message
-                        client
-                            .lock()
-                            .send_chat_msg(fingerprint, message.to_string())
-                            .await?;
-                    }
-                }
+                                println!("{} [{}]", message, timestamp);
+
+                                input_client
+                                    .send_chat_msg(neighbor, message.to_string())
+                                    .await
+                                    .unwrap();
+                            }
+                        }
+                    };
+
+                    let listening_loop = async {
+                        loop {
+                            if let Ok((is_mine, msg, time)) = recv_incoming.recv().await {
+                                let arrow = if is_mine { "-> " } else { "<- " };
+                                let date: DateTime<Utc> = time.into();
+                                println!(
+                                    "[{}] {} {}",
+                                    date.format("%Y-%m-%d %H:%M:%S"),
+                                    arrow,
+                                    msg
+                                );
+                            }
+                        }
+                    };
+
+                    user_input_loop.race(listening_loop).await;
+
+                    Ok(())
+                }));
             }
         },
     }
@@ -230,22 +252,9 @@ pub async fn main_control(
 }
 
 fn current_time_stamp() -> String {
-    // Get the current time as a SystemTime object
     let now = SystemTime::now();
-
-    // Convert the SystemTime object to a DateTime object in the local timezone
     let datetime: chrono::DateTime<chrono::Local> = now.into();
-
-    // Format the DateTime object as a string
     datetime.format("%Y-%m-%d %H:%M:%S").to_string()
-}
-
-// Define a message type for requests
-enum ControlClientRequest {
-    GetChat(
-        String,
-        Sender<Result<Vec<(bool, String, i64)>, anyhow::Error>>,
-    ),
 }
 
 #[nanorpc_derive]
