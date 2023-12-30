@@ -189,8 +189,7 @@ pub async fn main_control(
                                 let result = control_client.lock().unwrap().get_chat(fingerprint);
                                 // Send the result back through the provided response channel
                                 let _ = response_tx.send(result);
-                            }
-                            // Other request variants could be added here
+                            } // Other request variants could be added here
                         }
                     }
                 });
