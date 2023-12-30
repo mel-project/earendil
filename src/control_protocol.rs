@@ -1,4 +1,4 @@
-use crate::commands::ControlCommands;
+use crate::commands::{ChatCommands, ControlCommands};
 use crate::socket::Endpoint;
 use crate::{daemon::ControlProtErr, haven_util::HavenLocator};
 use anyhow::Context;
@@ -12,11 +12,17 @@ use earendil_packet::{
 };
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
+use parking_lot::Mutex;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use smol::channel::Sender;
+use smol::Timer;
+use smolscale::reaper::TaskReaper;
+use std::io::{stdin, stdout, Write};
 use std::marker::Send;
-use std::time::SystemTime;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 use std::{net::SocketAddr, str::FromStr};
 use thiserror::Error;
 
@@ -159,8 +165,88 @@ pub async fn main_control(
         ControlCommands::SendChatMsg { dest, msg } => {
             client.send_chat_msg(dest, msg).await?;
         }
+        ControlCommands::Chat { chat_command: cmd } => match cmd {
+            ChatCommands::List => {
+                println!("Fingerprint\t\tLastActivity\tLast Message");
+                let res = client.list_chats().await?;
+                println!("{res}");
+            }
+            ChatCommands::Start { fingerprint } => {
+                // TODO: first, list stored chat history in the correct format (maybe use a
+                // modified get_chat)
+
+                // start accepting new messages
+                println!("<starting chat with {}>", fingerprint);
+
+                let (request_tx, request_rx) = channel::unbounded::<ControlClientRequest>();
+
+                let client = Arc::new(Mutex::new(client));
+
+                thread::spawn(move || {
+                    while let Ok(request) = request_rx.recv() {
+                        match request {
+                            ControlClientRequest::GetChat(fingerprint, response_tx) => {
+                                let result = control_client.lock().unwrap().get_chat(fingerprint);
+                                // Send the result back through the provided response channel
+                                let _ = response_tx.send(result);
+                            }
+                            // Other request variants could be added here
+                        }
+                    }
+                });
+
+                loop {
+                    // Print the prompt
+                    print!("-> ");
+                    stdout().flush().unwrap(); // Make sure the prompt is displayed
+
+                    // Read a line of input from the user
+                    let mut message = String::new();
+                    stdin()
+                        .read_line(&mut message)
+                        .expect("Failed to read line");
+
+                    // Trim the newline character from the input
+                    let message = message.trim();
+
+                    // If the user has entered a message, process and display it
+                    if !message.is_empty() {
+                        // Get the current timestamp
+                        let timestamp = current_time_stamp();
+
+                        // Display the message with the timestamp
+                        println!("{} [{}]", message, timestamp);
+
+                        // send message
+                        client
+                            .lock()
+                            .send_chat_msg(fingerprint, message.to_string())
+                            .await?;
+                    }
+                }
+            }
+        },
     }
     Ok(())
+}
+
+fn current_time_stamp() -> String {
+    // Get the current time as a SystemTime object
+    let now = SystemTime::now();
+
+    // Convert the SystemTime object to a DateTime object in the local timezone
+    let datetime: chrono::DateTime<chrono::Local> = now.into();
+
+    // Format the DateTime object as a string
+    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+// Define a message type for requests
+enum ControlClientRequest {
+    GetChat(
+        String,
+        Sender<Result<Vec<(bool, String, i64)>, anyhow::Error>>,
+    ),
 }
 
 #[nanorpc_derive]

@@ -116,4 +116,21 @@ pub enum ControlCommands {
         #[arg(short, long)]
         msg: String,
     },
+    /// Interacts with chat functionality.
+    Chat {
+        #[command(subcommand)]
+        chat_command: ChatCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ChatCommands {
+    /// Lists all chats with their last activity and message.
+    List,
+
+    /// Starts a chat with a specified user.
+    Start {
+        /// The fingerprint (or partial fingerprint) of the user to start a chat with.
+        fingerprint: Fingerprint,
+    },
 }
