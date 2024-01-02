@@ -59,6 +59,7 @@ tap = "1.0.1"
 sqlx = { version = "0.7.3", features = ["sqlite", "runtime-async-std"] }
 chrono = "0.4.31"
 colored = "2.1.0"
+futures = "0.3.30"
 
 [profile.dev]
 panic = 'abort'

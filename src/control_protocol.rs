@@ -181,25 +181,32 @@ pub async fn main_control(
 
                 let (send_incoming, recv_incoming) = smol::channel::bounded(1000);
 
-                let reaper = TaskReaper::new();
+                let mut tasks = Vec::new();
 
                 let c = Arc::new(client);
                 let listen_client = c.clone();
-                reaper.attach(smolscale::spawn(async move {
+                let listen_loop = smolscale::spawn(async move {
                     loop {
-                        let history = listen_client.get_chat(neighbor).await?;
-                        for (is_mine, msg, time) in history {
-                            send_incoming.send((is_mine, msg, time)).await?;
+                        let mut prev_time: SystemTime;
+                        if let Some((is_mine, msg, time)) =
+                            listen_client.get_latest_chat(neighbor).await?
+                        {
+                            if time != prev_time {
+                                println!("sending incoming chat to channel: {msg}");
+                                send_incoming.send((is_mine, msg, time)).await?;
+                            }
                         }
-
+                        //
                         Timer::after(Duration::from_secs(1)).await;
                     }
-                    anyhow::Ok(())
-                }));
+                });
+
+                tasks.push(listen_loop);
 
                 let input_client = c.clone();
-
-                reaper.attach(smolscale::spawn(async move {
+                let input_client = input_client.clone();
+                let recv_incoming = recv_incoming.clone();
+                let main_loop = smolscale::spawn(async move {
                     let user_input_loop = async {
                         loop {
                             print!("-> ");
@@ -216,35 +223,46 @@ pub async fn main_control(
                             if !message.is_empty() {
                                 let timestamp = current_time_stamp();
 
-                                println!("{} [{}]", message, timestamp);
+                                println!("sending msg: {} [{}]", message, timestamp);
 
-                                input_client
-                                    .send_chat_msg(neighbor, message.to_string())
-                                    .await
-                                    .unwrap();
+                                let client = input_client.clone();
+                                let msg = message.clone().to_string();
+                                client.send_chat_msg(neighbor, msg).await.unwrap();
+                                println!("sent msg to: {neighbor}");
                             }
                         }
                     };
 
                     let listening_loop = async {
                         loop {
-                            if let Ok((is_mine, msg, time)) = recv_incoming.recv().await {
-                                let arrow = if is_mine { "-> " } else { "<- " };
-                                let date: DateTime<Utc> = time.into();
-                                println!(
-                                    "[{}] {} {}",
-                                    date.format("%Y-%m-%d %H:%M:%S"),
-                                    arrow,
-                                    msg
-                                );
+                            println!("listening for messages...");
+                            match recv_incoming.recv().await {
+                                Ok((is_mine, msg, time)) => {
+                                    println!("got message: {msg}");
+                                    let arrow = if is_mine { "-> " } else { "<- " };
+                                    let date: DateTime<Utc> = time.into();
+                                    println!(
+                                        "[{}] {} {}",
+                                        date.format("%Y-%m-%d %H:%M:%S"),
+                                        arrow,
+                                        msg
+                                    );
+                                }
+                                Err(e) => {
+                                    dbg!(e);
+                                    println!("error receiving chat from channel!: {:?}", e);
+                                }
                             }
                         }
                     };
 
                     user_input_loop.race(listening_loop).await;
 
-                    Ok(())
-                }));
+                    anyhow::Ok(())
+                });
+
+                tasks.push(main_loop);
+                futures::future::join_all(tasks).await;
             }
         },
     }
@@ -297,6 +315,8 @@ pub trait ControlProtocol {
     async fn list_chats(&self) -> String;
 
     async fn get_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)>;
+
+    async fn get_latest_chat(&self, neigh: Fingerprint) -> Option<(bool, String, SystemTime)>;
 
     async fn send_chat_msg(&self, dest: Fingerprint, msg: String);
 }

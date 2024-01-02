@@ -1302,6 +1302,7 @@ dependencies = [
  "earendil_crypt",
  "earendil_packet",
  "earendil_topology",
+ "futures",
  "futures-util",
  "hex",
  "indexmap 1.9.3",

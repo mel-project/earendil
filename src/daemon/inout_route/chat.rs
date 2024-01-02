@@ -36,8 +36,11 @@ static CHATS: CtxField<Chats> = |ctx| {
 };
 
 pub fn incoming_chat(ctx: &DaemonContext, neighbor: Fingerprint, msg: String) {
+    println!("GOT NEW MSG: {}, inserting into chat history", msg.clone());
+
     let chats = ctx.get(CHATS);
     let entry = ChatEntry::new(msg);
+
     chats.insert(neighbor, entry);
 }
 
@@ -82,12 +85,26 @@ pub fn get_chat(ctx: &DaemonContext, neigh: Fingerprint) -> Vec<(bool, String, S
 pub async fn send_chat_msg(ctx: &DaemonContext, dest: Fingerprint, msg: String) {
     let client = ctx.get(CHATS).clients.get(&dest);
     if let Some(client) = client {
+        println!("send_chat_msg - pushing chat {}", msg.clone());
         let _ = client.push_chat(msg).await;
+    } else {
+        log::error!("no client for send msg: {}", dest);
     }
 }
 
 pub fn serialize_chats(ctx: &DaemonContext) -> anyhow::Result<Vec<u8>> {
     ctx.get(CHATS).clone().into_bytes()
+}
+
+pub fn get_latest_chat(
+    ctx: &DaemonContext,
+    neighbor: Fingerprint,
+) -> Option<(bool, String, SystemTime)> {
+    if let Some(entry) = ctx.get(CHATS).get_latest(neighbor) {
+        Some((entry.is_mine, entry.text, entry.time))
+    } else {
+        None
+    }
 }
 
 #[derive(Clone)]
@@ -117,9 +134,12 @@ impl Chats {
 
     fn insert(&self, neighbor: Fingerprint, entry: ChatEntry) {
         let mut chat = self.history.entry(neighbor).or_default();
+        println!("chat insert...");
         if chat.len() >= self.max_chat_len {
             chat.pop_front();
         }
+
+        println!("push back in chat history!");
         chat.push_back(entry);
     }
 
@@ -129,6 +149,15 @@ impl Chats {
             .iter()
             .flat_map(|entry| entry.value().clone())
             .collect()
+    }
+
+    fn get_latest(&self, neighbor: Fingerprint) -> Option<ChatEntry> {
+        println!("history is some: {}", self.history.get(&neighbor).is_some());
+        if let Some(history) = self.history.get(&neighbor) {
+            history.back().cloned()
+        } else {
+            None
+        }
     }
 
     fn into_bytes(self) -> anyhow::Result<Vec<u8>> {
