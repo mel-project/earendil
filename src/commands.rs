@@ -101,4 +101,25 @@ pub enum ControlCommands {
 
     /// Dumps my own routes.
     MyRoutes,
+
+    Settlements {
+        #[command(subcommand)]
+        cmd: SettlementCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SettlementCommands {
+    /// Lists all pending settlements.
+    List,
+
+    /// Sends a settlement.
+    Send {
+        #[arg(short, long)]
+        neighbor: Fingerprint,
+
+        /// Amount to send, in microMEL
+        #[arg(short, long)]
+        amount: u128,
+    },
 }

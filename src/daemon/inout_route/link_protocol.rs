@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sosistab2::MuxPublic;
 
+use crate::daemon::settlement::{SettlementRequest, SettlementResponse};
+
 #[nanorpc_derive]
 #[async_trait]
 pub trait LinkProtocol {
@@ -32,6 +34,8 @@ pub trait LinkProtocol {
     /// pushes how much it will cost the neighbor to send me a packet, denominated in microMEL/packet
     /// debt_limit = max amount neighbor is allowed to owe me before I stop forwarding their packets
     async fn push_price(&self, price: u64, debt_limit: u64);
+
+    async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse>;
 }
 
 /// Response to an authentication challenge.

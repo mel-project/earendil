@@ -135,6 +135,9 @@ pub async fn main_control(
                 println!("{} - {}", info.0, info.1)
             }
         }
+        ControlCommands::Settlements { cmd } => {
+            todo!()
+        }
     }
     Ok(())
 }

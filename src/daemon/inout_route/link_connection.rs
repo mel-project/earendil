@@ -29,6 +29,7 @@ use sosistab2::Multiplex;
 use crate::daemon::{
     context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH},
     peel_forward::peel_forward,
+    settlement::{SettlementRequest, SettlementResponse},
 };
 
 use super::{
@@ -293,5 +294,9 @@ impl LinkProtocol for LinkProtocolImpl {
                 .insert_outgoing_price(remote_fp, price, debt_limit);
             log::trace!("Successfully registered {} price!", remote_fp);
         }
+    }
+
+    async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse> {
+        todo!()
     }
 }
