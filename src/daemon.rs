@@ -4,10 +4,8 @@ mod control_protocol_impl;
 mod debts;
 pub(crate) mod dht;
 
-mod inout_route;
-
-mod chat;
 mod db;
+mod inout_route;
 mod peel_forward;
 mod reply_block_store;
 mod rrb_balance;

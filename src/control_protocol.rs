@@ -3,6 +3,7 @@ use crate::socket::Endpoint;
 use crate::{daemon::ControlProtErr, haven_util::HavenLocator};
 use anyhow::Context;
 use async_trait::async_trait;
+use blake3::Hash;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use earendil_crypt::{Fingerprint, IdentitySecret};
@@ -10,14 +11,12 @@ use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
     Dock, PacketConstructError,
 };
-use futures_util::io::BufReader;
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use smol::future::FutureExt;
-use smol::{Async, Timer};
+use smol::Timer;
 use smolscale::reaper::TaskReaper;
 use std::io::{stdin, stdout, Write};
 use std::marker::Send;
@@ -82,7 +81,6 @@ pub async fn main_control(
             let res = client
                 .send_global_rpc(GlobalRpcArgs {
                     id,
-
                     destination,
                     method,
                     args,
@@ -143,31 +141,8 @@ pub async fn main_control(
                 println!("{} - {}", info.0, info.1);
             }
         }
-        ControlCommands::ListChats => {
-            println!("Fingerprint\t\tLastActivity\tLast Message");
-            let res = client.list_chats().await?;
-            println!("{res}");
-        }
-        ControlCommands::GetChat { neighbor } => {
-            let entries = client.get_chat(neighbor).await?;
-            for (is_mine, text, time) in entries {
-                let arrow = if is_mine { "->" } else { "<-" };
-                let datetime: DateTime<Utc> = time.into();
-
-                println!(
-                    "[{}] {} {}",
-                    datetime.format("%Y-%m-%d %H:%M:%S"),
-                    arrow,
-                    text
-                );
-            }
-        }
-        ControlCommands::SendChatMsg { dest, msg } => {
-            client.send_chat_msg(dest, msg).await?;
-        }
         ControlCommands::Chat { chat_command: cmd } => match cmd {
             ChatCommands::List => {
-                println!("Fingerprint\t\tLastActivity\tLast Message");
                 let res = client.list_chats().await?;
                 println!("{res}");
             }
@@ -176,103 +151,97 @@ pub async fn main_control(
             } => {
                 println!("<starting chat with {}>", neighbor);
 
-                // TODO: first, list stored chat history in the correct format (maybe use a
-                // modified get_chat)
+                let entries = client.get_chat(neighbor).await?;
+                let mut current_hash = entries
+                    .iter()
+                    .last()
+                    .map(|(is_mine, text, time)| {
+                        let bytes = stdcode::serialize(&(is_mine, text.clone(), time)).unwrap();
+                        blake3::hash(&bytes)
+                    })
+                    .unwrap_or(Hash::from([0; 32]));
 
-                let (send_incoming, recv_incoming) = smol::channel::bounded(1000);
+                for (is_mine, text, time) in entries {
+                    println!("{}", pretty_entry(is_mine, text, time));
+                }
 
-                let mut tasks = Vec::new();
+                let client = Arc::new(client);
+                let listen_client = client.clone();
 
-                let c = Arc::new(client);
-                let listen_client = c.clone();
+                let reaper = TaskReaper::new();
                 let listen_loop = smolscale::spawn(async move {
                     loop {
-                        let mut prev_time: SystemTime;
-                        if let Some((is_mine, msg, time)) =
-                            listen_client.get_latest_chat(neighbor).await?
-                        {
-                            if time != prev_time {
-                                println!("sending incoming chat to channel: {msg}");
-                                send_incoming.send((is_mine, msg, time)).await?;
+                        let last_msg = listen_client.clone().get_latest_msg(neighbor).await;
+                        if let Ok(Some((is_mine, text, time))) = last_msg {
+                            if is_mine {
+                                // let last_bytes =
+                                //     stdcode::serialize(&(is_mine, text.clone(), time)).unwrap();
+                                // let last_hash = blake3::hash(&last_bytes);
+
+                                // if last_hash != current_hash {
+                                //     current_hash = last_hash;
+                                //     println!("{:>40}", pretty_time(time));
+                                // }
+                            } else {
+                                let last_bytes =
+                                    stdcode::serialize(&(is_mine, text.clone(), time)).unwrap();
+                                let last_hash = blake3::hash(&last_bytes);
+
+                                if last_hash != current_hash {
+                                    current_hash = last_hash;
+                                    print!("\r");
+                                    println!("{}", pretty_entry(is_mine, text, time));
+                                    print!("-> ");
+                                    stdout().flush().unwrap();
+                                }
                             }
                         }
-                        //
+
                         Timer::after(Duration::from_secs(1)).await;
                     }
                 });
 
-                tasks.push(listen_loop);
+                reaper.attach(listen_loop);
 
-                let input_client = c.clone();
-                let input_client = input_client.clone();
-                let recv_incoming = recv_incoming.clone();
-                let main_loop = smolscale::spawn(async move {
-                    let user_input_loop = async {
-                        loop {
-                            print!("-> ");
-                            stdout().flush().unwrap(); // Make sure the prompt is displayed
+                loop {
+                    print!("-> ");
+                    stdout().flush().unwrap(); // Make sure the prompt is displayed
 
-                            // Read a line of input from the user
-                            let mut message = String::new();
-                            stdin()
-                                .read_line(&mut message)
-                                .expect("Failed to read line");
+                    let mut message = String::new();
+                    stdin()
+                        .read_line(&mut message)
+                        .expect("Failed to read line");
 
-                            let message = message.trim();
+                    let message = message.trim();
 
-                            if !message.is_empty() {
-                                let timestamp = current_time_stamp();
-
-                                println!("sending msg: {} [{}]", message, timestamp);
-
-                                let client = input_client.clone();
-                                let msg = message.clone().to_string();
-                                client.send_chat_msg(neighbor, msg).await.unwrap();
-                                println!("sent msg to: {neighbor}");
-                            }
-                        }
-                    };
-
-                    let listening_loop = async {
-                        loop {
-                            println!("listening for messages...");
-                            match recv_incoming.recv().await {
-                                Ok((is_mine, msg, time)) => {
-                                    println!("got message: {msg}");
-                                    let arrow = if is_mine { "-> " } else { "<- " };
-                                    let date: DateTime<Utc> = time.into();
-                                    println!(
-                                        "[{}] {} {}",
-                                        date.format("%Y-%m-%d %H:%M:%S"),
-                                        arrow,
-                                        msg
-                                    );
-                                }
-                                Err(e) => {
-                                    dbg!(e);
-                                    println!("error receiving chat from channel!: {:?}", e);
-                                }
-                            }
-                        }
-                    };
-
-                    user_input_loop.race(listening_loop).await;
-
-                    anyhow::Ok(())
-                });
-
-                tasks.push(main_loop);
-                futures::future::join_all(tasks).await;
+                    if !message.is_empty() {
+                        let msg = message.to_string();
+                        client.send_chat_msg(neighbor, msg).await.unwrap();
+                    }
+                }
             }
+            ChatCommands::Get { neighbor } => {
+                let entries = client.get_chat(neighbor).await?;
+                for (is_mine, text, time) in entries {
+                    println!("{}", pretty_entry(is_mine, text, time));
+                }
+            }
+            ChatCommands::Send { dest, msg } => client.send_chat_msg(dest, msg).await?,
         },
     }
     Ok(())
 }
 
-fn current_time_stamp() -> String {
-    let now = SystemTime::now();
-    let datetime: chrono::DateTime<chrono::Local> = now.into();
-    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+fn pretty_entry(is_mine: bool, text: String, time: SystemTime) -> String {
+    let arrow = if is_mine { "->" } else { "<-" };
+
+    format!("{} {} {}", arrow, text, pretty_time(time))
+}
+
+fn pretty_time(time: SystemTime) -> String {
+    let datetime: DateTime<Utc> = time.into();
+
+    format!("[{}]", datetime.format("%Y-%m-%d %H:%M:%S"),)
 }
 
 #[nanorpc_derive]
@@ -316,7 +285,7 @@ pub trait ControlProtocol {
 
     async fn get_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)>;
 
-    async fn get_latest_chat(&self, neigh: Fingerprint) -> Option<(bool, String, SystemTime)>;
+    async fn get_latest_msg(&self, neigh: Fingerprint) -> Option<(bool, String, SystemTime)>;
 
     async fn send_chat_msg(&self, dest: Fingerprint, msg: String);
 }

@@ -102,20 +102,6 @@ pub enum ControlCommands {
     /// Dumps my own routes.
     MyRoutes,
 
-    /// Dumps a mapping of neighbor fingerprints to metadata
-    ListChats,
-
-    GetChat {
-        #[arg(short, long)]
-        neighbor: Fingerprint,
-    },
-
-    SendChatMsg {
-        #[arg(short, long)]
-        dest: Fingerprint,
-        #[arg(short, long)]
-        msg: String,
-    },
     /// Interacts with chat functionality.
     Chat {
         #[command(subcommand)]
@@ -132,5 +118,17 @@ pub enum ChatCommands {
     Start {
         /// The fingerprint (or partial fingerprint) of the user to start a chat with.
         fingerprint: Fingerprint,
+    },
+
+    Get {
+        #[arg(short, long)]
+        neighbor: Fingerprint,
+    },
+
+    Send {
+        #[arg(short, long)]
+        dest: Fingerprint,
+        #[arg(short, long)]
+        msg: String,
     },
 }
