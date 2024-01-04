@@ -152,7 +152,7 @@ pub async fn main_control(
                 let neighbor = neigh_by_prefix(neighbors, fp_prefix);
 
                 if let Some(neigh) = neighbor {
-                    println!("<starting chat with {}>", neigh);
+                    println!("<starting chat with {}>", earendil_blue(&neigh.to_string()));
 
                     let entries = client.get_chat(neigh).await?;
                     let mut current_hash = entries
@@ -185,7 +185,7 @@ pub async fn main_control(
                                         current_hash = last_hash;
                                         print!("\r");
                                         println!("{:>120}", pretty_time(time));
-                                        print!("{} ", "->".blue());
+                                        print!("{} ", right_arrow());
                                         let _ = io::stdout().flush().await;
                                     }
                                 } else {
@@ -197,7 +197,7 @@ pub async fn main_control(
                                         current_hash = last_hash;
                                         print!("\r");
                                         println!("{}", pretty_entry(is_mine, text, time));
-                                        print!("{} ", "->".blue());
+                                        print!("{} ", right_arrow());
                                         let _ = io::stdout().flush().await;
                                     }
                                 }
@@ -210,7 +210,7 @@ pub async fn main_control(
                     reaper.attach(listen_loop);
 
                     loop {
-                        print!("{} ", "->".blue());
+                        print!("{} ", right_arrow());
                         io::stdout().flush().await?;
 
                         let mut message = String::new();
@@ -240,6 +240,24 @@ pub async fn main_control(
     Ok(())
 }
 
+fn earendil_blue(string: &str) -> ColoredString {
+    string
+        .custom_color(colored::CustomColor {
+            r: 0,
+            g: 129,
+            b: 162,
+        })
+        .bold()
+}
+
+fn left_arrow() -> ColoredString {
+    earendil_blue("<-")
+}
+
+fn right_arrow() -> ColoredString {
+    earendil_blue("->")
+}
+
 fn neigh_by_prefix(fingerprints: Vec<Fingerprint>, prefix: String) -> Option<Fingerprint> {
     for fp in fingerprints {
         let fp_string = format!("{}", fp);
@@ -251,7 +269,7 @@ fn neigh_by_prefix(fingerprints: Vec<Fingerprint>, prefix: String) -> Option<Fin
 }
 
 fn pretty_entry(is_mine: bool, text: String, time: SystemTime) -> String {
-    let arrow = if is_mine { "->".blue() } else { "<-".blue() };
+    let arrow = if is_mine { right_arrow() } else { left_arrow() };
 
     format!("{} {} {}", arrow, text, pretty_time(time))
 }
@@ -259,7 +277,7 @@ fn pretty_entry(is_mine: bool, text: String, time: SystemTime) -> String {
 fn pretty_time(time: SystemTime) -> ColoredString {
     let datetime: DateTime<Utc> = time.into();
 
-    format!("[{}]", datetime.format("%Y-%m-%d %H:%M:%S")).yellow()
+    format!("[{}]", datetime.format("%Y-%m-%d %H:%M:%S")).bright_yellow()
 }
 
 #[nanorpc_derive]
