@@ -26,8 +26,8 @@ pub struct Settlements {
 }
 
 struct PendingSettlement {
-    req: SettlementRequest,
-    sender: oneshot::Sender<SettlementResponse>,
+    request: SettlementRequest,
+    send_res: oneshot::Sender<SettlementResponse>,
 }
 
 impl Default for Settlements {
@@ -35,5 +35,19 @@ impl Default for Settlements {
         Self {
             pending: DashMap::new(),
         }
+    }
+}
+
+impl Settlements {
+    pub fn insert_pending(
+        &self,
+        request: SettlementRequest,
+    ) -> oneshot::Receiver<SettlementResponse> {
+        let neighbor = request.fingerprint;
+        let (send_res, recv_res) = oneshot::channel();
+        let pending_settlement = PendingSettlement { request, send_res };
+
+        self.pending.insert(neighbor, pending_settlement);
+        recv_res
     }
 }

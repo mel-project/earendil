@@ -27,7 +27,7 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use sosistab2::Multiplex;
 
 use crate::daemon::{
-    context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH},
+    context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
     peel_forward::peel_forward,
     settlement::{SettlementRequest, SettlementResponse},
 };
@@ -297,6 +297,17 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse> {
-        todo!()
+        log::trace!("starting settlement");
+
+        let settlements = self.ctx.get(SETTLEMENTS);
+        let recv_res = settlements.insert_pending(req);
+
+        match recv_res.recv() {
+            Ok(res) => Some(res),
+            Err(e) => {
+                log::warn!("settlement request rejected: {e}");
+                None
+            }
+        }
     }
 }
