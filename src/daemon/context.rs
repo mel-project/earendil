@@ -98,7 +98,7 @@ pub static DEBTS: CtxField<Debts> = |ctx| {
     })
 };
 
-pub static SETTLEMENTS: CtxField<Settlements> = |ctx| Settlements::default();
+pub static SETTLEMENTS: CtxField<Settlements> = |_| Settlements::default();
 
 /// Sends a raw N2R message with the given parameters.
 pub async fn send_n2r(

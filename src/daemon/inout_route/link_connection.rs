@@ -300,14 +300,19 @@ impl LinkProtocol for LinkProtocolImpl {
         log::trace!("starting settlement");
 
         let settlements = self.ctx.get(SETTLEMENTS);
-        let recv_res = settlements.insert_pending(req);
+        let recv_res = settlements.insert_pending(req.clone());
 
-        match recv_res.recv() {
-            Ok(res) => Some(res),
-            Err(e) => {
-                log::warn!("settlement request rejected: {e}");
-                None
+        if let Ok(recv_res) = recv_res {
+            match recv_res.recv_timeout(Duration::from_secs(300)) {
+                Ok(res) => Some(res),
+                Err(e) => {
+                    log::warn!("settlement request rejected: {e}");
+                    let _ = settlements.remove_pending(req);
+                    None
+                }
             }
+        } else {
+            None
         }
     }
 }
