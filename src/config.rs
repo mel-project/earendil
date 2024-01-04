@@ -18,6 +18,9 @@ pub struct ConfigFile {
     #[serde(flatten)]
     pub identity: Option<Identity>,
 
+    /// Path to database file.
+    pub db_path: Option<PathBuf>,
+
     /// Where to listen for the local control protocol.
     #[serde(default = "default_control_listen")]
     pub control_listen: SocketAddr,
@@ -53,6 +56,8 @@ pub enum InRouteConfig {
         #[serde_as(as = "serde_with::DisplayFromStr")]
         listen: SocketAddr,
         secret: String,
+        #[serde(default)]
+        link_price: LinkPrice,
     },
 }
 
@@ -67,6 +72,8 @@ pub enum OutRouteConfig {
         connect: SocketAddr,
         #[serde_as(as = "serde_with::hex::Hex")]
         cookie: [u8; 32],
+        #[serde(default)]
+        link_price: LinkPrice,
     },
 }
 
@@ -179,4 +186,12 @@ impl Identity {
             }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
+pub struct LinkPrice {
+    /// in micromels
+    pub max_outgoing_price: u64,
+    pub incoming_price: u64,
+    pub incoming_debt_limit: u64,
 }

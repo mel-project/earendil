@@ -23,7 +23,8 @@ use crate::{
 };
 
 use super::{
-    neightable::NeighTable, reply_block_store::ReplyBlockStore, rrb_balance::replenish_rrb,
+    db::db_read, debts::Debts, peel_forward::peel_forward, reply_block_store::ReplyBlockStore,
+    rrb_balance::replenish_rrb,
 };
 
 pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
@@ -37,19 +38,64 @@ pub static GLOBAL_IDENTITY: CtxField<IdentitySecret> = |ctx| {
             id.actualize()
                 .expect("failed to initialize global identity")
         })
-        .unwrap_or_else(IdentitySecret::generate)
+        .unwrap_or_else(|| {
+            let ctx = ctx.clone();
+            smol::future::block_on(async move {
+                match db_read(&ctx, "global_identity").await {
+                    Ok(Some(id)) => IdentitySecret::from_bytes(&id.try_into().unwrap()),
+                    _ => IdentitySecret::generate(),
+                }
+            })
+        })
 };
 
 pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
-pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |_| RwLock::new(RelayGraph::new());
+pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
+    let ctx = ctx.clone();
+    smol::future::block_on(async move {
+        match db_read(&ctx, "relay_graph")
+            .await
+            .ok()
+            .flatten()
+            .and_then(|s| stdcode::deserialize(&s).ok())
+        {
+            Some(g) => RwLock::new(g),
+            None => {
+                log::warn!("**** INIT RELAY GRAPH****");
+                RwLock::new(RelayGraph::new())
+            }
+        }
+    })
+};
 pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBlockStore::new());
-pub static NEIGH_TABLE: CtxField<NeighTable> = |_| NeighTable::new();
+
+pub static NEIGH_TABLE_NEW: CtxField<Cache<Fingerprint, Sender<RawPacket>>> = |_| {
+    CacheBuilder::default()
+        .time_to_live(Duration::from_secs(120))
+        .build()
+}; // TODO a better solution for deletion
 pub static SOCKET_RECV_QUEUES: CtxField<DashMap<Endpoint, Sender<(Message, Fingerprint)>>> =
     |_| Default::default();
 pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {
     CacheBuilder::default()
         .time_to_live(Duration::from_secs(60))
         .build()
+};
+
+pub static DEBTS: CtxField<Debts> = |ctx| {
+    let ctx = ctx.clone();
+    smol::future::block_on(async move {
+        match db_read(&ctx, "debts").await {
+            Ok(Some(debts)) => {
+                log::warn!("retrieving persisted debts");
+                Debts::from_bytes(debts).unwrap()
+            }
+            _ => {
+                log::warn!("initializing debts");
+                Debts::new()
+            }
+        }
+    })
 };
 
 /// Sends a raw N2R message with the given parameters.
@@ -76,7 +122,11 @@ pub async fn send_n2r(
         }
         let inner = InnerPacket::Message(Message::new(src_dock, dst_dock, content));
         let raw_packet = RawPacket::new_reply(&reply_block, inner, &src_idsk)?;
-        ctx.get(NEIGH_TABLE).inject_asif_incoming(raw_packet).await;
+        peel_forward(
+            ctx,
+            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+            raw_packet,
+        );
     } else {
         let route = ctx
             .get(RELAY_GRAPH)
@@ -102,13 +152,15 @@ pub async fn send_n2r(
 
         // if anon source, send RBs
         if src_anon {
-            replenish_rrb(ctx, src_idsk, dst_fp).await?;
+            replenish_rrb(ctx, src_idsk, dst_fp)?;
         }
 
         // we send the onion by treating it as a message addressed to ourselves
-        ctx.get(NEIGH_TABLE)
-            .inject_asif_incoming(wrapped_onion)
-            .await;
+        peel_forward(
+            ctx,
+            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+            wrapped_onion,
+        );
     }
     Ok(())
 }
@@ -170,8 +222,10 @@ pub async fn send_reply_blocks(
         route.iter().map(|s| s.to_string()).collect_vec()
     );
     // we send the onion by treating it as a message addressed to ourselves
-    ctx.get(NEIGH_TABLE)
-        .inject_asif_incoming(wrapped_rb_onion)
-        .await;
+    peel_forward(
+        ctx,
+        ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+        wrapped_rb_onion,
+    );
     Ok(())
 }

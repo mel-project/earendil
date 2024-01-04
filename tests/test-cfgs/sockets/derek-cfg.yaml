@@ -6,4 +6,8 @@ in_routes:
     listen: 0.0.0.0:12005
     protocol: obfsudp
     secret: push-hawk-horn-useful-logic-ice-wide-toy-party-main-island-merry
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000
 out_routes: {}

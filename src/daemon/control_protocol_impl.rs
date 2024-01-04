@@ -19,7 +19,7 @@ use crate::{
     config::InRouteConfig,
     control_protocol::{ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs},
     daemon::{
-        context::{NEIGH_TABLE, RELAY_GRAPH},
+        context::{DEBTS, NEIGH_TABLE_NEW, RELAY_GRAPH},
         DaemonContext,
     },
     global_rpc::transport::GlobalRpcTransport,
@@ -140,7 +140,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .in_routes
             .iter()
             .map(|(k, v)| match v {
-                InRouteConfig::Obfsudp { listen, secret } => {
+                InRouteConfig::Obfsudp { listen, secret, link_price } => {
                     let secret =
                         ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes());
                     (
@@ -149,6 +149,7 @@ impl ControlProtocol for ControlProtocolImpl {
                             "fingerprint": format!("{}", self.ctx.get(GLOBAL_IDENTITY).public().fingerprint()),
                             "connect": format!("<YOUR_IP>:{}", listen.port()),
                             "cookie": hex::encode(secret.to_public().as_bytes()),
+                            "link_price": link_price,
                         }),
                     )
                 }
@@ -165,19 +166,22 @@ impl ControlProtocol for ControlProtocolImpl {
             .fingerprint()
             .to_string();
         let relay_or_client = if self.ctx.init().in_routes.is_empty() {
-            "client"
+            "oval"
         } else {
-            "relay"
+            "rect"
         };
         if human {
-            let all_neighs =
-                self.ctx
-                    .get(NEIGH_TABLE)
-                    .all_neighs()
-                    .iter()
-                    .fold(String::new(), |acc, neigh| {
-                        acc + &format!("{:?}\n", neigh.remote_idpk().fingerprint().to_string())
-                    });
+            let all_neighs = self.ctx.get(NEIGH_TABLE_NEW).iter().map(|s| *s.0).fold(
+                String::new(),
+                |acc, neigh| {
+                    let fp = neigh;
+                    acc + &format!(
+                        "\n{:?}\nnet debt: {:?}\n",
+                        fp.to_string(),
+                        self.ctx.get(DEBTS).net_debt_est(&fp)
+                    )
+                },
+            );
             let all_adjs = self
                 .ctx
                 .get(RELAY_GRAPH)
@@ -206,18 +210,10 @@ impl ControlProtocol for ControlProtocolImpl {
                     )
                 });
             format!(
-                "My fingerprint:\n{}    [{}]\n\nMy neighbors:\n{}\nRelay graph:\n{}",
+                "My fingerprint:\n{}\t[{}]\n\nMy neighbors:{}\nRelay graph:\n{}",
                 my_fp, relay_or_client, all_neighs, all_adjs
             )
         } else {
-            let all_neighs =
-                self.ctx
-                    .get(NEIGH_TABLE)
-                    .all_neighs()
-                    .iter()
-                    .fold(String::new(), |acc, neigh| {
-                        acc + &format!("{:?}\n", neigh.remote_idpk().fingerprint().to_string())
-                    });
             let all_adjs = self
                 .ctx
                 .get(RELAY_GRAPH)
@@ -226,7 +222,7 @@ impl ControlProtocol for ControlProtocolImpl {
                 .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
                 .fold(String::new(), |acc, adj| {
                     acc + &format!(
-                        "{:?} -> {:?};\n",
+                        "{:?} -- {:?};\n",
                         adj.left.to_string(),
                         adj.right.to_string()
                     )
@@ -237,32 +233,28 @@ impl ControlProtocol for ControlProtocolImpl {
                     .read()
                     .all_nodes()
                     .fold(String::new(), |acc, node| {
-                        let node = node.to_string();
+                        let node_str = node.to_string();
+                        let desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
                         acc + &format!(
-                            "{:?} [label=\"{}..{}\"]\n",
-                            node,
-                            &node[..4],
-                            &node[node.len() - 4..node.len()]
+                            "{:?} [label={:?}, shape={}]\n",
+                            node_str,
+                            get_node_label(&node),
+                            (if desc.is_relay { "oval" } else { "rect" }).to_string()
+                                + (if self.ctx.get(NEIGH_TABLE_NEW).contains_key(&node) {
+                                    ", color=lightpink,style=filled"
+                                } else {
+                                    ""
+                                })
                         )
                     });
             format!(
-                "digraph G {{
-                subgraph cluster_0 {{
-                    color=lightblue;
-                    label=\"myself      [{}]\";
-                    node [shape=Mdiamond,color=lightblue,style=filled];
-                    {:?}
-                }}
-                subgraph cluster_1 {{
-                    color=lightpink
-                    label=\"my neighbors\";
-                    node [color=lightpink,style=filled]
-                    {}
-                }}
+                "graph G {{
+                    rankdir=\"LR\"
+                    {:?} [shape={},color=lightblue,style=filled]
                 {}
                 {}
             }}",
-                relay_or_client, my_fp, all_neighs, all_nodes, all_adjs
+                my_fp, relay_or_client, all_nodes, all_adjs
             )
         }
     }
@@ -312,6 +304,11 @@ impl ControlProtocol for ControlProtocolImpl {
                 |res| res,
             )
     }
+}
+
+fn get_node_label(fp: &Fingerprint) -> String {
+    let node = fp.to_string();
+    format!("{}..{}", &node[..4], &node[node.len() - 4..node.len()])
 }
 
 struct AnonIdentities {

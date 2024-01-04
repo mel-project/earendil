@@ -95,7 +95,7 @@ pub enum ControlCommands {
 
     /// Dumps the graph.
     GraphDump {
-        #[arg(short, long)]
+        #[arg(long)]
         human: bool,
     },
 
