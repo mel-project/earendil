@@ -310,6 +310,10 @@ impl ControlProtocol for ControlProtocolImpl {
             )
     }
 
+    async fn list_neighbors(&self) -> Vec<Fingerprint> {
+        chat::list_neighbors(&self.ctx)
+    }
+
     async fn list_chats(&self) -> String {
         chat::list_chats(&self.ctx)
     }

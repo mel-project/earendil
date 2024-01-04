@@ -4,7 +4,7 @@ use earendil_crypt::Fingerprint;
 use earendil_packet::Dock;
 
 #[derive(Subcommand)]
-pub enum ControlCommands {
+pub enum ControlCommand {
     /// Binds to a N2rSocket.
     BindN2r {
         #[arg(long)]
@@ -105,19 +105,19 @@ pub enum ControlCommands {
     /// Interacts with chat functionality.
     Chat {
         #[command(subcommand)]
-        chat_command: ChatCommands,
+        chat_command: ChatCommand,
     },
 }
 
 #[derive(Subcommand)]
-pub enum ChatCommands {
+pub enum ChatCommand {
     /// Lists all chats with their last activity and message.
     List,
 
     /// Starts a chat with a specified user.
     Start {
         /// The fingerprint (or partial fingerprint) of the user to start a chat with.
-        fingerprint: Fingerprint,
+        fp_prefix: String,
     },
 
     Get {

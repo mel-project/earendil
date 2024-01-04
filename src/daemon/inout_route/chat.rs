@@ -9,7 +9,7 @@ use std::{
     time::SystemTime,
 };
 
-use crate::daemon::context::CtxField;
+use crate::daemon::context::{CtxField, NEIGH_TABLE_NEW};
 
 static CHATS: CtxField<Chats> = |ctx| {
     let max_chat_len = usize::MAX;
@@ -39,6 +39,13 @@ pub fn incoming_chat(ctx: &DaemonContext, neighbor: Fingerprint, msg: String) {
     let chats = ctx.get(CHATS);
     let entry = ChatEntry::new_incoming(msg);
     chats.insert(neighbor, entry);
+}
+
+pub fn list_neighbors(ctx: &DaemonContext) -> Vec<Fingerprint> {
+    ctx.get(NEIGH_TABLE_NEW)
+        .iter()
+        .map(|neigh| *neigh.key())
+        .collect()
 }
 
 pub fn list_chats(ctx: &DaemonContext) -> String {

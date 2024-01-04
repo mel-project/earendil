@@ -1287,6 +1287,7 @@ version = "0.0.1"
 dependencies = [
  "anyctx",
  "anyhow",
+ "async-std",
  "async-trait",
  "base64",
  "bip39",
