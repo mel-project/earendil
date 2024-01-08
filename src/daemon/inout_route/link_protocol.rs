@@ -36,6 +36,9 @@ pub trait LinkProtocol {
     async fn push_price(&self, price: u64, debt_limit: u64);
 
     async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse>;
+
+    /// Send a chat message to the other end of the link.
+    async fn push_chat(&self, msg: String);
 }
 
 /// Response to an authentication challenge.

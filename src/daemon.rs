@@ -4,9 +4,8 @@ mod control_protocol_impl;
 mod debts;
 pub(crate) mod dht;
 
-mod inout_route;
-
 mod db;
+mod inout_route;
 mod peel_forward;
 mod reply_block_store;
 mod rrb_balance;
@@ -255,11 +254,15 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         log::debug!("syncing DB...");
-        let graph_bytes = ctx.clone().get(RELAY_GRAPH).read().stdcode();
+        let global_id = ctx.get(GLOBAL_IDENTITY).stdcode();
+        let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
+        let debts = ctx.get(DEBTS).as_bytes()?;
+        let chats = inout_route::chat::serialize_chats(&ctx)?;
 
-        db_write(&ctx, "global_identity", ctx.get(GLOBAL_IDENTITY).stdcode()).await?;
-        db_write(&ctx, "relay_graph", graph_bytes).await?;
-        db_write(&ctx, "debts", ctx.get(DEBTS).as_bytes()?).await?;
+        db_write(&ctx, "global_identity", global_id).await?;
+        db_write(&ctx, "relay_graph", graph).await?;
+        db_write(&ctx, "debts", debts).await?;
+        db_write(&ctx, "chats", chats).await?;
 
         smol::Timer::after(Duration::from_secs(10)).await;
     }

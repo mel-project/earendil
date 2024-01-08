@@ -33,6 +33,7 @@ use crate::daemon::{
 };
 
 use super::{
+    chat::incoming_chat,
     link_protocol::{AuthResponse, InfoResponse, LinkClient, LinkProtocol, LinkService},
     DaemonContext,
 };
@@ -313,6 +314,13 @@ impl LinkProtocol for LinkProtocolImpl {
             }
         } else {
             None
+        }
+    }
+
+    async fn push_chat(&self, msg: String) {
+        if let Some(neighbor) = self.remote_pk.get() {
+            println!("pushing chat: {}", msg.clone());
+            incoming_chat(&self.ctx, neighbor.fingerprint(), msg);
         }
     }
 }

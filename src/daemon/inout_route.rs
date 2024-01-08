@@ -10,6 +10,7 @@ use smolscale::reaper::TaskReaper;
 use sosistab2::{Multiplex, MuxSecret, Pipe};
 use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
 use tracing::Level;
+pub mod chat;
 mod gossip;
 mod link_connection;
 mod link_protocol;
@@ -18,7 +19,11 @@ use crate::{
     config::LinkPrice,
     daemon::{
         context::{DEBTS, NEIGH_TABLE_NEW},
-        inout_route::{gossip::gossip_loop, link_connection::link_authenticate},
+        inout_route::{
+            chat::{add_client, remove_client},
+            gossip::gossip_loop,
+            link_connection::link_authenticate,
+        },
     },
 };
 
@@ -121,6 +126,7 @@ async fn per_link_loop(
     mplex.add_pipe(pipe);
     let rpc = LinkRpcTransport::new(mplex.clone());
     let _client = LinkClient::from(rpc);
+
     // service loop
     let service_loop = link_service_loop(ctx.clone(), mplex, their_fp, link_price);
     service_loop
@@ -173,7 +179,13 @@ async fn link_service_loop(
             };
 
             let rpc = LinkRpcTransport::new(mplex.clone());
-            let client = LinkClient::from(rpc);
+            let client = Arc::new(LinkClient::from(rpc));
+
+            // add link mux to chats mapping and deregister
+            add_client(&ctx, idpk.fingerprint(), client.clone());
+            scopeguard::defer!({
+                remove_client(&ctx, &idpk.fingerprint());
+            });
 
             let price_loop = async {
                 loop {

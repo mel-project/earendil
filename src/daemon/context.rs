@@ -42,7 +42,13 @@ pub static GLOBAL_IDENTITY: CtxField<IdentitySecret> = |ctx| {
             let ctx = ctx.clone();
             smol::future::block_on(async move {
                 match db_read(&ctx, "global_identity").await {
-                    Ok(Some(id)) => IdentitySecret::from_bytes(&id.try_into().unwrap()),
+                    Ok(Some(id)) => {
+                        if let Ok(id_bytes) = &id.try_into() {
+                            IdentitySecret::from_bytes(id_bytes)
+                        } else {
+                            IdentitySecret::generate()
+                        }
+                    }
                     _ => IdentitySecret::generate(),
                 }
             })
@@ -88,7 +94,13 @@ pub static DEBTS: CtxField<Debts> = |ctx| {
         match db_read(&ctx, "debts").await {
             Ok(Some(debts)) => {
                 log::warn!("retrieving persisted debts");
-                Debts::from_bytes(debts).unwrap()
+                match Debts::from_bytes(debts) {
+                    Ok(debts) => debts,
+                    Err(e) => {
+                        log::warn!("debt decode error: {e}");
+                        Debts::new()
+                    }
+                }
             }
             _ => {
                 log::warn!("initializing debts");

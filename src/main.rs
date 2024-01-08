@@ -1,7 +1,7 @@
 use anyhow::Context;
 use bip39::Mnemonic;
 use clap::{Parser, Subcommand};
-use earendil::commands::ControlCommands;
+use earendil::commands::ControlCommand;
 use earendil::config::ConfigFile;
 use earendil::control_protocol::main_control;
 use earendil::daemon::Daemon;
@@ -30,8 +30,9 @@ enum Commands {
         #[arg(short, long, default_value = "127.0.0.1:18964")]
         connect: SocketAddr,
         #[command(subcommand)]
-        control_command: ControlCommands,
+        control_command: ControlCommand,
     },
+
     GenerateSeed,
 }
 
