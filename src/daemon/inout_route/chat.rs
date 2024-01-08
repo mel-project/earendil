@@ -44,7 +44,7 @@ pub fn incoming_chat(ctx: &DaemonContext, neighbor: Fingerprint, msg: String) {
 pub fn list_neighbors(ctx: &DaemonContext) -> Vec<Fingerprint> {
     ctx.get(NEIGH_TABLE_NEW)
         .iter()
-        .map(|neigh| *neigh.key())
+        .map(|neigh| *neigh.0)
         .collect()
 }
 
