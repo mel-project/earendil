@@ -171,8 +171,7 @@ pub async fn main_control(
                     let client = Arc::new(client);
                     let listen_client = client.clone();
 
-                    let reaper = TaskReaper::new();
-                    let listen_loop = smolscale::spawn(async move {
+                    let _listen_loop = smolscale::spawn(async move {
                         loop {
                             let last_msg = listen_client.clone().get_latest_msg(neigh).await;
                             if let Ok(Some((is_mine, text, time))) = last_msg {
@@ -206,8 +205,6 @@ pub async fn main_control(
                             Timer::after(Duration::from_secs(1)).await;
                         }
                     });
-
-                    reaper.attach(listen_loop);
 
                     loop {
                         print!("{} ", right_arrow());
