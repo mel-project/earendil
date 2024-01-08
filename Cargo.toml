@@ -9,7 +9,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyctx={git="https://github.com/nullchinchilla/anyctx.git"}
+anyctx = { git = "https://github.com/nullchinchilla/anyctx.git" }
 serde = { version = "1.0.188", features = ["derive"] }
 serde_with = { version = "3.3.0", features = ["hex", "base64"] }
 earendil_packet = { path = "libraries/earendil_packet" }
@@ -54,9 +54,12 @@ socksv5 = "0.3.1"
 bip39 = "2.0.0"
 tracing = "0.1.40"
 
-tracing-subscriber = {version="0.3.18", features=["env-filter"]}
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tap = "1.0.1"
 sqlx = { version = "0.7.3", features = ["sqlite", "runtime-async-std"] }
+chrono = "0.4.31"
+colored = "2.1.0"
+futures = "0.3.30"
 
 [profile.dev]
 panic = 'abort'

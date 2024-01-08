@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -30,6 +34,7 @@ use crate::{
 use super::{
     context::GLOBAL_IDENTITY,
     dht::{dht_get, dht_insert},
+    inout_route::chat,
 };
 
 pub struct ControlProtocolImpl {
@@ -303,6 +308,26 @@ impl ControlProtocol for ControlProtocolImpl {
                 )),
                 |res| res,
             )
+    }
+
+    async fn list_neighbors(&self) -> Vec<Fingerprint> {
+        chat::list_neighbors(&self.ctx)
+    }
+
+    async fn list_chats(&self) -> String {
+        chat::list_chats(&self.ctx)
+    }
+
+    async fn get_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)> {
+        chat::get_chat(&self.ctx, neigh)
+    }
+
+    async fn get_latest_msg(&self, neigh: Fingerprint) -> Option<(bool, String, SystemTime)> {
+        chat::get_latest_msg(&self.ctx, neigh)
+    }
+
+    async fn send_chat_msg(&self, dest: Fingerprint, msg: String) {
+        chat::send_chat_msg(&self.ctx, dest, msg).await;
     }
 }
 
