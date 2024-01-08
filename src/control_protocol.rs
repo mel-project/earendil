@@ -2,7 +2,6 @@ use crate::commands::{ChatCommand, ControlCommand};
 use crate::socket::Endpoint;
 use crate::{daemon::ControlProtErr, haven_util::HavenLocator};
 use anyhow::Context;
-use async_std::io::{self, WriteExt};
 use async_trait::async_trait;
 use blake3::Hash;
 use bytes::Bytes;
@@ -19,10 +18,9 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use smol::Timer;
-use smolscale::reaper::TaskReaper;
-use std::marker::Send;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+use std::{io::Write, marker::Send};
 use std::{net::SocketAddr, str::FromStr};
 use thiserror::Error;
 
@@ -185,7 +183,7 @@ pub async fn main_control(
                                         print!("\r");
                                         println!("{:>120}", pretty_time(time));
                                         print!("{} ", right_arrow());
-                                        let _ = io::stdout().flush().await;
+                                        let _ = std::io::stdout().flush();
                                     }
                                 } else {
                                     let last_bytes =
@@ -197,7 +195,7 @@ pub async fn main_control(
                                         print!("\r");
                                         println!("{}", pretty_entry(is_mine, text, time));
                                         print!("{} ", right_arrow());
-                                        let _ = io::stdout().flush().await;
+                                        let _ = std::io::stdout().flush();
                                     }
                                 }
                             }
@@ -208,15 +206,17 @@ pub async fn main_control(
 
                     loop {
                         print!("{} ", right_arrow());
-                        io::stdout().flush().await?;
+                        let _ = std::io::stdout().flush();
 
-                        let mut message = String::new();
-                        io::stdin()
-                            .read_line(&mut message)
-                            .await
-                            .expect("Failed to read line");
+                        let message = smol::unblock(|| {
+                            let mut message = String::new();
+                            std::io::stdin()
+                                .read_line(&mut message)
+                                .expect("Failed to read line");
 
-                        let message = message.trim();
+                            message.trim().to_string()
+                        })
+                        .await;
 
                         if !message.is_empty() {
                             let msg = message.to_string();
