@@ -102,31 +102,13 @@ pub enum ControlCommand {
     /// Dumps my own routes.
     MyRoutes,
 
-    Settlements {
-        #[command(subcommand)]
-        cmd: SettlementCommands,
-    },
+    /// Lists pending debt settlements
+    ListSettlements,
 
     /// Interacts with chat functionality.
     Chat {
         #[command(subcommand)]
         chat_command: ChatCommand,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum SettlementCommands {
-    /// Lists all pending settlements.
-    List,
-
-    /// Sends a settlement.
-    Send {
-        #[arg(short, long)]
-        neighbor: Fingerprint,
-
-        /// Amount to send, in microMEL
-        #[arg(short, long)]
-        amount: u128,
     },
 }
 
@@ -141,11 +123,13 @@ pub enum ChatCommand {
         fp_prefix: String,
     },
 
+    /// Pulls conversation between you and neighbor
     Get {
         #[arg(short, long)]
         neighbor: Fingerprint,
     },
 
+    /// Sends a single chat message to dest
     Send {
         #[arg(short, long)]
         dest: Fingerprint,

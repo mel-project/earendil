@@ -299,10 +299,10 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse> {
-        log::trace!("starting settlement");
+        log::debug!("starting settlement");
 
         let settlements = self.ctx.get(SETTLEMENTS);
-        let recv_res = settlements.insert_pending(req.clone());
+        let recv_res = settlements.insert_pending(req);
 
         if let Ok(recv_res) = recv_res {
             match recv_res.recv().timeout(Duration::from_secs(300)).await {

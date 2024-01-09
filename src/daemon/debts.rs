@@ -74,6 +74,12 @@ impl Debts {
         true
     }
 
+    pub fn deduct_settlement(&self, their_fp: &Fingerprint, amount: u64) {
+        if let Some(mut current_debt) = self.balances.get_mut(their_fp) {
+            current_debt.incoming_balance -= amount;
+        }
+    }
+
     pub fn as_bytes(&self) -> anyhow::Result<Vec<u8>> {
         let incoming_prices: HashMap<Fingerprint, PriceInfo> = self
             .incoming_prices

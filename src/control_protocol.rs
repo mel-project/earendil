@@ -140,8 +140,11 @@ pub async fn main_control(
                 println!("{} - {}", info.0, info.1);
             }
         }
-        ControlCommand::Settlements { cmd } => {
-            todo!()
+        ControlCommand::ListSettlements => {
+            let settlements = client.list_settlements().await?;
+            for settlement in settlements {
+                println!("{:?}", settlement);
+            }
         }
         ControlCommand::Chat { chat_command } => match chat_command {
             ChatCommand::List => {
@@ -234,7 +237,7 @@ pub async fn main_control(
                     println!("{}", pretty_entry(is_mine, text, time));
                 }
             }
-            ChatCommand::Send { dest, msg } => client.send_chat_msg(dest, msg).await?,
+            ChatCommand::Send { dest, msg } => client.send_chat_msg(dest, msg).await??,
         },
     }
     Ok(())
@@ -325,7 +328,9 @@ pub trait ControlProtocol {
 
     async fn get_latest_msg(&self, neigh: Fingerprint) -> Option<(bool, String, SystemTime)>;
 
-    async fn send_chat_msg(&self, dest: Fingerprint, msg: String);
+    async fn send_chat_msg(&self, dest: Fingerprint, msg: String) -> Result<(), ChatError>;
+
+    async fn list_settlements(&self) -> Vec<String>;
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
@@ -374,4 +379,10 @@ pub struct GlobalRpcArgs {
 pub enum GlobalRpcError {
     #[error("error sending GlobalRpc request")]
     SendError,
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum ChatError {
+    #[error("error sending chat message {0}")]
+    Send(String),
 }
