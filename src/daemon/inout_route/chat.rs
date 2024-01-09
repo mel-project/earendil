@@ -1,4 +1,5 @@
 use crate::daemon::inout_route::LinkClient;
+use crate::daemon::settlement::{SettlementProof, SettlementRequest, SettlementResponse};
 use crate::daemon::{context::DaemonContext, db::db_read};
 use dashmap::DashMap;
 use earendil_crypt::Fingerprint;
@@ -9,7 +10,9 @@ use std::{
     time::SystemTime,
 };
 
-use crate::daemon::context::{CtxField, NEIGH_TABLE_NEW};
+use crate::daemon::context::{
+    CtxField, DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS,
+};
 
 static CHATS: CtxField<Chats> = |ctx| {
     let max_chat_len = usize::MAX;
@@ -35,10 +38,28 @@ static CHATS: CtxField<Chats> = |ctx| {
     })
 };
 
-pub fn incoming_chat(ctx: &DaemonContext, neighbor: Fingerprint, msg: String) {
+pub async fn incoming_chat(ctx: &DaemonContext, neighbor: Fingerprint, msg: String) {
     let chats = ctx.get(CHATS);
-    let entry = ChatEntry::new_incoming(msg);
-    chats.insert(neighbor, entry);
+    let settlements = ctx.get(SETTLEMENTS);
+    let debts = ctx.get(DEBTS);
+    let debt = debts.net_debt_est(&neighbor);
+    let my_sk = *ctx.get(GLOBAL_IDENTITY);
+
+    if msg == "!accept" {
+        if let Some(debt) = debt {
+            if let Some(request) = settlements.get_request(&neighbor) {
+                let net_debt = debt.saturating_sub(request.decrease as i128);
+                let settlements = ctx.get(SETTLEMENTS);
+                let response = SettlementResponse::new(my_sk, request, net_debt);
+                let _ = settlements.send_response(Some(response)).await;
+            }
+        }
+    } else if msg == "!reject" {
+        let _ = settlements.send_response(None).await;
+    } else {
+        let entry = ChatEntry::new_incoming(msg);
+        chats.insert(neighbor, entry);
+    }
 }
 
 pub fn list_neighbors(ctx: &DaemonContext) -> Vec<Fingerprint> {
@@ -94,8 +115,62 @@ pub fn get_chat(ctx: &DaemonContext, neigh: Fingerprint) -> Vec<(bool, String, S
 
 pub async fn send_chat_msg(ctx: &DaemonContext, dest: Fingerprint, msg: String) {
     let chats = ctx.get(CHATS);
+    let my_sk = *ctx.get(GLOBAL_IDENTITY);
 
-    if let Some(client) = chats.clients.get(&dest) {
+    if msg.starts_with("!settle ") {
+        let tokens: Vec<&str> = msg.split(" ").collect();
+        let maybe_amount = if tokens.len() == 2 {
+            match tokens[1].parse::<u128>() {
+                Ok(amount) => Some(amount),
+                Err(_) => {
+                    log::warn!("invalid settlement syntax. !settle <amount in micromel>");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        if let Some(amount) = maybe_amount {
+            let proof = SettlementProof::Manual;
+            if let Some(client) = chats.clients.get(&dest) {
+                let settlement_msg = format!("<{}> sent you a settlement request for {amount}. Accept with '!accept' or reject with '!reject'.", my_sk.public().fingerprint());
+
+                match client.push_chat(settlement_msg.clone()).await {
+                    Ok(_) => chats.insert(dest, ChatEntry::new_outgoing(msg)),
+                    Err(e) => log::warn!("error pushing chat: {e}"),
+                };
+
+                let maybe_descriptor = ctx.get(RELAY_GRAPH).read().identity(&dest);
+                if let Some(descriptor) = maybe_descriptor {
+                    let neighbor_pk = descriptor.identity_pk;
+                    let response = client
+                        .start_settlement(SettlementRequest::new(
+                            my_sk,
+                            amount,
+                            proof,
+                            Arc::new(neighbor_pk),
+                        ))
+                        .await;
+
+                    let res_msg = match response {
+                        Ok(Some(res)) => {
+                            format!("{dest} accepted your settlement request for {amount} micromel")
+                        }
+                        Ok(None) => {
+                            format!("{dest} rejected your settlement request for {amount} micromel")
+                        }
+                        Err(e) => format!("error sending {dest} a settlement request: {e}"),
+                    };
+
+                    match client.push_chat(res_msg.clone()).await {
+                        Ok(_) => chats.insert(dest, ChatEntry::new_outgoing(res_msg)),
+                        Err(e) => log::warn!("error pushing chat: {e}"),
+                    };
+                }
+            }
+        }
+    } else if let Some(client) = chats.clients.get(&dest) {
         match client.push_chat(msg.clone()).await {
             Ok(_) => chats.insert(dest, ChatEntry::new_outgoing(msg)),
             Err(e) => log::warn!("error pushing chat: {e}"),

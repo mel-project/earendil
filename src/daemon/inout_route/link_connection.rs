@@ -23,6 +23,7 @@ use smol::{
     stream::StreamExt,
 };
 
+use smol_timeout::TimeoutExt;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use sosistab2::Multiplex;
 
@@ -304,13 +305,13 @@ impl LinkProtocol for LinkProtocolImpl {
         let recv_res = settlements.insert_pending(req.clone());
 
         if let Ok(recv_res) = recv_res {
-            match recv_res.recv_timeout(Duration::from_secs(300)) {
-                Ok(res) => Some(res),
-                Err(e) => {
-                    log::warn!("settlement request rejected: {e}");
-                    let _ = settlements.remove_pending(req);
+            match recv_res.recv().timeout(Duration::from_secs(300)).await {
+                Some(Ok(res)) => res,
+                Some(Err(e)) => {
+                    log::warn!("settlement response receive error: {e}");
                     None
                 }
+                None => None,
             }
         } else {
             None
@@ -320,7 +321,7 @@ impl LinkProtocol for LinkProtocolImpl {
     async fn push_chat(&self, msg: String) {
         if let Some(neighbor) = self.remote_pk.get() {
             println!("pushing chat: {}", msg.clone());
-            incoming_chat(&self.ctx, neighbor.fingerprint(), msg);
+            incoming_chat(&self.ctx, neighbor.fingerprint(), msg).await;
         }
     }
 }
