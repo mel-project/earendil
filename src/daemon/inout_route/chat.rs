@@ -18,17 +18,17 @@ static CHATS: CtxField<Chats> = |ctx| {
     smolscale::block_on(async move {
         match db_read(&ctx, "chats").await {
             Ok(Some(chats)) => {
-                log::debug!("retrieving persisted chats");
+                log::debug!("Retrieving persisted chats");
                 match Chats::from_bytes(chats) {
                     Ok(chats) => chats,
                     Err(e) => {
-                        log::warn!("{e}");
+                        log::warn!("Error retrieving persisted chats: {e}");
                         Chats::new(max_chat_len)
                     }
                 }
             }
             _ => {
-                log::debug!("initializing debts");
+                log::debug!("no persisted chats");
                 Chats::new(max_chat_len)
             }
         }
