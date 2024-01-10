@@ -13,6 +13,7 @@ mod socks5;
 mod tcp_forward;
 mod udp_forward;
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentitySecret};
@@ -21,15 +22,18 @@ use earendil_packet::ForwardInstruction;
 use earendil_topology::{IdentityDescriptor, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
-use nanorpc::{JrpcRequest, RpcService};
+use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use smolscale::reaper::TaskReaper;
 use stdcode::StdcodeSerializeExt;
 
+use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
+use crate::commands::ControlCommand;
+use crate::control_protocol::ControlClient;
 use crate::{
     config::ConfigFile,
     daemon::context::{GLOBAL_ONION_SK, RELAY_GRAPH},
@@ -76,6 +80,25 @@ impl Daemon {
 
     pub fn identity(&self) -> IdentitySecret {
         *self.ctx.get(GLOBAL_IDENTITY)
+    }
+
+    pub fn control_client(&self) -> ControlClient {
+        ControlClient::from(DummyControlProtocolTransport {
+            inner: ControlService(ControlProtocolImpl::new(self.ctx.clone())),
+        })
+    }
+}
+
+struct DummyControlProtocolTransport {
+    inner: ControlService<ControlProtocolImpl>,
+}
+
+#[async_trait]
+impl RpcTransport for DummyControlProtocolTransport {
+    type Error = Infallible;
+
+    async fn call_raw(&self, req: JrpcRequest) -> Result<JrpcResponse, Self::Error> {
+        Ok(self.inner.respond_raw(req).await)
     }
 }
 

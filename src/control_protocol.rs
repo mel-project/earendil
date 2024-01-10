@@ -196,17 +196,13 @@ pub async fn main_control(
 
                     if !message.is_empty() {
                         let msg = message.to_string();
-                        let _ = listen_client.send_chat_msg(neighbor, msg).await;
+                        match listen_client.send_chat_msg(neighbor, msg).await {
+                            Ok(_) => continue,
+                            Err(e) => println!("ERROR: {e}"),
+                        }
                     }
                 }
             }
-            ChatCommand::Get { neighbor } => {
-                let entries = client.get_chat(neighbor).await?;
-                for (is_mine, text, time) in entries {
-                    println!("{}", pretty_entry(is_mine, text, time));
-                }
-            }
-            ChatCommand::Send { dest, msg } => client.send_chat_msg(dest, msg).await?,
         },
     }
     Ok(())

@@ -102,7 +102,7 @@ pub enum ControlCommand {
     /// Dumps my own routes.
     MyRoutes,
 
-    /// Interacts with chat functionality.
+    /// Interactive chat for talking to immediate neighbors
     Chat {
         #[command(subcommand)]
         chat_command: ChatCommand,
@@ -111,24 +111,12 @@ pub enum ControlCommand {
 
 #[derive(Subcommand)]
 pub enum ChatCommand {
-    /// Lists all chats with their last activity and message.
+    /// print a summary of all your conversations
     List,
 
-    /// Starts a chat with a specified user.
+    /// start an interactive chat session with a neighbor
     Start {
         /// The fingerprint (or partial fingerprint) of the user to start a chat with.
         fp_prefix: String,
-    },
-
-    Get {
-        #[arg(short, long)]
-        neighbor: Fingerprint,
-    },
-
-    Send {
-        #[arg(short, long)]
-        dest: Fingerprint,
-        #[arg(short, long)]
-        msg: String,
     },
 }

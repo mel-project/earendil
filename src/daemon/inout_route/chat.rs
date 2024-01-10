@@ -49,9 +49,9 @@ pub fn list_neighbors(ctx: &DaemonContext) -> Vec<Fingerprint> {
 }
 
 pub fn list_chats(ctx: &DaemonContext) -> String {
-    let mut info = "+----------------------------------+-------------------+--------------------------------+\n".to_owned();
-    info +=    "| Neighbor                          | # of Messages     | Last chat                       |\n";
-    info +=    "+----------------------------------+-------------------+--------------------------------+\n";
+    let mut info = "+----------------------------------+-------------------+-----------------------------------+\n".to_owned();
+    info +=    "| Neighbor                         | # of Messages     | Last chat                         |\n";
+    info +=    "+----------------------------------+-------------------+-----------------------------------+\n";
 
     for entry in ctx.get(CHATS).history.iter() {
         let (neigh, chat) = entry.pair();
@@ -69,7 +69,7 @@ pub fn list_chats(ctx: &DaemonContext) -> String {
                 text,
                 create_timestamp(*time)
             );
-            info += "+----------------------------------+-------------------+--------------------------------+\n";
+            info += "+----------------------------------+-------------------+-----------------------------------+\n";
         }
     }
 
