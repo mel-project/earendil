@@ -3,10 +3,11 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use anyhow::Context;
 use earendil_crypt::Fingerprint;
 use futures_util::TryFutureExt;
+use nursery_macro::nursery;
 use once_cell::sync::OnceCell;
 use smol::future::FutureExt;
 use smol_timeout::TimeoutExt;
-use smolscale::reaper::TaskReaper;
+
 use sosistab2::{Multiplex, MuxSecret, Pipe};
 use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
 use tracing::Level;
@@ -55,15 +56,15 @@ pub async fn in_route_obfsudp(
         hex::encode(secret.to_public().as_bytes())
     );
     let listener = ObfsUdpListener::bind(listen, secret).await?;
-    let tasks = TaskReaper::new();
-    loop {
+    nursery!(loop {
         let pipe = listener.accept().await?;
         let context = context.clone();
-        tasks.attach(smolscale::spawn(
+        spawn!(
             per_link_loop(context.daemon_ctx.clone(), pipe, None, link_price)
-                .timeout(CONNECTION_LIFETIME),
-        ));
-    }
+                .timeout(CONNECTION_LIFETIME)
+        )
+        .detach();
+    })
 }
 
 #[derive(Clone)]

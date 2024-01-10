@@ -1313,6 +1313,7 @@ dependencies = [
  "moro",
  "nanorpc",
  "nanorpc-http",
+ "nursery_macro",
  "once_cell",
  "parking_lot 0.12.1",
  "rand 0.8.5",
@@ -2462,6 +2463,13 @@ checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
  "hermit-abi 0.3.3",
  "libc",
+]
+
+[[package]]
+name = "nursery_macro"
+version = "0.1.0"
+dependencies = [
+ "smol",
 ]
 
 [[package]]

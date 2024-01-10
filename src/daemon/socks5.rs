@@ -3,12 +3,13 @@ use std::{net::Ipv4Addr, str::FromStr};
 use anyhow::Context;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use futures_util::{io, TryFutureExt};
+use nursery_macro::nursery;
 use smol::{
     future::FutureExt,
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
 };
-use smolscale::reaper::TaskReaper;
+
 use socksv5::v5::*;
 
 use crate::{
@@ -19,27 +20,27 @@ use crate::{
 
 use super::{context::CtxField, DaemonContext};
 
+#[tracing::instrument(skip(ctx))]
 pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Result<()> {
     log::debug!("socks5 loop started");
     let tcp_listener = TcpListener::bind(socks5_cfg.listen).await?;
     let fallback = socks5_cfg.fallback;
-    let reaper = TaskReaper::new();
 
-    loop {
+    nursery!(loop {
         let (client_stream, _) = tcp_listener.accept().await?;
-
-        reaper.attach(smolscale::spawn(
-            socks5_once(ctx.clone(), client_stream, fallback)
-                .map_err(|e| log::warn!("socks5 worker failed: {:?}", e)),
-        ));
-    }
+        // look ma, borrowing from the stack!
+        spawn!(socks5_once(&ctx, client_stream, fallback)
+            .map_err(|e| log::warn!("socks5 worker failed: {:?}", e)))
+        .detach();
+    })
 }
 
 // this makes reply block handling a bit more efficient at the cost of some anonymity --- we should investigate a better way
 static SOCKS5_LOCAL_IDSK: CtxField<IdentitySecret> = |_| IdentitySecret::generate();
 
+#[tracing::instrument(skip(ctx, client_stream, fallback))]
 async fn socks5_once(
-    ctx: DaemonContext,
+    ctx: &DaemonContext,
     client_stream: TcpStream,
     fallback: Fallback,
 ) -> anyhow::Result<()> {

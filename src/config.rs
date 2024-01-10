@@ -87,7 +87,7 @@ pub struct UdpForwardConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct TcpForwardConfig {
     pub listen: SocketAddr,
@@ -96,7 +96,7 @@ pub struct TcpForwardConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub struct Socks5 {
     pub listen: SocketAddr,
@@ -104,7 +104,7 @@ pub struct Socks5 {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum Fallback {
     Block,
