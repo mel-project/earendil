@@ -44,7 +44,7 @@ pub fn incoming_chat(ctx: &DaemonContext, neighbor: Fingerprint, msg: String) {
 pub fn list_neighbors(ctx: &DaemonContext) -> Vec<Fingerprint> {
     ctx.get(NEIGH_TABLE_NEW)
         .iter()
-        .map(|neigh| *neigh.key())
+        .map(|neigh| *neigh.0)
         .collect()
 }
 
@@ -57,7 +57,7 @@ pub fn list_chats(ctx: &DaemonContext) -> String {
         let (neigh, chat) = entry.pair();
         let num_messages = chat.len();
         if let Some(ChatEntry {
-            is_mine,
+            is_mine: _,
             text,
             time,
         }) = chat.back()
