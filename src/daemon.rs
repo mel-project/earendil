@@ -33,7 +33,6 @@ use stdcode::StdcodeSerializeExt;
 use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
-use crate::commands::ControlCommand;
 use crate::control_protocol::ControlClient;
 use crate::{
     config::ConfigFile,

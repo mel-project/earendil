@@ -25,8 +25,6 @@ use smol::{
 };
 
 use smolscale::immortal::{Immortal, RespawnStrategy};
-use smolscale::immortal::{Immortal, RespawnStrategy};
-use sosistab2::Multiplex;
 use sosistab2::Multiplex;
 
 use crate::daemon::{
