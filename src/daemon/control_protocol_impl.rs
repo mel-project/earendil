@@ -322,10 +322,6 @@ impl ControlProtocol for ControlProtocolImpl {
         chat::get_chat(&self.ctx, neigh)
     }
 
-    async fn get_latest_msg(&self, neigh: Fingerprint) -> Option<(bool, String, SystemTime)> {
-        chat::get_latest_msg(&self.ctx, neigh)
-    }
-
     async fn send_chat_msg(&self, dest: Fingerprint, msg: String) {
         chat::send_chat_msg(&self.ctx, dest, msg).await;
     }

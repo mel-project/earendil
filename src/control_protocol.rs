@@ -295,8 +295,6 @@ pub trait ControlProtocol {
 
     async fn get_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)>;
 
-    async fn get_latest_msg(&self, neigh: Fingerprint) -> Option<(bool, String, SystemTime)>;
-
     async fn send_chat_msg(&self, dest: Fingerprint, msg: String);
 }
 
