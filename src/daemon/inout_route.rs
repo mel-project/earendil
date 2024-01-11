@@ -43,6 +43,7 @@ pub struct InRouteContext {
     pub in_route_name: String,
 }
 
+#[tracing::instrument(skip(context, secret))]
 pub async fn in_route_obfsudp(
     context: InRouteContext,
     listen: SocketAddr,
@@ -50,7 +51,7 @@ pub async fn in_route_obfsudp(
     link_price: LinkPrice,
 ) -> anyhow::Result<()> {
     let secret = ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes());
-    log::debug!(
+    tracing::debug!(
         "obfsudp in_route {} listen start with cookie {}",
         context.in_route_name,
         hex::encode(secret.to_public().as_bytes())
@@ -74,6 +75,7 @@ pub struct OutRouteContext {
     pub remote_fingerprint: Fingerprint,
 }
 
+#[tracing::instrument(skip(context, cookie))]
 pub async fn out_route_obfsudp(
     context: OutRouteContext,
     connect: SocketAddr,
@@ -84,12 +86,9 @@ pub async fn out_route_obfsudp(
     let mut timer2 = smol::Timer::interval(CONNECTION_LIFETIME);
     loop {
         let fallible = async {
-            log::debug!("obfsudp out_route {} trying...", context.out_route_name);
+            tracing::debug!("{} trying...", context.out_route_name);
             let pipe = ObfsUdpPipe::connect(connect, ObfsUdpPublic::from_bytes(cookie), "").await?;
-            log::info!(
-                "obfsudp out_route {} pipe connected",
-                context.out_route_name
-            );
+            tracing::info!("{} pipe connected", context.out_route_name);
 
             per_link_loop(
                 context.daemon_ctx.clone(),
@@ -101,7 +100,7 @@ pub async fn out_route_obfsudp(
         };
         async {
             if let Err(err) = fallible.await {
-                log::warn!(
+                tracing::warn!(
                     "obfs out_route {} failed: {:?}",
                     context.out_route_name,
                     err
@@ -132,7 +131,7 @@ async fn per_link_loop(
     let service_loop = link_service_loop(ctx.clone(), mplex, their_fp, link_price);
     service_loop
         .map_err(|e| {
-            log::warn!("link_service_loop for {:?} died: {:?}", their_fp, e);
+            tracing::warn!("link_service_loop for {:?} died: {:?}", their_fp, e);
             e
         })
         .await?;

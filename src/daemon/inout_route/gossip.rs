@@ -21,14 +21,14 @@ pub async fn gossip_loop(
     neighbor_idpk: IdentityPublic,
     link_client: LinkClient,
 ) -> anyhow::Result<()> {
-    scopeguard::defer!(log::info!(
+    scopeguard::defer!(tracing::info!(
         "gossip loop for {} stopped",
         neighbor_idpk.fingerprint()
     ));
     loop {
         let once = async {
             if let Err(err) = gossip_once(&ctx, neighbor_idpk, &link_client).await {
-                log::warn!(
+                tracing::warn!(
                     "gossip with {} failed: {:?}",
                     neighbor_idpk.fingerprint(),
                     err
@@ -37,7 +37,7 @@ pub async fn gossip_loop(
         };
         // pin_mut!(once);
         if once.timeout(Duration::from_secs(10)).await.is_none() {
-            log::warn!("gossip once timed out");
+            tracing::warn!("gossip once timed out");
         };
         smol::Timer::after(gossip_interval(ctx.get(STARTUP_TIME))).await;
     }
@@ -50,7 +50,7 @@ async fn gossip_once(
     neighbor_idpk: IdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
-    log::trace!("gossip_once to {}", neighbor_idpk.fingerprint());
+    tracing::trace!("gossip_once to {}", neighbor_idpk.fingerprint());
     fetch_identity(ctx, &neighbor_idpk, link_client).await?;
     sign_adjacency(ctx, &neighbor_idpk, link_client).await?;
     gossip_graph(ctx, &neighbor_idpk, link_client).await?;
@@ -65,7 +65,7 @@ async fn fetch_identity(
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
-    // log::debug!("getting identity of {remote_fingerprint}");
+    // tracing::debug!("getting identity of {remote_fingerprint}");
 
     let their_id = link_client
         .identity(remote_fingerprint)
@@ -85,7 +85,7 @@ async fn sign_adjacency(
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
     if ctx.get(GLOBAL_IDENTITY).public().fingerprint() < remote_fingerprint {
-        // log::debug!("signing adjacency with {remote_fingerprint}");
+        // tracing::debug!("signing adjacency with {remote_fingerprint}");
         let mut left_incomplete = AdjacencyDescriptor {
             left: ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             right: remote_fingerprint,
@@ -103,7 +103,7 @@ async fn sign_adjacency(
         ctx.get(RELAY_GRAPH)
             .write()
             .insert_adjacency(complete.clone())?;
-        log::trace!("inserted the new adjacency {:?} into the graph", complete);
+        tracing::trace!("inserted the new adjacency {:?} into the graph", complete);
     }
     Ok(())
 }
@@ -117,12 +117,12 @@ async fn gossip_graph(
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
     let all_known_nodes = ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();
-    log::info!("num known nodes: {}", all_known_nodes.len());
+    tracing::info!("num known nodes: {}", all_known_nodes.len());
     let random_sample = all_known_nodes
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
         .copied()
         .collect_vec();
-    log::trace!(
+    tracing::trace!(
         "asking {remote_fingerprint} for neighbors of {} neighbors!",
         random_sample.len()
     );
@@ -151,6 +151,6 @@ fn gossip_interval(start_time: &Instant) -> Duration {
     let interval_secs = 10. / (1. + 50. * (-0.15 * elapsed_secs).exp());
     let mut rng = rand::thread_rng();
     let with_jitter = rng.gen_range(interval_secs..(interval_secs * 2.));
-    log::debug!("GOSSIP_INTERVAL = {with_jitter}");
+    tracing::debug!("GOSSIP_INTERVAL = {with_jitter}");
     Duration::from_secs_f64(with_jitter)
 }

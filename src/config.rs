@@ -6,6 +6,7 @@ use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fs::OpenOptions;
+use tracing::instrument;
 
 use crate::socket::Endpoint;
 
@@ -78,7 +79,7 @@ pub enum OutRouteConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct UdpForwardConfig {
     pub listen: SocketAddr,
@@ -116,7 +117,7 @@ pub enum Fallback {
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct HavenForwardConfig {
     #[serde(flatten)]
     pub identity: Identity,
@@ -126,7 +127,7 @@ pub struct HavenForwardConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ForwardHandler {
     UdpService {
@@ -142,7 +143,7 @@ pub enum ForwardHandler {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 /// A configuration for an identity, specified either as a human-readable seed that will be passed through a KDF, or a file that stores the raw binary bytes of the identity secret.
 #[serde(rename_all = "snake_case")]
 pub enum Identity {
@@ -151,11 +152,12 @@ pub enum Identity {
 }
 
 impl Identity {
+    #[instrument(skip(self))]
     /// Actualizes this into an actual identity.
     pub fn actualize(&self) -> anyhow::Result<IdentitySecret> {
         match self {
             Identity::IdentitySeed(seed) => {
-                log::warn!("initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!");
+                tracing::warn!("initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!");
                 Ok(IdentitySecret::from_seed(seed))
             }
             Identity::IdentityFile(file) => {
@@ -167,7 +169,7 @@ impl Identity {
                             .context("identity file not of the right length")?;
                         return Ok(IdentitySecret::from_bytes(&bts));
                     } else {
-                        log::info!("identity file {:?} does not exist yet, so creating", file);
+                        tracing::info!("identity file {:?} does not exist yet, so creating", file);
                         // create it here
                         let identity = IdentitySecret::generate();
                         let mut options = OpenOptions::new();

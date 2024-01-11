@@ -264,6 +264,7 @@ impl ControlProtocol for ControlProtocolImpl {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn send_global_rpc(
         &self,
         send_args: GlobalRpcArgs,
@@ -277,11 +278,11 @@ impl ControlProtocol for ControlProtocolImpl {
             .call(&send_args.method, &send_args.args)
             .await
             .map_err(|e| {
-                log::warn!("send_global_rpc failed with {:?}", e);
+                tracing::warn!("send_global_rpc failed with {:?}", e);
                 GlobalRpcError::SendError
             })? {
             res.map_err(|e| {
-                log::warn!("send_global_rpc failed with {:?}", e);
+                tracing::warn!("send_global_rpc failed with {:?}", e);
                 GlobalRpcError::SendError
             })?
         } else {

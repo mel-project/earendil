@@ -122,6 +122,7 @@ pub async fn haven_loop(ctx: DaemonContext, haven_cfg: HavenForwardConfig) -> an
     }
 }
 
+#[tracing::instrument(skip(ctx))]
 async fn udp_forward(
     ctx: DaemonContext,
     haven_cfg: HavenForwardConfig,
@@ -143,7 +144,7 @@ async fn udp_forward(
     }
 
     let haven_id = haven_cfg.identity.actualize()?;
-    log::debug!(
+    tracing::debug!(
         "UDP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
     );
@@ -187,7 +188,7 @@ async fn tcp_forward(
     upstream: SocketAddr,
 ) -> anyhow::Result<()> {
     let haven_id = haven_cfg.identity.actualize()?;
-    log::debug!(
+    tracing::debug!(
         "TCP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
     );
@@ -206,7 +207,7 @@ async fn tcp_forward(
     loop {
         let earendil_stream = listener.accept().await?;
         let tcp_stream = TcpStream::connect(upstream).await?;
-        log::trace!("TCP forward earendil stream accepted");
+        tracing::trace!("TCP forward earendil stream accepted");
         reaper.attach(smolscale::spawn(async move {
             io::copy(earendil_stream.clone(), &mut tcp_stream.clone())
                 .race(io::copy(tcp_stream.clone(), &mut earendil_stream.clone()))
@@ -216,13 +217,14 @@ async fn tcp_forward(
     }
 }
 
+#[tracing::instrument(skip(ctx))]
 async fn simple_proxy(
     ctx: DaemonContext,
     haven_cfg: HavenForwardConfig,
     listen_dock: u32,
 ) -> Result<(), anyhow::Error> {
     let haven_id = haven_cfg.identity.actualize()?;
-    log::debug!(
+    tracing::debug!(
         "simple proxy haven fingerprint: {}",
         haven_id.public().fingerprint()
     );
@@ -240,7 +242,7 @@ async fn simple_proxy(
     loop {
         let mut earendil_stream = listener.accept().await?;
 
-        log::trace!("simple proxy forward earendil stream accepted");
+        tracing::trace!("simple proxy forward earendil stream accepted");
         reaper.attach(smolscale::spawn(async move {
             // the first 2 bytes of the stream encode the byte-length of the subsequent `hostname:port`
             let mut len_buf = [0; 2];

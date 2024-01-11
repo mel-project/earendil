@@ -40,6 +40,7 @@ struct BoundDock {
 }
 
 impl N2rSocket {
+    #[tracing::instrument(skip(ctx))]
     /// Binds an N2R socket.
     pub fn bind(ctx: DaemonContext, idsk: IdentitySecret, dock: Option<Dock>) -> N2rSocket {
         let our_fingerprint = idsk.public().fingerprint();
@@ -99,6 +100,7 @@ impl N2rSocket {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
         loop {
             if let Ok(retval) = self.incoming_queue.pop() {
@@ -106,7 +108,7 @@ impl N2rSocket {
             }
 
             let (message, fingerprint) = self.recv_incoming.recv().await.map_err(|e| {
-                log::debug!("N2rSocket RecvError: {e}");
+                tracing::debug!("N2rSocket RecvError: {e}");
                 SocketRecvError::N2rRecvError
             })?;
             let endpoint = Endpoint::new(fingerprint, message.source_dock);
@@ -120,7 +122,7 @@ impl N2rSocket {
         Endpoint::new(self.bound_dock.fp, self.bound_dock.dock)
     }
 }
-
+#[tracing::instrument(skip(ctx, recv_outgoing))]
 async fn send_batcher_loop(
     ctx: DaemonContext,
     isk: IdentitySecret,
@@ -132,7 +134,7 @@ async fn send_batcher_loop(
         batches.clear();
         // sleep a little while so that stuff accumulates
         smol::Timer::after(Duration::from_millis(5)).await;
-        log::trace!("{} packets queued up", recv_outgoing.len());
+        tracing::trace!("{} packets queued up", recv_outgoing.len());
         let (msg, dest) = recv_outgoing.recv().await?;
         batches.entry(dest).or_default().push_back(msg);
         // try to receive more, as long as they're immediately available
@@ -158,7 +160,7 @@ async fn send_batcher_loop(
                     subbatch.push(first);
                     current_size = next_size;
                 }
-                log::trace!("subbatch of size {}", subbatch.len());
+                tracing::trace!("subbatch of size {}", subbatch.len());
                 // send the message
                 send_n2r(
                     &ctx,

@@ -12,7 +12,7 @@ pub async fn tcp_forward_loop(
     ctx: DaemonContext,
     tcp_fwd_cfg: TcpForwardConfig,
 ) -> anyhow::Result<()> {
-    log::debug!("tcp forward loop start");
+    tracing::debug!("tcp forward loop start");
     let tcp_listener = TcpListener::bind(tcp_fwd_cfg.listen).await?;
 
     nursery!(loop {
