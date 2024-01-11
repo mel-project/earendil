@@ -5,3 +5,5 @@ perf*
 
 *.tfvars
 !example.tfvars
+*.terraform/
+
