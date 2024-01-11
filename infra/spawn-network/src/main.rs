@@ -7,18 +7,18 @@ fn main() -> anyhow::Result<()> {
         .parent()
         .unwrap()
         .to_path_buf();
-    let yaml_path = infra_dir.join("topology.yaml");
+    let topology_path = infra_dir.join("topology.yaml");
     let terraform_dir = infra_dir.join("terraform");
     let tfvars_path = terraform_dir.join("terraform.tfvars");
 
-    populate_node_list(&yaml_path, &tfvars_path)?;
+    populate_node_list(&topology_path, &tfvars_path)?;
     provision_nodes(terraform_dir)?;
 
     Ok(())
 }
 
-fn populate_node_list(adjacencies_path: &PathBuf, tfvars_path: &PathBuf) -> anyhow::Result<()> {
-    let file = File::open(adjacencies_path)?;
+fn populate_node_list(topology_path: &PathBuf, tfvars_path: &PathBuf) -> anyhow::Result<()> {
+    let file = File::open(topology_path)?;
     let adjacencies: Adjacencies =
         serde_yaml::from_reader(file).expect("Error parsing the adjacency YAML file");
 
