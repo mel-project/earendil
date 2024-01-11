@@ -1,3 +1,7 @@
 perf*
+
 **/shadow.data/
 **/target/
+
+*.tfvars
+!example.tfvars

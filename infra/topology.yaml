@@ -1,0 +1,5 @@
+adjacencies:
+  - [alice, rob]
+  - [rob, bob]
+  # - [damian, fabio]
+  # - [alice, fabio]

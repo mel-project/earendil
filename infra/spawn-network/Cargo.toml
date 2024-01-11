@@ -1,0 +1,12 @@
+[package]
+name = "spawn-network"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.79"
+serde_yaml = "0.9.30"
+smolscale = "0.4.2"
+serde = { version = "1.0.188", features = ["derive"] }
+regex = "1.10.2"
+bytes = "1.5.0"
