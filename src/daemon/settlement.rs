@@ -17,9 +17,8 @@ use super::context::{DaemonContext, DEBTS, GLOBAL_IDENTITY};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SettlementRequest {
-    // unix milliseconds
     timestamp_ms: u64,
-    pub decrease: u64,
+    decrease: u64,
     payment_proof: SettlementProof,
     signature: Bytes,
     initiator_pk: Arc<IdentityPublic>,

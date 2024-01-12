@@ -40,7 +40,7 @@ static CHATS: CtxField<Chats> = |ctx| {
     })
 };
 
-pub async fn incoming_chat(ctx: &DaemonContext, neighbor: Fingerprint, msg: String) {
+pub fn incoming_chat(ctx: &DaemonContext, neighbor: Fingerprint, msg: String) {
     let chats = ctx.get(CHATS);
     let entry = ChatEntry::new_incoming(msg);
     chats.insert(neighbor, entry);

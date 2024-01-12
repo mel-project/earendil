@@ -320,8 +320,8 @@ impl LinkProtocol for LinkProtocolImpl {
 
     async fn push_chat(&self, msg: String) {
         if let Some(neighbor) = self.remote_pk.get() {
-            println!("pushing chat: {}", msg.clone());
-            incoming_chat(&self.ctx, neighbor.fingerprint(), msg).await;
+            log::debug!("pushing chat: {}", msg.clone());
+            incoming_chat(&self.ctx, neighbor.fingerprint(), msg);
         }
     }
 }
