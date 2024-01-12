@@ -22,8 +22,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 type InRoutes = Vec<(String, InRouteConfig)>;
 type OutRoutes = Vec<(String, OutRouteConfig)>;
 
-// sets up a global tracing subscriber and initializes env vars
-pub fn prelude() {
+// sets up a global tracing subscriber
+pub fn tracing_init() {
     let _ = tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().compact())
         .with(
@@ -32,7 +32,10 @@ pub fn prelude() {
                 .from_env_lossy(),
         )
         .try_init();
+}
 
+// initializes env vars
+pub fn env_vars() {
     env::set_var("SOSISTAB2_NO_SLEEP", "1");
 }
 
@@ -65,30 +68,34 @@ pub fn gen_cfg(
 }
 
 // finds a random, unused socket address on localhost
-fn free_address(rng: &mut StdRng) -> SocketAddr {
+fn free_port(rng: &mut StdRng) -> u16 {
     loop {
         let port: u16 = rng.gen_range(1024..=65535);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
 
         match TcpStream::connect(addr) {
             Ok(_) => {
-                eprintln!("port {port} is bound");
+                eprintln!("port {} is bound", port);
                 continue;
             }
-            Err(_) => {
-                eprintln!("port {port} is free");
-                return addr;
+            Err(ref e) if e.kind() == std::io::ErrorKind::ConnectionRefused => {
+                eprintln!("port {} is free", port);
+                return port;
+            }
+            Err(e) => {
+                eprintln!("other error with port {port}: {e}");
+                continue;
             }
         }
     }
 }
 
-// creates random in/out routes
+// creates random in/out routes for a ConfigFile, given a vector of existing relays
 fn routes(
     rng: &mut StdRng,
-    relay_configs: &Vec<ConfigFile>,
+    existing_relays: &Vec<ConfigFile>,
     is_relay: bool,
-    outroute_range: RangeInclusive<u8>,
+    num_outroutes_range: RangeInclusive<u8>,
 ) -> anyhow::Result<(InRoutes, OutRoutes)> {
     let secret = "secret".to_string();
     let link_price = LinkPrice {
@@ -102,22 +109,23 @@ fn routes(
         in_routes.push((
             "obfsudp".to_string(),
             InRouteConfig::Obfsudp {
-                listen: free_address(rng),
+                listen: format!("0.0.0.0:{}", free_port(rng)).parse()?,
                 secret,
                 link_price,
             },
         ))
     }
 
-    let num_out_routes = rng.gen_range(outroute_range);
+    let num_outroutes = rng.gen_range(num_outroutes_range);
     let mut out_routes: Vec<(String, OutRouteConfig)> = vec![];
     let mut seen = HashSet::new();
 
-    for _ in 0..num_out_routes {
+    for _ in 0..num_outroutes {
         let mut relay_cfg;
         loop {
-            let relay_index = rng.gen_range(0..relay_configs.len());
-            relay_cfg = relay_configs.get(relay_index).unwrap();
+            let relay_index = rng.gen_range(0..existing_relays.len());
+            relay_cfg = existing_relays.get(relay_index).unwrap();
+
             let relay_fp = relay_cfg
                 .identity
                 .clone()
@@ -135,16 +143,19 @@ fn routes(
         }
         let (connect, cookie, link_price) = match relay_cfg.in_routes.get("obfsudp").unwrap() {
             InRouteConfig::Obfsudp {
-                listen,
+                mut listen,
                 secret,
                 link_price,
-            } => (
-                *listen,
-                *ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes())
-                    .to_public()
-                    .as_bytes(),
-                *link_price,
-            ),
+            } => {
+                listen.set_ip(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+                (
+                    listen,
+                    *ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes())
+                        .to_public()
+                        .as_bytes(),
+                    *link_price,
+                )
+            }
         };
         let relay_id = match &relay_cfg.identity {
             Some(Identity::IdentitySeed(seed)) => seed.clone(),
@@ -170,12 +181,12 @@ fn routes(
     Ok((in_routes, out_routes.into_iter().collect()))
 }
 
-// creates arbitrarily-sized vectors of randomly (but deterministically) interconnected relay and client daemons
-pub fn spawn_network(
+// creates arbitrarily-sized vectors of randomly (but deterministically) interconnected relay and client daemon configs
+pub fn generate_network(
     num_relays: u8,
     num_clients: u16,
     seed: Option<[u8; 32]>,
-) -> anyhow::Result<(Vec<Daemon>, Vec<Daemon>)> {
+) -> anyhow::Result<(Vec<ConfigFile>, Vec<ConfigFile>)> {
     let seed = if let Some(s) = seed { s } else { [1; 32] };
     let mut rng: StdRng = SeedableRng::from_seed(seed);
     let mut relay_configs = vec![];
@@ -183,9 +194,10 @@ pub fn spawn_network(
     for i in 0..num_relays {
         println!("relay i = {i}");
         let relay_id = Identity::IdentitySeed(format!("relay{i}"));
-        let control_listen = free_address(&mut rng);
-        let outroute_range = 0..=(i as f64).sqrt() as u8;
-        let (in_routes, out_routes) = routes(&mut rng, &relay_configs, true, outroute_range)?;
+        let control_listen = format!("127.0.0.1:{}", free_port(&mut rng)).parse()?;
+        // range start is 0 for i = 0 and 1 otherwise; end grows slowly according to √i
+        let num_outroutes_range = (i > 0) as u8..=(i > 0) as u8 * (i as f64).sqrt() as u8;
+        let (in_routes, out_routes) = routes(&mut rng, &relay_configs, true, num_outroutes_range)?;
         let relay_cfg = gen_cfg(
             relay_id,
             control_listen,
@@ -200,22 +212,23 @@ pub fn spawn_network(
 
     for i in 0..num_clients {
         let client_id = Identity::IdentitySeed(format!("client{i}"));
-        let control_listen = free_address(&mut rng);
-        let outroute_range = 1..=(num_relays as f64).sqrt() as u8;
-        let (in_routes, out_routes) = routes(&mut rng, &relay_configs, false, outroute_range)?;
+        let control_listen = format!("127.0.0.1:{}", free_port(&mut rng)).parse()?;
+        let num_outroutes_range = 1..=(num_relays as f64).sqrt() as u8;
+        let (in_routes, out_routes) = routes(&mut rng, &relay_configs, false, num_outroutes_range)?;
         let client_cfg = gen_cfg(client_id, control_listen, in_routes, out_routes);
 
         client_configs.push(client_cfg);
     }
 
-    for (i, config) in [relay_configs.clone(), client_configs.clone()]
-        .iter()
-        .flatten()
-        .enumerate()
-    {
-        config_to_yaml_file(config, &format!("./z/{i}"))?;
-    }
+    Ok((relay_configs, client_configs))
+}
 
+pub fn spawn_network(
+    num_relays: u8,
+    num_clients: u16,
+    seed: Option<[u8; 32]>,
+) -> anyhow::Result<(Vec<Daemon>, Vec<Daemon>)> {
+    let (relay_configs, client_configs) = generate_network(num_relays, num_clients, seed)?;
     let relays: Vec<Daemon> = relay_configs
         .into_iter()
         .map(Daemon::init)
@@ -305,6 +318,12 @@ pub fn config_to_yaml_file(config: &ConfigFile, file_path: &str) -> std::io::Res
     fs::create_dir_all(parent_dir)?;
 
     let mut file = fs::File::create(file_path)?;
+    let id = match &config.identity {
+        Some(id) => id.actualize().unwrap(),
+        None => panic!("id generated in unexpected format"),
+    };
+    file.write_all(format!("# fingerprint: {}\n", id.public().fingerprint()).as_bytes())?;
     file.write_all(yaml_string.as_bytes())?;
+
     Ok(())
 }

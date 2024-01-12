@@ -7,10 +7,11 @@ mod helpers;
 
 #[test]
 fn send_chat_msg() {
-    helpers::prelude();
+    helpers::tracing_init();
+    helpers::env_vars();
 
     smolscale::block_on(async {
-        let (relays, mut clients) = helpers::spawn_network(4, 16, None).unwrap();
+        let (relays, mut clients) = helpers::spawn_network(3, 9, None).unwrap();
 
         Timer::after(Duration::from_secs(30)).await;
 
