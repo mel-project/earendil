@@ -156,14 +156,6 @@ impl Chats {
             .collect()
     }
 
-    fn get_latest(&self, neighbor: Fingerprint) -> Option<ChatEntry> {
-        if let Some(history) = self.history.get(&neighbor) {
-            history.back().cloned()
-        } else {
-            None
-        }
-    }
-
     fn into_bytes(self) -> anyhow::Result<Vec<u8>> {
         let history: HashMap<Fingerprint, VecDeque<ChatEntry>> = self.history.into_iter().collect();
         Ok(stdcode::serialize(&(history, self.max_chat_len))?)

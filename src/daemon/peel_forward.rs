@@ -16,7 +16,7 @@ use crate::{
 
 use super::context::{DaemonContext, SOCKET_RECV_QUEUES};
 
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, pkt))]
 pub fn peel_forward(ctx: &DaemonContext, last_hop_fp: Fingerprint, pkt: RawPacket) {
     let inner = || {
         if !ctx.get(DEBTS).is_within_debt_limit(&last_hop_fp) {
