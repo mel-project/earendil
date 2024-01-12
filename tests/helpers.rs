@@ -37,11 +37,11 @@ pub fn prelude() {
 }
 
 // generates a barebones config
-fn gen_cfg(
+pub fn gen_cfg(
     identity: Identity,
     control_listen: SocketAddr,
-    in_routes: Vec<(String, InRouteConfig)>,
-    out_routes: Vec<(String, OutRouteConfig)>,
+    in_routes: InRoutes,
+    out_routes: OutRoutes,
 ) -> ConfigFile {
     let db_path = None;
     let in_routes = in_routes.into_iter().collect();
@@ -72,11 +72,11 @@ fn free_address(rng: &mut StdRng) -> SocketAddr {
 
         match TcpStream::connect(addr) {
             Ok(_) => {
-                println!("port {port} is bound");
+                eprintln!("port {port} is bound");
                 continue;
             }
             Err(_) => {
-                println!("port {port} is free");
+                eprintln!("port {port} is free");
                 return addr;
             }
         }
@@ -199,11 +199,9 @@ pub fn spawn_network(
     let mut client_configs = vec![];
 
     for i in 0..num_clients {
-        println!("client i = {i}");
         let client_id = Identity::IdentitySeed(format!("client{i}"));
         let control_listen = free_address(&mut rng);
         let outroute_range = 1..=(num_relays as f64).sqrt() as u8;
-        println!("outrout range: {:?}", &outroute_range);
         let (in_routes, out_routes) = routes(&mut rng, &relay_configs, false, outroute_range)?;
         let client_cfg = gen_cfg(client_id, control_listen, in_routes, out_routes);
 
