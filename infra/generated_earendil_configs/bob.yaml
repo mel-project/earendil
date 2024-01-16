@@ -1,0 +1,9 @@
+# bob fingerprint: zwtztn80eg4124j2crja03g6z7dv85f1
+control_listen: 127.0.0.1:12003
+identity_seed: little-address-marble-tongue-accident-demise-asthma-quick-salmon-canal-clerk-silver
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12002
+    protocol: obfsudp
+    secret: wolf-wait-place-autumn-embody-cross-expose-unfair-custom-fine-gym-hurdle
+out_routes: {}

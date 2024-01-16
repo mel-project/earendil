@@ -1,0 +1,13 @@
+# alice fingerprint: frjhtmqgxvamwy84rvh357851qfar4pv
+control_listen: 127.0.0.1:12005
+identity_seed: duty-autumn-nice-debris-rate-pet-course-draft-prize-rotate-photo-glow
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12004
+    protocol: obfsudp
+    secret: fringe-update-runway-shoulder-captain-hawk-attend-iron-section-iron-valley-traffic
+  rob:
+    connect: 45.79.149.64:12000
+    cookie: 0ac1b6fe5357a87077f5681da11d75f3951fc7c22d8a030c826be14829ab5f36
+    fingerprint: xvd4bk1xcen104c1kp1nwaa4x6cvcwk9
+    protocol: obfsudp

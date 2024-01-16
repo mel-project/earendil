@@ -1,0 +1,13 @@
+# rob fingerprint: xvd4bk1xcen104c1kp1nwaa4x6cvcwk9
+control_listen: 127.0.0.1:12001
+identity_seed: lawsuit-detect-flat-surround-spell-soup-mushroom-gloom-keen-wheat-luggage-fabric
+in_routes:
+  main_udp:
+    listen: 0.0.0.0:12000
+    protocol: obfsudp
+    secret: base-forget-onion-pet-globe-chief-imitate-manual-flower-distance-crater-toilet
+  bob:
+    connect: 45.79.149.214:12002
+    cookie: d2096fb2689198dcb22f15a1bca19ce64c97c5a7007701ca0d682fee85349638
+    fingerprint: zwtztn80eg4124j2crja03g6z7dv85f1
+    protocol: obfsudp
