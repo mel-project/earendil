@@ -1,7 +1,4 @@
-use std::time::Duration;
-
 use earendil::daemon::Daemon;
-use smol::Timer;
 
 mod helpers;
 
@@ -13,7 +10,7 @@ fn send_chat_msg() {
     smolscale::block_on(async {
         let (relays, mut clients) = helpers::spawn_network(3, 9, None).unwrap();
 
-        Timer::after(Duration::from_secs(30)).await;
+        helpers::sleep(30).await;
 
         // pick an alice and bob
         let alice = clients.pop().unwrap();

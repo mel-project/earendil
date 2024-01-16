@@ -5,16 +5,15 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     ops::RangeInclusive,
     path::Path,
+    time::Duration,
 };
 
 use earendil::{
-    config::{
-        ConfigFile, HavenForwardConfig, Identity, InRouteConfig, LinkPrice, OutRouteConfig, Socks5,
-        TcpForwardConfig, UdpForwardConfig,
-    },
+    config::{ConfigFile, Identity, InRouteConfig, LinkPrice, OutRouteConfig},
     daemon::Daemon,
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use smol::Timer;
 use sosistab2_obfsudp::ObfsUdpSecret;
 use std::net::TcpStream;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -37,6 +36,10 @@ pub fn tracing_init() {
 // initializes env vars
 pub fn env_vars() {
     env::set_var("SOSISTAB2_NO_SLEEP", "1");
+}
+
+pub async fn sleep(secs: u64) {
+    Timer::after(Duration::from_secs(secs)).await;
 }
 
 // generates a barebones config
@@ -239,75 +242,6 @@ pub fn spawn_network(
         .collect::<anyhow::Result<Vec<Daemon>>>()?;
 
     Ok((relays, clients))
-}
-
-// adds a udp forward to a config
-pub fn add_udp_forward(config: ConfigFile, udp_forward: UdpForwardConfig) -> ConfigFile {
-    let mut udp_forwards = config.udp_forwards;
-    udp_forwards.push(udp_forward);
-
-    ConfigFile {
-        identity: config.identity,
-        db_path: config.db_path,
-        control_listen: config.control_listen,
-        in_routes: config.in_routes,
-        out_routes: config.out_routes,
-        udp_forwards,
-        tcp_forwards: config.tcp_forwards,
-        socks5: config.socks5,
-        havens: config.havens,
-    }
-}
-
-// adds a tcp forward to a config
-pub fn add_tcp_forward(config: ConfigFile, tcp_forward: TcpForwardConfig) -> ConfigFile {
-    let mut tcp_forwards = config.tcp_forwards;
-    tcp_forwards.push(tcp_forward);
-
-    ConfigFile {
-        identity: config.identity,
-        db_path: config.db_path,
-        control_listen: config.control_listen,
-        in_routes: config.in_routes,
-        out_routes: config.out_routes,
-        udp_forwards: config.udp_forwards,
-        tcp_forwards,
-        socks5: config.socks5,
-        havens: config.havens,
-    }
-}
-
-// adds socks5 to a config
-pub fn add_socks5(config: ConfigFile, socks5: Socks5) -> ConfigFile {
-    ConfigFile {
-        identity: config.identity,
-        db_path: config.db_path,
-        control_listen: config.control_listen,
-        in_routes: config.in_routes,
-        out_routes: config.out_routes,
-        udp_forwards: config.udp_forwards,
-        tcp_forwards: config.tcp_forwards,
-        socks5: Some(socks5),
-        havens: config.havens,
-    }
-}
-
-// adds a haven to a config
-pub fn add_haven(config: ConfigFile, haven: HavenForwardConfig) -> ConfigFile {
-    let mut havens = config.havens;
-    havens.push(haven);
-
-    ConfigFile {
-        identity: config.identity,
-        db_path: config.db_path,
-        control_listen: config.control_listen,
-        in_routes: config.in_routes,
-        out_routes: config.out_routes,
-        udp_forwards: config.udp_forwards,
-        tcp_forwards: config.tcp_forwards,
-        socks5: config.socks5,
-        havens,
-    }
 }
 
 // writes a ConfigFile to the given path, creating the parent dir if it doesn't exist
