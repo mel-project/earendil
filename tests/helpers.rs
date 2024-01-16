@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     env, fs,
-    io::Write,
+    io::{self, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     ops::RangeInclusive,
     path::Path,
@@ -38,8 +38,23 @@ pub fn env_vars() {
     env::set_var("SOSISTAB2_NO_SLEEP", "1");
 }
 
+// sleeps while displaying progress
 pub async fn sleep(secs: u64) {
-    Timer::after(Duration::from_secs(secs)).await;
+    println!("sleeping for {secs} seconds...");
+    for i in 0..=secs {
+        let percentage = i as f64 / secs as f64 * 100.0;
+        let progress = (percentage as usize) / 2; // For a progress bar of 50 characters
+        let remaining = 50 - progress;
+        print!(
+            "\r[{}>{}]{:.2}% ",
+            "=".repeat(progress),
+            " ".repeat(remaining),
+            percentage
+        );
+        io::stdout().flush().unwrap();
+        Timer::after(Duration::from_secs(1)).await;
+    }
+    println!();
 }
 
 // generates a barebones config
