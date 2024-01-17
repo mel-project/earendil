@@ -1,9 +1,0 @@
-# bob fingerprint: ztt6sy7xgxjkf1t93zqsjqz5mq9rdd52
-control_listen: 127.0.0.1:12005
-identity_seed: put-build-piano-two-wisdom-eagle-infant-black-someone-exit-victory-story
-in_routes:
-  main_udp:
-    listen: 0.0.0.0:12004
-    protocol: obfsudp
-    secret: cart-mercy-guess-abandon-tube-upgrade-couch-snow-few-solution-online-close
-out_routes: {}
