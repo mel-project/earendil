@@ -15,7 +15,7 @@ static CHATS: CtxField<Chats> = |ctx| {
     let max_chat_len = usize::MAX;
     let ctx = ctx.clone();
 
-    smolscale::block_on(async move {
+    smol::future::block_on(async move {
         match db_read(&ctx, "chats").await {
             Ok(Some(chats)) => {
                 log::debug!("retrieving persisted chats");
@@ -77,7 +77,9 @@ pub fn list_chats(ctx: &DaemonContext) -> String {
 }
 
 pub fn add_client(ctx: &DaemonContext, neighbor: Fingerprint, client: Arc<LinkClient>) {
+    tracing::info!("about to add rpc client for neighbor: {neighbor}");
     ctx.get(CHATS).clients.insert(neighbor, client);
+    tracing::info!("added rpc client for neighbor: {neighbor}");
 }
 
 pub fn remove_client(ctx: &DaemonContext, neighbor: &Fingerprint) {
