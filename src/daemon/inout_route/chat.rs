@@ -15,7 +15,7 @@ static CHATS: CtxField<Chats> = |ctx| {
     let max_chat_len = usize::MAX;
     let ctx = ctx.clone();
 
-    smol::future::block_on(async move {
+    smolscale::block_on(async move {
         match db_read(&ctx, "chats").await {
             Ok(Some(chats)) => {
                 log::debug!("retrieving persisted chats");
