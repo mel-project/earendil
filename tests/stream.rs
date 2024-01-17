@@ -16,7 +16,7 @@ fn stream() {
     helpers::env_vars();
 
     let seed = gen_seed("stream");
-    let (relays, mut clients) = helpers::spawn_network(2, 2, Some(seed)).unwrap();
+    let (mut relays, mut clients) = helpers::spawn_network(2, 2, Some(seed)).unwrap();
     // let (relay_configs, client_configs) = generate_network(2, 2, None).unwrap();
     // for i in 0..2 {
     //     helpers::config_to_yaml_file(&relay_configs[i], &format!("./zzz/relay{i}")).unwrap();
@@ -33,8 +33,8 @@ fn stream() {
         let alice_skt_ep = alice_skt.local_endpoint();
         let mut alice_listener = StreamListener::listen(alice_skt);
 
-        let bob = relays.get(0).unwrap(); // todo: test only works w/ neighbors?
-        let bob_skt = Socket::bind_n2r(bob, bob.identity(), None);
+        let bob = relays.pop().unwrap(); // todo: test only works w/ neighbors?
+        let bob_skt = Socket::bind_n2r(&bob, bob.identity(), None);
 
         let to_bob = b"hello bobert";
         let to_alice = b"hey there, allison";
