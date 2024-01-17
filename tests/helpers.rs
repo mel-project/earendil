@@ -199,8 +199,12 @@ fn routes(
     Ok((in_routes, out_routes.into_iter().collect()))
 }
 
+pub fn gen_seed(phrase: &str) -> [u8; 32] {
+    *blake3::hash(phrase.as_bytes()).as_bytes()
+}
+
 // creates arbitrarily-sized vectors of randomly (but deterministically) interconnected relay and client daemon configs
-pub fn generate_network(
+pub fn gen_network(
     num_relays: u8,
     num_clients: u16,
     seed: Option<[u8; 32]>,
@@ -210,7 +214,6 @@ pub fn generate_network(
     let mut relay_configs = vec![];
 
     for i in 0..num_relays {
-        println!("relay i = {i}");
         let relay_id = Identity::IdentitySeed(format!("relay{i}"));
         let control_listen = format!("127.0.0.1:{}", free_port(&mut rng)).parse()?;
         // range start is 0 for i = 0 and 1 otherwise; end grows slowly according to √i
@@ -241,12 +244,16 @@ pub fn generate_network(
     Ok((relay_configs, client_configs))
 }
 
+pub fn configs_to_daemons(configs: Vec<ConfigFile>) -> anyhow::Result<Vec<Daemon>> {
+    configs.into_iter().map(Daemon::init).collect()
+}
+
 pub fn spawn_network(
     num_relays: u8,
     num_clients: u16,
     seed: Option<[u8; 32]>,
 ) -> anyhow::Result<(Vec<Daemon>, Vec<Daemon>)> {
-    let (relay_configs, client_configs) = generate_network(num_relays, num_clients, seed)?;
+    let (relay_configs, client_configs) = gen_network(num_relays, num_clients, seed)?;
     let relays: Vec<Daemon> = relay_configs
         .into_iter()
         .map(Daemon::init)
