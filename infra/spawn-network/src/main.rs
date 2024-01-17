@@ -2,7 +2,7 @@ use regex::Regex;
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
-    fs::File,
+    fs::{self, File},
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -64,10 +64,19 @@ fn run_remote_earendil_once(
     let remote_binary_path = format!("{}@{}:/usr/local/bin/earendil", remote_user, ip);
     let remote_config_dir = "/etc/earendil";
 
+    Command::new("ssh")
+        .args([
+            &format!("{}@{}", remote_user, ip),
+            "sudo systemctl stop earendil.service",
+        ])
+        .status()?;
+
     // rsync the binary
     Command::new("rsync")
         .args([
             "-avz",
+            "--progress",
+            "--inplace",
             local_binary_path.to_str().unwrap(),
             &remote_binary_path,
         ])
@@ -91,6 +100,8 @@ fn run_remote_earendil_once(
     Command::new("rsync")
         .args([
             "-avz",
+            "--progress",
+            "--inplace",
             config_file_path.to_str().unwrap(),
             &remote_config_dest,
         ])
@@ -118,6 +129,8 @@ fn run_remote_earendil_once(
     Command::new("rsync")
         .args([
             "-avz",
+            "--progress",
+            "--inplace",
             temp_service_file.path().to_str().unwrap(),
             &remote_service_path,
         ])
@@ -132,12 +145,13 @@ fn run_remote_earendil_once(
         .status()?;
 
     // Enable and start the systemd service on the remote machine
+    // Restart the systemd service on the remote machine
     Command::new("ssh")
-        .args([
-            &format!("{}@{}", remote_user, ip),
-            "sudo systemctl enable --now earendil.service",
-        ])
-        .status()?;
+    .args([
+        &format!("{}@{}", remote_user, ip),
+        "sudo systemctl enable --now earendil.service && sudo systemctl restart earendil.service",
+    ])
+    .status()?;
 
     // the temporary file will be deleted when it goes out of scope here
     println!("Completed setup for {node_name} on remote {ip}");
@@ -271,31 +285,34 @@ fn update_out_routes_in_configs(
     config_output_dir: &Path,
     node_ips: &HashMap<String, String>,
 ) -> anyhow::Result<()> {
-    // Compile a regex to find the out_routes' connect field
-    let re = Regex::new(r"(connect: )127\.0\.0\.1(:\d+)")?;
+    // Compile a regex to find the out_routes' connect field with the correct pattern
+    let re = Regex::new(r"(out_routes:\s*\n\s*)(\w+):\s*\n(\s*)(connect: )127\.0\.0\.1(:\d+)")?;
 
     for entry in std::fs::read_dir(config_output_dir)? {
         let entry = entry?;
         let path = entry.path();
         if path.is_file() {
             let contents = std::fs::read_to_string(&path)?;
-            if contents.contains("out_routes:") {
-                let updated_contents = re.replace_all(&contents, |caps: &regex::Captures| {
-                    // Extract the port from the second capture group
-                    if let Some(port) = caps.get(2).map(|m| m.as_str()) {
-                        // Iterate over the node_ips to find the matching IP address for the port
-                        for (node_name, ip) in node_ips {
-                            if contents.contains(&format!("fingerprint: {}", node_name)) {
-                                // Replace 127.0.0.1 with the actual IP address
-                                return format!("{}{}{}", &caps[1], ip, port);
-                            }
-                        }
+            let updated_contents = re.replace_all(&contents, |caps: &regex::Captures| {
+                // Get the node name from the second capture group
+                if let Some(node_name) = caps.get(2).map(|m| m.as_str()) {
+                    // Look up the corresponding IP address
+                    if let Some(ip) = node_ips.get(node_name) {
+                        // Replace 127.0.0.1 with the actual IP address, preserving the whitespace and newline
+                        format!(
+                            "{}{}:\n{}{}{}{}",
+                            &caps[1], node_name, &caps[3], &caps[4], ip, &caps[5]
+                        )
+                    } else {
+                        // If no IP found for the node name, keep the original text
+                        caps[0].to_string()
                     }
-                    // If no replacement was made, keep the original text
+                } else {
+                    // If the node name capture group is not found, keep the original text
                     caps[0].to_string()
-                });
-                std::fs::write(path, updated_contents.as_bytes())?;
-            }
+                }
+            });
+            std::fs::write(path, updated_contents.as_bytes())?;
         }
     }
     Ok(())

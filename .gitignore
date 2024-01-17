@@ -7,3 +7,4 @@ perf*
 !example.tfvars
 *.terraform/
 *.tfstate*
+**/generated_earendil_configs/**
