@@ -1,13 +1,14 @@
-# rob fingerprint: xvd4bk1xcen104c1kp1nwaa4x6cvcwk9
+# rob fingerprint: exs0023e1x76fdwc54cvax8ty3x32t3f
 control_listen: 127.0.0.1:12001
-identity_seed: lawsuit-detect-flat-surround-spell-soup-mushroom-gloom-keen-wheat-luggage-fabric
+identity_seed: protect-december-lawn-regular-yellow-choice-attack-quiz-sort-sketch-castle-connect
 in_routes:
   main_udp:
     listen: 0.0.0.0:12000
     protocol: obfsudp
-    secret: base-forget-onion-pet-globe-chief-imitate-manual-flower-distance-crater-toilet
+    secret: company-elbow-switch-theory-grant-sleep-entry-session-spike-name-battle-climb
+out_routes:
   bob:
-    connect: 45.79.149.214:12002
-    cookie: d2096fb2689198dcb22f15a1bca19ce64c97c5a7007701ca0d682fee85349638
-    fingerprint: zwtztn80eg4124j2crja03g6z7dv85f1
+    connect: 127.0.0.1:12004
+    cookie: 68180a33c503452d077c13af4a9aabf4280c83de120d0a7c2776a6e3e2510e5d
+    fingerprint: ztt6sy7xgxjkf1t93zqsjqz5mq9rdd52
     protocol: obfsudp

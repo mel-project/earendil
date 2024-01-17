@@ -1,9 +1,9 @@
-# bob fingerprint: zwtztn80eg4124j2crja03g6z7dv85f1
-control_listen: 127.0.0.1:12003
-identity_seed: little-address-marble-tongue-accident-demise-asthma-quick-salmon-canal-clerk-silver
+# bob fingerprint: ztt6sy7xgxjkf1t93zqsjqz5mq9rdd52
+control_listen: 127.0.0.1:12005
+identity_seed: put-build-piano-two-wisdom-eagle-infant-black-someone-exit-victory-story
 in_routes:
   main_udp:
-    listen: 0.0.0.0:12002
+    listen: 0.0.0.0:12004
     protocol: obfsudp
-    secret: wolf-wait-place-autumn-embody-cross-expose-unfair-custom-fine-gym-hurdle
+    secret: cart-mercy-guess-abandon-tube-upgrade-couch-snow-few-solution-online-close
 out_routes: {}

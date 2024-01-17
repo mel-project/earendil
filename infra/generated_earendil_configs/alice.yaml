@@ -1,13 +1,14 @@
-# alice fingerprint: frjhtmqgxvamwy84rvh357851qfar4pv
-control_listen: 127.0.0.1:12005
-identity_seed: duty-autumn-nice-debris-rate-pet-course-draft-prize-rotate-photo-glow
+# alice fingerprint: 23frktyxzaap06sscmg999ebqdqjmm55
+control_listen: 127.0.0.1:12003
+identity_seed: prison-rib-brief-elite-total-tiny-arrow-faculty-sudden-treat-upgrade-favorite
 in_routes:
   main_udp:
-    listen: 0.0.0.0:12004
+    listen: 0.0.0.0:12002
     protocol: obfsudp
-    secret: fringe-update-runway-shoulder-captain-hawk-attend-iron-section-iron-valley-traffic
+    secret: promote-curtain-fish-mercy-volume-dress-best-museum-primary-language-differ-history
+out_routes:
   rob:
-    connect: 45.79.149.64:12000
-    cookie: 0ac1b6fe5357a87077f5681da11d75f3951fc7c22d8a030c826be14829ab5f36
-    fingerprint: xvd4bk1xcen104c1kp1nwaa4x6cvcwk9
+    connect: 127.0.0.1:12000
+    cookie: 972eab773a275e123bb97afedead37366187cd6535eb4162d3e6b6069b699913
+    fingerprint: exs0023e1x76fdwc54cvax8ty3x32t3f
     protocol: obfsudp

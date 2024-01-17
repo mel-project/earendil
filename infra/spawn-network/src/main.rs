@@ -2,11 +2,12 @@ use regex::Regex;
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
-    fs::{rename, File},
-    io::Read,
+    fs::File,
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
 };
+use tempfile::NamedTempFile;
 
 #[derive(Debug, Deserialize)]
 struct Adjacencies {
@@ -37,8 +38,132 @@ fn main() -> anyhow::Result<()> {
     let node_ips = get_node_ips(&terraform_dir)?;
     update_out_routes_in_configs(&config_output_dir, &node_ips)?;
 
-    // TODO: compile `earendil` and rsync the binary + config file to the corresponding server
-    // TODO: on each server, set up a systemd service and run the earendil nodes
+    let earendil_dir = infra_dir.parent().unwrap().to_path_buf();
+    let earendil_binary_path =
+        earendil_dir.join("target/x86_64-unknown-linux-musl/release/earendil");
+    let systemd_service_path = infra_dir.join("earendil_systemd.service");
+
+    run_earendil_nodes_remote(
+        &node_ips,
+        &earendil_binary_path,
+        &config_output_dir,
+        &systemd_service_path,
+    )?;
+
+    Ok(())
+}
+
+fn run_remote_earendil_once(
+    node_name: &str,
+    ip: &str,
+    local_binary_path: &Path,
+    local_config_dir: &Path,
+    local_service_config: &Path,
+) -> anyhow::Result<()> {
+    let remote_user = "root";
+    let remote_binary_path = format!("{}@{}:/usr/local/bin/earendil", remote_user, ip);
+    let remote_config_dir = "/etc/earendil";
+
+    // rsync the binary
+    Command::new("rsync")
+        .args([
+            "-avz",
+            local_binary_path.to_str().unwrap(),
+            &remote_binary_path,
+        ])
+        .status()?;
+
+    // Ensure the remote configuration directory exists
+    Command::new("ssh")
+        .args([
+            &format!("{}@{}", remote_user, ip),
+            &format!("sudo mkdir -p {}", remote_config_dir),
+        ])
+        .status()?;
+
+    // rsync the config file
+    let config_file_name = format!("{}.yaml", node_name);
+    let config_file_path = local_config_dir.join(&config_file_name);
+    let remote_config_dest = format!(
+        "{}@{}:{}/{}",
+        remote_user, ip, remote_config_dir, config_file_name
+    );
+    Command::new("rsync")
+        .args([
+            "-avz",
+            config_file_path.to_str().unwrap(),
+            &remote_config_dest,
+        ])
+        .status()?;
+
+    // Create a modified copy of the systemd service file
+    let mut service_config_content = String::new();
+    File::open(local_service_config)?.read_to_string(&mut service_config_content)?;
+    let remote_config_path = format!("{}/{}", remote_config_dir, config_file_name);
+    println!("remote config path: {remote_config_path}");
+    let modified_service_content = service_config_content.replace(
+        "--config CONFIG_PLACEHOLDER",
+        &format!("--config {}", remote_config_path),
+    );
+
+    // Write the modified content to a temporary file
+    let mut temp_service_file = NamedTempFile::new()?;
+    temp_service_file.write_all(modified_service_content.as_bytes())?;
+
+    // Rsync the temporary systemd service file
+    let remote_service_path = format!(
+        "{}@{}:/etc/systemd/system/earendil.service",
+        remote_user, ip
+    );
+    Command::new("rsync")
+        .args([
+            "-avz",
+            temp_service_file.path().to_str().unwrap(),
+            &remote_service_path,
+        ])
+        .status()?;
+
+    // Reload the systemd daemon to recognize the new service file
+    Command::new("ssh")
+        .args([
+            &format!("{}@{}", remote_user, ip),
+            "sudo systemctl daemon-reload",
+        ])
+        .status()?;
+
+    // Enable and start the systemd service on the remote machine
+    Command::new("ssh")
+        .args([
+            &format!("{}@{}", remote_user, ip),
+            "sudo systemctl enable --now earendil.service",
+        ])
+        .status()?;
+
+    // the temporary file will be deleted when it goes out of scope here
+    println!("Completed setup for {node_name} on remote {ip}");
+
+    Ok(())
+}
+
+fn run_earendil_nodes_remote(
+    node_ips: &HashMap<String, String>,
+    local_binary_path: &Path,
+    local_config_dir: &Path,
+    local_service_config: &Path,
+) -> anyhow::Result<()> {
+    if !local_binary_path.exists() {
+        panic!("earendil release binary not found. Please build it in release mode first.");
+    }
+
+    for (node_name, ip) in node_ips.iter() {
+        run_remote_earendil_once(
+            node_name,
+            ip,
+            local_binary_path,
+            local_config_dir,
+            local_service_config,
+        )?;
+    }
 
     Ok(())
 }
@@ -121,14 +246,13 @@ fn get_node_ips(terraform_dir: &PathBuf) -> anyhow::Result<HashMap<String, Strin
     Ok(ips)
 }
 
-fn generate_earendil_configs(topology_path: &PathBuf, output_dir_name: &str) -> anyhow::Result<()> {
+fn generate_earendil_configs(topology_path: &Path, output_dir_name: &str) -> anyhow::Result<()> {
     // Call the installed gen-earendil-shadow executable with the given arguments
     Command::new("gen-earendil-shadow")
         .args([topology_path.to_str().unwrap(), output_dir_name])
         .status()?;
     Ok(())
 }
-
 fn rename_configs_in_directory(config_output_dir: &Path) -> anyhow::Result<()> {
     for entry in std::fs::read_dir(config_output_dir)? {
         let entry = entry?;
@@ -148,30 +272,30 @@ fn update_out_routes_in_configs(
     node_ips: &HashMap<String, String>,
 ) -> anyhow::Result<()> {
     // Compile a regex to find the out_routes' connect field
-    let re = Regex::new(r"out_routes:\s*\n(\s*(.*?):\s*\n\s*connect: )127\.0\.0\.1(:\d+)")?;
+    let re = Regex::new(r"(connect: )127\.0\.0\.1(:\d+)")?;
 
     for entry in std::fs::read_dir(config_output_dir)? {
         let entry = entry?;
         let path = entry.path();
         if path.is_file() {
             let contents = std::fs::read_to_string(&path)?;
-            let updated_contents = re.replace_all(&contents, |caps: &regex::Captures| {
-                // Get the node name from the second capture group
-                if let Some(node_name) = caps.get(2).map(|m| m.as_str()) {
-                    // Look up the corresponding IP address
-                    if let Some(ip) = node_ips.get(node_name) {
-                        // Replace 127.0.0.1 with the actual IP address
-                        format!("{}{}{}", &caps[1], ip, &caps[3])
-                    } else {
-                        // If no IP found for the node name, keep the original text
-                        caps[0].to_string()
+            if contents.contains("out_routes:") {
+                let updated_contents = re.replace_all(&contents, |caps: &regex::Captures| {
+                    // Extract the port from the second capture group
+                    if let Some(port) = caps.get(2).map(|m| m.as_str()) {
+                        // Iterate over the node_ips to find the matching IP address for the port
+                        for (node_name, ip) in node_ips {
+                            if contents.contains(&format!("fingerprint: {}", node_name)) {
+                                // Replace 127.0.0.1 with the actual IP address
+                                return format!("{}{}{}", &caps[1], ip, port);
+                            }
+                        }
                     }
-                } else {
-                    // If the node name capture group is not found, keep the original text
+                    // If no replacement was made, keep the original text
                     caps[0].to_string()
-                }
-            });
-            std::fs::write(path, updated_contents.as_bytes())?;
+                });
+                std::fs::write(path, updated_contents.as_bytes())?;
+            }
         }
     }
     Ok(())
