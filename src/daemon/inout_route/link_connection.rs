@@ -106,7 +106,7 @@ pub async fn connection_loop(
                 ))
                 .detach(),
                 other => {
-                    log::error!("could not handle {other}");
+                    tracing::error!("could not handle {other}");
                 }
             }
         }
@@ -235,7 +235,7 @@ impl LinkProtocol for LinkProtocolImpl {
                 .get(&left_incomplete.left)
                 .is_some();
         if !valid {
-            log::debug!("neighbor not right of us! Refusing to sign adjacency x_x");
+            tracing::debug!("neighbor not right of us! Refusing to sign adjacency x_x");
             return None;
         }
         // Fill in the right-hand-side
@@ -250,7 +250,7 @@ impl LinkProtocol for LinkProtocolImpl {
             .write()
             .insert_adjacency(left_incomplete.clone())
             .map_err(|e| {
-                log::warn!("could not insert here: {:?}", e);
+                tracing::warn!("could not insert here: {:?}", e);
                 e
             })
             .ok()?;
@@ -275,7 +275,7 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     async fn push_price(&self, price: u64, debt_limit: u64) {
-        log::trace!("received push price");
+        tracing::trace!("received push price");
         let remote_fp = match self.remote_pk.get() {
             Some(rpk) => rpk.fingerprint(),
             None => {
@@ -284,12 +284,12 @@ impl LinkProtocol for LinkProtocolImpl {
         };
 
         if price > self.max_outgoing_price {
-            log::warn!("neigh {} price too high! YOU SHOULD MANUALLY REMOVE THIS NEIGHBOR UNTIL YOU RESOLVE THE ISSUE", remote_fp);
+            tracing::warn!("neigh {} price too high! YOU SHOULD MANUALLY REMOVE THIS NEIGHBOR UNTIL YOU RESOLVE THE ISSUE", remote_fp);
         } else {
             self.ctx
                 .get(DEBTS)
                 .insert_outgoing_price(remote_fp, price, debt_limit);
-            log::trace!("Successfully registered {} price!", remote_fp);
+            tracing::trace!("Successfully registered {} price!", remote_fp);
         }
     }
 

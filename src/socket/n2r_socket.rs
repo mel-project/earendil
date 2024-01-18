@@ -106,7 +106,7 @@ impl N2rSocket {
             }
 
             let (message, fingerprint) = self.recv_incoming.recv().await.map_err(|e| {
-                log::debug!("N2rSocket RecvError: {e}");
+                tracing::debug!("N2rSocket RecvError: {e}");
                 SocketRecvError::N2rRecvError
             })?;
             let endpoint = Endpoint::new(fingerprint, message.source_dock);
@@ -132,7 +132,7 @@ async fn send_batcher_loop(
         batches.clear();
         // sleep a little while so that stuff accumulates
         smol::Timer::after(Duration::from_millis(5)).await;
-        log::trace!("{} packets queued up", recv_outgoing.len());
+        tracing::trace!("{} packets queued up", recv_outgoing.len());
         let (msg, dest) = recv_outgoing.recv().await?;
         batches.entry(dest).or_default().push_back(msg);
         // try to receive more, as long as they're immediately available
@@ -158,7 +158,7 @@ async fn send_batcher_loop(
                     subbatch.push(first);
                     current_size = next_size;
                 }
-                log::trace!("subbatch of size {}", subbatch.len());
+                tracing::trace!("subbatch of size {}", subbatch.len());
                 // send the message
                 send_n2r(
                     &ctx,

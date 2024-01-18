@@ -70,7 +70,7 @@ impl Daemon {
     pub fn init(config: ConfigFile) -> anyhow::Result<Daemon> {
         let ctx = DaemonContext::new(config);
         let context = ctx.clone();
-        log::info!("starting background task for main_daemon");
+        tracing::info!("starting background task for main_daemon");
         let task = Immortal::spawn(async move {
             main_daemon(context).await.unwrap();
             panic!("daemon failed to start!")
@@ -103,13 +103,13 @@ impl RpcTransport for DummyControlProtocolTransport {
 }
 
 pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
-    log::info!(
+    tracing::info!(
         "daemon starting with fingerprint {}",
         ctx.get(GLOBAL_IDENTITY).public().fingerprint()
     );
 
     scopeguard::defer!({
-        log::info!(
+        tracing::info!(
             "daemon with fingerprint {} is now DROPPED!",
             ctx.get(GLOBAL_IDENTITY).public().fingerprint()
         )
@@ -275,7 +275,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 /// Loop that handles the persistence of contex state
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
-        log::debug!("syncing DB...");
+        tracing::debug!("syncing DB...");
         let global_id = ctx.get(GLOBAL_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
         let debts = ctx.get(DEBTS).as_bytes()?;
@@ -344,7 +344,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         if let Ok((msg, src_ep)) = socket.recv_from().await {
             let ctx = ctx.clone();
             let (inner, dest_ep): (Bytes, Endpoint) = stdcode::deserialize(&msg)?;
-            log::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
+            tracing::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
 
             let is_valid_dest = ctx
                 .get(REGISTERED_HAVENS)
@@ -358,7 +358,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 let body: Bytes = (inner, src_ep).stdcode().into();
                 socket.send_to(body, dest_ep).await?;
             } else {
-                log::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
+                tracing::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
             }
         };
     }

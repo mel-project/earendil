@@ -18,17 +18,17 @@ static CHATS: CtxField<Chats> = |ctx| {
     smolscale::block_on(async move {
         match db_read(&ctx, "chats").await {
             Ok(Some(chats)) => {
-                log::debug!("Retrieving persisted chats");
+                tracing::debug!("Retrieving persisted chats");
                 match Chats::from_bytes(chats) {
                     Ok(chats) => chats,
                     Err(e) => {
-                        log::warn!("Error retrieving persisted chats: {e}");
+                        tracing::warn!("Error retrieving persisted chats: {e}");
                         Chats::new(max_chat_len)
                     }
                 }
             }
             _ => {
-                log::debug!("no persisted chats");
+                tracing::debug!("no persisted chats");
                 Chats::new(max_chat_len)
             }
         }
@@ -98,7 +98,7 @@ pub async fn send_chat_msg(ctx: &DaemonContext, dest: Fingerprint, msg: String) 
     if let Some(client) = chats.clients.get(&dest) {
         match client.push_chat(msg.clone()).await {
             Ok(_) => chats.insert(dest, ChatEntry::new_outgoing(msg)),
-            Err(e) => log::warn!("error pushing chat: {e}"),
+            Err(e) => tracing::warn!("error pushing chat: {e}"),
         }
     }
 }

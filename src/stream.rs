@@ -32,7 +32,7 @@ impl Stream {
         let mut timeout = 4;
         let send_syn = async {
             loop {
-                log::trace!("sending SYN");
+                tracing::trace!("sending SYN");
                 socket
                     .send_to(syn.stdcode().into(), server_endpoint)
                     .await?;
@@ -59,19 +59,19 @@ impl Stream {
             }
         };
         send_syn.race(wait_synack).await?;
-        log::trace!("received SYNACK");
+        tracing::trace!("received SYNACK");
 
         // construct sosistab2::Stream & sosistab2::StreamStates
         let (send_tick, recv_tick) = smol::channel::unbounded::<()>();
         let (send_outgoing, recv_outgoing) = smol::channel::unbounded::<StreamMessage>();
         let tick_notify = move || {
             if let Err(e) = send_tick.try_send(()) {
-                log::debug!("Stream send_tick.try_send(()) failed! {e}");
+                tracing::debug!("Stream send_tick.try_send(()) failed! {e}");
             }
         };
         let outgoing_callback = move |smsg: StreamMessage| {
             if let Err(e) = send_outgoing.try_send(smsg) {
-                log::debug!("Stream outgoing_callback.try_send(()) failed! {e}");
+                tracing::debug!("Stream outgoing_callback.try_send(()) failed! {e}");
             }
         };
 
@@ -116,7 +116,7 @@ impl Stream {
 
         let task = smolscale::spawn(async {
             if let Err(e) = ticker_task.race(forward_task).await {
-                log::debug!("a stream task failed: {e}")
+                tracing::debug!("a stream task failed: {e}")
             }
         });
 

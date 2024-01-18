@@ -27,7 +27,7 @@ impl StreamListener {
         loop {
             let (msg, client_ep) = self.socket.recv_from().await?;
             let stream_msg: StreamMessage = stdcode::deserialize(&msg)?;
-            log::trace!("we got msg {:?}", stream_msg);
+            tracing::trace!("we got msg {:?}", stream_msg);
             match stream_msg.clone() {
                 StreamMessage::Reliable {
                     kind: RelKind::Syn,
@@ -39,7 +39,7 @@ impl StreamListener {
 
                     let tick_notify = move || {
                         if let Err(e) = send_tick.try_send(()) {
-                            log::error!("StreamListener send_tick.try_send(()) failed! {e}");
+                            tracing::error!("StreamListener send_tick.try_send(()) failed! {e}");
                         }
                     };
                     let (s2_state, s2_stream) =
@@ -64,7 +64,7 @@ impl StreamListener {
                     let ticker = smolscale::spawn(async move {
                         loop {
                             let mut outgoing = Vec::new();
-                            log::trace!("listener-spawned ticker ticking!!");
+                            tracing::trace!("listener-spawned ticker ticking!!");
                             let maybe_retick = state.lock().tick(|msg| outgoing.push(msg));
 
                             if let Some(retick_time) = maybe_retick {
@@ -72,12 +72,15 @@ impl StreamListener {
                                 let recv_future = recv_tick.recv();
                                 future::select(recv_future, timer.fuse()).await;
                                 for msg in outgoing.drain(..) {
-                                    log::trace!("listener sending back result of tick {:?}", msg);
+                                    tracing::trace!(
+                                        "listener sending back result of tick {:?}",
+                                        msg
+                                    );
                                     let msg = msg.stdcode().into();
                                     let _ = skt.send_to(msg, client_ep).await;
                                 }
                             } else {
-                                log::debug!("no retick time: connection is dead! dropping from the table...");
+                                tracing::debug!("no retick time: connection is dead! dropping from the table...");
                                 table.remove(&client_ep);
                                 return;
                             }
@@ -111,7 +114,7 @@ impl StreamListener {
                     payload,
                 } => match self.table.get(&client_ep) {
                     Some(state) => {
-                        log::trace!("INJECTING into state: {:?}", stream_msg);
+                        tracing::trace!("INJECTING into state: {:?}", stream_msg);
                         state.lock().inject_incoming(stream_msg);
                         continue;
                     }
@@ -129,7 +132,7 @@ impl StreamListener {
                     }
                 },
                 _ => {
-                    log::debug!("unreliable stream messages aren't supported")
+                    tracing::debug!("unreliable stream messages aren't supported")
                 }
             };
         }

@@ -67,7 +67,7 @@ pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
         {
             Some(g) => RwLock::new(g),
             None => {
-                log::warn!("**** INIT RELAY GRAPH****");
+                tracing::warn!("**** INIT RELAY GRAPH****");
                 RwLock::new(RelayGraph::new())
             }
         }
@@ -93,17 +93,17 @@ pub static DEBTS: CtxField<Debts> = |ctx| {
     smol::future::block_on(async move {
         match db_read(&ctx, "debts").await {
             Ok(Some(debts)) => {
-                log::warn!("retrieving persisted debts");
+                tracing::warn!("retrieving persisted debts");
                 match Debts::from_bytes(debts) {
                     Ok(debts) => debts,
                     Err(e) => {
-                        log::warn!("debt decode error: {e}");
+                        tracing::warn!("debt decode error: {e}");
                         Debts::new()
                     }
                 }
             }
             _ => {
-                log::warn!("initializing debts");
+                tracing::warn!("initializing debts");
                 Debts::new()
             }
         }
@@ -122,7 +122,7 @@ pub async fn send_n2r(
     let now = Instant::now();
     let _guard = scopeguard::guard((), |_| {
         let send_msg_time = now.elapsed();
-        log::trace!("send message took {:?}", send_msg_time);
+        tracing::trace!("send message took {:?}", send_msg_time);
     });
 
     let src_anon = &src_idsk != ctx.get(GLOBAL_IDENTITY);
@@ -189,7 +189,7 @@ pub async fn send_reply_blocks(
         OnionSecret::generate()
     });
 
-    log::trace!("sending a batch of {count} reply blocks to {dst_fp}");
+    tracing::trace!("sending a batch of {count} reply blocks to {dst_fp}");
 
     let route = ctx
         .get(RELAY_GRAPH)
@@ -229,7 +229,7 @@ pub async fn send_reply_blocks(
         InnerPacket::ReplyBlocks(rbs),
         &my_anon_isk,
     )?;
-    log::trace!(
+    tracing::trace!(
         "inject_asif_incoming on route = {:?}",
         route.iter().map(|s| s.to_string()).collect_vec()
     );

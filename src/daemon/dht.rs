@@ -32,7 +32,7 @@ pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator) {
     for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
         let locator = locator.clone();
         gatherer.push(async move {
-            log::trace!("key {key} inserting into remote replica {replica}");
+            tracing::trace!("key {key} inserting into remote replica {replica}");
             let gclient = GlobalRpcClient(GlobalRpcTransport::new(ctx.clone(), anon_isk, replica));
             anyhow::Ok(
                 gclient
@@ -45,7 +45,7 @@ pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator) {
     while let Some(res) = gatherer.next().await {
         match res {
             Ok(_) => (),
-            Err(e) => log::debug!("DHT insert failed! {e}"),
+            Err(e) => tracing::debug!("DHT insert failed! {e}"),
         }
     }
 }

@@ -155,7 +155,7 @@ impl Identity {
     pub fn actualize(&self) -> anyhow::Result<IdentitySecret> {
         match self {
             Identity::IdentitySeed(seed) => {
-                log::warn!("initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!");
+                tracing::warn!("initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!");
                 Ok(IdentitySecret::from_seed(seed))
             }
             Identity::IdentityFile(file) => {
@@ -167,7 +167,7 @@ impl Identity {
                             .context("identity file not of the right length")?;
                         return Ok(IdentitySecret::from_bytes(&bts));
                     } else {
-                        log::info!("identity file {:?} does not exist yet, so creating", file);
+                        tracing::info!("identity file {:?} does not exist yet, so creating", file);
                         // create it here
                         let identity = IdentitySecret::generate();
                         let mut options = OpenOptions::new();

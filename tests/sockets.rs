@@ -121,6 +121,12 @@ fn haven() {
             .await
             .context("alice sending failed!")
             .unwrap();
+        let alice_graphviz = ALICE_DAEMON
+            .control_client()
+            .graph_dump(false)
+            .await
+            .unwrap();
+        eprintln!("alice graph: {}", alice_graphviz);
         Timer::after(Duration::from_millis(100)).await;
         // derek receives the msg
         let (body, ep) = derek_skt

@@ -22,7 +22,7 @@ use super::{context::CtxField, DaemonContext};
 
 #[tracing::instrument(skip(ctx))]
 pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Result<()> {
-    log::debug!("socks5 loop started");
+    tracing::debug!("socks5 loop started");
     let tcp_listener = TcpListener::bind(socks5_cfg.listen).await?;
     let fallback = socks5_cfg.fallback;
 
@@ -30,7 +30,7 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
         let (client_stream, _) = tcp_listener.accept().await?;
         // look ma, borrowing from the stack!
         spawn!(socks5_once(&ctx, client_stream, fallback)
-            .map_err(|e| log::warn!("socks5 worker failed: {:?}", e)))
+            .map_err(|e| tracing::warn!("socks5 worker failed: {:?}", e)))
         .detach();
     })
 }
@@ -67,7 +67,7 @@ async fn socks5_once(
     )
     .await?;
 
-    log::info!("socks5 received request for {addr}");
+    tracing::info!("socks5 received request for {addr}");
 
     let mut split_domain = domain.split('.');
     let top_level = split_domain.clone().last();

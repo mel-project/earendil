@@ -200,10 +200,10 @@ async fn enc_task(
                     let plain = dec_key.open(&pad_nonce(nonce), &inner)?;
                     let _ = send_incoming_decrypted.try_send((plain.into(), remote));
                 } else {
-                    log::debug!("received pkt with duplicate nonce! dropping...")
+                    tracing::debug!("received pkt with duplicate nonce! dropping...")
                 }
             } else {
-                log::debug!("stray handshake message!");
+                tracing::debug!("stray handshake message!");
             }
         }
     };
