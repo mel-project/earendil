@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -16,6 +17,7 @@ use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use once_cell::sync::OnceCell;
 
+use rand::Rng;
 use smol::{
     channel::Receiver,
     future::FutureExt,
@@ -30,7 +32,7 @@ use sosistab2::Multiplex;
 use crate::daemon::{
     context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
     peel_forward::peel_forward,
-    settlement::{SettlementRequest, SettlementResponse},
+    settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse},
 };
 
 use super::{
@@ -302,19 +304,31 @@ impl LinkProtocol for LinkProtocolImpl {
         log::debug!("starting settlement");
 
         let settlements = self.ctx.get(SETTLEMENTS);
-        let recv_res = settlements.insert_pending(req);
 
-        if let Ok(recv_res) = recv_res {
-            match recv_res.recv().timeout(Duration::from_secs(300)).await {
-                Some(Ok(res)) => res,
-                Some(Err(e)) => {
-                    log::warn!("settlement response receive error: {e}");
+        match req.payment_proof {
+            SettlementProof::Automatic(_) => {
+                if let Ok(res) = settlements.verify_auto_settle(self.ctx, req) {
+                    res
+                } else {
                     None
                 }
-                None => None,
             }
-        } else {
-            None
+            SettlementProof::Manual => {
+                let recv_res = settlements.insert_pending(req);
+
+                if let Ok(recv_res) = recv_res {
+                    match recv_res.recv().timeout(Duration::from_secs(300)).await {
+                        Some(Ok(res)) => res,
+                        Some(Err(e)) => {
+                            log::warn!("settlement response receive error: {e}");
+                            None
+                        }
+                        None => None,
+                    }
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -323,5 +337,29 @@ impl LinkProtocol for LinkProtocolImpl {
             log::debug!("pushing chat: {}", msg.clone());
             incoming_chat(&self.ctx, neighbor.fingerprint(), msg);
         }
+    }
+
+    async fn request_seed(&self) -> Option<Seed> {
+        let seed = rand::thread_rng().gen();
+        let seed_cache = self.ctx.get(SETTLEMENTS).seed_cache;
+
+        if let Some(pk) = self.remote_pk.get() {
+            let fp = pk.fingerprint();
+            match seed_cache.get(&fp) {
+                Some(mut seeds) => {
+                    seeds.insert(seed);
+                    seed_cache.insert(fp, seeds);
+                    return Some(seed);
+                }
+                None => {
+                    let mut seed_set = HashSet::new();
+                    seed_set.insert(seed);
+                    seed_cache.insert(fp, seed_set);
+                    return Some(seed);
+                }
+            }
+        }
+
+        None
     }
 }

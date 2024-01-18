@@ -61,6 +61,7 @@ oneshot = "0.1.6"
 chrono = "0.4.31"
 colored = "2.1.0"
 futures = "0.3.30"
+melpow = "0.1.1"
 
 [profile.dev]
 panic = 'abort'

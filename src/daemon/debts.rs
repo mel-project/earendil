@@ -64,14 +64,21 @@ impl Debts {
     }
 
     pub fn is_within_debt_limit(&self, their_fp: &Fingerprint) -> bool {
-        if let Some(b) = self.incoming_prices.get(their_fp) {
+        if let Some(price_info) = self.incoming_prices.get(their_fp) {
             if let Some(net) = self.net_debt_est(their_fp) {
-                if net > b.debt_limit as i128 {
+                if net > price_info.debt_limit as i128 {
                     return false;
                 }
             }
         }
         true
+    }
+
+    pub fn debt_limit(&self, their_fp: &Fingerprint) -> Option<u64> {
+        if let Some(price_info) = self.incoming_prices.get(their_fp) {
+            return Some(price_info.debt_limit);
+        }
+        None
     }
 
     pub fn deduct_settlement(&self, their_fp: &Fingerprint, amount: u64) {

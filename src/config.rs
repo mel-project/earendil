@@ -31,6 +31,11 @@ pub struct ConfigFile {
     /// List of all outgoing connections
     #[serde(default)]
     pub out_routes: BTreeMap<String, OutRouteConfig>,
+
+    /// Contains the automatic settlement difficulty if accepted
+    #[serde(default)]
+    pub auto_settle: Option<AutoSettle>,
+
     /// List of all client configs for udp forwarding
     #[serde(default)]
     pub udp_forwards: Vec<UdpForwardConfig>,
@@ -190,8 +195,16 @@ impl Identity {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
 pub struct LinkPrice {
-    /// in micromels
+    /// in micromel
     pub max_outgoing_price: u64,
     pub incoming_price: u64,
     pub incoming_debt_limit: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AutoSettle {
+    /// mel credit is proportional to 2^difficulty
+    pub difficulty: usize,
+    /// number of seconds in between settlements
+    pub interval: u64,
 }

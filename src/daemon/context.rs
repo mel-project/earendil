@@ -23,8 +23,12 @@ use crate::{
 };
 
 use super::{
-    db::db_read, debts::Debts, peel_forward::peel_forward, reply_block_store::ReplyBlockStore,
-    rrb_balance::replenish_rrb, settlement::Settlements,
+    db::db_read,
+    debts::Debts,
+    peel_forward::peel_forward,
+    reply_block_store::ReplyBlockStore,
+    rrb_balance::replenish_rrb,
+    settlement::{Seed, Settlements},
 };
 
 pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
@@ -110,7 +114,7 @@ pub static DEBTS: CtxField<Debts> = |ctx| {
     })
 };
 
-pub static SETTLEMENTS: CtxField<Settlements> = |_| Settlements::default();
+pub static SETTLEMENTS: CtxField<Settlements> = |ctx| Settlements::new(ctx.init().auto_settle);
 
 /// Sends a raw N2R message with the given parameters.
 pub async fn send_n2r(

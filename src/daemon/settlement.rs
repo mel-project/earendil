@@ -1,7 +1,8 @@
 use std::{
+    collections::HashSet,
     fmt,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::Context;
@@ -9,17 +10,41 @@ use blake3::Hash;
 use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
+use melpow::{HashFunction, SVec};
+use moka::sync::{Cache, CacheBuilder};
 use serde::{Deserialize, Serialize};
 use smol::channel::{Receiver, Sender};
 use stdcode::StdcodeSerializeExt;
 
+use crate::config::AutoSettle;
+
 use super::context::{DaemonContext, DEBTS, GLOBAL_IDENTITY};
+
+const ONCHAIN_MULTIPLIER: u8 = 8;
+
+pub struct Hasher;
+
+impl HashFunction for Hasher {
+    fn hash(&self, b: &[u8], k: &[u8]) -> SVec<u8> {
+        let mut res = blake3::keyed_hash(blake3::hash(k).as_bytes(), b);
+        for _ in 0..100 {
+            res = blake3::hash(res.as_bytes());
+        }
+        SVec::from_slice(res.as_bytes())
+    }
+}
+
+pub fn auto_settle_credit(difficulty: usize) -> u64 {
+    (2u8.pow(difficulty as u32) * ONCHAIN_MULTIPLIER)
+        .try_into()
+        .unwrap()
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SettlementRequest {
     timestamp_ms: u64,
     decrease: u64,
-    payment_proof: SettlementProof,
+    pub payment_proof: SettlementProof,
     signature: Bytes,
     initiator_pk: Arc<IdentityPublic>,
 }
@@ -65,7 +90,32 @@ impl SettlementRequest {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum SettlementProof {
+    Automatic(AutoSettleProof),
     Manual,
+}
+
+impl SettlementProof {
+    pub fn new_auto(seed: Seed, difficulty: usize) -> Self {
+        log::debug!("generating mel PoW...");
+        let proof = melpow::Proof::generate(&seed, difficulty, Hasher);
+        SettlementProof::Automatic(AutoSettleProof {
+            seed,
+            difficulty,
+            proof,
+        })
+    }
+
+    pub fn new_manual() -> Self {
+        SettlementProof::Manual
+    }
+}
+
+pub type Seed = [u8; 32];
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AutoSettleProof {
+    pub seed: Seed,
+    pub difficulty: usize,
+    pub proof: melpow::Proof,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -99,6 +149,20 @@ impl SettlementResponse {
 
 pub struct Settlements {
     pending: DashMap<Fingerprint, PendingSettlement>,
+    pub seed_cache: Cache<Fingerprint, HashSet<Seed>>,
+    pub auto_settle: Option<AutoSettle>,
+}
+
+impl Settlements {
+    pub fn new(auto_settle: Option<AutoSettle>) -> Self {
+        Settlements {
+            pending: DashMap::new(),
+            seed_cache: CacheBuilder::default()
+                .time_to_live(Duration::from_secs(60))
+                .build(),
+            auto_settle,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -107,21 +171,19 @@ struct PendingSettlement {
     send_res: Sender<Option<SettlementResponse>>,
 }
 
-impl Default for Settlements {
-    fn default() -> Self {
-        Self {
-            pending: DashMap::new(),
-        }
-    }
-}
-
 impl Settlements {
+    // handles manual settlements
     pub fn insert_pending(
         &self,
         request: SettlementRequest,
     ) -> anyhow::Result<Receiver<Option<SettlementResponse>>> {
         let initiator_pk = request.clone().initiator_pk;
         initiator_pk.verify(request.to_sign().as_bytes(), &request.signature)?;
+
+        match request.payment_proof {
+            SettlementProof::Manual => (),
+            _ => return Err(anyhow::anyhow!("expected manual settlement proof")),
+        };
 
         let (send_res, recv_res) = smol::channel::bounded(1);
         let pending_settlement = PendingSettlement {
@@ -133,6 +195,52 @@ impl Settlements {
             .insert(initiator_pk.fingerprint(), pending_settlement);
 
         Ok(recv_res)
+    }
+
+    // handles automatic settlements
+    pub fn verify_auto_settle(
+        &self,
+        ctx: DaemonContext,
+        request: SettlementRequest,
+    ) -> anyhow::Result<Option<SettlementResponse>> {
+        let initiator_pk = request.clone().initiator_pk;
+        initiator_pk.verify(request.to_sign().as_bytes(), &request.signature)?;
+
+        match request.payment_proof {
+            SettlementProof::Automatic(AutoSettleProof {
+                seed,
+                difficulty,
+                proof,
+            }) => {
+                if let Some(mut seeds) = self.seed_cache.get(&initiator_pk.fingerprint()) {
+                    if let Some(AutoSettle {
+                        difficulty,
+                        interval: _,
+                    }) = self.auto_settle
+                    {
+                        if seeds.contains(&seed) && proof.verify(&seed, difficulty, Hasher) {
+                            let debts = ctx.get(DEBTS);
+                            let amount = auto_settle_credit(difficulty);
+
+                            debts.deduct_settlement(&initiator_pk.fingerprint(), amount);
+                            seeds.remove(&seed);
+
+                            if let Some(current_debt) =
+                                debts.net_debt_est(&initiator_pk.fingerprint())
+                            {
+                                return Ok(Some(SettlementResponse::new(
+                                    *ctx.get(GLOBAL_IDENTITY),
+                                    request,
+                                    current_debt,
+                                )));
+                            }
+                        }
+                    }
+                }
+            }
+            _ => return Err(anyhow::anyhow!("expected automatic settlement proof")),
+        };
+        Ok(None)
     }
 
     pub async fn accept_response(
