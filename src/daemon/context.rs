@@ -67,7 +67,7 @@ pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
         {
             Some(g) => RwLock::new(g),
             None => {
-                tracing::warn!("**** INIT RELAY GRAPH****");
+                tracing::debug!("**** INIT RELAY GRAPH****");
                 RwLock::new(RelayGraph::new())
             }
         }
@@ -93,7 +93,7 @@ pub static DEBTS: CtxField<Debts> = |ctx| {
     smol::future::block_on(async move {
         match db_read(&ctx, "debts").await {
             Ok(Some(debts)) => {
-                tracing::warn!("retrieving persisted debts");
+                tracing::debug!("retrieving persisted debts");
                 match Debts::from_bytes(debts) {
                     Ok(debts) => debts,
                     Err(e) => {
@@ -103,13 +103,14 @@ pub static DEBTS: CtxField<Debts> = |ctx| {
                 }
             }
             _ => {
-                tracing::warn!("initializing debts");
+                tracing::debug!("initializing debts");
                 Debts::new()
             }
         }
     })
 };
 
+#[tracing::instrument(skip(ctx, content))]
 /// Sends a raw N2R message with the given parameters.
 pub async fn send_n2r(
     ctx: &DaemonContext,
@@ -177,6 +178,7 @@ pub async fn send_n2r(
     Ok(())
 }
 
+#[tracing::instrument(skip(ctx))]
 /// Send a batch of reply blocks to the given N2R destination.
 pub async fn send_reply_blocks(
     ctx: &DaemonContext,

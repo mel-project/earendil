@@ -18,11 +18,11 @@ static CHATS: CtxField<Chats> = |ctx| {
     smolscale::block_on(async move {
         match db_read(&ctx, "chats").await {
             Ok(Some(chats)) => {
-                tracing::debug!("Retrieving persisted chats");
+                tracing::debug!("retrieving persisted chats");
                 match Chats::from_bytes(chats) {
                     Ok(chats) => chats,
                     Err(e) => {
-                        tracing::warn!("Error retrieving persisted chats: {e}");
+                        tracing::warn!("error retrieving persisted chats: {e}");
                         Chats::new(max_chat_len)
                     }
                 }
@@ -92,6 +92,7 @@ pub fn get_chat(ctx: &DaemonContext, neigh: Fingerprint) -> Vec<(bool, String, S
         .collect()
 }
 
+#[tracing::instrument(skip(ctx))]
 pub async fn send_chat_msg(ctx: &DaemonContext, dest: Fingerprint, msg: String) {
     let chats = ctx.get(CHATS);
 
@@ -105,17 +106,6 @@ pub async fn send_chat_msg(ctx: &DaemonContext, dest: Fingerprint, msg: String) 
 
 pub fn serialize_chats(ctx: &DaemonContext) -> anyhow::Result<Vec<u8>> {
     ctx.get(CHATS).clone().into_bytes()
-}
-
-pub fn get_latest_msg(
-    ctx: &DaemonContext,
-    neighbor: Fingerprint,
-) -> Option<(bool, String, SystemTime)> {
-    if let Some(entry) = ctx.get(CHATS).get_latest(neighbor) {
-        Some((entry.is_mine, entry.text, entry.time))
-    } else {
-        None
-    }
 }
 
 pub fn create_timestamp(now: SystemTime) -> String {
@@ -164,14 +154,6 @@ impl Chats {
             .iter()
             .flat_map(|entry| entry.value().clone())
             .collect()
-    }
-
-    fn get_latest(&self, neighbor: Fingerprint) -> Option<ChatEntry> {
-        if let Some(history) = self.history.get(&neighbor) {
-            history.back().cloned()
-        } else {
-            None
-        }
     }
 
     fn into_bytes(self) -> anyhow::Result<Vec<u8>> {

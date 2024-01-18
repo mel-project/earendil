@@ -29,6 +29,7 @@ use nursery_macro::nursery;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use stdcode::StdcodeSerializeExt;
+use tracing::instrument;
 
 use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
@@ -272,6 +273,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[instrument(skip(ctx))]
 /// Loop that handles the persistence of contex state
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
@@ -290,6 +292,7 @@ async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 }
 
+#[instrument(skip(ctx))]
 /// Loop that handles the control protocol
 async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let http = HttpRpcServer::bind(ctx.init().control_listen).await?;
@@ -298,6 +301,7 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[instrument(skip(ctx))]
 /// Loop that listens to and handles incoming GlobalRpc requests
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let socket = Arc::new(N2rSocket::bind(
@@ -327,6 +331,7 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     })
 }
 
+#[instrument(skip(ctx))]
 /// Loop that listens to and handles incoming haven forwarding requests
 async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let seen_srcs: Cache<(Endpoint, Endpoint), ()> = Cache::builder()

@@ -22,7 +22,7 @@ impl StreamListener {
             table: Arc::new(DashMap::new()),
         }
     }
-
+    #[tracing::instrument(skip(self))]
     pub async fn accept(&mut self) -> anyhow::Result<Stream> {
         loop {
             let (msg, client_ep) = self.socket.recv_from().await?;

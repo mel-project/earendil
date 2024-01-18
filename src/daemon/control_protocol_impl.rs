@@ -264,6 +264,7 @@ impl ControlProtocol for ControlProtocolImpl {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn send_global_rpc(
         &self,
         send_args: GlobalRpcArgs,

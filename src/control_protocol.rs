@@ -331,7 +331,7 @@ pub struct SendMessageArgs {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct GlobalRpcArgs {
     pub id: Option<String>,
     #[serde_as(as = "serde_with::DisplayFromStr")]

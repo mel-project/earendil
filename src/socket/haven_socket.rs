@@ -39,6 +39,7 @@ pub struct HavenSocket {
 }
 
 impl HavenSocket {
+    #[tracing::instrument(skip(ctx))]
     pub fn bind(
         ctx: DaemonContext,
         isk: IdentitySecret,

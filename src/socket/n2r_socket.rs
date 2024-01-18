@@ -40,6 +40,7 @@ struct BoundDock {
 }
 
 impl N2rSocket {
+    #[tracing::instrument(skip(ctx))]
     /// Binds an N2R socket.
     pub fn bind(ctx: DaemonContext, idsk: IdentitySecret, dock: Option<Dock>) -> N2rSocket {
         let our_fingerprint = idsk.public().fingerprint();
@@ -99,6 +100,7 @@ impl N2rSocket {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
         loop {
             if let Ok(retval) = self.incoming_queue.pop() {
@@ -120,7 +122,7 @@ impl N2rSocket {
         Endpoint::new(self.bound_dock.fp, self.bound_dock.dock)
     }
 }
-
+#[tracing::instrument(skip(ctx, recv_outgoing))]
 async fn send_batcher_loop(
     ctx: DaemonContext,
     isk: IdentitySecret,

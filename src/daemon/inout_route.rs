@@ -43,6 +43,7 @@ pub struct InRouteContext {
     pub in_route_name: String,
 }
 
+#[tracing::instrument(skip(context, secret))]
 pub async fn in_route_obfsudp(
     context: InRouteContext,
     listen: SocketAddr,
@@ -74,6 +75,7 @@ pub struct OutRouteContext {
     pub remote_fingerprint: Fingerprint,
 }
 
+#[tracing::instrument(skip(context, cookie))]
 pub async fn out_route_obfsudp(
     context: OutRouteContext,
     connect: SocketAddr,
@@ -84,12 +86,9 @@ pub async fn out_route_obfsudp(
     let mut timer2 = smol::Timer::interval(CONNECTION_LIFETIME);
     loop {
         let fallible = async {
-            tracing::debug!("obfsudp out_route {} trying...", context.out_route_name);
+            tracing::debug!("{} trying...", context.out_route_name);
             let pipe = ObfsUdpPipe::connect(connect, ObfsUdpPublic::from_bytes(cookie), "").await?;
-            tracing::info!(
-                "obfsudp out_route {} pipe connected",
-                context.out_route_name
-            );
+            tracing::info!("{} pipe connected", context.out_route_name);
 
             per_link_loop(
                 context.daemon_ctx.clone(),

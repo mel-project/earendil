@@ -20,6 +20,7 @@ pub struct Stream {
 }
 
 impl Stream {
+    #[tracing::instrument(skip(socket))]
     pub async fn connect(socket: Socket, server_endpoint: Endpoint) -> anyhow::Result<Self> {
         // handshake
         let our_stream_id: u16 = rand::random();

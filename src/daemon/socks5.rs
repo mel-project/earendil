@@ -22,15 +22,14 @@ use super::{context::CtxField, DaemonContext};
 
 #[tracing::instrument(skip(ctx))]
 pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Result<()> {
-    tracing::debug!("socks5 loop started");
+    tracing::debug!("started");
     let tcp_listener = TcpListener::bind(socks5_cfg.listen).await?;
     let fallback = socks5_cfg.fallback;
 
     nursery!(loop {
         let (client_stream, _) = tcp_listener.accept().await?;
-        // look ma, borrowing from the stack!
         spawn!(socks5_once(&ctx, client_stream, fallback)
-            .map_err(|e| tracing::warn!("socks5 worker failed: {:?}", e)))
+            .map_err(|e| tracing::debug!("worker failed: {:?}", e)))
         .detach();
     })
 }

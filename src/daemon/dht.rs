@@ -22,6 +22,7 @@ static DHT_CACHE: CtxField<Cache<Fingerprint, HavenLocator>> = |_| {
         .build()
 };
 
+#[tracing::instrument(skip(ctx))]
 /// Insert a locator into the DHT.
 pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator) {
     let key = locator.identity_pk.fingerprint();

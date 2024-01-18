@@ -222,6 +222,7 @@ impl LinkProtocol for LinkProtocolImpl {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn sign_adjacency(
         &self,
         mut left_incomplete: AdjacencyDescriptor,
@@ -274,6 +275,7 @@ impl LinkProtocol for LinkProtocolImpl {
             .collect()
     }
 
+    #[tracing::instrument(skip(self))]
     async fn push_price(&self, price: u64, debt_limit: u64) {
         tracing::trace!("received push price");
         let remote_fp = match self.remote_pk.get() {
@@ -292,10 +294,10 @@ impl LinkProtocol for LinkProtocolImpl {
             tracing::trace!("Successfully registered {} price!", remote_fp);
         }
     }
-
+    #[tracing::instrument(skip(self))]
     async fn push_chat(&self, msg: String) {
         if let Some(neighbor) = self.remote_pk.get() {
-            println!("pushing chat: {}", msg.clone());
+            tracing::debug!("pushing chat: {}", msg.clone());
             incoming_chat(&self.ctx, neighbor.fingerprint(), msg);
         }
     }

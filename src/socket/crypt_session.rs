@@ -104,6 +104,7 @@ impl CryptSession {
     }
 }
 
+#[tracing::instrument(skip(n2r_skt, recv_incoming, recv_outgoing, client_hs, ctx))]
 async fn enc_task(
     my_isk: IdentitySecret,
     n2r_skt: N2rSocket,
