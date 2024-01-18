@@ -84,7 +84,7 @@ pub static SOCKET_RECV_QUEUES: CtxField<DashMap<Endpoint, Sender<(Message, Finge
     |_| Default::default();
 pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {
     CacheBuilder::default()
-        .time_to_live(Duration::from_secs(60))
+        .time_to_live(Duration::from_secs(600))
         .build()
 };
 
