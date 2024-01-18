@@ -168,6 +168,7 @@ fn haven_ii() {
     let (mut relays, mut clients) = helpers::spawn_network(2, 4, Some(seed)).unwrap();
 
     smolscale::block_on(async move {
+        helpers::sleep(5).await;
         let alice = clients.pop().unwrap();
 
         let alice_anon_isk = IdentitySecret::generate();
@@ -180,14 +181,14 @@ fn haven_ii() {
             &bob,
             bob_haven_isk,
             None,
-            Some(relays.pop().unwrap().identity().public().fingerprint()),
+            Some(relays.last().unwrap().identity().public().fingerprint()),
         );
         let bob_haven_fp = bob_skt.local_endpoint();
 
         let to_bob = b"hello bobert";
         let to_alice = b"hey there, allison";
 
-        helpers::sleep(30).await;
+        helpers::sleep(5).await;
 
         let alice_task = async {
             alice_skt
@@ -197,7 +198,7 @@ fn haven_ii() {
 
             let (from_bob, _) = alice_skt
                 .recv_from()
-                .timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(20))
                 .await
                 .unwrap()
                 .unwrap();

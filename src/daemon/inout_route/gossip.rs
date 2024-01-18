@@ -52,7 +52,7 @@ async fn gossip_once(
     neighbor_idpk: IdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
-    tracing::trace!("gossip_once to {}", neighbor_idpk.fingerprint());
+    // tracing::trace!("gossip_once to {}", neighbor_idpk.fingerprint());
     fetch_identity(ctx, &neighbor_idpk, link_client).await?;
     sign_adjacency(ctx, &neighbor_idpk, link_client).await?;
     gossip_graph(ctx, &neighbor_idpk, link_client).await?;
@@ -105,7 +105,7 @@ async fn sign_adjacency(
         ctx.get(RELAY_GRAPH)
             .write()
             .insert_adjacency(complete.clone())?;
-        tracing::trace!("inserted the new adjacency {:?} into the graph", complete);
+        // tracing::trace!("inserted the new adjacency {:?} into the graph", complete);
     }
     Ok(())
 }
@@ -119,15 +119,15 @@ async fn gossip_graph(
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
     let all_known_nodes = ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();
-    tracing::info!("num known nodes: {}", all_known_nodes.len());
+    // tracing::info!("num known nodes: {}", all_known_nodes.len());
     let random_sample = all_known_nodes
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
         .copied()
         .collect_vec();
-    tracing::trace!(
-        "asking {remote_fingerprint} for neighbors of {} neighbors!",
-        random_sample.len()
-    );
+    // tracing::trace!(
+    //     "asking {remote_fingerprint} for neighbors of {} neighbors!",
+    //     random_sample.len()
+    // );
     let adjacencies = link_client.adjacencies(random_sample).await?;
     for adjacency in adjacencies {
         let left_fp = adjacency.left;
@@ -178,6 +178,6 @@ fn gossip_interval(start_time: &Instant) -> Duration {
     let interval_secs = 10. / (1. + 50. * (-0.15 * elapsed_secs).exp());
     let mut rng = rand::thread_rng();
     let with_jitter = rng.gen_range(interval_secs..(interval_secs * 2.));
-    tracing::debug!("GOSSIP_INTERVAL = {with_jitter}");
+
     Duration::from_secs_f64(with_jitter)
 }

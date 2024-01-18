@@ -85,7 +85,7 @@ impl HavenSocket {
                 loop {
                     match gclient
                         .alloc_forward(forward_req.clone())
-                        .timeout(Duration::from_secs(30))
+                        .timeout(Duration::from_secs(10))
                         .await
                     {
                         Some(Err(e)) => {

@@ -82,11 +82,7 @@ pub static NEIGH_TABLE_NEW: CtxField<Cache<Fingerprint, Sender<RawPacket>>> = |_
 }; // TODO a better solution for deletion
 pub static SOCKET_RECV_QUEUES: CtxField<DashMap<Endpoint, Sender<(Message, Fingerprint)>>> =
     |_| Default::default();
-pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {
-    CacheBuilder::default()
-        .time_to_live(Duration::from_secs(600))
-        .build()
-};
+pub static DEGARBLERS: CtxField<DashMap<u64, ReplyDegarbler>> = |_| Default::default();
 
 pub static DEBTS: CtxField<Debts> = |ctx| {
     let ctx = ctx.clone();

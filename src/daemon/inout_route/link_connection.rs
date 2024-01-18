@@ -90,7 +90,7 @@ pub async fn connection_loop(
                     while let Some(line) = stream_lines.next().await {
                         let line = line?;
                         let req: JrpcRequest = serde_json::from_str(&line)?;
-                        tracing::debug!(method = req.method, "LinkRPC request received");
+                        // tracing::debug!(method = req.method, "LinkRPC request received");
                         let resp = service.respond_raw(req).await;
                         stream
                             .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
@@ -145,7 +145,6 @@ async fn handle_onion_packets(
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
             if let Some(other_fp) = service.0.remote_pk.get() {
-                peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt);
                 peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt);
             }
         }
