@@ -5,12 +5,14 @@ use earendil::{
 };
 use helpers::gen_seed;
 use smol::io::{AsyncReadExt, AsyncWriteExt};
+use tracing_test::traced_test;
 
 use crate::helpers::{configs_to_daemons, gen_network};
 
 mod helpers;
 
 #[test]
+#[traced_test]
 fn stream() {
     // helpers::tracing_init();
     helpers::env_vars();

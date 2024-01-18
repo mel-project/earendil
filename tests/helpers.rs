@@ -21,18 +21,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 type InRoutes = Vec<(String, InRouteConfig)>;
 type OutRoutes = Vec<(String, OutRouteConfig)>;
 
-// sets up a global tracing subscriber
-pub fn tracing_init() {
-    let _ = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().compact())
-        .with(
-            EnvFilter::builder()
-                .with_default_directive("earendil=debug".parse().unwrap())
-                .from_env_lossy(),
-        )
-        .try_init();
-}
-
 // initializes env vars
 pub fn env_vars() {
     env::set_var("SOSISTAB2_NO_SLEEP", "1");

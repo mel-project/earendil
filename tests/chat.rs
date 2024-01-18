@@ -4,7 +4,6 @@ mod helpers;
 
 #[test]
 fn send_chat_msg() {
-    helpers::tracing_init();
     helpers::env_vars();
 
     smolscale::block_on(async {

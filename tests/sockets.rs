@@ -7,7 +7,7 @@ use earendil_crypt::IdentitySecret;
 use once_cell::sync::Lazy;
 use smol::Timer;
 use smol_timeout::TimeoutExt;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_test::traced_test;
 
 mod helpers;
 
@@ -38,8 +38,8 @@ fn daemon_from_yaml(yaml: &str) -> Daemon {
 // 3 hop, anon
 
 #[test]
+#[traced_test]
 fn n2r() {
-    // helpers::tracing_init();
     helpers::env_vars();
 
     let seed = helpers::gen_seed("n2r");
@@ -95,15 +95,8 @@ fn n2r() {
 }
 
 #[test]
+#[traced_test]
 fn haven() {
-    // let _ = tracing_subscriber::registry()
-    //     .with(tracing_subscriber::fmt::layer().compact())
-    //     .with(
-    //         EnvFilter::builder()
-    //             .with_default_directive("earendil=debug".parse().unwrap())
-    //             .from_env_lossy(),
-    //     )
-    //     .try_init();
     env::set_var("SOSISTAB2_NO_SLEEP", "1");
     Lazy::force(&START_DAEMONS);
 
@@ -128,6 +121,7 @@ fn haven() {
             .await
             .context("alice sending failed!")
             .unwrap();
+        Timer::after(Duration::from_millis(100)).await;
         // derek receives the msg
         let (body, ep) = derek_skt
             .recv_from()
@@ -159,6 +153,7 @@ fn haven() {
 }
 
 #[test]
+#[traced_test]
 fn haven_ii() {
     // helpers::tracing_init();
     helpers::env_vars();
