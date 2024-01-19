@@ -201,10 +201,8 @@ pub struct LinkPrice {
     pub incoming_debt_limit: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct AutoSettle {
-    /// mel credit is proportional to 2^difficulty
-    pub difficulty: usize,
     /// number of seconds in between settlements
     pub interval: u64,
 }

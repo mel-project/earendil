@@ -20,8 +20,6 @@ use crate::config::AutoSettle;
 
 use super::context::{DaemonContext, DEBTS, GLOBAL_IDENTITY};
 
-const ONCHAIN_MULTIPLIER: u8 = 8;
-
 pub struct Hasher;
 
 impl HashFunction for Hasher {
@@ -34,8 +32,13 @@ impl HashFunction for Hasher {
     }
 }
 
+// a stand in for the real Mel getter
+pub fn onchain_multiplier() -> u8 {
+    8
+}
+
 pub fn auto_settle_credit(difficulty: usize) -> u64 {
-    (2u8.pow(difficulty as u32) * ONCHAIN_MULTIPLIER)
+    (2u8.pow(difficulty as u32) * onchain_multiplier())
         .try_into()
         .unwrap()
 }
@@ -97,16 +100,12 @@ pub enum SettlementProof {
 impl SettlementProof {
     pub fn new_auto(seed: Seed, difficulty: usize) -> Self {
         log::debug!("generating mel PoW...");
-        let proof = melpow::Proof::generate(&seed, difficulty, Hasher);
+        let proof = melpow::Proof::generate(&seed, difficulty, Hasher).to_bytes();
         SettlementProof::Automatic(AutoSettleProof {
             seed,
             difficulty,
             proof,
         })
-    }
-
-    pub fn new_manual() -> Self {
-        SettlementProof::Manual
     }
 }
 
@@ -115,7 +114,7 @@ pub type Seed = [u8; 32];
 pub struct AutoSettleProof {
     pub seed: Seed,
     pub difficulty: usize,
-    pub proof: melpow::Proof,
+    pub proof: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -200,30 +199,28 @@ impl Settlements {
     // handles automatic settlements
     pub fn verify_auto_settle(
         &self,
-        ctx: DaemonContext,
+        ctx: &DaemonContext,
         request: SettlementRequest,
     ) -> anyhow::Result<Option<SettlementResponse>> {
         let initiator_pk = request.clone().initiator_pk;
         initiator_pk.verify(request.to_sign().as_bytes(), &request.signature)?;
 
-        match request.payment_proof {
+        match &request.payment_proof {
             SettlementProof::Automatic(AutoSettleProof {
                 seed,
                 difficulty,
                 proof,
             }) => {
+                let proof =
+                    melpow::Proof::from_bytes(proof).context("unable to deserialize mel proof")?;
                 if let Some(mut seeds) = self.seed_cache.get(&initiator_pk.fingerprint()) {
-                    if let Some(AutoSettle {
-                        difficulty,
-                        interval: _,
-                    }) = self.auto_settle
-                    {
-                        if seeds.contains(&seed) && proof.verify(&seed, difficulty, Hasher) {
+                    if let Some(AutoSettle { interval: _ }) = self.auto_settle {
+                        if seeds.contains(seed) && proof.verify(seed, *difficulty, Hasher) {
                             let debts = ctx.get(DEBTS);
-                            let amount = auto_settle_credit(difficulty);
+                            let amount = auto_settle_credit(*difficulty);
 
                             debts.deduct_settlement(&initiator_pk.fingerprint(), amount);
-                            seeds.remove(&seed);
+                            seeds.remove(seed);
 
                             if let Some(current_debt) =
                                 debts.net_debt_est(&initiator_pk.fingerprint())

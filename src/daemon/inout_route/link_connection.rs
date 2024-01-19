@@ -307,7 +307,7 @@ impl LinkProtocol for LinkProtocolImpl {
 
         match req.payment_proof {
             SettlementProof::Automatic(_) => {
-                if let Ok(res) = settlements.verify_auto_settle(self.ctx, req) {
+                if let Ok(res) = settlements.verify_auto_settle(&self.ctx, req) {
                     res
                 } else {
                     None
@@ -341,7 +341,7 @@ impl LinkProtocol for LinkProtocolImpl {
 
     async fn request_seed(&self) -> Option<Seed> {
         let seed = rand::thread_rng().gen();
-        let seed_cache = self.ctx.get(SETTLEMENTS).seed_cache;
+        let seed_cache = &self.ctx.get(SETTLEMENTS).seed_cache;
 
         if let Some(pk) = self.remote_pk.get() {
             let fp = pk.fingerprint();

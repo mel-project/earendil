@@ -24,7 +24,7 @@ use crate::{
             gossip::gossip_loop,
             link_connection::link_authenticate,
         },
-        settlement::{auto_settle_credit, SettlementProof, SettlementRequest},
+        settlement::{auto_settle_credit, onchain_multiplier, SettlementProof, SettlementRequest},
     },
 };
 
@@ -164,12 +164,12 @@ async fn link_service_loop(
     let connection_loop = connection_loop(service, mplex.clone(), recv_outgoing);
 
     let neigh_idpk = link_authenticate(mplex.clone(), their_fp).await?;
+    let neigh_fp = neigh_idpk.fingerprint();
     remote_pk_shared.set(neigh_idpk).unwrap();
 
     // register the outgoing channel. This registration eventually expires, but we'll die before that so it's fine.
     // Note that this will overwrite any existing entry, which will close their send_outgoing, which will stop their loop. That is a good thing!
-    ctx.get(NEIGH_TABLE_NEW)
-        .insert(neigh_idpk.fingerprint(), send_outgoing);
+    ctx.get(NEIGH_TABLE_NEW).insert(neigh_fp, send_outgoing);
 
     let gossip_loop = {
         let rpc = LinkRpcTransport::new(mplex.clone());
@@ -206,16 +206,19 @@ async fn link_service_loop(
     };
 
     // include auto_settle_loop if we have provided automatic settlement options in the config
-    if let Some(AutoSettle {
-        difficulty,
-        interval,
-    }) = ctx.get(SETTLEMENTS).auto_settle
-    {
+    if let Some(AutoSettle { interval }) = ctx.get(SETTLEMENTS).auto_settle {
         let auto_settle_loop = async {
             loop {
                 smol::Timer::after(Duration::from_secs(interval)).await;
 
                 if let Ok(Some(seed)) = client.request_seed().await {
+                    let debts = ctx.get(DEBTS);
+                    let net_debt = debts.net_debt_est(&neigh_fp).unwrap_or_default();
+                    if net_debt < 1 {
+                        continue;
+                    }
+                    let difficulty = (net_debt / onchain_multiplier() as i128).ilog2() as usize;
+
                     let proof = SettlementProof::new_auto(seed, difficulty);
                     let request = SettlementRequest::new(
                         *ctx.get(GLOBAL_IDENTITY),
