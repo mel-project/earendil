@@ -302,7 +302,6 @@ impl LinkProtocol for LinkProtocolImpl {
 
     async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse> {
         log::debug!("starting settlement");
-
         let settlements = self.ctx.get(SETTLEMENTS);
 
         match req.payment_proof {

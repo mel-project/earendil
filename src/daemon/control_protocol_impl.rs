@@ -334,9 +334,12 @@ impl ControlProtocol for ControlProtocolImpl {
             .map_err(|e| ChatError::Send(e.to_string()))
     }
 
+    async fn list_debts(&self) -> Vec<String> {
+        self.ctx.get(DEBTS).list()
+    }
+
     async fn list_settlements(&self) -> Vec<String> {
-        let settlements = self.ctx.get(SETTLEMENTS);
-        settlements.list()
+        self.ctx.get(SETTLEMENTS).list()
     }
 }
 

@@ -33,14 +33,13 @@ impl HashFunction for Hasher {
 }
 
 // a stand in for the real Mel getter
-pub fn onchain_multiplier() -> u8 {
+pub fn onchain_multiplier() -> u64 {
     8
 }
 
-pub fn auto_settle_credit(difficulty: usize) -> u64 {
-    (2u8.pow(difficulty as u32) * onchain_multiplier())
-        .try_into()
-        .unwrap()
+pub fn difficulty_to_micromel(difficulty: usize) -> u64 {
+    let work = (2u64).pow(difficulty as u32);
+    work.saturating_mul(onchain_multiplier())
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -214,23 +213,20 @@ impl Settlements {
                 let proof =
                     melpow::Proof::from_bytes(proof).context("unable to deserialize mel proof")?;
                 if let Some(mut seeds) = self.seed_cache.get(&initiator_pk.fingerprint()) {
-                    if let Some(AutoSettle { interval: _ }) = self.auto_settle {
-                        if seeds.contains(seed) && proof.verify(seed, *difficulty, Hasher) {
-                            let debts = ctx.get(DEBTS);
-                            let amount = auto_settle_credit(*difficulty);
+                    if seeds.contains(seed) && proof.verify(seed, *difficulty, Hasher) {
+                        let debts = ctx.get(DEBTS);
+                        let amount = difficulty_to_micromel(*difficulty);
 
-                            debts.deduct_settlement(&initiator_pk.fingerprint(), amount);
-                            seeds.remove(seed);
+                        debts.deduct_settlement(initiator_pk.fingerprint(), amount);
+                        seeds.remove(seed);
 
-                            if let Some(current_debt) =
-                                debts.net_debt_est(&initiator_pk.fingerprint())
-                            {
-                                return Ok(Some(SettlementResponse::new(
-                                    *ctx.get(GLOBAL_IDENTITY),
-                                    request,
-                                    current_debt,
-                                )));
-                            }
+                        if let Some(current_debt) = debts.net_debt_est(&initiator_pk.fingerprint())
+                        {
+                            return Ok(Some(SettlementResponse::new(
+                                *ctx.get(GLOBAL_IDENTITY),
+                                request,
+                                current_debt,
+                            )));
                         }
                     }
                 }
@@ -257,7 +253,7 @@ impl Settlements {
 
         if let Some(settlement) = self.pending.get(&neighbor) {
             settlement.send_res.send(Some(response)).await?;
-            debts.deduct_settlement(&neighbor, deduct_amount);
+            debts.deduct_settlement(neighbor, deduct_amount);
         }
 
         self.pending.remove(&neighbor);

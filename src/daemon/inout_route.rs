@@ -24,7 +24,9 @@ use crate::{
             gossip::gossip_loop,
             link_connection::link_authenticate,
         },
-        settlement::{auto_settle_credit, onchain_multiplier, SettlementProof, SettlementRequest},
+        settlement::{
+            difficulty_to_micromel, onchain_multiplier, SettlementProof, SettlementRequest,
+        },
     },
 };
 
@@ -163,89 +165,95 @@ async fn link_service_loop(
     let (send_outgoing, recv_outgoing) = smol::channel::unbounded();
     let connection_loop = connection_loop(service, mplex.clone(), recv_outgoing);
 
-    let neigh_idpk = link_authenticate(mplex.clone(), their_fp).await?;
-    let neigh_fp = neigh_idpk.fingerprint();
-    remote_pk_shared.set(neigh_idpk).unwrap();
+    connection_loop
+        .race(async move {
+            let neigh_idpk = link_authenticate(mplex.clone(), their_fp).await?;
+            let neigh_fp = neigh_idpk.fingerprint();
 
-    // register the outgoing channel. This registration eventually expires, but we'll die before that so it's fine.
-    // Note that this will overwrite any existing entry, which will close their send_outgoing, which will stop their loop. That is a good thing!
-    ctx.get(NEIGH_TABLE_NEW).insert(neigh_fp, send_outgoing);
+            remote_pk_shared.set(neigh_idpk).unwrap();
 
-    let gossip_loop = {
-        let rpc = LinkRpcTransport::new(mplex.clone());
-        let client = LinkClient::from(rpc);
-        gossip_loop(ctx.clone(), neigh_idpk, client)
-    };
+            // register the outgoing channel. This registration eventually expires, but we'll die before that so it's fine.
+            // Note that this will overwrite any existing entry, which will close their send_outgoing, which will stop their loop. That is a good thing!
+            ctx.get(NEIGH_TABLE_NEW).insert(neigh_fp, send_outgoing);
 
-    let rpc = LinkRpcTransport::new(mplex.clone());
-    let client = Arc::new(LinkClient::from(rpc));
+            let gossip_loop = {
+                let rpc = LinkRpcTransport::new(mplex.clone());
+                let client = LinkClient::from(rpc);
+                gossip_loop(ctx.clone(), neigh_idpk, client)
+            };
 
-    // add link mux to chats mapping and deregister
-    add_client(&ctx, neigh_idpk.fingerprint(), client.clone());
-    scopeguard::defer!({
-        remove_client(&ctx, &neigh_idpk.fingerprint());
-    });
+            let rpc = LinkRpcTransport::new(mplex.clone());
+            let client = Arc::new(LinkClient::from(rpc));
 
-    let price_loop = async {
-        loop {
-            ctx.get(DEBTS).insert_incoming_price(
-                neigh_idpk.fingerprint(),
-                link_info.incoming_price,
-                link_info.incoming_debt_limit,
-            );
-            // attempt to push the price
-            if link_info.incoming_price > 0 {
-                client
-                    .push_price(link_info.incoming_price, link_info.incoming_debt_limit)
-                    .timeout(Duration::from_secs(60))
-                    .await
-                    .context("push_price timed out")??;
-            }
-            smol::Timer::after(Duration::from_secs(300)).await;
-        }
-    };
+            // add link mux to chats mapping and deregister
+            add_client(&ctx, neigh_fp, client.clone());
+            scopeguard::defer!({
+                remove_client(&ctx, &neigh_fp);
+            });
 
-    // include auto_settle_loop if we have provided automatic settlement options in the config
-    if let Some(AutoSettle { interval }) = ctx.get(SETTLEMENTS).auto_settle {
-        let auto_settle_loop = async {
-            loop {
-                smol::Timer::after(Duration::from_secs(interval)).await;
-
-                if let Ok(Some(seed)) = client.request_seed().await {
-                    let debts = ctx.get(DEBTS);
-                    let net_debt = debts.net_debt_est(&neigh_fp).unwrap_or_default();
-                    if net_debt < 1 {
-                        continue;
-                    }
-                    let difficulty = (net_debt / onchain_multiplier() as i128).ilog2() as usize;
-
-                    let proof = SettlementProof::new_auto(seed, difficulty);
-                    let request = SettlementRequest::new(
-                        *ctx.get(GLOBAL_IDENTITY),
-                        auto_settle_credit(difficulty),
-                        proof,
+            let price_loop = async {
+                loop {
+                    ctx.get(DEBTS).insert_incoming_price(
+                        neigh_fp,
+                        link_info.incoming_price,
+                        link_info.incoming_debt_limit,
                     );
-                    match client.start_settlement(request).await {
-                        Ok(_) => {
-                            log::debug!(
-                                "automatic settlement of {} micromel accepted by {}",
-                                auto_settle_credit(difficulty),
-                                neigh_idpk.fingerprint()
-                            );
-                        }
-                        Err(e) => log::warn!(
-                            "automatic settlement rejected by {}: {e}",
-                            neigh_idpk.fingerprint()
-                        ),
+                    // attempt to push the price
+                    if link_info.incoming_price > 0 {
+                        client
+                            .push_price(link_info.incoming_price, link_info.incoming_debt_limit)
+                            .timeout(Duration::from_secs(60))
+                            .await
+                            .context("push_price timed out")??;
                     }
+                    smol::Timer::after(Duration::from_secs(300)).await;
                 }
-            }
-        };
+            };
 
-        connection_loop
-            .race(gossip_loop.race(price_loop.race(auto_settle_loop)))
-            .await
-    } else {
-        connection_loop.race(gossip_loop.race(price_loop)).await
-    }
+            // include auto_settle_loop if we have provided automatic settlement options in the config
+            if let Some(AutoSettle { interval }) = ctx.get(SETTLEMENTS).auto_settle {
+                let auto_settle_loop = async {
+                    loop {
+                        smol::Timer::after(Duration::from_secs(interval)).await;
+
+                        if let Ok(Some(seed)) = client.request_seed().await {
+                            let debts = ctx.get(DEBTS);
+                            let net_debt = debts.net_debt_est(&neigh_fp).unwrap_or_default();
+                            if net_debt.is_negative() {
+                                let i_owe = net_debt.abs();
+                                let difficulty =
+                                    (i_owe / onchain_multiplier() as i128).ilog2() as usize;
+
+                                let proof = SettlementProof::new_auto(seed, difficulty);
+                                let request = SettlementRequest::new(
+                                    *ctx.get(GLOBAL_IDENTITY),
+                                    difficulty_to_micromel(difficulty),
+                                    proof,
+                                );
+                                match client.start_settlement(request).await {
+                                    Ok(Some(_)) => log::debug!(
+                                        "automatic settlement of {} micromel accepted by {}",
+                                        difficulty_to_micromel(difficulty),
+                                        neigh_idpk.fingerprint()
+                                    ),
+                                    Ok(None) => log::warn!(
+                                        "automatic settlement rejected by {}",
+                                        neigh_idpk.fingerprint(),
+                                    ),
+                                    Err(e) => log::warn!(
+                                        "error with automatic settlement sent to {}: {e}",
+                                        neigh_idpk.fingerprint()
+                                    ),
+                                }
+                            }
+                        }
+                    }
+                };
+
+                gossip_loop.race(price_loop.race(auto_settle_loop)).await
+            } else {
+                gossip_loop.race(price_loop).await
+            }
+        })
+        .await
 }

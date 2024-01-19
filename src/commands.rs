@@ -102,6 +102,9 @@ pub enum ControlCommand {
     /// Dumps my own routes.
     MyRoutes,
 
+    /// Lists debts between you and your neighbors
+    ListDebts,
+
     /// Lists pending debt settlements
     ListSettlements,
 

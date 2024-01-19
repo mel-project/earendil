@@ -135,14 +135,17 @@ pub async fn main_control(
             println!("{}", serde_yaml::to_string(&routes)?);
         }
         ControlCommand::HavensInfo => {
-            let havens_info = client.havens_info().await?;
-            for info in havens_info {
+            for info in client.havens_info().await? {
                 println!("{} - {}", info.0, info.1);
             }
         }
+        ControlCommand::ListDebts => {
+            for debt in client.list_debts().await? {
+                println!("{:?}", debt);
+            }
+        }
         ControlCommand::ListSettlements => {
-            let settlements = client.list_settlements().await?;
-            for settlement in settlements {
+            for settlement in client.list_settlements().await? {
                 println!("{:?}", settlement);
             }
         }
@@ -329,6 +332,8 @@ pub trait ControlProtocol {
     async fn get_latest_msg(&self, neigh: Fingerprint) -> Option<(bool, String, SystemTime)>;
 
     async fn send_chat_msg(&self, dest: Fingerprint, msg: String) -> Result<(), ChatError>;
+
+    async fn list_debts(&self) -> Vec<String>;
 
     async fn list_settlements(&self) -> Vec<String>;
 }
