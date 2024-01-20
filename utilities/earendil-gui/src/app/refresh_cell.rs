@@ -33,6 +33,10 @@ impl<T: Send + Sync + 'static> RefreshCell<T> {
             self.last_updated = Instant::now();
         }
 
+        if self.last_updated.elapsed() > timeout * 2 {
+            return None;
+        }
+
         self.next.as_ref().unwrap().ready().or(self.stable.as_ref())
     }
 }

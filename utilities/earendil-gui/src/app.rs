@@ -23,7 +23,7 @@ use tap::Tap;
 use crate::app::refresh_cell::RefreshCell;
 
 use self::{
-    config::ConfigState,
+    config::{ConfigState, DaemonMode},
     daemon_wrap::DaemonWrap,
     modal_state::{ModalState, Severity},
 };
@@ -101,7 +101,7 @@ impl eframe::App for App {
             self.last_sync_time = Instant::now();
             let daemon_cfg = self.daemon_cfg.clone();
             std::thread::spawn(move || {
-                let _ = daemon_cfg.lock().save();
+                daemon_cfg.lock().save().unwrap();
             });
         }
 
@@ -171,10 +171,25 @@ impl App {
     }
 
     fn render_settings(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        let mut daemon_cfg = self.daemon_cfg.lock();
         ui.heading("Settings");
+        egui::ComboBox::from_label("Daemon mode")
+            .selected_text(format!("{:?}", daemon_cfg.gui_prefs.daemon_mode))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut daemon_cfg.gui_prefs.daemon_mode,
+                    DaemonMode::Embedded,
+                    "Embedded",
+                );
+                ui.selectable_value(
+                    &mut daemon_cfg.gui_prefs.daemon_mode,
+                    DaemonMode::Remote,
+                    "Remote",
+                );
+            });
         ui.separator();
         ui.heading("Earendil config");
-        if let Err(err) = self.daemon_cfg.lock().realize() {
+        if let Err(err) = daemon_cfg.realize() {
             ui.label(
                 RichText::new(format!("invalid config: {:?}", err))
                     .background_color(Color32::LIGHT_RED),
@@ -185,7 +200,7 @@ impl App {
                     .background_color(Color32::LIGHT_GREEN),
             );
         }
-        ui.centered_and_justified(|ui| ui.code_editor(&mut self.daemon_cfg.lock().raw_yaml));
+        ui.centered_and_justified(|ui| ui.code_editor(&mut daemon_cfg.raw_yaml));
     }
 
     fn render_bottom_panel(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
