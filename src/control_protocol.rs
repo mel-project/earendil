@@ -3,7 +3,6 @@ use crate::socket::Endpoint;
 use crate::{daemon::ControlProtErr, haven_util::HavenLocator};
 use anyhow::Context;
 use async_trait::async_trait;
-use blake3::Hash;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use colored::{ColoredString, Colorize};
@@ -18,6 +17,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use smol::Timer;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{io::Write, marker::Send};
@@ -156,81 +156,56 @@ pub async fn main_control(
             }
             ChatCommand::Start { fp_prefix } => {
                 let neighbors = client.list_neighbors().await?;
-                let neighbor = neigh_by_prefix(neighbors, fp_prefix);
 
-                if let Some(neigh) = neighbor {
-                    println!("<starting chat with {}>", earendil_blue(&neigh.to_string()));
-
-                    let entries = client.get_chat(neigh).await?;
-                    let mut current_hash = entries
-                        .iter()
-                        .last()
-                        .map(|(is_mine, text, time)| {
-                            let bytes = stdcode::serialize(&(is_mine, text.clone(), time)).unwrap();
-                            blake3::hash(&bytes)
-                        })
-                        .unwrap_or(Hash::from([0; 32]));
-
-                    for (is_mine, text, time) in entries {
-                        println!("{}", pretty_entry(is_mine, text, time));
+                let neighbor = match neigh_by_prefix(neighbors, fp_prefix) {
+                    Ok(neigh) => {
+                        println!("<starting chat with {}>", earendil_blue(&neigh.to_string()));
+                        neigh
                     }
+                    Err(e) => {
+                        println!("{e}");
+                        return Ok(());
+                    }
+                };
 
-                    let client = Arc::new(client);
-                    let listen_client = client.clone();
+                let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
+                let client = Arc::new(client);
+                let listen_client = client.clone();
 
-                    let _listen_loop = smolscale::spawn(async move {
-                        loop {
-                            let last_msg = listen_client.clone().get_latest_msg(neigh).await;
-                            if let Ok(Some((is_mine, text, time))) = last_msg {
-                                if is_mine {
-                                    let last_bytes =
-                                        stdcode::serialize(&(is_mine, text.clone(), time)).unwrap();
-                                    let last_hash = blake3::hash(&last_bytes);
-
-                                    if last_hash != current_hash {
-                                        current_hash = last_hash;
-                                        print!("\r");
-                                        println!("{:>120}", pretty_time(time));
-                                        print!("{} ", right_arrow());
-                                        let _ = std::io::stdout().flush();
-                                    }
-                                } else {
-                                    let last_bytes =
-                                        stdcode::serialize(&(is_mine, text.clone(), time)).unwrap();
-                                    let last_hash = blake3::hash(&last_bytes);
-
-                                    if last_hash != current_hash {
-                                        current_hash = last_hash;
-                                        print!("\r");
-                                        println!("{}", pretty_entry(is_mine, text, time));
-                                        print!("{} ", right_arrow());
-                                        let _ = std::io::stdout().flush();
-                                    }
-                                }
-                            }
-
-                            Timer::after(Duration::from_secs(1)).await;
-                        }
-                    });
-
+                let _listen_loop = smolscale::spawn(async move {
                     loop {
-                        print!("{} ", right_arrow());
-                        let _ = std::io::stdout().flush();
-
-                        let message = smol::unblock(|| {
-                            let mut message = String::new();
-                            std::io::stdin()
-                                .read_line(&mut message)
-                                .expect("Failed to read line");
-
-                            message.trim().to_string()
-                        })
-                        .await;
-
-                        if !message.is_empty() {
-                            let msg = message.to_string();
-                            let _ = client.send_chat_msg(neigh, msg).await;
+                        let msgs = if let Ok(msgs) = client.get_chat(neighbor).await {
+                            msgs
+                        } else {
+                            println!("error fetching messages");
+                            Timer::after(Duration::from_secs(1)).await;
+                            continue;
+                        };
+                        for (is_mine, text, time) in msgs {
+                            let msg = (is_mine, text.clone(), time);
+                            if !displayed.contains(&msg) {
+                                println!("{}", pretty_entry(is_mine, text, time));
+                                displayed.insert(msg);
+                            }
                         }
+                    }
+                });
+
+                loop {
+                    let _ = std::io::stdout().flush();
+                    let message = smol::unblock(|| {
+                        let mut message = String::new();
+                        std::io::stdin()
+                            .read_line(&mut message)
+                            .expect("Failed to read line");
+
+                        message.trim().to_string()
+                    })
+                    .await;
+
+                    if !message.is_empty() {
+                        let msg = message.to_string();
+                        let _ = listen_client.send_chat_msg(neighbor, msg).await;
                     }
                 }
             }
@@ -264,14 +239,18 @@ fn right_arrow() -> ColoredString {
     earendil_blue("->")
 }
 
-fn neigh_by_prefix(fingerprints: Vec<Fingerprint>, prefix: String) -> Option<Fingerprint> {
-    for fp in fingerprints {
-        let fp_string = format!("{}", fp);
-        if fp_string.starts_with(&prefix) {
-            return Some(fp);
-        }
+fn neigh_by_prefix(fingerprints: Vec<Fingerprint>, prefix: String) -> anyhow::Result<Fingerprint> {
+    let valid: Vec<Fingerprint> = fingerprints
+        .into_iter()
+        .filter(|fp| fp.to_string().starts_with(&prefix))
+        .collect();
+    if valid.len() == 1 {
+        Ok(valid[0])
+    } else if valid.len() > 1 {
+        anyhow::bail!("ERROR: multiple neighbors have this prefix! Try a longer prefix.")
+    } else {
+        anyhow::bail!("ERROR: no neighbor with this prefix. Exiting...")
     }
-    None
 }
 
 fn pretty_entry(is_mine: bool, text: String, time: SystemTime) -> String {

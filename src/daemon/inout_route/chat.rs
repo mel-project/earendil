@@ -62,7 +62,7 @@ pub fn list_chats(ctx: &DaemonContext) -> String {
         let (neigh, chat) = entry.pair();
         let num_messages = chat.len();
         if let Some(ChatEntry {
-            is_mine,
+            is_mine: _,
             text,
             time,
         }) = chat.back()
@@ -82,7 +82,9 @@ pub fn list_chats(ctx: &DaemonContext) -> String {
 }
 
 pub fn add_client(ctx: &DaemonContext, neighbor: Fingerprint, client: Arc<LinkClient>) {
+    tracing::info!("about to add rpc client for neighbor: {neighbor}");
     ctx.get(CHATS).clients.insert(neighbor, client);
+    tracing::info!("added rpc client for neighbor: {neighbor}");
 }
 
 pub fn remove_client(ctx: &DaemonContext, neighbor: &Fingerprint) {
