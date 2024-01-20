@@ -1,20 +1,26 @@
 mod config;
 mod daemon_wrap;
 mod modal_state;
+mod refresh_cell;
 
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
 
+use anyctx::AnyCtx;
 use anyhow::Context;
 use earendil::daemon::Daemon;
 use egui::{
-    mutex::Mutex, Color32, FontData, FontDefinitions, FontFamily, RichText, Shape, Visuals,
+    mutex::Mutex, Color32, FontData, FontDefinitions, FontFamily, FontId, RichText, Shape,
+    TextStyle, Visuals,
 };
 use egui_modal::Modal;
 use poll_promise::Promise;
+use smol::future::block_on;
 use tap::Tap;
+
+use crate::app::refresh_cell::RefreshCell;
 
 use self::{
     config::ConfigState,
@@ -27,6 +33,8 @@ pub struct App {
     daemon_cfg: Arc<Mutex<ConfigState>>,
     selected_tab: TabName,
     modal: Arc<Mutex<Option<ModalState>>>,
+
+    state: AnyCtx<()>,
 
     last_sync_time: Instant,
 }
@@ -65,6 +73,7 @@ impl App {
             modal: Default::default(),
             selected_tab: TabName::Dashboard,
             last_sync_time: Instant::now(),
+            state: AnyCtx::new(()),
         }
     }
 }
@@ -79,10 +88,12 @@ impl eframe::App for App {
             })
         });
         egui::TopBottomPanel::bottom("bottom").show(ctx, |ui| self.render_bottom_panel(ctx, ui));
-        egui::CentralPanel::default().show(ctx, |ui| match self.selected_tab {
-            TabName::Dashboard => self.render_dashboard(ctx, ui),
-            TabName::Chat => self.render_chat(ctx, ui),
-            TabName::Settings => self.render_settings(ctx, ui),
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| match self.selected_tab {
+                TabName::Dashboard => self.render_dashboard(ctx, ui),
+                TabName::Chat => self.render_chat(ctx, ui),
+                TabName::Settings => self.render_settings(ctx, ui),
+            })
         });
 
         // sync if it's been a while since our last sync
@@ -123,6 +134,33 @@ impl App {
             cols[0].vertical(|ui| ui.heading("Peers"));
             cols[1].vertical(|ui| ui.heading("Stats"));
         });
+        ui.separator();
+        ui.heading("Graph dump");
+        if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
+            static GRAPH_DUMP: fn(&AnyCtx<()>) -> Mutex<RefreshCell<anyhow::Result<String>>> =
+                |_| Mutex::new(RefreshCell::new());
+
+            let control = daemon.control();
+            let mut dump = self.state.get(GRAPH_DUMP).lock();
+            let dump = dump.get_or_refresh(Duration::from_millis(100), || {
+                block_on(async move {
+                    let dump = control.graph_dump(true).await?;
+                    Ok(dump)
+                })
+            });
+            match dump {
+                None => {
+                    ui.label("Loading...");
+                }
+                Some(Err(err)) => {
+                    ui.colored_label(Color32::DARK_RED, "Loading graph failed:");
+                    ui.label(format!("{:?}", err));
+                }
+                Some(Ok(dump)) => {
+                    ui.centered_and_justified(|ui| ui.code_editor(&mut dump.as_str()));
+                }
+            }
+        }
     }
 
     fn render_chat(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -162,7 +200,7 @@ impl App {
                         circle_color = Color32::from_rgb(0xff, 0xd7, 0x00);
                         label_text = "Connecting...".into();
                     }
-                    Some(Ok(_)) => {
+                    Some(Ok(daemon)) => {
                         circle_color = Color32::GREEN;
                         label_text = "Running".into();
                     }
@@ -184,7 +222,7 @@ impl App {
             ui.painter()
                 .add(Shape::circle_filled(rect.center(), 7.0, circle_color));
             ui.label(&label_text);
-            // here we handle the daemon-starting logic.
+            // here we handle the daemon-starting and daemon-stopping logic.
             if label_text == "Disconnected" && ui.button("Start").clicked() {
                 let daemon_cfg = self.daemon_cfg.lock().raw_yaml.clone();
                 self.daemon = Some(Promise::spawn_thread("daemon-starter", move || {
@@ -196,6 +234,10 @@ impl App {
                         .context("could not get graph dump")?;
                     Ok(DaemonWrap::Embedded(daemon))
                 }))
+            }
+
+            if label_text == "Running" && ui.button("Stop").clicked() {
+                self.daemon = None;
             }
         });
     }
