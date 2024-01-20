@@ -301,11 +301,11 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse> {
-        log::debug!("starting settlement");
         let settlements = self.ctx.get(SETTLEMENTS);
 
         match req.payment_proof {
             SettlementProof::Automatic(_) => {
+                tracing::debug!("handling auto_settlement req: {:?}", req);
                 if let Ok(res) = settlements.verify_auto_settle(&self.ctx, req) {
                     res
                 } else {
@@ -313,6 +313,7 @@ impl LinkProtocol for LinkProtocolImpl {
                 }
             }
             SettlementProof::Manual => {
+                tracing::debug!("handling manual settlement req: {:?}", req);
                 let recv_res = settlements.insert_pending(req);
 
                 if let Ok(recv_res) = recv_res {

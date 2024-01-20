@@ -214,9 +214,11 @@ async fn link_service_loop(
             if let Some(AutoSettle { interval }) = ctx.get(SETTLEMENTS).auto_settle {
                 let auto_settle_loop = async {
                     loop {
+                        tracing::debug!("starting auto_settle loop!");
                         smol::Timer::after(Duration::from_secs(interval)).await;
 
                         if let Ok(Some(seed)) = client.request_seed().await {
+                            tracing::debug!("got an auto_settle seed");
                             let debts = ctx.get(DEBTS);
                             let net_debt = debts.net_debt_est(&neigh_fp).unwrap_or_default();
                             if net_debt.is_negative() {

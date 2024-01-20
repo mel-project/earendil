@@ -222,6 +222,10 @@ impl Settlements {
 
                         if let Some(current_debt) = debts.net_debt_est(&initiator_pk.fingerprint())
                         {
+                            tracing::debug!(
+                                "processed auto_settle debt with {}",
+                                &initiator_pk.fingerprint()
+                            );
                             return Ok(Some(SettlementResponse::new(
                                 *ctx.get(GLOBAL_IDENTITY),
                                 request,
