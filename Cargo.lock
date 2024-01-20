@@ -401,17 +401,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-fs"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd1f344136bad34df1f83a47f3fd7f2ab85d75cb8a940af4ccf6d482a84ea01b"
-dependencies = [
- "async-lock 3.2.0",
- "blocking",
- "futures-lite 2.1.0",
-]
-
-[[package]]
 name = "async-global-executor"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -506,17 +495,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-net"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b948000fad4873c1c9339d60f2623323a0cfd3816e5181033c6a5cb68b2accf7"
-dependencies = [
- "async-io 2.2.2",
- "blocking",
- "futures-lite 2.1.0",
-]
-
-[[package]]
 name = "async-once-cell"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -537,24 +515,6 @@ dependencies = [
  "futures-lite 1.13.0",
  "rustix 0.38.28",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "async-process"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15c1cd5d253ecac3d3cf15e390fd96bd92a13b1d14497d81abf077304794fb04"
-dependencies = [
- "async-channel 2.1.1",
- "async-io 2.2.2",
- "async-lock 3.2.0",
- "async-signal",
- "blocking",
- "cfg-if",
- "event-listener 4.0.1",
- "futures-lite 2.1.0",
- "rustix 0.38.28",
- "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1824,7 +1784,7 @@ dependencies = [
  "serde_json",
  "serde_with 3.4.0",
  "serde_yaml",
- "smol 1.3.0",
+ "smol",
  "smol-timeout",
  "smolscale",
  "socksv5",
@@ -1854,7 +1814,7 @@ dependencies = [
  "nanorpc-http",
  "poll-promise",
  "serde_yaml",
- "smol 2.0.0",
+ "smol",
  "tap",
 ]
 
@@ -3333,7 +3293,7 @@ dependencies = [
  "hyper",
  "nanorpc",
  "serde_json",
- "smol 1.3.0",
+ "smol",
 ]
 
 [[package]]
@@ -3499,7 +3459,7 @@ dependencies = [
 name = "nursery_macro"
 version = "0.1.0"
 dependencies = [
- "smol 1.3.0",
+ "smol",
 ]
 
 [[package]]
@@ -4670,30 +4630,13 @@ checksum = "13f2b548cd8447f8de0fdf1c592929f70f4fc7039a05e47404b0d096ec6987a1"
 dependencies = [
  "async-channel 1.9.0",
  "async-executor",
- "async-fs 1.6.0",
+ "async-fs",
  "async-io 1.13.0",
  "async-lock 2.8.0",
- "async-net 1.8.0",
- "async-process 1.8.1",
+ "async-net",
+ "async-process",
  "blocking",
  "futures-lite 1.13.0",
-]
-
-[[package]]
-name = "smol"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e635339259e51ef85ac7aa29a1cd991b957047507288697a690e80ab97d07cad"
-dependencies = [
- "async-channel 2.1.1",
- "async-executor",
- "async-fs 2.1.0",
- "async-io 2.2.2",
- "async-lock 3.2.0",
- "async-net 2.0.0",
- "async-process 2.0.1",
- "blocking",
- "futures-lite 2.1.0",
 ]
 
 [[package]]
@@ -4816,7 +4759,7 @@ dependencies = [
  "serde",
  "slab",
  "smallvec",
- "smol 1.3.0",
+ "smol",
  "smol-timeout",
  "smolscale",
  "stdcode",
@@ -4853,7 +4796,7 @@ dependencies = [
  "replay_filter",
  "scopeguard",
  "serde",
- "smol 1.3.0",
+ "smol",
  "smol-timeout",
  "smolscale",
  "sosistab2",
@@ -5150,7 +5093,7 @@ dependencies = [
  "log",
  "scopeguard",
  "serde_yaml",
- "smol 1.3.0",
+ "smol",
  "smolscale",
 ]
 
@@ -5525,7 +5468,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap 4.4.11",
- "smol 1.3.0",
+ "smol",
  "smolscale",
 ]
 
@@ -6395,10 +6338,10 @@ checksum = "31de390a2d872e4cd04edd71b425e29853f786dc99317ed72d73d6fcf5ebb948"
 dependencies = [
  "async-broadcast",
  "async-executor",
- "async-fs 1.6.0",
+ "async-fs",
  "async-io 1.13.0",
  "async-lock 2.8.0",
- "async-process 1.8.1",
+ "async-process",
  "async-recursion",
  "async-task",
  "async-trait",
