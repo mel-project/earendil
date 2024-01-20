@@ -8,6 +8,14 @@ pub struct ConfigState {
     pub raw_yaml: String,
 }
 
+pub fn earendil_config_dir() -> PathBuf {
+    let config_dir = dirs::config_dir().unwrap().tap_mut(|path| {
+        path.push("earendil");
+    });
+    let _ = std::fs::create_dir_all(&config_dir);
+    config_dir
+}
+
 fn yaml_dir() -> PathBuf {
     let config_dir = dirs::config_dir().unwrap().tap_mut(|path| {
         path.push("earendil");
