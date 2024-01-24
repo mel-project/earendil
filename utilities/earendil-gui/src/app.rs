@@ -11,6 +11,7 @@ use std::{
 use anyctx::AnyCtx;
 use anyhow::Context;
 use earendil::daemon::Daemon;
+use earendil_crypt::Fingerprint;
 use egui::{
     mutex::Mutex, Color32, FontData, FontDefinitions, FontFamily, FontId, RichText, Shape,
     TextStyle, Visuals,
@@ -168,9 +169,55 @@ impl App {
 
     fn render_chat(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.columns(3, |cols| {
-            cols[0].vertical(|ui| ui.heading("Select peer"));
+            cols[0].vertical(|ui| ui.heading("Peer Selection"));
             cols[1].vertical(|ui| ui.heading("Chat"));
         });
+
+        if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
+            let mut daemon_cfg = self.daemon_cfg.lock();
+            let control = daemon.control();
+
+            static NEIGHBORS: fn(
+                &AnyCtx<()>,
+            )
+                -> Mutex<RefreshCell<anyhow::Result<Vec<Fingerprint>>>> =
+                |_| Mutex::new(RefreshCell::new());
+            let mut neighbors = self.state.get(NEIGHBORS).lock();
+            let neighbors = neighbors.get_or_refresh(Duration::from_millis(100), || {
+                block_on(async move {
+                    let neighbors = control.list_neighbors().await?;
+                    Ok(neighbors)
+                })
+            });
+
+            match neighbors {
+                None => {
+                    ui.label("Loading...");
+                }
+                Some(Err(err)) => {
+                    ui.colored_label(Color32::DARK_RED, "Loading peers failed:");
+                    ui.label(format!("{:?}", err));
+                }
+                Some(Ok(neighs)) => {
+                    let placeholder = if let Some(neigh) = daemon_cfg.gui_prefs.chatting_with {
+                        neigh.to_string()
+                    } else {
+                        "        Select a peer to start chatting         ".to_string()
+                    };
+                    egui::ComboBox::from_label("Peers")
+                        .selected_text(placeholder)
+                        .show_ui(ui, |ui| {
+                            for neigh in neighs {
+                                ui.selectable_value(
+                                    &mut daemon_cfg.gui_prefs.chatting_with,
+                                    Some(*neigh),
+                                    neigh.to_string(),
+                                );
+                            }
+                        });
+                }
+            }
+        }
     }
 
     fn render_settings(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {

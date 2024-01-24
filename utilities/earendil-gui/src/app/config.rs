@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use earendil::config::ConfigFile;
+use earendil_crypt::Fingerprint;
 use serde::{Deserialize, Serialize};
 use tap::Tap;
 
@@ -14,12 +15,14 @@ pub struct ConfigState {
 
 pub struct Prefs {
     pub daemon_mode: DaemonMode,
+    pub chatting_with: Option<Fingerprint>,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
         Self {
             daemon_mode: DaemonMode::Embedded,
+            chatting_with: None,
         }
     }
 }

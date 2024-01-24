@@ -1808,6 +1808,7 @@ dependencies = [
  "chrono",
  "dirs",
  "earendil",
+ "earendil_crypt",
  "eframe",
  "egui",
  "egui-modal",
