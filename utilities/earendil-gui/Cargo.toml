@@ -26,3 +26,4 @@ tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 chrono = "0.4.32"
 earendil_crypt = { version = "0.1.0", path = "../../libraries/earendil_crypt" }
+async-std = "1.12.0"

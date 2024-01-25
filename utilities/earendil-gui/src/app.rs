@@ -5,11 +5,12 @@ mod refresh_cell;
 
 use std::{
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use anyctx::AnyCtx;
 use anyhow::Context;
+use chrono::{DateTime, Local, LocalResult, NaiveDateTime, TimeZone, Utc};
 use earendil::daemon::Daemon;
 use earendil_crypt::Fingerprint;
 use egui::{
@@ -175,7 +176,9 @@ impl App {
 
         if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
             let mut daemon_cfg = self.daemon_cfg.lock();
-            let control = daemon.control();
+
+            let control = Arc::new(async_std::sync::Mutex::new(daemon.control()));
+            let control_clone = control.clone();
 
             static NEIGHBORS: fn(
                 &AnyCtx<()>,
@@ -185,7 +188,7 @@ impl App {
             let mut neighbors = self.state.get(NEIGHBORS).lock();
             let neighbors = neighbors.get_or_refresh(Duration::from_millis(100), || {
                 block_on(async move {
-                    let neighbors = control.list_neighbors().await?;
+                    let neighbors = control.lock().await.list_neighbors().await?;
                     Ok(neighbors)
                 })
             });
@@ -217,6 +220,68 @@ impl App {
                         });
                 }
             }
+
+            static CHAT: fn(
+                &AnyCtx<()>,
+            )
+                -> Mutex<RefreshCell<anyhow::Result<Vec<(bool, String, SystemTime)>>>> =
+                |_| Mutex::new(RefreshCell::new());
+            let mut chat = self.state.get(CHAT).lock();
+            let chatting_with = daemon_cfg.gui_prefs.chatting_with;
+            let chat = chat.get_or_refresh(Duration::from_millis(100), move || {
+                if let Some(neigh) = chatting_with {
+                    block_on(async move {
+                        let chat = control_clone
+                            .lock()
+                            .await
+                            .get_chat(neigh)
+                            .await
+                            .map_err(|e| anyhow::anyhow!("error pulling chat with {neigh}: {e}"))?;
+                        Ok(chat)
+                    })
+                } else {
+                    Ok(vec![(true, "hello".to_string(), SystemTime::now())])
+                }
+            });
+
+            ui.columns(3, |cols| match chat {
+                None => {
+                    cols[1].label("Loading...");
+                }
+
+                Some(Ok(chat)) => {
+                    for (is_mine, msg, time) in chat {
+                        let datetime: DateTime<Utc> =
+                            <SystemTime as std::convert::Into<DateTime<Utc>>>::into(*time);
+                        let formatted_time = datetime.to_rfc3339();
+                        let id_source = format!("{}{}{}", is_mine, msg, formatted_time);
+
+                        if *is_mine {
+                            egui::ScrollArea::vertical().show(&mut cols[1], |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.push_id(id_source, |ui| {
+                                        ui.label(msg);
+                                        ui.label(formatted_time);
+                                    });
+                                });
+                            });
+                        } else {
+                            egui::ScrollArea::vertical().show(&mut cols[1], |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.push_id(id_source, |ui| {
+                                        ui.label(msg);
+                                        ui.label(formatted_time);
+                                    });
+                                });
+                            });
+                        }
+                    }
+                }
+                Some(Err(err)) => {
+                    cols[1].colored_label(Color32::DARK_RED, "Loading peers failed:");
+                    cols[1].label(format!("{:?}", err));
+                }
+            });
         }
     }
 
@@ -312,7 +377,7 @@ impl App {
     fn render_logs(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.heading("Logs");
         let logs = LOGS.read().unwrap();
-        let mut logs_str = logs.iter().fold(String::new(), |init, x| init + "\n" + x);
+        let logs_str = logs.iter().fold(String::new(), |init, x| init + "\n" + x);
 
         ui.centered_and_justified(|ui| {
             egui::ScrollArea::vertical().show(ui, |ui| ui.code_editor(&mut logs_str.as_str()))

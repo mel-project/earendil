@@ -1805,6 +1805,7 @@ version = "0.1.0"
 dependencies = [
  "anyctx",
  "anyhow",
+ "async-std",
  "chrono",
  "dirs",
  "earendil",
