@@ -24,7 +24,7 @@ use tap::Tap;
 use crate::{app::refresh_cell::RefreshCell, subscriber::LOGS};
 
 use self::{
-    config::{ConfigState, DaemonMode},
+    config::{ConfigState, DaemonMode, Prefs},
     daemon_wrap::DaemonWrap,
     modal_state::{ModalState, Severity},
 };
@@ -168,7 +168,7 @@ impl App {
     }
 
     fn render_chat(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        ui.columns(3, |cols| {
+        ui.columns(2, |cols| {
             cols[0].vertical(|ui| ui.heading("Peer Selection"));
             cols[1].vertical(|ui| ui.heading("Chat"));
         });
@@ -205,7 +205,7 @@ impl App {
                     let placeholder = if let Some(neigh) = daemon_cfg.gui_prefs.chatting_with {
                         neigh.to_string()
                     } else {
-                        "        Select a peer to start chatting         ".to_string()
+                        "          Select a peer to start chatting         ".to_string()
                     };
                     egui::ComboBox::from_label("Peers")
                         .selected_text(placeholder)
@@ -245,7 +245,7 @@ impl App {
             });
 
             if let Some(neigh) = chatting_with {
-                ui.columns(3, |cols| match chat {
+                ui.columns(2, |cols| match chat {
                     None => {
                         cols[1].label("Loading...");
                     }
@@ -261,6 +261,17 @@ impl App {
                                 .fingerprint(),
                             neigh,
                         );
+                        let daemon = self.daemon.as_ref().and_then(|d| d.ready());
+                        if let Some(Ok(daemon)) = daemon {
+                            if let Some(neigh) = chatting_with {
+                                self.render_input(
+                                    ctx,
+                                    &mut cols[1],
+                                    &mut daemon_cfg.gui_prefs,
+                                    neigh,
+                                );
+                            }
+                        }
                     }
                     Some(Err(err)) => {
                         cols[1].colored_label(Color32::DARK_RED, "Loading peers failed:");
@@ -277,24 +288,26 @@ impl App {
         my_fp: Fingerprint,
         their_fp: Fingerprint,
     ) {
-        for (is_mine, msg, time) in tuple_chat {
-            let time: DateTime<Local> = time.into();
-            let time_str = format!("{}", time.format("%H:%M:%S"));
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for (is_mine, msg, time) in tuple_chat {
+                let time: DateTime<Local> = time.into();
+                let time_str = format!("{}", time.format("%H:%M:%S"));
 
-            if is_mine {
-                ui.horizontal(|ui| {
-                    ui.label(format!("[{time_str}]"));
-                    Self::render_fp(ui, my_fp);
-                    ui.label(msg);
-                });
-            } else {
-                ui.horizontal(|ui| {
-                    ui.label(format!("[{time_str}]"));
-                    Self::render_fp(ui, their_fp);
-                    ui.label(msg);
-                });
+                if is_mine {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("[{time_str}]"));
+                        Self::render_fp(ui, my_fp);
+                        ui.add(egui::Label::new(msg).wrap(true));
+                    });
+                } else {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("[{time_str}]"));
+                        Self::render_fp(ui, their_fp);
+                        ui.add(egui::Label::new(msg).wrap(true));
+                    });
+                }
             }
-        }
+        });
     }
 
     fn render_fp(ui: &mut egui::Ui, fp: Fingerprint) {
@@ -317,6 +330,38 @@ impl App {
             egui::Color32::from_rgb(r_acc / 2, g_acc / 2, b_acc / 2),
             fp.to_string(),
         );
+    }
+
+    fn render_input(
+        &self,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+        prefs: &mut Prefs,
+        dest: Fingerprint,
+    ) {
+        egui::TopBottomPanel::bottom("input").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.add_space(ui.available_width() / 2.0);
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut prefs.chat_msg)
+                            .desired_width(ui.available_width() * 0.85),
+                    );
+
+                    let msg = prefs.chat_msg.clone();
+                    if ui.button("Send").clicked() {
+                        if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
+                            match block_on(async move {
+                                daemon.control().send_chat_msg(dest, msg).await
+                            }) {
+                                Ok(_) => prefs.chat_msg = String::new(),
+                                Err(e) => println!("error sending chat message: {e}"),
+                            }
+                        }
+                    }
+                });
+            });
+        });
     }
 
     fn render_settings(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {

@@ -16,6 +16,7 @@ pub struct ConfigState {
 pub struct Prefs {
     pub daemon_mode: DaemonMode,
     pub chatting_with: Option<Fingerprint>,
+    pub chat_msg: String,
 }
 
 impl Default for Prefs {
@@ -23,6 +24,7 @@ impl Default for Prefs {
         Self {
             daemon_mode: DaemonMode::Embedded,
             chatting_with: None,
+            chat_msg: String::new(),
         }
     }
 }
