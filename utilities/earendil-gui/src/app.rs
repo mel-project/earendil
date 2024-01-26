@@ -5,17 +5,16 @@ mod refresh_cell;
 
 use std::{
     sync::Arc,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime},
 };
 
 use anyctx::AnyCtx;
 use anyhow::Context;
-use chrono::{DateTime, Local, LocalResult, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Local};
 use earendil::daemon::Daemon;
 use earendil_crypt::Fingerprint;
 use egui::{
-    mutex::Mutex, Color32, FontData, FontDefinitions, FontFamily, FontId, RichText, Shape,
-    TextStyle, Visuals,
+    mutex::Mutex, Color32, FontData, FontDefinitions, FontFamily, RichText, Shape, Visuals,
 };
 use egui_modal::Modal;
 use poll_promise::Promise;
@@ -173,6 +172,7 @@ impl App {
             cols[0].vertical(|ui| ui.heading("Peer Selection"));
             cols[1].vertical(|ui| ui.heading("Chat"));
         });
+        ui.separator();
 
         if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
             let mut daemon_cfg = self.daemon_cfg.lock();
@@ -240,49 +240,83 @@ impl App {
                         Ok(chat)
                     })
                 } else {
-                    Ok(vec![(true, "hello".to_string(), SystemTime::now())])
+                    Ok(vec![])
                 }
             });
 
-            ui.columns(3, |cols| match chat {
-                None => {
-                    cols[1].label("Loading...");
-                }
-
-                Some(Ok(chat)) => {
-                    for (is_mine, msg, time) in chat {
-                        let datetime: DateTime<Utc> =
-                            <SystemTime as std::convert::Into<DateTime<Utc>>>::into(*time);
-                        let formatted_time = datetime.to_rfc3339();
-                        let id_source = format!("{}{}{}", is_mine, msg, formatted_time);
-
-                        if *is_mine {
-                            egui::ScrollArea::vertical().show(&mut cols[1], |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.push_id(id_source, |ui| {
-                                        ui.label(msg);
-                                        ui.label(formatted_time);
-                                    });
-                                });
-                            });
-                        } else {
-                            egui::ScrollArea::vertical().show(&mut cols[1], |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.push_id(id_source, |ui| {
-                                        ui.label(msg);
-                                        ui.label(formatted_time);
-                                    });
-                                });
-                            });
-                        }
+            if let Some(neigh) = chatting_with {
+                ui.columns(3, |cols| match chat {
+                    None => {
+                        cols[1].label("Loading...");
                     }
-                }
-                Some(Err(err)) => {
-                    cols[1].colored_label(Color32::DARK_RED, "Loading peers failed:");
-                    cols[1].label(format!("{:?}", err));
-                }
-            });
+
+                    Some(Ok(chat)) => {
+                        Self::render_convo(
+                            &mut cols[1],
+                            chat.to_vec(),
+                            daemon
+                                .global_sk()
+                                .expect("unable to get remote daemon pk")
+                                .public()
+                                .fingerprint(),
+                            neigh,
+                        );
+                    }
+                    Some(Err(err)) => {
+                        cols[1].colored_label(Color32::DARK_RED, "Loading peers failed:");
+                        cols[1].label(format!("{:?}", err));
+                    }
+                });
+            }
         }
+    }
+
+    fn render_convo(
+        ui: &mut egui::Ui,
+        tuple_chat: Vec<(bool, String, SystemTime)>,
+        my_fp: Fingerprint,
+        their_fp: Fingerprint,
+    ) {
+        for (is_mine, msg, time) in tuple_chat {
+            let time: DateTime<Local> = time.into();
+            let time_str = format!("{}", time.format("%H:%M:%S"));
+
+            if is_mine {
+                ui.horizontal(|ui| {
+                    ui.label(format!("[{time_str}]"));
+                    Self::render_fp(ui, my_fp);
+                    ui.label(msg);
+                });
+            } else {
+                ui.horizontal(|ui| {
+                    ui.label(format!("[{time_str}]"));
+                    Self::render_fp(ui, their_fp);
+                    ui.label(msg);
+                });
+            }
+        }
+    }
+
+    fn render_fp(ui: &mut egui::Ui, fp: Fingerprint) {
+        let bytes = fp.as_bytes();
+        let r_bytes = &bytes[0..6];
+        let g_bytes = &bytes[6..12];
+        let b_bytes = &bytes[12..18];
+
+        let mut r_acc: u8 = 0;
+        let mut g_acc: u8 = 0;
+        let mut b_acc: u8 = 0;
+
+        for i in 0..6 {
+            r_acc = r_acc.wrapping_add(r_bytes[i]);
+            g_acc = g_acc.wrapping_add(g_bytes[i]);
+            b_acc = b_acc.wrapping_add(b_bytes[i]);
+        }
+
+        ui.colored_label(
+            egui::Color32::from_rgb(r_acc / 2, g_acc / 2, b_acc / 2),
+            fp.to_string(),
+        );
     }
 
     fn render_settings(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -376,6 +410,8 @@ impl App {
 
     fn render_logs(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.heading("Logs");
+        ui.separator();
+
         let logs = LOGS.read().unwrap();
         let logs_str = logs.iter().fold(String::new(), |init, x| init + "\n" + x);
 
