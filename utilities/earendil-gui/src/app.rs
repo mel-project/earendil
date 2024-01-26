@@ -343,20 +343,19 @@ impl App {
             ui.horizontal(|ui| {
                 ui.add_space(ui.available_width() / 2.0);
                 ui.horizontal(|ui| {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut prefs.chat_msg)
-                            .desired_width(ui.available_width() * 0.85),
-                    );
+                    let response = ui.text_edit_singleline(&mut prefs.chat_msg);
+                    let enter_pressed = ctx.input(|input| input.key_pressed(egui::Key::Enter));
 
-                    let msg = prefs.chat_msg.clone();
-                    if ui.button("Send").clicked() {
+                    if ui.button("Send").clicked() || enter_pressed {
                         if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
+                            let msg = prefs.chat_msg.clone();
                             match block_on(async move {
                                 daemon.control().send_chat_msg(dest, msg).await
                             }) {
                                 Ok(_) => prefs.chat_msg = String::new(),
                                 Err(e) => println!("error sending chat message: {e}"),
                             }
+                            response.request_focus();
                         }
                     }
                 });

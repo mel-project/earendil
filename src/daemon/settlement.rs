@@ -34,7 +34,7 @@ impl HashFunction for Hasher {
 
 // a stand in for the real Mel getter
 pub fn onchain_multiplier() -> u64 {
-    8
+    1
 }
 
 pub fn difficulty_to_micromel(difficulty: usize) -> u64 {
@@ -98,7 +98,7 @@ pub enum SettlementProof {
 
 impl SettlementProof {
     pub fn new_auto(seed: Seed, difficulty: usize) -> Self {
-        log::debug!("generating mel PoW...");
+        log::debug!("generating mel PoW with difficulty {difficulty}...");
         let proof = melpow::Proof::generate(&seed, difficulty, Hasher).to_bytes();
         SettlementProof::Automatic(AutoSettleProof {
             seed,

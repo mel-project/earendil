@@ -222,9 +222,8 @@ async fn link_service_loop(
                             let debts = ctx.get(DEBTS);
                             let net_debt = debts.net_debt_est(&neigh_fp).unwrap_or_default();
                             if net_debt.is_negative() {
-                                let i_owe = net_debt.abs();
-                                let difficulty =
-                                    (i_owe / onchain_multiplier() as i128).ilog2() as usize;
+                                let i_owe = net_debt.unsigned_abs() as u64;
+                                let difficulty = (i_owe / onchain_multiplier()).ilog2() as usize;
 
                                 let proof = SettlementProof::new_auto(seed, difficulty);
                                 let request = SettlementRequest::new(
