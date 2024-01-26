@@ -17,13 +17,16 @@ mod link_connection;
 mod link_protocol;
 
 use crate::{
-    config::LinkPrice,
+    config::{AutoSettle, LinkPrice},
     daemon::{
-        context::{DEBTS, NEIGH_TABLE_NEW},
+        context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, SETTLEMENTS},
         inout_route::{
             chat::{add_client, remove_client},
             gossip::gossip_loop,
             link_connection::link_authenticate,
+        },
+        settlement::{
+            difficulty_to_micromel, onchain_multiplier, SettlementProof, SettlementRequest,
         },
     },
 };
@@ -164,33 +167,34 @@ async fn link_service_loop(
 
     connection_loop
         .race(async move {
-            let idpk = link_authenticate(mplex.clone(), their_fp).await?;
-            remote_pk_shared.set(idpk).unwrap();
+            let neigh_idpk = link_authenticate(mplex.clone(), their_fp).await?;
+            let neigh_fp = neigh_idpk.fingerprint();
+
+            remote_pk_shared.set(neigh_idpk).unwrap();
 
             // register the outgoing channel. This registration eventually expires, but we'll die before that so it's fine.
             // Note that this will overwrite any existing entry, which will close their send_outgoing, which will stop their loop. That is a good thing!
-            ctx.get(NEIGH_TABLE_NEW)
-                .insert(idpk.fingerprint(), send_outgoing);
+            ctx.get(NEIGH_TABLE_NEW).insert(neigh_fp, send_outgoing);
 
             let gossip_loop = {
                 let rpc = LinkRpcTransport::new(mplex.clone());
                 let client = LinkClient::from(rpc);
-                gossip_loop(ctx.clone(), idpk, client)
+                gossip_loop(ctx.clone(), neigh_idpk, client)
             };
 
             let rpc = LinkRpcTransport::new(mplex.clone());
             let client = Arc::new(LinkClient::from(rpc));
 
             // add link mux to chats mapping and deregister
-            add_client(&ctx, idpk.fingerprint(), client.clone());
+            add_client(&ctx, neigh_fp, client.clone());
             scopeguard::defer!({
-                remove_client(&ctx, &idpk.fingerprint());
+                remove_client(&ctx, &neigh_fp);
             });
 
             let price_loop = async {
                 loop {
                     ctx.get(DEBTS).insert_incoming_price(
-                        idpk.fingerprint(),
+                        neigh_fp,
                         link_info.incoming_price,
                         link_info.incoming_debt_limit,
                     );
@@ -205,7 +209,53 @@ async fn link_service_loop(
                     smol::Timer::after(Duration::from_secs(300)).await;
                 }
             };
-            gossip_loop.race(price_loop).await
+
+            // include auto_settle_loop if we have provided automatic settlement options in the config
+            if let Some(AutoSettle { interval }) = ctx.get(SETTLEMENTS).auto_settle {
+                let auto_settle_loop = async {
+                    loop {
+                        tracing::debug!("starting auto_settle loop!");
+                        smol::Timer::after(Duration::from_secs(interval)).await;
+
+                        if let Ok(Some(seed)) = client.request_seed().await {
+                            tracing::debug!("got an auto_settle seed");
+                            let debts = ctx.get(DEBTS);
+                            let net_debt = debts.net_debt_est(&neigh_fp).unwrap_or_default();
+                            if net_debt.is_negative() {
+                                let i_owe = net_debt.abs();
+                                let difficulty =
+                                    (i_owe / onchain_multiplier() as i128).ilog2() as usize;
+
+                                let proof = SettlementProof::new_auto(seed, difficulty);
+                                let request = SettlementRequest::new(
+                                    *ctx.get(GLOBAL_IDENTITY),
+                                    difficulty_to_micromel(difficulty),
+                                    proof,
+                                );
+                                match client.start_settlement(request).await {
+                                    Ok(Some(_)) => log::debug!(
+                                        "automatic settlement of {} micromel accepted by {}",
+                                        difficulty_to_micromel(difficulty),
+                                        neigh_idpk.fingerprint()
+                                    ),
+                                    Ok(None) => log::warn!(
+                                        "automatic settlement rejected by {}",
+                                        neigh_idpk.fingerprint(),
+                                    ),
+                                    Err(e) => log::warn!(
+                                        "error with automatic settlement sent to {}: {e}",
+                                        neigh_idpk.fingerprint()
+                                    ),
+                                }
+                            }
+                        }
+                    }
+                };
+
+                gossip_loop.race(price_loop.race(auto_settle_loop)).await
+            } else {
+                gossip_loop.race(price_loop).await
+            }
         })
         .await
 }
