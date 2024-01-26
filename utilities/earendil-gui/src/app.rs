@@ -343,7 +343,10 @@ impl App {
             ui.horizontal(|ui| {
                 ui.add_space(ui.available_width() / 2.0);
                 ui.horizontal(|ui| {
-                    let response = ui.text_edit_singleline(&mut prefs.chat_msg);
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut prefs.chat_msg)
+                            .desired_width(ui.available_width() * 0.85),
+                    );
                     let enter_pressed = ctx.input(|input| input.key_pressed(egui::Key::Enter));
 
                     if ui.button("Send").clicked() || enter_pressed {
