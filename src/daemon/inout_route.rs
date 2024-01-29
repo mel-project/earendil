@@ -225,26 +225,29 @@ async fn link_service_loop(
                                 let i_owe = net_debt.unsigned_abs() as u64;
                                 let difficulty = (i_owe / onchain_multiplier()).ilog2() as usize;
 
-                                let proof = SettlementProof::new_auto(seed, difficulty);
-                                let request = SettlementRequest::new(
-                                    *ctx.get(GLOBAL_IDENTITY),
-                                    difficulty_to_micromel(difficulty),
-                                    proof,
-                                );
-                                match client.start_settlement(request).await {
-                                    Ok(Some(_)) => log::debug!(
-                                        "automatic settlement of {} micromel accepted by {}",
+                                if difficulty > 0 {
+                                    let difficulty = if difficulty > 64 { 64 } else { difficulty };
+                                    let proof = SettlementProof::new_auto(seed, difficulty);
+                                    let request = SettlementRequest::new(
+                                        *ctx.get(GLOBAL_IDENTITY),
                                         difficulty_to_micromel(difficulty),
-                                        neigh_idpk.fingerprint()
-                                    ),
-                                    Ok(None) => log::warn!(
-                                        "automatic settlement rejected by {}",
-                                        neigh_idpk.fingerprint(),
-                                    ),
-                                    Err(e) => log::warn!(
-                                        "error with automatic settlement sent to {}: {e}",
-                                        neigh_idpk.fingerprint()
-                                    ),
+                                        proof,
+                                    );
+                                    match client.start_settlement(request).await {
+                                        Ok(Some(_)) => log::debug!(
+                                            "automatic settlement of {} micromel accepted by {}",
+                                            difficulty_to_micromel(difficulty),
+                                            neigh_idpk.fingerprint()
+                                        ),
+                                        Ok(None) => log::warn!(
+                                            "automatic settlement rejected by {}",
+                                            neigh_idpk.fingerprint(),
+                                        ),
+                                        Err(e) => log::warn!(
+                                            "error with automatic settlement sent to {}: {e}",
+                                            neigh_idpk.fingerprint()
+                                        ),
+                                    }
                                 }
                             }
                         }

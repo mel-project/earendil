@@ -168,15 +168,21 @@ impl App {
     }
 
     fn render_chat(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        let mut daemon_cfg = self.daemon_cfg.lock();
+
+        let chat_heading = if let Some(neigh) = daemon_cfg.gui_prefs.chatting_with {
+            format!("Chatting with {neigh}")
+        } else {
+            "Chat".to_string()
+        };
+
         ui.columns(2, |cols| {
             cols[0].vertical(|ui| ui.heading("Peer Selection"));
-            cols[1].vertical(|ui| ui.heading("Chat"));
+            cols[1].vertical(|ui| ui.heading(chat_heading));
         });
         ui.separator();
 
         if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
-            let mut daemon_cfg = self.daemon_cfg.lock();
-
             let control = Arc::new(async_std::sync::Mutex::new(daemon.control()));
             let control_clone = control.clone();
 
@@ -202,22 +208,11 @@ impl App {
                     ui.label(format!("{:?}", err));
                 }
                 Some(Ok(neighs)) => {
-                    let placeholder = if let Some(neigh) = daemon_cfg.gui_prefs.chatting_with {
-                        neigh.to_string()
-                    } else {
-                        "          Select a peer to start chatting         ".to_string()
-                    };
-                    egui::ComboBox::from_label("Peers")
-                        .selected_text(placeholder)
-                        .show_ui(ui, |ui| {
-                            for neigh in neighs {
-                                ui.selectable_value(
-                                    &mut daemon_cfg.gui_prefs.chatting_with,
-                                    Some(*neigh),
-                                    neigh.to_string(),
-                                );
-                            }
-                        });
+                    for neigh in neighs {
+                        if ui.button(neigh.to_string()).clicked() {
+                            daemon_cfg.gui_prefs.chatting_with = Some(*neigh);
+                        }
+                    }
                 }
             }
 
