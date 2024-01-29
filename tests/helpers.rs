@@ -70,6 +70,7 @@ pub fn gen_cfg(
         tcp_forwards,
         socks5,
         havens,
+        auto_settle: None,
     }
 }
 
