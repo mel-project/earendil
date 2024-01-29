@@ -352,12 +352,13 @@ impl App {
                     if ui.button("Send").clicked() || enter_pressed {
                         if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
                             let msg = prefs.chat_msg.clone();
-                            match block_on(async move {
-                                daemon.control().send_chat_msg(dest, msg).await
-                            }) {
-                                Ok(_) => prefs.chat_msg = String::new(),
-                                Err(e) => println!("error sending chat message: {e}"),
-                            }
+                            let daemon = daemon.clone();
+                            std::thread::spawn(move || {
+                                block_on(
+                                    async move { daemon.control().send_chat_msg(dest, msg).await },
+                                )
+                            });
+                            prefs.chat_msg.clear();
                             response.request_focus();
                         }
                     }
@@ -445,7 +446,7 @@ impl App {
                     let daemon = Daemon::init(config_file).context("cannot start daemon")?;
                     smol::future::block_on(daemon.control_client().graph_dump(false))
                         .context("could not get graph dump")?;
-                    Ok(DaemonWrap::Embedded(daemon))
+                    Ok(DaemonWrap::Embedded(daemon.into()))
                 }))
             }
 

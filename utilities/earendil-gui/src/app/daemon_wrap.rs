@@ -1,11 +1,12 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use earendil::{control_protocol::ControlClient, daemon::Daemon};
 use earendil_crypt::IdentitySecret;
 
+#[derive(Clone)]
 pub enum DaemonWrap {
     Remote(SocketAddr),
-    Embedded(Daemon),
+    Embedded(Arc<Daemon>),
 }
 
 impl DaemonWrap {
