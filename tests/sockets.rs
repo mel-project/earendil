@@ -1,4 +1,4 @@
-use std::{env, fmt::Alignment, time::Duration};
+use std::{env, time::Duration};
 
 use anyhow::Context;
 use bytes::Bytes;
@@ -113,8 +113,8 @@ fn haven() {
     );
 
     smolscale::block_on(async move {
-        // sleep to give the nodes time to connect
-        Timer::after(Duration::from_secs(5)).await;
+        // sleep to give the nodes time to connect and register havens
+        helpers::sleep(15).await;
         let alice_msg = Bytes::from_static("Hello, anonymous Derek!".as_bytes());
         alice_skt
             .send_to(alice_msg.clone(), derek_skt.local_endpoint())

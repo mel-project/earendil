@@ -199,113 +199,126 @@ impl App {
                 })
             });
 
-            match neighbors {
-                None => {
-                    ui.label("Loading...");
-                }
-                Some(Err(err)) => {
-                    ui.colored_label(Color32::DARK_RED, "Loading peers failed:");
-                    ui.label(format!("{:?}", err));
-                }
-                Some(Ok(neighs)) => {
-                    for neigh in neighs {
-                        if ui.button(neigh.to_string()).clicked() {
-                            daemon_cfg.gui_prefs.chatting_with = Some(*neigh);
-                        }
-                    }
-                }
-            }
-
-            static CHAT: fn(
-                &AnyCtx<()>,
-            )
-                -> Mutex<RefreshCell<anyhow::Result<Vec<(bool, String, SystemTime)>>>> =
-                |_| Mutex::new(RefreshCell::new());
-            let mut chat = self.state.get(CHAT).lock();
-            let chatting_with = daemon_cfg.gui_prefs.chatting_with;
-            let chat = chat.get_or_refresh(Duration::from_millis(100), move || {
-                if let Some(neigh) = chatting_with {
-                    block_on(async move {
-                        let chat = control_clone
-                            .lock()
-                            .await
-                            .get_chat(neigh)
-                            .await
-                            .map_err(|e| anyhow::anyhow!("error pulling chat with {neigh}: {e}"))?;
-                        Ok(chat)
-                    })
-                } else {
-                    Ok(vec![])
-                }
-            });
-
-            if let Some(neigh) = chatting_with {
-                ui.columns(2, |cols| match chat {
+            ui.columns(2, |cols| {
+                match neighbors {
                     None => {
-                        cols[1].label("Loading...");
-                    }
-
-                    Some(Ok(chat)) => {
-                        Self::render_convo(
-                            &mut cols[1],
-                            chat.to_vec(),
-                            daemon
-                                .global_sk()
-                                .expect("unable to get remote daemon pk")
-                                .public()
-                                .fingerprint(),
-                            neigh,
-                        );
-                        let daemon = self.daemon.as_ref().and_then(|d| d.ready());
-                        if let Some(Ok(daemon)) = daemon {
-                            if let Some(neigh) = chatting_with {
-                                self.render_input(
-                                    ctx,
-                                    &mut cols[1],
-                                    &mut daemon_cfg.gui_prefs,
-                                    neigh,
-                                );
-                            }
-                        }
+                        cols[0].label("Loading...");
                     }
                     Some(Err(err)) => {
-                        cols[1].colored_label(Color32::DARK_RED, "Loading peers failed:");
-                        cols[1].label(format!("{:?}", err));
+                        cols[0].colored_label(Color32::DARK_RED, "Loading peers failed:");
+                        cols[0].label(format!("{:?}", err));
                     }
-                });
-            }
+                    Some(Ok(neighs)) => {
+                        cols[0].vertical(|ui| {
+                            for neigh in neighs {
+                                if ui.button(neigh.to_string()).clicked() {
+                                    daemon_cfg.gui_prefs.chatting_with = Some(*neigh);
+                                }
+                            }
+                        });
+                    }
+                }
+
+                static CHAT: fn(
+                    &AnyCtx<()>,
+                ) -> Mutex<
+                    RefreshCell<anyhow::Result<Vec<(bool, String, SystemTime)>>>,
+                > = |_| Mutex::new(RefreshCell::new());
+                let mut chat = self.state.get(CHAT).lock();
+                let chatting_with = daemon_cfg.gui_prefs.chatting_with;
+                let chat =
+                    chat.get_or_refresh(Duration::from_millis(100), move || {
+                        if let Some(neigh) = chatting_with {
+                            block_on(async move {
+                                let chat =
+                                    control_clone.lock().await.get_chat(neigh).await.map_err(
+                                        |e| anyhow::anyhow!("error pulling chat with {neigh}: {e}"),
+                                    )?;
+                                Ok(chat)
+                            })
+                        } else {
+                            Ok(vec![])
+                        }
+                    });
+
+                if let Some(neigh) = chatting_with {
+                    match chat {
+                        None => {
+                            cols[1].label("Loading...");
+                        }
+
+                        Some(Ok(chat)) => {
+                            self.render_convo(
+                                &mut cols[1],
+                                chat.to_vec(),
+                                daemon
+                                    .global_sk()
+                                    .expect("unable to get remote daemon pk")
+                                    .public()
+                                    .fingerprint(),
+                                neigh,
+                            );
+                            let daemon = self.daemon.as_ref().and_then(|d| d.ready());
+                            if let Some(Ok(_daemon)) = daemon {
+                                if let Some(neigh) = chatting_with {
+                                    match neighbors {
+                                        Some(Ok(neighs)) => {
+                                            if neighs.contains(&neigh) {
+                                                self.render_input(
+                                                    ctx,
+                                                    &mut cols[1],
+                                                    &mut daemon_cfg.gui_prefs,
+                                                    neigh,
+                                                );
+                                            }
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                            }
+                        }
+                        Some(Err(err)) => {
+                            cols[1].colored_label(Color32::DARK_RED, "Loading peers failed:");
+                            cols[1].label(format!("{:?}", err));
+                        }
+                    }
+                }
+            });
         }
     }
 
     fn render_convo(
+        &self,
         ui: &mut egui::Ui,
         tuple_chat: Vec<(bool, String, SystemTime)>,
         my_fp: Fingerprint,
         their_fp: Fingerprint,
     ) {
         egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.set_height(ui.available_height());
+
             for (is_mine, msg, time) in tuple_chat {
                 let time: DateTime<Local> = time.into();
                 let time_str = format!("{}", time.format("%H:%M:%S"));
 
                 if is_mine {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.label(format!("[{time_str}]"));
-                        Self::render_fp(ui, my_fp);
-                        ui.add(egui::Label::new(msg).wrap(true));
+                        self.render_fp(ui, my_fp);
+                        ui.add(egui::Label::new(msg));
                     });
                 } else {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.label(format!("[{time_str}]"));
-                        Self::render_fp(ui, their_fp);
-                        ui.add(egui::Label::new(msg).wrap(true));
+                        self.render_fp(ui, their_fp);
+                        ui.add(egui::Label::new(msg));
                     });
                 }
             }
         });
     }
 
-    fn render_fp(ui: &mut egui::Ui, fp: Fingerprint) {
+    fn render_fp(&self, ui: &mut egui::Ui, fp: Fingerprint) {
         let bytes = fp.as_bytes();
         let r_bytes = &bytes[0..6];
         let g_bytes = &bytes[6..12];
@@ -334,31 +347,24 @@ impl App {
         prefs: &mut Prefs,
         dest: Fingerprint,
     ) {
-        egui::TopBottomPanel::bottom("input").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.add_space(ui.available_width() / 2.0);
-                ui.horizontal(|ui| {
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut prefs.chat_msg)
-                            .desired_width(ui.available_width() * 0.85),
-                    );
-                    let enter_pressed = ctx.input(|input| input.key_pressed(egui::Key::Enter));
+        ui.horizontal(|ui| {
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut prefs.chat_msg)
+                    .desired_width(ui.available_width() - 50.0),
+            );
+            let enter_pressed = ctx.input(|input| input.key_pressed(egui::Key::Enter));
 
-                    if ui.button("Send").clicked() || enter_pressed {
-                        if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
-                            let msg = prefs.chat_msg.clone();
-                            let daemon = daemon.clone();
-                            std::thread::spawn(move || {
-                                block_on(
-                                    async move { daemon.control().send_chat_msg(dest, msg).await },
-                                )
-                            });
-                            prefs.chat_msg.clear();
-                            response.request_focus();
-                        }
-                    }
-                });
-            });
+            if ui.button("Send").clicked() || enter_pressed {
+                if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
+                    let msg = prefs.chat_msg.clone();
+                    let daemon = daemon.clone();
+                    std::thread::spawn(move || {
+                        block_on(async move { daemon.control().send_chat_msg(dest, msg).await })
+                    });
+                    prefs.chat_msg.clear();
+                    response.request_focus();
+                }
+            }
         });
     }
 
