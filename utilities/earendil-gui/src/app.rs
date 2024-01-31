@@ -86,8 +86,8 @@ impl eframe::App for App {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.selected_tab, TabName::Dashboard, "Dashboard");
                 ui.selectable_value(&mut self.selected_tab, TabName::Chat, "Chat");
-                ui.selectable_value(&mut self.selected_tab, TabName::Settings, "Settings");
                 ui.selectable_value(&mut self.selected_tab, TabName::Logs, "Logs");
+                ui.selectable_value(&mut self.selected_tab, TabName::Settings, "Settings");
             })
         });
         egui::TopBottomPanel::bottom("bottom").show(ctx, |ui| self.render_bottom_panel(ctx, ui));
@@ -133,11 +133,11 @@ impl eframe::App for App {
 impl App {
     fn render_dashboard(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.columns(2, |cols| {
-                cols[0].vertical(|ui| ui.heading("Peers"));
-                cols[1].vertical(|ui| ui.heading("Stats"));
-            });
-            ui.separator();
+            // ui.columns(2, |cols| {
+            //     cols[0].vertical(|ui| ui.heading("Peers"));
+            //     cols[1].vertical(|ui| ui.heading("Stats"));
+            // });
+            // ui.separator();
             ui.heading("Graph dump");
             if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
                 static GRAPH_DUMP: fn(&AnyCtx<()>) -> Mutex<RefreshCell<anyhow::Result<String>>> =
@@ -169,22 +169,22 @@ impl App {
 
     fn render_settings(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let mut daemon_cfg = self.daemon_cfg.lock();
-        ui.heading("Settings");
-        egui::ComboBox::from_label("Daemon mode")
-            .selected_text(format!("{:?}", daemon_cfg.gui_prefs.daemon_mode))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(
-                    &mut daemon_cfg.gui_prefs.daemon_mode,
-                    DaemonMode::Embedded,
-                    "Embedded",
-                );
-                ui.selectable_value(
-                    &mut daemon_cfg.gui_prefs.daemon_mode,
-                    DaemonMode::Remote,
-                    "Remote",
-                );
-            });
-        ui.separator();
+        // ui.heading("Settings");
+        // egui::ComboBox::from_label("Daemon mode")
+        //     .selected_text(format!("{:?}", daemon_cfg.gui_prefs.daemon_mode))
+        //     .show_ui(ui, |ui| {
+        //         ui.selectable_value(
+        //             &mut daemon_cfg.gui_prefs.daemon_mode,
+        //             DaemonMode::Embedded,
+        //             "Embedded",
+        //         );
+        //         ui.selectable_value(
+        //             &mut daemon_cfg.gui_prefs.daemon_mode,
+        //             DaemonMode::Remote,
+        //             "Remote",
+        //         );
+        //     });
+        // ui.separator();
         ui.heading("Earendil config");
         if let Err(err) = daemon_cfg.realize() {
             ui.label(
