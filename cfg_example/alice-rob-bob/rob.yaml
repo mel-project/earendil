@@ -3,6 +3,8 @@
 identity_seed: rob-was-here
 state_cache: rob_state_cache.db
 control_listen: 127.0.0.1:33333
+auto_settle: 
+  interval: 10
 
 in_routes:
   # arbitrary names, used for diagnositics and logging
@@ -10,6 +12,10 @@ in_routes:
     protocol: obfsudp
     listen: 0.0.0.0:34567
     secret: labooyah hahaha lol smany
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000
 
 out_routes:
   bob:
@@ -17,3 +23,7 @@ out_routes:
     protocol: obfsudp
     connect: 127.0.0.1:12345
     cookie: bb27ead798b27ec3384ac2cf2f374a17c02bfce420b19e8b2c5a8f898fd6384d
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000

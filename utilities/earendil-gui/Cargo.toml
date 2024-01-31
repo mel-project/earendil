@@ -1,0 +1,29 @@
+[package]
+name = "earendil-gui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.79"
+eframe = "0.25.0"
+egui = "0.25.0"
+tap = "1.0.1"
+earendil={path="../../"}
+nanorpc-http = "0.1.3"
+poll-promise = "0.3.0"
+anyctx = { git = "https://github.com/nullchinchilla/anyctx.git" }
+serde_yaml = "0.9.30"
+dirs = "5.0.1"
+egui-modal = "0.3.2"
+futures-util = "0.3.30"
+smol = "1"
+serde = { version = "1.0.188", features = ["derive"] }
+serde_json = "1.0.111"
+once_cell = "1.19.0"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+chrono = "0.4.32"
+earendil_crypt = { version = "0.1.0", path = "../../libraries/earendil_crypt" }
+async-std = "1.12.0"

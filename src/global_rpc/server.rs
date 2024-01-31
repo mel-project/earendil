@@ -66,7 +66,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         if let Some(val) = self.ctx.get(LOCAL_DHT_SHARD).get(&key) {
             return Ok(Some(val));
         } else if recurse {
-            log::debug!("searching DHT for {key}");
+            tracing::debug!("searching DHT for {key}");
             return dht_get(&self.ctx, key).await;
         }
         Ok(None)

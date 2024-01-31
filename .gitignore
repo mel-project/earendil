@@ -1,3 +1,10 @@
 perf*
+
 **/shadow.data/
 **/target/
+
+*.tfvars
+!example.tfvars
+*.terraform/
+*.tfstate*
+**/generated_earendil_configs/**

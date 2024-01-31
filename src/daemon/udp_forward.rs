@@ -10,6 +10,7 @@ use crate::{config::UdpForwardConfig, socket::Socket};
 
 use super::DaemonContext;
 
+#[tracing::instrument(skip(ctx))]
 /// Loop that forwards a remote earendil address to a local udp port
 pub async fn udp_forward_loop(
     ctx: DaemonContext,

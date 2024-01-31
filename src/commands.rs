@@ -4,7 +4,7 @@ use earendil_crypt::Fingerprint;
 use earendil_packet::Dock;
 
 #[derive(Subcommand)]
-pub enum ControlCommands {
+pub enum ControlCommand {
     /// Binds to a N2rSocket.
     BindN2r {
         #[arg(long)]
@@ -95,10 +95,48 @@ pub enum ControlCommands {
 
     /// Dumps the graph.
     GraphDump {
-        #[arg(short, long)]
+        #[arg(long)]
         human: bool,
     },
 
     /// Dumps my own routes.
     MyRoutes,
+
+    /// Lists debts between you and your neighbors
+    ListDebts,
+
+    /// Lists pending debt settlements
+    ListSettlements,
+
+    /// Interactive chat for talking to immediate neighbors
+    Chat {
+        #[command(subcommand)]
+        chat_command: ChatCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ChatCommand {
+    /// print a summary of all your conversations
+    List,
+
+    /// start an interactive chat session with a neighbor
+    Start {
+        /// The fingerprint (or partial fingerprint) of the user to start a chat with.
+        fp_prefix: String,
+    },
+
+    /// Pulls conversation between you and neighbor
+    Get {
+        #[arg(short, long)]
+        neighbor: Fingerprint,
+    },
+
+    /// Sends a single chat message to dest
+    Send {
+        #[arg(short, long)]
+        dest: Fingerprint,
+        #[arg(short, long)]
+        msg: String,
+    },
 }

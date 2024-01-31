@@ -6,6 +6,7 @@ use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fs::OpenOptions;
+use tracing::instrument;
 
 use crate::socket::Endpoint;
 
@@ -18,6 +19,9 @@ pub struct ConfigFile {
     #[serde(flatten)]
     pub identity: Option<Identity>,
 
+    /// Path to database file.
+    pub db_path: Option<PathBuf>,
+
     /// Where to listen for the local control protocol.
     #[serde(default = "default_control_listen")]
     pub control_listen: SocketAddr,
@@ -28,6 +32,11 @@ pub struct ConfigFile {
     /// List of all outgoing connections
     #[serde(default)]
     pub out_routes: BTreeMap<String, OutRouteConfig>,
+
+    /// Contains the automatic settlement difficulty if accepted
+    #[serde(default)]
+    pub auto_settle: Option<AutoSettle>,
+
     /// List of all client configs for udp forwarding
     #[serde(default)]
     pub udp_forwards: Vec<UdpForwardConfig>,
@@ -53,6 +62,8 @@ pub enum InRouteConfig {
         #[serde_as(as = "serde_with::DisplayFromStr")]
         listen: SocketAddr,
         secret: String,
+        #[serde(default)]
+        link_price: LinkPrice,
     },
 }
 
@@ -67,11 +78,13 @@ pub enum OutRouteConfig {
         connect: SocketAddr,
         #[serde_as(as = "serde_with::hex::Hex")]
         cookie: [u8; 32],
+        #[serde(default)]
+        link_price: LinkPrice,
     },
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct UdpForwardConfig {
     pub listen: SocketAddr,
@@ -80,7 +93,7 @@ pub struct UdpForwardConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct TcpForwardConfig {
     pub listen: SocketAddr,
@@ -89,7 +102,7 @@ pub struct TcpForwardConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub struct Socks5 {
     pub listen: SocketAddr,
@@ -97,7 +110,7 @@ pub struct Socks5 {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum Fallback {
     Block,
@@ -109,7 +122,7 @@ pub enum Fallback {
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct HavenForwardConfig {
     #[serde(flatten)]
     pub identity: Identity,
@@ -119,7 +132,7 @@ pub struct HavenForwardConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ForwardHandler {
     UdpService {
@@ -135,7 +148,7 @@ pub enum ForwardHandler {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 /// A configuration for an identity, specified either as a human-readable seed that will be passed through a KDF, or a file that stores the raw binary bytes of the identity secret.
 #[serde(rename_all = "snake_case")]
 pub enum Identity {
@@ -144,11 +157,12 @@ pub enum Identity {
 }
 
 impl Identity {
+    #[instrument(skip(self))]
     /// Actualizes this into an actual identity.
     pub fn actualize(&self) -> anyhow::Result<IdentitySecret> {
         match self {
             Identity::IdentitySeed(seed) => {
-                log::warn!("initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!");
+                tracing::warn!("initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!");
                 Ok(IdentitySecret::from_seed(seed))
             }
             Identity::IdentityFile(file) => {
@@ -160,7 +174,7 @@ impl Identity {
                             .context("identity file not of the right length")?;
                         return Ok(IdentitySecret::from_bytes(&bts));
                     } else {
-                        log::info!("identity file {:?} does not exist yet, so creating", file);
+                        tracing::info!("identity file {:?} does not exist yet, so creating", file);
                         // create it here
                         let identity = IdentitySecret::generate();
                         let mut options = OpenOptions::new();
@@ -179,4 +193,18 @@ impl Identity {
             }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
+pub struct LinkPrice {
+    /// in micromel
+    pub max_outgoing_price: u64,
+    pub incoming_price: u64,
+    pub incoming_debt_limit: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub struct AutoSettle {
+    /// number of seconds in between settlements
+    pub interval: u64,
 }

@@ -39,6 +39,7 @@ pub struct HavenSocket {
 }
 
 impl HavenSocket {
+    #[tracing::instrument(skip(ctx))]
     pub fn bind(
         ctx: DaemonContext,
         isk: IdentitySecret,
@@ -71,7 +72,7 @@ impl HavenSocket {
         if let Some(rob) = rendezvous_point {
             // We're Bob:
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
-            log::debug!("binding haven with rendezvous_point {}", rob);
+            tracing::debug!("binding haven with rendezvous_point {}", rob);
             let context = ctx.clone();
             let registration_isk = isk;
             let task = smolscale::spawn(async move {
@@ -84,16 +85,16 @@ impl HavenSocket {
                 loop {
                     match gclient
                         .alloc_forward(forward_req.clone())
-                        .timeout(Duration::from_secs(30))
+                        .timeout(Duration::from_secs(10))
                         .await
                     {
                         Some(Err(e)) => {
-                            log::debug!("registering haven rendezvous {rob} failed: {:?}", e);
+                            tracing::debug!("registering haven rendezvous {rob} failed: {:?}", e);
                             Timer::after(Duration::from_secs(3)).await;
                             continue;
                         }
                         None => {
-                            log::debug!("registering haven rendezvous relay timed out");
+                            tracing::debug!("registering haven rendezvous relay timed out");
                             Timer::after(Duration::from_secs(3)).await;
                         }
                         _ => {

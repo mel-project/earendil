@@ -2,24 +2,32 @@ use std::time::Duration;
 
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use moka::sync::Cache;
+use parking_lot::Mutex;
 
 use crate::{control_protocol::SendMessageError, daemon::context::send_reply_blocks};
 
 use super::context::{CtxField, DaemonContext};
 
-pub async fn replenish_rrb(
+static LAWK: Mutex<()> = Mutex::new(());
+
+pub fn replenish_rrb(
     ctx: &DaemonContext,
     my_anon_isk: IdentitySecret,
     dst_fp: Fingerprint,
 ) -> Result<(), SendMessageError> {
+    let _guard = LAWK.lock();
     const BATCH_SIZE: usize = 10;
     while rb_balance(ctx, my_anon_isk, dst_fp) < 100.0 {
-        send_reply_blocks(ctx, BATCH_SIZE, my_anon_isk, dst_fp).await?;
         // we conservatively assume half get there
         ctx.get(BALANCE_TABLE).insert(
             (my_anon_isk, dst_fp),
             rb_balance(ctx, my_anon_isk, dst_fp) + (BATCH_SIZE / 2) as f64,
         );
+        let ctx = ctx.clone();
+        smolscale::spawn(
+            async move { send_reply_blocks(&ctx, BATCH_SIZE, my_anon_isk, dst_fp).await },
+        )
+        .detach();
     }
     Ok(())
 }

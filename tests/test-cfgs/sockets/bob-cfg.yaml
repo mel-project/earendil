@@ -6,9 +6,17 @@ in_routes:
     listen: 0.0.0.0:12003
     protocol: obfsudp
     secret: endorse-clock-warrior-pact-taxi-brief-diesel-feature-hope-airport-arch-memory
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000
 out_routes:
   charlie:
     connect: 127.0.0.1:12004
     cookie: e1634484eb0a357e290ff462c0dd0f2f2a0cd9f5318dbc0bc673d62b6c04b04d
     fingerprint: wbnm5bhq7hr6jwgnjqtd50zryebccq43
     protocol: obfsudp
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000

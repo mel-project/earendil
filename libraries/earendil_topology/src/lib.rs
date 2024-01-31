@@ -14,7 +14,7 @@ use stdcode::StdcodeSerializeExt;
 /// A full, indexed representation of the Earendil relay graph. Includes info about:
 /// - Which fingerprints are adjacent to which fingerprints
 /// - What signing keys and midterm keys do each fingerprint have
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct RelayGraph {
     unalloc_id: u64,
     fp_to_id: HashMap<Fingerprint, u64>,
@@ -128,8 +128,8 @@ impl RelayGraph {
             .map(|v| v.1.clone())
     }
 
-    /// Finds the shortest path between two Fingerprints.
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.
+    /// bypassing any Fingerprint in the blacklist.
     pub fn find_shortest_path(
         &self,
         start_fp: &Fingerprint,
@@ -150,6 +150,7 @@ impl RelayGraph {
                 let mut result = Vec::new();
                 let mut current_id = current_id;
 
+                // Retrace the path backwards and add the Fingerprint instances to the result
                 while let Some(prev_id) = path.get(&current_id) {
                     result.push(self.id_to_fp[&current_id]);
                     current_id = *prev_id;
@@ -160,11 +161,13 @@ impl RelayGraph {
                 return Some(result);
             }
 
-            for neighbor_id in self.adjacency.get(&current_id)?.iter() {
-                if !visited.contains(neighbor_id) {
-                    visited.insert(*neighbor_id);
-                    path.insert(*neighbor_id, current_id);
-                    queue.push_back(*neighbor_id);
+            if let Some(neighbors) = self.adjacency.get(&current_id) {
+                for neighbor_id in neighbors.iter() {
+                    if !visited.contains(neighbor_id) {
+                        visited.insert(*neighbor_id);
+                        path.insert(*neighbor_id, current_id);
+                        queue.push_back(*neighbor_id);
+                    }
                 }
             }
         }

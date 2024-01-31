@@ -1,11 +1,14 @@
 use anyhow::Context;
 use bip39::Mnemonic;
 use clap::{Parser, Subcommand};
-use earendil::commands::ControlCommands;
+use earendil::commands::ControlCommand;
 use earendil::config::ConfigFile;
 use earendil::control_protocol::main_control;
 use earendil::daemon::Daemon;
 use std::{net::SocketAddr, path::PathBuf};
+
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 /// Official implementation of an Earendil node
 #[derive(Parser)]
@@ -28,13 +31,22 @@ enum Commands {
         #[arg(short, long, default_value = "127.0.0.1:18964")]
         connect: SocketAddr,
         #[command(subcommand)]
-        control_command: ControlCommands,
+        control_command: ControlCommand,
     },
+
     GenerateSeed,
 }
 
+#[tracing::instrument]
 fn main() -> anyhow::Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("earendil=debug"))
+    // initialize tracing subscriber that displays to output
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().compact())
+        .with(
+            EnvFilter::builder()
+                .with_default_directive("earendil=debug".parse()?)
+                .from_env_lossy(),
+        )
         .init();
 
     match Args::parse().command {
@@ -43,11 +55,11 @@ fn main() -> anyhow::Result<()> {
                 serde_yaml::from_slice(&std::fs::read(config).context("cannot read config file")?)
                     .context("syntax error in config file")?;
             let config_parsed: ConfigFile = serde_json::from_value(json)?;
-            log::debug!(
+            tracing::debug!(
                 "parsed config file: {}",
                 serde_json::to_string_pretty(&config_parsed)?
             );
-            log::info!("about to init daemon!");
+            tracing::info!("about to init daemon!");
             let _daemon = Daemon::init(config_parsed)?;
             loop {
                 std::thread::park()

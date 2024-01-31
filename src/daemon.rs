@@ -1,65 +1,65 @@
 pub(crate) mod context;
 mod control_protocol_impl;
 
+mod debts;
 pub(crate) mod dht;
-mod gossip;
+
+mod db;
 mod inout_route;
-mod link_connection;
-mod link_protocol;
-mod neightable;
 mod peel_forward;
 mod reply_block_store;
 mod rrb_balance;
+mod settlement;
 mod socks5;
 mod tcp_forward;
 mod udp_forward;
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::ForwardInstruction;
 
-use earendil_topology::RelayGraph;
+use earendil_topology::{IdentityDescriptor, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
 use moka::sync::Cache;
-use nanorpc::{JrpcRequest, RpcService};
+use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 
+use nursery_macro::nursery;
 use smolscale::immortal::{Immortal, RespawnStrategy};
-use smolscale::reaper::TaskReaper;
+
 use stdcode::StdcodeSerializeExt;
+use tracing::instrument;
 
-use std::thread::available_parallelism;
-
+use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
-use crate::socket::Endpoint;
-use crate::{config::ConfigFile, global_rpc::GLOBAL_RPC_DOCK};
+use crate::control_protocol::ControlClient;
+use crate::{
+    config::ConfigFile,
+    daemon::context::{GLOBAL_ONION_SK, RELAY_GRAPH},
+    global_rpc::GLOBAL_RPC_DOCK,
+};
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
     control_protocol::ControlService,
-    daemon::{
-        gossip::gossip_loop,
-        inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
-    },
+    daemon::inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
 };
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
 use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
-use crate::{daemon::context::NEIGH_TABLE, socket::n2r_socket::N2rSocket};
-use crate::{
-    daemon::{
-        peel_forward::peel_forward_loop, socks5::socks5_loop, tcp_forward::tcp_forward_loop,
-        udp_forward::udp_forward_loop,
-    },
-    log_error,
-};
+use crate::{daemon::socks5::socks5_loop, socket::Endpoint};
+use crate::{daemon::tcp_forward::tcp_forward_loop, socket::n2r_socket::N2rSocket};
+use crate::{daemon::udp_forward::udp_forward_loop, log_error};
 use crate::{
     global_rpc::server::REGISTERED_HAVENS,
     haven_util::{haven_loop, HAVEN_FORWARD_DOCK},
 };
 
+use self::context::DEBTS;
 pub use self::control_protocol_impl::ControlProtErr;
 
+use self::db::db_write;
 use self::{context::GLOBAL_IDENTITY, control_protocol_impl::ControlProtocolImpl};
 
 pub struct Daemon {
@@ -72,7 +72,7 @@ impl Daemon {
     pub fn init(config: ConfigFile) -> anyhow::Result<Daemon> {
         let ctx = DaemonContext::new(config);
         let context = ctx.clone();
-        log::info!("starting background task for main_daemon");
+        tracing::info!("starting background task for main_daemon");
         let task = Immortal::spawn(async move {
             main_daemon(context).await.unwrap();
             panic!("daemon failed to start!")
@@ -83,46 +83,65 @@ impl Daemon {
     pub fn identity(&self) -> IdentitySecret {
         *self.ctx.get(GLOBAL_IDENTITY)
     }
+
+    pub fn control_client(&self) -> ControlClient {
+        ControlClient::from(DummyControlProtocolTransport {
+            inner: ControlService(ControlProtocolImpl::new(self.ctx.clone())),
+        })
+    }
+}
+
+struct DummyControlProtocolTransport {
+    inner: ControlService<ControlProtocolImpl>,
+}
+
+#[async_trait]
+impl RpcTransport for DummyControlProtocolTransport {
+    type Error = Infallible;
+
+    async fn call_raw(&self, req: JrpcRequest) -> Result<JrpcResponse, Self::Error> {
+        Ok(self.inner.respond_raw(req).await)
+    }
 }
 
 pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
-    log::info!(
+    tracing::info!(
         "daemon starting with fingerprint {}",
         ctx.get(GLOBAL_IDENTITY).public().fingerprint()
     );
 
     scopeguard::defer!({
-        log::info!(
+        tracing::info!(
             "daemon with fingerprint {} is now DROPPED!",
             ctx.get(GLOBAL_IDENTITY).public().fingerprint()
         )
     });
 
     // Run the loops
-    let _table_gc = Immortal::spawn(clone!([ctx], async move {
-        loop {
-            smol::Timer::after(Duration::from_secs(60)).await;
-            ctx.get(NEIGH_TABLE).garbage_collect();
-        }
-    }));
+    let _db_sync_loop = ctx.init().db_path.clone().map(|_| {
+        Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([ctx], move || db_sync_loop(ctx.clone())
+                .map_err(log_error("db_sync_loop"))),
+        )
+    });
 
-    let _peel_forward_loops: Vec<Immortal> =
-        (0..available_parallelism().map(|s| s.into()).unwrap_or(1))
-            .map(|_| {
-                Immortal::respawn(
-                    RespawnStrategy::Immediate,
-                    clone!([ctx], move || peel_forward_loop(ctx.clone())
-                        .map_err(log_error("peel_forward"))),
-                )
-            })
-            .collect();
-
-    let _gossip = Immortal::respawn(
+    let _identity_refresh_loop = Immortal::respawn(
         RespawnStrategy::Immediate,
-        clone!([ctx], move || gossip_loop(ctx.clone())
-            .map_err(log_error("gossip"))),
+        clone!([ctx], move || clone!([ctx], async move {
+            // first insert ourselves
+            let am_i_relay = !ctx.init().in_routes.is_empty();
+            ctx.get(RELAY_GRAPH)
+                .write()
+                .insert_identity(IdentityDescriptor::new(
+                    ctx.get(GLOBAL_IDENTITY),
+                    ctx.get(GLOBAL_ONION_SK),
+                    am_i_relay,
+                ))?;
+            smol::Timer::after(Duration::from_secs(60)).await;
+            anyhow::Ok(())
+        })),
     );
-
     let _control_protocol = Immortal::respawn(
         RespawnStrategy::Immediate,
         clone!([ctx], move || control_protocol_loop(ctx.clone())
@@ -190,10 +209,10 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         })
         .collect();
 
-    let _socks5_loop = ctx.init().socks5.clone().map(|config| {
+    let _socks5_loop = ctx.init().socks5.map(|config| {
         Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([ctx], move || socks5_loop(ctx.clone(), config.clone(),)),
+            clone!([ctx], move || socks5_loop(ctx.clone(), config)),
         )
     });
 
@@ -205,9 +224,19 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             in_route_name: in_route_name.clone(),
             daemon_ctx: ctx.clone(),
         };
+
         match config.clone() {
-            InRouteConfig::Obfsudp { listen, secret } => {
-                route_tasks.push(smolscale::spawn(in_route_obfsudp(context, listen, secret)));
+            InRouteConfig::Obfsudp {
+                listen,
+                secret,
+                link_price,
+            } => {
+                route_tasks.push(smolscale::spawn(in_route_obfsudp(
+                    context.clone(),
+                    listen,
+                    secret,
+                    link_price,
+                )));
             }
         }
     }
@@ -219,14 +248,19 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                 fingerprint,
                 connect,
                 cookie,
+                link_price,
             } => {
                 let context = OutRouteContext {
                     out_route_name: out_route_name.clone(),
                     remote_fingerprint: *fingerprint,
                     daemon_ctx: ctx.clone(),
                 };
+
                 route_tasks.push(smolscale::spawn(out_route_obfsudp(
-                    context, *connect, *cookie,
+                    context,
+                    *connect,
+                    *cookie,
+                    *link_price,
                 )));
             }
         }
@@ -236,9 +270,30 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     while let Some(next) = route_tasks.next().await {
         next?;
     }
+
     Ok(())
 }
 
+#[instrument(skip(ctx))]
+/// Loop that handles the persistence of contex state
+async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    loop {
+        tracing::debug!("syncing DB...");
+        let global_id = ctx.get(GLOBAL_IDENTITY).stdcode();
+        let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
+        let debts = ctx.get(DEBTS).as_bytes()?;
+        let chats = inout_route::chat::serialize_chats(&ctx)?;
+
+        db_write(&ctx, "global_identity", global_id).await?;
+        db_write(&ctx, "relay_graph", graph).await?;
+        db_write(&ctx, "debts", debts).await?;
+        db_write(&ctx, "chats", chats).await?;
+
+        smol::Timer::after(Duration::from_secs(10)).await;
+    }
+}
+
+#[instrument(skip(ctx))]
 /// Loop that handles the control protocol
 async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let http = HttpRpcServer::bind(ctx.init().control_listen).await?;
@@ -247,6 +302,7 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[instrument(skip(ctx))]
 /// Loop that listens to and handles incoming GlobalRpc requests
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let socket = Arc::new(N2rSocket::bind(
@@ -255,13 +311,11 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         Some(GLOBAL_RPC_DOCK),
     ));
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
-    let group: TaskReaper<anyhow::Result<()>> = TaskReaper::new();
-
-    loop {
+    nursery!(loop {
         let socket = socket.clone();
         if let Ok((req, endpoint)) = socket.recv_from().await {
             let service = service.clone();
-            group.attach(smolscale::spawn(async move {
+            spawn!(async move {
                 let req: JrpcRequest = serde_json::from_str(&String::from_utf8(req.to_vec())?)?;
                 let resp = service.respond_raw(req).await;
                 socket
@@ -271,12 +325,14 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     )
                     .await?;
 
-                Ok(())
-            }));
+                anyhow::Ok(())
+            })
+            .detach();
         }
-    }
+    })
 }
 
+#[instrument(skip(ctx))]
 /// Loop that listens to and handles incoming haven forwarding requests
 async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let seen_srcs: Cache<(Endpoint, Endpoint), ()> = Cache::builder()
@@ -294,7 +350,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         if let Ok((msg, src_ep)) = socket.recv_from().await {
             let ctx = ctx.clone();
             let (inner, dest_ep): (Bytes, Endpoint) = stdcode::deserialize(&msg)?;
-            log::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
+            tracing::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
 
             let is_valid_dest = ctx
                 .get(REGISTERED_HAVENS)
@@ -308,7 +364,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 let body: Bytes = (inner, src_ep).stdcode().into();
                 socket.send_to(body, dest_ep).await?;
             } else {
-                log::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
+                tracing::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
             }
         };
     }

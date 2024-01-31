@@ -38,7 +38,6 @@ impl RpcTransport for GlobalRpcTransport {
     type Error = anyhow::Error;
 
     async fn call_raw(&self, req: JrpcRequest) -> Result<JrpcResponse, Self::Error> {
-        log::debug!("=====> {}/{} ({:?})", self.dest_fp, req.method, req.id);
         let endpoint = Endpoint::new(self.dest_fp, GLOBAL_RPC_DOCK);
         let socket = N2rSocket::bind(self.ctx.clone(), self.anon_isk, None);
         let mut retries = 0;
@@ -48,6 +47,12 @@ impl RpcTransport for GlobalRpcTransport {
             socket
                 .send_to(serde_json::to_string(&req)?.into(), endpoint)
                 .await?;
+            // tracing::debug!(
+            //     "=====> x{retries} {}/{} ({:?})",
+            //     self.dest_fp,
+            //     req.method,
+            //     req.id
+            // );
 
             timeout = Duration::from_secs(2u64.pow(retries + 1));
             let when = Instant::now() + timeout;
@@ -59,7 +64,7 @@ impl RpcTransport for GlobalRpcTransport {
                     Ok((res, _endpoint)) => {
                         let jrpc_res: JrpcResponse =
                             serde_json::from_str(&String::from_utf8(res.to_vec())?)?;
-                        log::debug!("<===== {}/{} ({:?})", self.dest_fp, req.method, req.id);
+                        // tracing::debug!("<===== {}/{} ({:?})", self.dest_fp, req.method, req.id);
                         return Ok(jrpc_res);
                     }
                     Err(_) => {

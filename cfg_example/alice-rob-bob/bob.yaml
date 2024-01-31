@@ -2,13 +2,19 @@
 
 identity_seed: bob-was-here
 state_cache: bob_state_cache.db
-control_listen: 127.0.0.1:11111
+control_listen: 127.0.0.1:22222
+auto_settle: 
+  interval: 10
 
 in_routes:
   main_udp:
     protocol: obfsudp
     listen: 0.0.0.0:12345
     secret: correct horse battery staple
+    link_price:
+      max_outgoing_price: 100
+      incoming_price: 1
+      incoming_debt_limit: 1000000000
 
 # server config
 havens:
@@ -23,6 +29,5 @@ havens:
   - identity_seed: i-am-a-haven-pls-no-eat-me
     rendezvous: q29wsm1jpvg6j494kfdyf3wad5m92331 # rob's fingerprint
     handler:
-      type: tcp_forward
+      type: simple_proxy
       listen_dock: 69421
-      upstream: 127.0.0.1:8815 # e.g. listening port of geph4-exit
