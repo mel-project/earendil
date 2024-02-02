@@ -25,7 +25,7 @@ jobs:
             cargo install cross
           else
             sudo apt-get update
-            sudo apt-get install -y musl-tools glibc-source
+            sudo apt-get install -y musl-tools
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             source $HOME/.cargo/env
             cargo install cross
@@ -42,10 +42,6 @@ jobs:
             cp target/x86_64-apple-darwin/release/earendil earendil.app/Contents/MacOS/earendil
             zip -r earendil-macos.zip earendil.app
           else
-            rustup target add x86_64-unknown-linux-musl
-            cargo build --release --target x86_64-unknown-linux-musl
-            zip -r earendil-linux.zip target/x86_64-unknown-linux-musl/release/earendil
-
             cd utilities/earendil-gui
             cross build --target x86_64-pc-windows-gnu --release
           fi
@@ -59,4 +55,3 @@ jobs:
           path: |
             target/x86_64-pc-windows-gnu/release/
             target/x86_64-apple-darwin/release/
-            target/x86_64-unknown-linux-musl/release/
