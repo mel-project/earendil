@@ -146,7 +146,7 @@ pub async fn send_n2r(
         let route = ctx
             .get(RELAY_GRAPH)
             .read()
-            .find_shortest_path(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
+            .rand_3_hops(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
             .ok_or(SendMessageError::NoRoute(dst_fp))?;
         let instructs = {
             let graph = ctx.get(RELAY_GRAPH).read();
@@ -198,7 +198,7 @@ pub async fn send_reply_blocks(
     let route = ctx
         .get(RELAY_GRAPH)
         .read()
-        .find_shortest_path(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
+        .rand_3_hops(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
         .ok_or(SendMessageError::NoRoute(dst_fp))?;
     let their_opk = ctx
         .get(RELAY_GRAPH)
@@ -211,7 +211,7 @@ pub async fn send_reply_blocks(
     let reverse_route = ctx
         .get(RELAY_GRAPH)
         .read()
-        .find_shortest_path(&dst_fp, &ctx.get(GLOBAL_IDENTITY).public().fingerprint())
+        .rand_3_hops(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
         .ok_or(SendMessageError::NoRoute(dst_fp))?;
     let reverse_instructs = route_to_instructs(reverse_route, ctx.get(RELAY_GRAPH).read().deref())?;
 

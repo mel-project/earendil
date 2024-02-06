@@ -7,7 +7,7 @@ use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret, VerifyError};
 use earendil_packet::crypt::{OnionPublic, OnionSecret};
 use indexmap::IndexMap;
-use rand::Rng;
+use rand::{seq::IteratorRandom, Rng};
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
 
@@ -126,6 +126,25 @@ impl RelayGraph {
         self.documents
             .get_index(rand::thread_rng().gen_range(0..self.documents.len()))
             .map(|v| v.1.clone())
+    }
+
+    pub fn rand_3_hops(
+        &self,
+        start_fp: &Fingerprint,
+        end_fp: &Fingerprint,
+    ) -> Option<Vec<Fingerprint>> {
+        // get list of all relays
+        let mut rng = rand::thread_rng();
+        let all_nodes = self.all_nodes();
+        let mut middle_3 = all_nodes.choose_multiple(&mut rng, 3);
+        if middle_3.len() == 3 {
+            let mut ret = vec![start_fp.clone()];
+            ret.append(&mut middle_3);
+            ret.push(end_fp.clone());
+            Some(ret)
+        } else {
+            None
+        }
     }
 
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.
