@@ -42,7 +42,7 @@ jobs:
           else
             cd utilities/earendil-gui
             cross build --target x86_64-pc-windows-gnu --release
-            zip -r target/x86_64-pc-windows-gnu/release/earendil.exe target/x86_64-pc-windows-gnu/release/earendil.zip
+            zip earendil-gui.zip ../../target/x86_64-pc-windows-gnu/release/earendil-gui.exe
             echo "ARTIFACT_PATH=target/x86_64-pc-windows-gnu/release/earendil.zip" >> $GITHUB_ENV
           fi
         env:
