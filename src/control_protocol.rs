@@ -135,9 +135,18 @@ pub async fn main_control(
             println!("{}", serde_yaml::to_string(&routes)?);
         }
         ControlCommand::HavensInfo => {
-            let havens_info = client.havens_info().await?;
-            for info in havens_info {
+            for info in client.havens_info().await? {
                 println!("{} - {}", info.0, info.1);
+            }
+        }
+        ControlCommand::ListDebts => {
+            for debt in client.list_debts().await? {
+                println!("{:?}", debt);
+            }
+        }
+        ControlCommand::ListSettlements => {
+            for settlement in client.list_settlements().await? {
+                println!("{:?}", settlement);
             }
         }
         ControlCommand::Chat { chat_command } => match chat_command {
@@ -203,6 +212,13 @@ pub async fn main_control(
                     }
                 }
             }
+            ChatCommand::Get { neighbor } => {
+                let entries = client.get_chat(neighbor).await?;
+                for (is_mine, text, time) in entries {
+                    println!("{}", pretty_entry(is_mine, text, time));
+                }
+            }
+            ChatCommand::Send { dest, msg } => client.send_chat_msg(dest, msg).await??,
         },
     }
     Ok(())
@@ -295,7 +311,11 @@ pub trait ControlProtocol {
 
     async fn get_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)>;
 
-    async fn send_chat_msg(&self, dest: Fingerprint, msg: String);
+    async fn send_chat_msg(&self, dest: Fingerprint, msg: String) -> Result<(), ChatError>;
+
+    async fn list_debts(&self) -> Vec<String>;
+
+    async fn list_settlements(&self) -> Vec<String>;
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
@@ -344,4 +364,10 @@ pub struct GlobalRpcArgs {
 pub enum GlobalRpcError {
     #[error("error sending GlobalRpc request")]
     SendError,
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum ChatError {
+    #[error("error sending chat message {0}")]
+    Send(String),
 }

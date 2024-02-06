@@ -5,9 +5,11 @@ use bytes::Bytes;
 use earendil::{config::ConfigFile, daemon::Daemon, socket::Socket};
 use earendil_crypt::IdentitySecret;
 use once_cell::sync::Lazy;
-use smol::Timer;
+use smol::{future::FutureExt, Timer};
 use smol_timeout::TimeoutExt;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_test::traced_test;
+
+mod helpers;
 
 static ALICE_DAEMON: Lazy<Daemon> =
     Lazy::new(|| daemon_from_yaml(include_str!("test-cfgs/sockets/alice-cfg.yaml")));
@@ -36,28 +38,26 @@ fn daemon_from_yaml(yaml: &str) -> Daemon {
 // 3 hop, anon
 
 #[test]
+#[traced_test]
 fn n2r() {
-    let _ = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().compact())
-        .with(
-            EnvFilter::builder()
-                .with_default_directive("earendil=debug".parse().unwrap())
-                .from_env_lossy(),
-        )
-        .try_init();
-    env::set_var("SOSISTAB2_NO_SLEEP", "1");
-    Lazy::force(&START_DAEMONS);
+    helpers::env_vars();
+
+    let seed = helpers::gen_seed("n2r");
+    let (mut relays, mut clients) = helpers::spawn_network(2, 4, Some(seed)).unwrap();
 
     // spin up alice, bob, and charlie daemons
+    let alice = clients.pop().unwrap();
     let alice_isk = IdentitySecret::generate();
-    let alice_skt = Socket::bind_n2r(&ALICE_DAEMON, alice_isk, None);
-    let charlie_isk = CHARLIE_DAEMON.identity();
-    let charlie_skt = Socket::bind_n2r(&CHARLIE_DAEMON, charlie_isk, None);
+    let alice_skt = Socket::bind_n2r(&alice, alice_isk, None);
+    let charlie = relays.pop().unwrap();
+    let charlie_isk = charlie.identity();
+    let charlie_skt = Socket::bind_n2r(&charlie, charlie_isk, None);
 
     // alice sends charlie a msg
     smolscale::block_on(async move {
         // sleep to give the nodes time to connect
-        Timer::after(Duration::from_secs(5)).await;
+        helpers::sleep(5).await;
+
         let alice_msg = Bytes::from_static("Hello, dear Charlie!".as_bytes());
         alice_skt
             .send_to(alice_msg.clone(), charlie_skt.local_endpoint())
@@ -74,7 +74,7 @@ fn n2r() {
             .unwrap();
         assert_eq!(body, alice_msg);
         assert_eq!(ep, alice_skt.local_endpoint());
-        eprintln!("------------N2R: 1st ASSERT SUCCEEDED!!!------------");
+
         // charlie responds to alice after waiting 10 secs for the reply blocks
         Timer::after(Duration::from_secs_f32(0.1)).await;
         let charlie_msg = Bytes::from_static("Hello, dear Alice!".as_bytes());
@@ -91,20 +91,12 @@ fn n2r() {
             .unwrap();
         assert_eq!(body, charlie_msg);
         assert_eq!(ep, charlie_skt.local_endpoint());
-        eprintln!("------------N2R: 2nd ASSERT SUCCEEDED!!!------------");
     });
 }
 
-// #[test]
+#[test]
+#[traced_test]
 fn haven() {
-    let _ = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().compact())
-        .with(
-            EnvFilter::builder()
-                .with_default_directive("earendil=debug".parse().unwrap())
-                .from_env_lossy(),
-        )
-        .try_init();
     env::set_var("SOSISTAB2_NO_SLEEP", "1");
     Lazy::force(&START_DAEMONS);
 
@@ -121,15 +113,21 @@ fn haven() {
     );
 
     smolscale::block_on(async move {
-        // sleep to give the nodes time to connect
-        Timer::after(Duration::from_secs(30)).await;
+        // sleep to give the nodes time to connect and register havens
+        helpers::sleep(15).await;
         let alice_msg = Bytes::from_static("Hello, anonymous Derek!".as_bytes());
         alice_skt
             .send_to(alice_msg.clone(), derek_skt.local_endpoint())
             .await
             .context("alice sending failed!")
             .unwrap();
-
+        let alice_graphviz = ALICE_DAEMON
+            .control_client()
+            .graph_dump(false)
+            .await
+            .unwrap();
+        eprintln!("alice graph: {}", alice_graphviz);
+        Timer::after(Duration::from_millis(100)).await;
         // derek receives the msg
         let (body, ep) = derek_skt
             .recv_from()
@@ -158,4 +156,74 @@ fn haven() {
         assert_eq!(ep, derek_skt.local_endpoint());
         eprintln!("------------HAVEN: 2nd ASSERT SUCCEEDED!!!------------");
     })
+}
+
+#[test]
+#[traced_test]
+fn haven_ii() {
+    // helpers::tracing_init();
+    helpers::env_vars();
+
+    let seed = helpers::gen_seed("haven");
+    let (mut relays, mut clients) = helpers::spawn_network(2, 4, Some(seed)).unwrap();
+
+    smolscale::block_on(async move {
+        helpers::sleep(5).await;
+        let alice = clients.pop().unwrap();
+
+        let alice_anon_isk = IdentitySecret::generate();
+        let alice_skt = Socket::bind_haven(&alice, alice_anon_isk, None, None);
+        let alice_anon_fp = alice_skt.local_endpoint();
+
+        let bob = relays.pop().unwrap();
+        let bob_haven_isk = IdentitySecret::generate();
+        let bob_skt = Socket::bind_haven(
+            &bob,
+            bob_haven_isk,
+            None,
+            Some(relays.last().unwrap().identity().public().fingerprint()),
+        );
+        let bob_haven_fp = bob_skt.local_endpoint();
+
+        let to_bob = b"hello bobert";
+        let to_alice = b"hey there, allison";
+
+        helpers::sleep(5).await;
+
+        let alice_task = async {
+            alice_skt
+                .send_to(Bytes::copy_from_slice(to_bob), bob_haven_fp)
+                .await
+                .unwrap();
+
+            let (from_bob, _) = alice_skt
+                .recv_from()
+                .timeout(Duration::from_secs(20))
+                .await
+                .unwrap()
+                .unwrap();
+
+            assert_eq!(from_bob.as_ref(), to_alice);
+        };
+
+        let bob_task = async {
+            let (from_alice, _) = bob_skt
+                .recv_from()
+                .timeout(Duration::from_secs(10))
+                .await
+                .unwrap()
+                .unwrap();
+            Timer::after(Duration::from_millis(100)).await;
+            bob_skt
+                .send_to(Bytes::copy_from_slice(to_alice), alice_anon_fp)
+                .timeout(Duration::from_secs(10))
+                .await
+                .unwrap()
+                .unwrap();
+
+            assert_eq!(from_alice.as_ref(), to_bob);
+        };
+
+        alice_task.race(bob_task).await
+    });
 }

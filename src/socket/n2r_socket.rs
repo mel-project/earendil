@@ -16,7 +16,7 @@ use smol::channel::{Receiver, Sender};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use crate::{
-    daemon::context::{send_n2r, DaemonContext, SOCKET_RECV_QUEUES},
+    daemon::context::{send_n2r, DaemonContext, GLOBAL_IDENTITY, SOCKET_RECV_QUEUES},
     log_error,
     socket::SocketRecvError,
 };
@@ -89,7 +89,12 @@ impl N2rSocket {
                     dock,
                     recv_outgoing.clone()
                 )
-                .map_err(log_error("send_batcher"))),
+                .map_err(clone!([ctx, idsk], move |e| tracing::warn!(
+                    "send_batcher from global ID {}, temp fingerprint {} restarting: {:?}",
+                    ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+                    idsk.public().fingerprint(),
+                    e
+                )))),
             )
             .into(),
         }
@@ -122,7 +127,7 @@ impl N2rSocket {
         Endpoint::new(self.bound_dock.fp, self.bound_dock.dock)
     }
 }
-#[tracing::instrument(skip(ctx, recv_outgoing))]
+#[tracing::instrument(skip(ctx, isk, recv_outgoing))]
 async fn send_batcher_loop(
     ctx: DaemonContext,
     isk: IdentitySecret,

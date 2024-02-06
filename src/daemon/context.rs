@@ -23,8 +23,12 @@ use crate::{
 };
 
 use super::{
-    db::db_read, debts::Debts, peel_forward::peel_forward, reply_block_store::ReplyBlockStore,
+    db::db_read,
+    debts::Debts,
+    peel_forward::peel_forward,
+    reply_block_store::ReplyBlockStore,
     rrb_balance::replenish_rrb,
+    settlement::{Seed, Settlements},
 };
 
 pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
@@ -82,11 +86,7 @@ pub static NEIGH_TABLE_NEW: CtxField<Cache<Fingerprint, Sender<RawPacket>>> = |_
 }; // TODO a better solution for deletion
 pub static SOCKET_RECV_QUEUES: CtxField<DashMap<Endpoint, Sender<(Message, Fingerprint)>>> =
     |_| Default::default();
-pub static DEGARBLERS: CtxField<Cache<u64, ReplyDegarbler>> = |_| {
-    CacheBuilder::default()
-        .time_to_live(Duration::from_secs(60))
-        .build()
-};
+pub static DEGARBLERS: CtxField<DashMap<u64, ReplyDegarbler>> = |_| Default::default();
 
 pub static DEBTS: CtxField<Debts> = |ctx| {
     let ctx = ctx.clone();
@@ -110,8 +110,10 @@ pub static DEBTS: CtxField<Debts> = |ctx| {
     })
 };
 
-#[tracing::instrument(skip(ctx, content))]
+pub static SETTLEMENTS: CtxField<Settlements> = |ctx| Settlements::new(ctx.init().auto_settle);
+
 /// Sends a raw N2R message with the given parameters.
+#[tracing::instrument(skip(ctx))]
 pub async fn send_n2r(
     ctx: &DaemonContext,
     src_idsk: IdentitySecret,

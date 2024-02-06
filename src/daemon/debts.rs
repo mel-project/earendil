@@ -57,6 +57,10 @@ impl Debts {
         }
     }
 
+    fn insert_incoming(&self, their_fp: Fingerprint, new_debt: u64) {
+        self.balances.entry(their_fp).or_default().incoming_balance = new_debt;
+    }
+
     pub fn net_debt_est(&self, their_fp: &Fingerprint) -> Option<i128> {
         self.balances
             .get(their_fp)
@@ -64,14 +68,36 @@ impl Debts {
     }
 
     pub fn is_within_debt_limit(&self, their_fp: &Fingerprint) -> bool {
-        if let Some(b) = self.incoming_prices.get(their_fp) {
+        if let Some(price_info) = self.incoming_prices.get(their_fp) {
             if let Some(net) = self.net_debt_est(their_fp) {
-                if net > b.debt_limit as i128 {
+                if net > price_info.debt_limit as i128 {
                     return false;
                 }
             }
         }
         true
+    }
+
+    pub fn list(&self) -> Vec<String> {
+        self.balances
+            .iter()
+            .map(|entry| {
+                let fp = entry.key();
+                if let Some(debt) = self.net_debt_est(fp) {
+                    format!("{fp} owes me {debt} micromel")
+                } else {
+                    format!("no debt found for {fp}")
+                }
+            })
+            .collect()
+    }
+
+    pub fn deduct_settlement(&self, their_fp: Fingerprint, amount: u64) {
+        if let Some(current_debt) = self.net_debt_est(&their_fp) {
+            let debt = current_debt - amount as i128;
+            let settled_debt = if debt > 0 { debt as u64 } else { 0 };
+            self.insert_incoming(their_fp, settled_debt);
+        }
     }
 
     pub fn as_bytes(&self) -> anyhow::Result<Vec<u8>> {

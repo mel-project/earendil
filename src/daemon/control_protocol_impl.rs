@@ -21,7 +21,9 @@ use thiserror::Error;
 
 use crate::{
     config::InRouteConfig,
-    control_protocol::{ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs},
+    control_protocol::{
+        ChatError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs,
+    },
     daemon::{
         context::{DEBTS, NEIGH_TABLE_NEW, RELAY_GRAPH},
         DaemonContext,
@@ -32,7 +34,7 @@ use crate::{
 };
 
 use super::{
-    context::GLOBAL_IDENTITY,
+    context::{GLOBAL_IDENTITY, SETTLEMENTS},
     dht::{dht_get, dht_insert},
     inout_route::chat,
 };
@@ -323,8 +325,18 @@ impl ControlProtocol for ControlProtocolImpl {
         chat::get_chat(&self.ctx, neigh)
     }
 
-    async fn send_chat_msg(&self, dest: Fingerprint, msg: String) {
-        chat::send_chat_msg(&self.ctx, dest, msg).await;
+    async fn send_chat_msg(&self, dest: Fingerprint, msg: String) -> Result<(), ChatError> {
+        chat::send_chat_msg(&self.ctx, dest, msg)
+            .await
+            .map_err(|e| ChatError::Send(e.to_string()))
+    }
+
+    async fn list_debts(&self) -> Vec<String> {
+        self.ctx.get(DEBTS).list()
+    }
+
+    async fn list_settlements(&self) -> Vec<String> {
+        self.ctx.get(SETTLEMENTS).list()
     }
 }
 

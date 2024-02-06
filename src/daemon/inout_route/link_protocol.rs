@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sosistab2::MuxPublic;
 
+use crate::daemon::settlement::{Seed, SettlementRequest, SettlementResponse};
+
 #[nanorpc_derive]
 #[async_trait]
 pub trait LinkProtocol {
@@ -29,12 +31,18 @@ pub trait LinkProtocol {
     /// Gets all the adjacency-descriptors adjacent to the given fingerprints. This is called repeatedly to eventually discover the entire graph.
     async fn adjacencies(&self, fps: Vec<Fingerprint>) -> Vec<AdjacencyDescriptor>;
 
-    /// pushes how much it will cost the neighbor to send me a packet, denominated in microMEL/packet
-    /// debt_limit = max amount neighbor is allowed to owe me before I stop forwarding their packets
+    /// Pushes how much it will cost the neighbor to send me a packet, denominated in microMEL/packet
+    /// debt_limit = max amount neighbor is allowed to owe me before I stop forwarding their packets.
     async fn push_price(&self, price: u64, debt_limit: u64);
+
+    /// Sends a settlement request and waits until a response is received or the call times out.
+    async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse>;
 
     /// Send a chat message to the other end of the link.
     async fn push_chat(&self, msg: String);
+
+    /// Request a MelPoW seed (used to create an automatic payment proof).
+    async fn request_seed(&self) -> Option<Seed>;
 }
 
 /// Response to an authentication challenge.

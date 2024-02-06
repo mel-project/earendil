@@ -22,7 +22,10 @@ pub fn peel_forward(ctx: &DaemonContext, last_hop_fp: Fingerprint, pkt: RawPacke
         if !ctx.get(DEBTS).is_within_debt_limit(&last_hop_fp) {
             anyhow::bail!("received pkt from neighbor who owes us too much money -_-");
         }
-        tracing::trace!("INSIDE peel_forward; processing packet from good neigh!");
+        tracing::trace!(
+            "peel_forward on raw packet with hash {}",
+            blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8882]>(pkt))
+        );
         if last_hop_fp != ctx.get(GLOBAL_IDENTITY).public().fingerprint() {
             ctx.get(DEBTS).incr_incoming(last_hop_fp);
             tracing::trace!("incr'ed debt");
@@ -60,10 +63,14 @@ pub fn peel_forward(ctx: &DaemonContext, last_hop_fp: Fingerprint, pkt: RawPacke
             )?,
             PeeledPacket::GarbledReply { id, mut pkt } => {
                 tracing::trace!("received garbled packet");
-                let reply_degarbler = ctx.get(DEGARBLERS).remove(&id).context(format!(
+                let reply_degarbler = ctx
+                    .get(DEGARBLERS)
+                    .remove(&id)
+                    .context(format!(
                 "no degarbler for this garbled pkt with id {id}, despite {} items in the degarbler",
-                ctx.get(DEGARBLERS).entry_count()
-            ))?;
+                ctx.get(DEGARBLERS).len()
+            ))?
+                    .1;
                 let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
                 tracing::trace!("packet has been degarbled!");
 

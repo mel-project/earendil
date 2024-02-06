@@ -9,6 +9,7 @@ mod inout_route;
 mod peel_forward;
 mod reply_block_store;
 mod rrb_balance;
+mod settlement;
 mod socks5;
 mod tcp_forward;
 mod udp_forward;
@@ -277,7 +278,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 /// Loop that handles the persistence of contex state
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
-        tracing::trace!("syncing DB...");
+        tracing::debug!("syncing DB...");
         let global_id = ctx.get(GLOBAL_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
         let debts = ctx.get(DEBTS).as_bytes()?;

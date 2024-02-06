@@ -102,6 +102,12 @@ pub enum ControlCommand {
     /// Dumps my own routes.
     MyRoutes,
 
+    /// Lists debts between you and your neighbors
+    ListDebts,
+
+    /// Lists pending debt settlements
+    ListSettlements,
+
     /// Interactive chat for talking to immediate neighbors
     Chat {
         #[command(subcommand)]
@@ -118,5 +124,19 @@ pub enum ChatCommand {
     Start {
         /// The fingerprint (or partial fingerprint) of the user to start a chat with.
         fp_prefix: String,
+    },
+
+    /// Pulls conversation between you and neighbor
+    Get {
+        #[arg(short, long)]
+        neighbor: Fingerprint,
+    },
+
+    /// Sends a single chat message to dest
+    Send {
+        #[arg(short, long)]
+        dest: Fingerprint,
+        #[arg(short, long)]
+        msg: String,
     },
 }
