@@ -46,7 +46,7 @@ jobs:
           else
             cross build --release --target x86_64-pc-windows-gnu
             mkdir -p earendil-windows
-            cp target/x86_64-pc-windows-gnu/release/earendil.exe earendil-windows/
+            cp target/x86_64-pc-windows-gnu/release/earendil-gui.exe earendil-windows/
             7z a -tzip earendil-windows.zip ./earendil-windows/*
             echo "ARTIFACT_PATH=earendil-windows.zip" >> $GITHUB_ENV
           fi
