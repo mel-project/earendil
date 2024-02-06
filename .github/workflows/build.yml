@@ -55,7 +55,8 @@ jobs:
       - name: Build Windows Binary with Cross
         run: |
           cd utilities/earendil-gui
-          cross build --target x86_64-pc-windows-gnu --release
+          echo "CARGO_TARGET_DIR: $CARGO_TARGET_DIR"
+          cross build --target x86_64-pc-windows-gnu --release --target-dir ./target
           pwd
           ls -la
           ls -la target/x86_64-pc-windows-gnu/release/
