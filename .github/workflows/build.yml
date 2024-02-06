@@ -3,7 +3,7 @@ name: Build and Release Artifacts
 on:
   push:
     branches:
-      - main  # Adjust this to your main branch name
+      - build
 
 jobs:
   setup-and-build-macos:
