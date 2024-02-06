@@ -52,7 +52,10 @@ jobs:
           PKG_CONFIG_ALLOW_CROSS: 1
 
       - name: Get Release Version
-        run: echo "GUI_VERSION=$(cargo pkgid | cut -d'#' -f2)" >> $GITHUB_ENV
+        run: |
+          echo "GUI_VERSION=$(cargo pkgid | cut -d'#' -f2)" >> $GITHUB_ENV
+          MAC_TAG=$(macos-${{ env.GUI_VERSION }}) >> $GITHUB_ENV
+          WINDOWS_TAG=$(windows-${{ env.GUI_VERSION }}) >> $GITHUB_ENV
 
       - name: Create Release
         id: create_release
@@ -60,11 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: |
-            if [[ "${{ runner.os }}" == "macOS" ]]; then
-              macos-${{ env.GUI_VERSION }}
-            else
-              windows-${{ env.GUI_VERSION }}
+          tag_name: ${{ runner.os == 'macOS' && env.MAC_TAG || runner.os == 'Linux' && env.WINDOWS_TAG }}
           release_name: Release ${{ env.GUI_VERSION }}
           draft: false
           prerelease: false
