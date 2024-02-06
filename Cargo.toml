@@ -64,6 +64,8 @@ futures = "0.3.30"
 tracing-test = {version="0.2.4",features = ["no-env-filter"]}
 melpow = "0.1.1"
 smolscale = "0.4.3"
+priority-queue = "1.4.0"
+async-event = "0.1.0"
 
 [profile.dev]
 panic = 'abort'

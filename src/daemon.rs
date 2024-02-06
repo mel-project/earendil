@@ -5,6 +5,7 @@ mod debts;
 pub(crate) mod dht;
 
 mod db;
+mod delay_queue;
 mod inout_route;
 mod peel_forward;
 mod reply_block_store;
