@@ -56,7 +56,9 @@ jobs:
         run: |
           cd utilities/earendil-gui
           cross build --target x86_64-pc-windows-gnu --release
-          ls target/x86_64-pc-windows-gnu/release/
+          pwd
+          ls -la
+          ls -la target/x86_64-pc-windows-gnu/release/
 
       - name: Zip Windows Binary
         run: |
