@@ -51,14 +51,17 @@ jobs:
         env:
           PKG_CONFIG_ALLOW_CROSS: 1
 
+      - name: Get release version
+        run: echo "GUI_VERSION=$(cargo pkgid | cut -d'#' -f2)" >> $GITHUB_ENV
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag_name: ${{ env.GUI_VERSION }}
+          release_name: Release ${{ env.GUI_VERSION }}
           draft: false
           prerelease: false
 
