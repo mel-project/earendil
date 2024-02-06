@@ -54,8 +54,8 @@ jobs:
       - name: Get Release Version
         run: |
           echo "GUI_VERSION=$(cargo pkgid | cut -d'#' -f2)" >> $GITHUB_ENV
-          MAC_TAG=$(macos-${{ env.GUI_VERSION }}) >> $GITHUB_ENV
-          WINDOWS_TAG=$(windows-${{ env.GUI_VERSION }}) >> $GITHUB_ENV
+          echo "MAC_TAG=macos-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
+          echo "WINDOWS_TAG=windows-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
 
       - name: Create Release
         id: create_release
