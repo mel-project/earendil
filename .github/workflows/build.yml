@@ -1,85 +1,103 @@
-name: Build Artifacts
+name: Build and Release Artifacts
 
 on:
   push:
     branches:
-      - build
-
-permissions:
-  contents: write
+      - main  # Adjust this to your main branch name
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [macos-latest, ubuntu-latest]
-
+  setup-and-build-macos:
+    runs-on: macos-latest
     steps:
-      - name: Install Rust and Cross
+      - uses: actions/checkout@v2
+
+      - name: Install Rust
         run: |
-          if [[ "${{ runner.os }}" == "macOS" ]]; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-            source $HOME/.cargo/env
-            cargo install cross
-          else
-            sudo apt-get update
-            sudo apt-get install -y musl-tools
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-            source $HOME/.cargo/env
-            cargo install cross
-          fi
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
 
-      - name: Check out code
-        uses: actions/checkout@v2
+      - name: Install Cross
+        run: cargo install cross
 
-      - name: Generate artifacts
+      - name: Build macOS Binary
         run: |
           cd utilities/earendil-gui
-          if [[ "${{ runner.os }}" == "macOS" ]]; then
-            cargo build --release --target x86_64-apple-darwin
-            mkdir -p earendil.app/Contents/MacOS
-            cp target/x86_64-apple-darwin/release/earendil earendil.app/Contents/MacOS/earendil
-            zip -r earendil-macos.zip earendil.app
-            echo "ARTIFACT_PATH=earendil-macos.zip" >> $GITHUB_ENV
-          else
-            cross build --release --target x86_64-pc-windows-gnu
-            mkdir -p earendil-windows
-            cp ../target/x86_64-pc-windows-gnu/release/earendil-gui.exe earendil-windows/
-            7z a -tzip earendil-windows.zip ./earendil-windows/*
-            echo "ARTIFACT_PATH=earendil-windows.zip" >> $GITHUB_ENV
-          fi
-        env:
-          PKG_CONFIG_ALLOW_CROSS: 1
+          cross build --release --target x86_64-apple-darwin
 
-      - name: Get Release Version
+      - name: Zip macOS Binary
         run: |
-          echo "GUI_VERSION=$(cargo pkgid | cut -d'#' -f2)" >> $GITHUB_ENV
-          if [[ "${{ runner.os }}" == "macOS" ]]; then
-            echo "TAG_NAME=macos-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
-          else
-            echo "TAG_NAME=windows-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
-          fi
-
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          zip -j earendil-macos.zip ./utilities/earendil-gui/target/x86_64-apple-darwin/release/earendil-gui
+          
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v2
         with:
-          tag_name: ${{ env.TAG_NAME }}
-          release_name: Release ${{ env.GUI_VERSION }}
-          draft: false
-          prerelease: false
+          name: earendil-macos
+          path: earendil-macos.zip
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  setup-and-build-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Dependencies for Windows Build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+
+      - name: Install Cross
+        run: cargo install cross
+
+      - name: Build Windows Binary with Cross
+        run: |
+          cd utilities/earendil-gui
+          cross build --target x86_64-pc-windows-gnu --release
+
+      - name: Zip Windows Binary
+        run: |
+          zip -j earendil-windows.zip ./utilities/earendil-gui/target/x86_64-pc-windows-gnu/release/earendil-gui.exe
+          
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v2
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./${{ env.ARTIFACT_PATH }}
-          asset_name: ${{ env.ARTIFACT_PATH }}
-          asset_content_type: application/zip
+          name: earendil-windows
+          path: earendil-windows.zip
+
+  create-release:
+      needs: [setup-and-build-macos, setup-and-build-windows]
+      runs-on: ubuntu-latest
+      steps:
+        - name: Create Release
+          id: create_release
+          uses: actions/create-release@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            tag_name: ${{ github.sha }}
+            release_name: Release ${{ github.sha }}
+            draft: false
+            prerelease: false
+
+        - name: Upload macOS Artifact to Release
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ steps.create_release.outputs.upload_url }}
+            asset_path: ./earendil-macos.zip
+            asset_name: earendil-macos.zip
+            asset_content_type: application/zip
+
+        - name: Upload Windows Artifact to Release
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ steps.create_release.outputs.upload_url }}
+            asset_path: ./earendil-windows.zip
+            asset_name: earendil-windows.zip
+            asset_content_type: application/zip
