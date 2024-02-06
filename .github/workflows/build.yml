@@ -5,6 +5,9 @@ on:
     branches:
       - build
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -33,6 +36,7 @@ jobs:
 
       - name: Generate artifacts
         run: |
+          cd utilities/earendil-gui
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             cargo build --release --target x86_64-apple-darwin
             mkdir -p earendil.app/Contents/MacOS
@@ -40,13 +44,24 @@ jobs:
             zip -r earendil-macos.zip earendil.app
             echo "ARTIFACT_PATH=earendil-macos.zip" >> $GITHUB_ENV
           else
-            cd utilities/earendil-gui
-            cross build --target x86_64-pc-windows-gnu --release
-            zip earendil-gui.zip ../../target/x86_64-pc-windows-gnu/release/earendil-gui.exe
-            echo "ARTIFACT_PATH=target/x86_64-pc-windows-gnu/release/earendil.zip" >> $GITHUB_ENV
+            cross build --release --target x86_64-pc-windows-gnu
+            mkdir -p earendil-windows
+            cp ../target/x86_64-pc-windows-gnu/release/earendil-gui.exe earendil-windows/
+            7z a -tzip earendil-windows.zip ./earendil-windows/*
+            echo "ARTIFACT_PATH=earendil-windows.zip" >> $GITHUB_ENV
           fi
         env:
           PKG_CONFIG_ALLOW_CROSS: 1
+
+      - name: Get Release Version
+        run: |
+          echo "GUI_VERSION=$(cargo pkgid | cut -d'#' -f2)" >> $GITHUB_ENV
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            echo "TAG_NAME=macos-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
+          else
+            echo "TAG_NAME=windows-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
+          fi
+
 
       - name: Create Release
         id: create_release
@@ -54,8 +69,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: Release ${{ env.GUI_VERSION }}
           draft: false
           prerelease: false
 
