@@ -56,9 +56,11 @@ jobs:
         run: |
           cd utilities/earendil-gui
           cross build --target x86_64-pc-windows-gnu --release
+          ls target/x86_64-pc-windows-gnu/release/
 
       - name: Zip Windows Binary
         run: |
+          echo "current directory $(pwd)"
           zip -j earendil-windows.zip ./utilities/earendil-gui/target/x86_64-pc-windows-gnu/release/earendil-gui.exe
           
       - name: Upload Windows Artifact
