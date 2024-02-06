@@ -36,20 +36,18 @@ jobs:
 
       - name: Generate artifacts
         run: |
+          cd utilities/earendil-gui
           if [[ "${{ runner.os }}" == "macOS" ]]; then
-            cd utilities/earendil-gui
             cargo build --release --target x86_64-apple-darwin
-            mkdir -p ../../earendil.app/Contents/MacOS
-            cp target/release/earendil ../../earendil.app/Contents/MacOS/earendil
-            cd ../../
+            mkdir -p earendil.app/Contents/MacOS
+            cp target/x86_64-apple-darwin/release/earendil earendil.app/Contents/MacOS/earendil
             zip -r earendil-macos.zip earendil.app
             echo "ARTIFACT_PATH=earendil-macos.zip" >> $GITHUB_ENV
           else
-            cd utilities/earendil-gui
-            cross build --target x86_64-pc-windows-gnu --release
-            # After building, move to the root directory before zipping to ensure the path is correct
-            cd ../../../
-            zip -r earendil-windows.zip utilities/earendil-gui/target/x86_64-pc-windows-gnu/release/earendil-gui.exe
+            cargo build --release --target x86_64-pc-windows-gnu
+            mkdir -p earendil-windows
+            cp target/x86_64-pc-windows-gnu/release/earendil.exe earendil-windows/
+            7z a -tzip earendil-windows.zip ./earendil-windows/*
             echo "ARTIFACT_PATH=earendil-windows.zip" >> $GITHUB_ENV
           fi
         env:
