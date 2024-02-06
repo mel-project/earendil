@@ -55,9 +55,9 @@ jobs:
         run: |
           echo "GUI_VERSION=$(cargo pkgid | cut -d'#' -f2)" >> $GITHUB_ENV
           if [[ "${{ runner.os }}" == "macOS" ]]; then
-            echo "TAG_NAME=macos-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
+            echo "TAG_NAME=macos-v${{ env.GUI_VERSION }}" >> $GITHUB_ENV
           else
-            echo "TAG_NAME=windows-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
+            echo "TAG_NAME=windows-v${{ env.GUI_VERSION }}" >> $GITHUB_ENV
           fi
 
       - name: Create Release
