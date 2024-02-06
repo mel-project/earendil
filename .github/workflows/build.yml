@@ -60,7 +60,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.GUI_VERSION }}
+          tag_name: |
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            macos-${{ env.GUI_VERSION }}
+          else
+            windows-${{ env.GUI_VERSION }}
           release_name: Release ${{ env.GUI_VERSION }}
           draft: false
           prerelease: false
