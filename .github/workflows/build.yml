@@ -44,7 +44,7 @@ jobs:
             zip -r earendil-macos.zip earendil.app
             echo "ARTIFACT_PATH=earendil-macos.zip" >> $GITHUB_ENV
           else
-            cargo build --release --target x86_64-pc-windows-gnu
+            cross build --release --target x86_64-pc-windows-gnu
             mkdir -p earendil-windows
             cp target/x86_64-pc-windows-gnu/release/earendil.exe earendil-windows/
             7z a -tzip earendil-windows.zip ./earendil-windows/*
