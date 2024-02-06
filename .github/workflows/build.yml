@@ -54,8 +54,12 @@ jobs:
       - name: Get Release Version
         run: |
           echo "GUI_VERSION=$(cargo pkgid | cut -d'#' -f2)" >> $GITHUB_ENV
-          echo "MAC_TAG=macos-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
-          echo "WINDOWS_TAG=windows-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            echo "TAG_NAME=macos-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
+          else
+            echo "TAG_NAME=windows-${{ env.GUI_VERSION }}" >> $GITHUB_ENV
+          fi
+
 
       - name: Create Release
         id: create_release
@@ -63,7 +67,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ runner.os == 'macOS' && env.MAC_TAG || runner.os == 'Linux' && env.WINDOWS_TAG }}
+          tag_name: env.TAG_NAME
           release_name: Release ${{ env.GUI_VERSION }}
           draft: false
           prerelease: false
