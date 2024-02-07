@@ -70,6 +70,7 @@ jobs:
           path: earendil-windows.zip
 
   create-release:
+      permissions: write-all
       needs: [setup-and-build-macos, setup-and-build-windows]
       runs-on: ubuntu-latest
       steps:
