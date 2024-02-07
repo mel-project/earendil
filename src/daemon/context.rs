@@ -23,12 +23,8 @@ use crate::{
 };
 
 use super::{
-    db::db_read,
-    debts::Debts,
-    peel_forward::peel_forward,
-    reply_block_store::ReplyBlockStore,
-    rrb_balance::replenish_rrb,
-    settlement::{Seed, Settlements},
+    db::db_read, debts::Debts, peel_forward::peel_forward, reply_block_store::ReplyBlockStore,
+    rrb_balance::replenish_rrb, settlement::Settlements,
 };
 
 pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
@@ -147,7 +143,7 @@ pub async fn send_n2r(
         let route = ctx
             .get(RELAY_GRAPH)
             .read()
-            .rand_3_hops(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
+            .rand_hops(3, &ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
             .ok_or(SendMessageError::NoRoute(dst_fp))?;
         let instructs = {
             let graph = ctx.get(RELAY_GRAPH).read();
@@ -200,7 +196,7 @@ pub async fn send_reply_blocks(
     let route = ctx
         .get(RELAY_GRAPH)
         .read()
-        .rand_3_hops(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
+        .rand_hops(3, &ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
         .ok_or(SendMessageError::NoRoute(dst_fp))?;
     let their_opk = ctx
         .get(RELAY_GRAPH)
@@ -213,7 +209,7 @@ pub async fn send_reply_blocks(
     let reverse_route = ctx
         .get(RELAY_GRAPH)
         .read()
-        .rand_3_hops(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
+        .rand_hops(3, &ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
         .ok_or(SendMessageError::NoRoute(dst_fp))?;
     let reverse_instructs = route_to_instructs(reverse_route, ctx.get(RELAY_GRAPH).read().deref())?;
 

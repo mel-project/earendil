@@ -128,23 +128,30 @@ impl RelayGraph {
             .map(|v| v.1.clone())
     }
 
-    pub fn rand_3_hops(
+    pub fn rand_hops(
         &self,
+        num: usize,
         start_fp: &Fingerprint,
         end_fp: &Fingerprint,
     ) -> Option<Vec<Fingerprint>> {
         // get list of all relays
         let mut rng = rand::thread_rng();
-        let all_nodes = self.all_nodes();
-        let mut middle_3 = all_nodes.choose_multiple(&mut rng, 3);
-        if middle_3.len() == 3 {
-            let mut ret = vec![start_fp.clone()];
-            ret.append(&mut middle_3);
-            ret.push(end_fp.clone());
-            Some(ret)
-        } else {
-            None
+        let all_nodes: Vec<Fingerprint> = self.all_nodes().collect();
+        let mut middle = vec![];
+        let mut prev = *start_fp;
+
+        while middle.len() < num {
+            let node = all_nodes.iter().choose(&mut rng)?;
+            if node != &prev {
+                middle.push(node.clone());
+                prev = node.clone();
+            }
         }
+
+        let mut ret = vec![start_fp.clone()];
+        ret.append(&mut middle);
+        ret.push(end_fp.clone());
+        Some(ret)
     }
 
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.
