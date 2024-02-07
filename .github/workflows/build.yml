@@ -74,6 +74,18 @@ jobs:
     needs: [setup-and-build-macos, setup-and-build-windows]
     runs-on: ubuntu-latest
     steps:
+      - name: Download macOS Artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: earendil-macos
+          path: ./
+      
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: earendil-windows
+          path: ./
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
