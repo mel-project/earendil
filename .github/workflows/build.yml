@@ -74,6 +74,12 @@ jobs:
     needs: [setup-and-build-macos, setup-and-build-windows]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Extract version from Cargo.toml
+        run: echo "VERSION=$(sed -n 's/^version = \"\([^"]*\)\"/\1/p' utilities/earendil-gui/Cargo.toml)" >> $GITHUB_ENV
+
       - name: Download macOS Artifact
         uses: actions/download-artifact@v2
         with:
@@ -92,8 +98,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: release-${{ github.run_number }}-${{ github.sha }}
-          release_name: Release ${{ github.run_number }}-${{ github.sha }}
+          tag_name: earendil_gui_v${{ env.VERSION }}
+          release_name: Earendil GUI ${{ env.VERSION }}
           draft: false
           prerelease: false
 
