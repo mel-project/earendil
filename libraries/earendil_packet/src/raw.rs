@@ -50,9 +50,9 @@ impl RawPacket {
         destination: &OnionPublic,
         payload: InnerPacket,
         my_isk: &IdentitySecret,
-    ) -> Result<Self, PacketConstructError> {
+    ) -> Result<(Self, Fingerprint), PacketConstructError> {
         let (raw, _) = Self::new(route, destination, payload, &[0; 20], my_isk)?;
-        Ok(raw)
+        Ok((raw, route[0].next_fingerprint))
     }
 
     /// Creates a RawPacket for a message to an anonymous identity, using a ReplyBlock
@@ -68,7 +68,7 @@ impl RawPacket {
                 .map_err(|_| PacketConstructError::MessageTooBig)?,
         })
     }
-    /// Creates a new RawPacket along with a vector of the shared secrets used to encrypt each layer of the onion body, given a payload and the series of relays that the packet is supposed to pass through.
+    /// Creates a new RawPacket along with a vector of the shared secrets used to encrypt each layer of the onion body, given a payload and the series of relays that the packet is supposed to be peeled by.
     pub(crate) fn new(
         route: &[ForwardInstruction],
         destination: &OnionPublic,

@@ -79,7 +79,7 @@ pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
 };
 pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBlockStore::new());
 
-pub static NEIGH_TABLE_NEW: CtxField<Cache<Fingerprint, Sender<RawPacket>>> = |_| {
+pub static NEIGH_TABLE_NEW: CtxField<Cache<Fingerprint, Sender<(RawPacket, Fingerprint)>>> = |_| {
     CacheBuilder::default()
         .time_to_live(Duration::from_secs(120))
         .build()
@@ -140,6 +140,7 @@ pub async fn send_n2r(
         peel_forward(
             ctx,
             ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+            reply_block.first_peeler,
             raw_packet,
         );
     } else {
@@ -158,7 +159,7 @@ pub async fn send_n2r(
             .identity(&dst_fp)
             .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
             .onion_pk;
-        let wrapped_onion = RawPacket::new_normal(
+        let (wrapped_onion, first_peeler) = RawPacket::new_normal(
             &instructs,
             &their_opk,
             InnerPacket::Message(Message::new(src_dock, dst_dock, content)),
@@ -174,6 +175,7 @@ pub async fn send_n2r(
         peel_forward(
             ctx,
             ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+            first_peeler,
             wrapped_onion,
         );
     }
@@ -227,7 +229,7 @@ pub async fn send_reply_blocks(
         rbs.push(rb);
         ctx.get(DEGARBLERS).insert(id, degarbler);
     }
-    let wrapped_rb_onion = RawPacket::new_normal(
+    let (wrapped_rb_onion, first_peeler) = RawPacket::new_normal(
         &instructs,
         &their_opk,
         InnerPacket::ReplyBlocks(rbs),
@@ -241,6 +243,7 @@ pub async fn send_reply_blocks(
     peel_forward(
         ctx,
         ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+        first_peeler,
         wrapped_rb_onion,
     );
     Ok(())

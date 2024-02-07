@@ -7,6 +7,7 @@ use std::{
 use anyhow::Context;
 use async_trait::async_trait;
 
+use bytemuck::{Pod, Zeroable};
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
 use earendil_crypt::{Fingerprint, IdentityPublic};
@@ -74,7 +75,7 @@ pub async fn link_authenticate(
 pub async fn connection_loop(
     service: Arc<LinkService<LinkProtocolImpl>>,
     mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<RawPacket>,
+    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
 ) -> anyhow::Result<()> {
     let _onion_keepalive = Immortal::respawn(
         RespawnStrategy::Immediate,
@@ -121,7 +122,7 @@ pub async fn connection_loop(
 async fn onion_keepalive(
     service: Arc<LinkService<LinkProtocolImpl>>,
     mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<RawPacket>,
+    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
 ) -> anyhow::Result<()> {
     loop {
         let stream = mplex.open_conn("onion_packets").await?;
@@ -133,23 +134,30 @@ async fn onion_keepalive(
 async fn handle_onion_packets(
     service: Arc<LinkService<LinkProtocolImpl>>,
     conn: sosistab2::Stream,
-    recv_outgoing: Receiver<RawPacket>,
+    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
 ) -> anyhow::Result<()> {
+    #[repr(C)]
+    #[derive(Clone, Copy, Pod, Zeroable)]
+    struct PacketWithPeeler {
+        pkt: RawPacket,
+        peeler: Fingerprint,
+    }
     let up = async {
         loop {
-            let pkt = recv_outgoing.recv().await?;
-            conn.send_urel(bytemuck::bytes_of(&pkt).to_vec().into())
+            let (pkt, peeler) = recv_outgoing.recv().await?;
+            let pkt_with_peeler = PacketWithPeeler { pkt, peeler };
+            conn.send_urel(bytemuck::bytes_of(&pkt_with_peeler).to_vec().into())
                 .await?;
         }
     };
     let dn = async {
         loop {
             let pkt = conn.recv_urel().await?;
-            let pkt: RawPacket = *bytemuck::try_from_bytes(&pkt)
+            let PacketWithPeeler { pkt, peeler } = *bytemuck::try_from_bytes(&pkt)
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
             if let Some(other_fp) = service.0.remote_pk.get() {
-                peel_forward(&service.0.ctx, other_fp.fingerprint(), pkt);
+                peel_forward(&service.0.ctx, other_fp.fingerprint(), peeler, pkt);
             }
         }
     };
