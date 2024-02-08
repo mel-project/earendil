@@ -49,16 +49,27 @@ pub fn peel_forward(
             ));
             match peeled {
                 PeeledPacket::Forward {
-                    to: next_hop,
-                    pkt: inner,
+                    to: next_peeler,
+                    pkt,
                 } => {
-                    let conn = ctx
-                        .get(NEIGH_TABLE_NEW)
-                        .get(&next_hop)
-                        .context(format!("could not find this next hop {next_hop}"))?;
-                    let _ = conn.try_send((inner, peeler));
-                    if next_hop != my_fp {
-                        ctx.get(DEBTS).incr_outgoing(next_hop);
+                    let maybe_route = ctx
+                        .get(RELAY_GRAPH)
+                        .read()
+                        .find_shortest_path(&my_fp, &next_peeler);
+
+                    if let Some(route) = maybe_route {
+                        let next_hop = route[1];
+                        let conn = ctx
+                            .get(NEIGH_TABLE_NEW)
+                            .get(&next_hop)
+                            .context(format!("could not find this next hop {next_hop}"))?;
+
+                        let _ = conn.try_send((pkt, next_hop));
+                        if next_hop != my_fp {
+                            ctx.get(DEBTS).incr_outgoing(next_hop);
+                        }
+                    } else {
+                        log::warn!("no route found to next peeler {next_peeler}");
                     }
                 }
                 PeeledPacket::Received {
