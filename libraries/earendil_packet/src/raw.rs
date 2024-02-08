@@ -50,9 +50,9 @@ impl RawPacket {
         destination: &OnionPublic,
         payload: InnerPacket,
         my_isk: &IdentitySecret,
-    ) -> Result<(Self, Fingerprint), PacketConstructError> {
+    ) -> Result<Self, PacketConstructError> {
         let (raw, _) = Self::new(route, destination, payload, &[0; 20], my_isk)?;
-        Ok((raw, route[0].next_fingerprint))
+        Ok(raw)
     }
 
     /// Creates a RawPacket for a message to an anonymous identity, using a ReplyBlock
@@ -178,7 +178,7 @@ impl RawPacket {
             // the 20 remaining bytes in the metadata indicate the fingerprint of the next guy.
             let fingerprint = Fingerprint::from_bytes(array_ref![metadata, 1, 20]);
             PeeledPacket::Forward {
-                to: fingerprint,
+                next_peeler: fingerprint,
                 pkt: RawPacket {
                     header: bytemuck::cast(peeled_header),
                     onion_body: peeled_body,
@@ -228,7 +228,16 @@ pub struct RawHeader {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum PeeledPacket {
-    Forward { to: Fingerprint, pkt: RawPacket },
-    Received { from: Fingerprint, pkt: InnerPacket },
-    GarbledReply { id: u64, pkt: [u8; 8192] },
+    Forward {
+        next_peeler: Fingerprint,
+        pkt: RawPacket,
+    },
+    Received {
+        from: Fingerprint,
+        pkt: InnerPacket,
+    },
+    GarbledReply {
+        id: u64,
+        pkt: [u8; 8192],
+    },
 }

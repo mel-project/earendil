@@ -25,13 +25,16 @@ pub fn peel_forward(
     pkt: RawPacket,
 ) {
     let inner = || {
+        let packet_hash = blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8882]>(pkt)).to_string();
         let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
         if !ctx.get(DEBTS).is_within_debt_limit(&last_hop_fp) {
             anyhow::bail!("received pkt from neighbor who owes us too much money -_-");
         }
-        tracing::trace!(
-            "peel_forward on raw packet with hash {}",
-            blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8882]>(pkt))
+        tracing::debug!(
+            packet_hash,
+            my_fp = my_fp.to_string(),
+            peeler = peeler.to_string(),
+            "peel_forward on raw packet"
         );
         if last_hop_fp != my_fp {
             ctx.get(DEBTS).incr_incoming(last_hop_fp);
@@ -48,23 +51,25 @@ pub fn peel_forward(
                 now.elapsed()
             ));
             match peeled {
-                PeeledPacket::Forward {
-                    to: next_peeler,
-                    pkt,
-                } => {
-                    let maybe_route = ctx
-                        .get(RELAY_GRAPH)
-                        .read()
-                        .find_shortest_path(&my_fp, &next_peeler);
+                PeeledPacket::Forward { next_peeler, pkt } => {
+                    if next_peeler == my_fp {
+                        peel_forward(ctx, my_fp, peeler, pkt);
+                        return Ok(());
+                    }
 
-                    if let Some(route) = maybe_route {
-                        let next_hop = route[1];
+                    if let Some(next_hop) = one_hop_closer(ctx, next_peeler) {
+                        tracing::debug!(
+                            packet_hash,
+                            "entries in neigh table at this point: {:?}",
+                            ctx.get(NEIGH_TABLE_NEW)
+                        );
+
                         let conn = ctx
                             .get(NEIGH_TABLE_NEW)
                             .get(&next_hop)
                             .context(format!("could not find this next hop {next_hop}"))?;
 
-                        let _ = conn.try_send((pkt, next_hop));
+                        let _ = conn.try_send((pkt, next_peeler));
                         if next_hop != my_fp {
                             ctx.get(DEBTS).incr_outgoing(next_hop);
                         }
@@ -77,7 +82,6 @@ pub fn peel_forward(
                     pkt: inner,
                 } => process_inner_pkt(ctx, inner, src_fp, my_fp)?,
                 PeeledPacket::GarbledReply { id, mut pkt } => {
-                    tracing::trace!("received garbled packet");
                     let reply_degarbler = ctx
                         .get(DEGARBLERS)
                         .remove(&id)
@@ -87,7 +91,7 @@ pub fn peel_forward(
             ))?
                         .1;
                     let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
-                    tracing::trace!("packet has been degarbled!");
+                    tracing::debug!(packet_hash, "packet has been degarbled!");
 
                     // TODO
                     decrement_rrb_balance(ctx, reply_degarbler.my_anon_isk(), src_fp);
@@ -102,23 +106,19 @@ pub fn peel_forward(
                 }
             }
         } else {
+            tracing::debug!(
+                packet_hash,
+                peeler = peeler.to_string(),
+                "we are not the peeler"
+            );
             // we are not peeler, forward the packet a step closer to peeler
-            let maybe_route = ctx
-                .get(RELAY_GRAPH)
-                .read()
-                .find_shortest_path(&my_fp, &peeler);
 
-            if let Some(route) = maybe_route {
-                let next_hop = route.get(0).context("empty route, should not happen")?;
-
+            if let Some(next_hop) = one_hop_closer(ctx, peeler) {
                 let conn = ctx
                     .get(NEIGH_TABLE_NEW)
                     .get(&next_hop)
                     .context(format!("could not find this next hop {next_hop}"))?;
                 let _ = conn.try_send((pkt, peeler));
-                if next_hop != &my_fp {
-                    ctx.get(DEBTS).incr_outgoing(*next_hop);
-                }
             } else {
                 log::warn!("no route found, dropping packet");
             }
@@ -128,6 +128,14 @@ pub fn peel_forward(
     if let Err(err) = inner() {
         tracing::warn!("could not peel_forward: {:?}", err)
     }
+}
+
+fn one_hop_closer(ctx: &DaemonContext, dest_fp: Fingerprint) -> Option<Fingerprint> {
+    let route = ctx
+        .get(RELAY_GRAPH)
+        .read()
+        .find_shortest_path(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dest_fp)?;
+    route.get(1).cloned()
 }
 
 #[tracing::instrument(skip(ctx, inner))]

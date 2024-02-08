@@ -3,8 +3,8 @@
 identity_seed: bob-was-here
 state_cache: bob_state_cache.db
 control_listen: 127.0.0.1:22222
-auto_settle: 
-  interval: 10
+# auto_settle:
+#   interval: 10
 
 in_routes:
   main_udp:

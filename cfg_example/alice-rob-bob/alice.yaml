@@ -2,8 +2,8 @@
 identity_seed: alice-was-here
 state_cache: alice_state_cache.db
 control_listen: 127.0.0.1:11111
-auto_settle: 
-  interval: 10
+# auto_settle:
+#   interval: 10
 
 # in_routes:
 #   # arbitrary names, used for diagnositics and logging

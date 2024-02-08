@@ -137,7 +137,9 @@ impl HavenSocket {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
+        log::debug!("sending a haven message");
         let enc = self
             .crypt_sessions
             .try_get_with(endpoint, || {

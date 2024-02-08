@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
@@ -127,6 +128,7 @@ impl N2rSocket {
         Endpoint::new(self.bound_dock.fp, self.bound_dock.dock)
     }
 }
+
 #[tracing::instrument(skip(ctx, isk, recv_outgoing))]
 async fn send_batcher_loop(
     ctx: DaemonContext,
@@ -175,7 +177,8 @@ async fn send_batcher_loop(
                     endpoint.dock,
                     subbatch.clone(),
                 )
-                .await?;
+                .await
+                .context("send_n2r failed")?;
             }
         }
     }

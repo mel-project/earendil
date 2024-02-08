@@ -118,6 +118,7 @@ pub async fn send_n2r(
     dst_dock: Dock,
     content: Vec<Bytes>,
 ) -> Result<(), SendMessageError> {
+    tracing::debug!("calling send_n2r here");
     let now = Instant::now();
     let _guard = scopeguard::guard((), |_| {
         let send_msg_time = now.elapsed();
@@ -140,10 +141,12 @@ pub async fn send_n2r(
             raw_packet,
         );
     } else {
-        let route = ctx.get(RELAY_GRAPH).read().rand_hops(3);
         let instructs = {
             let graph = ctx.get(RELAY_GRAPH).read();
-            route_to_instructs(route, &graph)
+            route_to_instructs(
+                rand_route(ctx, ctx.get(GLOBAL_IDENTITY).public().fingerprint(), dst_fp),
+                &graph,
+            )
         }?;
         let their_opk = ctx
             .get(RELAY_GRAPH)
@@ -151,7 +154,7 @@ pub async fn send_n2r(
             .identity(&dst_fp)
             .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
             .onion_pk;
-        let (wrapped_onion, first_peeler) = RawPacket::new_normal(
+        let wrapped_onion = RawPacket::new_normal(
             &instructs,
             &their_opk,
             InnerPacket::Message(Message::new(src_dock, dst_dock, content)),
@@ -167,11 +170,19 @@ pub async fn send_n2r(
         peel_forward(
             ctx,
             ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-            first_peeler,
+            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             wrapped_onion,
         );
     }
     Ok(())
+}
+
+fn rand_route(ctx: &DaemonContext, src_fp: Fingerprint, dst_fp: Fingerprint) -> Vec<Fingerprint> {
+    let mut route = ctx.get(RELAY_GRAPH).read().rand_hops(3);
+    route.push(dst_fp);
+    route.insert(0, src_fp);
+    tracing::debug!("picked a random route: {:?}", route);
+    route
 }
 
 #[tracing::instrument(skip(ctx))]
@@ -189,7 +200,7 @@ pub async fn send_reply_blocks(
 
     tracing::trace!("sending a batch of {count} reply blocks to {dst_fp}");
 
-    let route = ctx.get(RELAY_GRAPH).read().rand_hops(3);
+    let route = rand_route(ctx, ctx.get(GLOBAL_IDENTITY).public().fingerprint(), dst_fp);
     let their_opk = ctx
         .get(RELAY_GRAPH)
         .read()
@@ -198,7 +209,7 @@ pub async fn send_reply_blocks(
         .onion_pk;
     let instructs = route_to_instructs(route.clone(), ctx.get(RELAY_GRAPH).read().deref())?;
     // currently the path for every one of them is the same; will want to change this in the future
-    let reverse_route = ctx.get(RELAY_GRAPH).read().rand_hops(3);
+    let reverse_route = rand_route(ctx, dst_fp, ctx.get(GLOBAL_IDENTITY).public().fingerprint());
     let reverse_instructs = route_to_instructs(reverse_route, ctx.get(RELAY_GRAPH).read().deref())?;
 
     let mut rbs: Vec<ReplyBlock> = vec![];
@@ -213,21 +224,18 @@ pub async fn send_reply_blocks(
         rbs.push(rb);
         ctx.get(DEGARBLERS).insert(id, degarbler);
     }
-    let (wrapped_rb_onion, first_peeler) = RawPacket::new_normal(
+    let wrapped_rb_onion = RawPacket::new_normal(
         &instructs,
         &their_opk,
         InnerPacket::ReplyBlocks(rbs),
         &my_anon_isk,
     )?;
-    tracing::trace!(
-        "inject_asif_incoming on route = {:?}",
-        route.iter().map(|s| s.to_string()).collect_vec()
-    );
+
     // we send the onion by treating it as a message addressed to ourselves
     peel_forward(
         ctx,
         ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-        first_peeler,
+        ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
         wrapped_rb_onion,
     );
     Ok(())
