@@ -84,6 +84,19 @@ impl RelayGraph {
         Ok(())
     }
 
+    /// Returns a list of neighbors to the given Fingerprint.
+    pub fn neighbors(&self, fp: &Fingerprint) -> Option<impl Iterator<Item = Fingerprint> + '_> {
+        let id = self.id(fp)?;
+        let neighs = self.adjacency.get(&id)?;
+        Some(
+            neighs
+                .iter()
+                .copied()
+                .filter_map(move |neigh_id| self.id_to_fp.get(&neigh_id))
+                .copied(),
+        )
+    }
+
     /// Returns the adjacencies next to the given Fingerprint.
     /// None is returned if the given Fingerprint is not present in the graph.
     pub fn adjacencies(
@@ -128,10 +141,13 @@ impl RelayGraph {
             .map(|v| v.1.clone())
     }
 
-    pub fn rand_hops(&self, num: usize) -> Vec<Fingerprint> {
-        let mut rng = rand::thread_rng();
-
-        self.all_nodes().choose_multiple(&mut rng, num)
+    /// Picks a certain number of random relays.
+    pub fn rand_relays(&self, num: usize) -> Vec<Fingerprint> {
+        self.all_nodes()
+            .filter_map(|n| self.identity(&n))
+            .filter(|id| id.is_relay)
+            .map(|id| id.identity_pk.fingerprint())
+            .choose_multiple(&mut rand::thread_rng(), num)
     }
 
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.

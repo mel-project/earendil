@@ -15,7 +15,6 @@ in_routes:
       max_outgoing_price: 100
       incoming_price: 1
       incoming_debt_limit: 1000000000
-
 # server config
 havens:
   # - identity: haven.asc
