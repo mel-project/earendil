@@ -21,7 +21,7 @@ use super::context::{DaemonContext, SOCKET_RECV_QUEUES};
 pub fn peel_forward(
     ctx: &DaemonContext,
     last_hop_fp: Fingerprint,
-    peeler: Fingerprint,
+    next_peeler: Fingerprint,
     pkt: RawPacket,
 ) {
     let inner = || {
@@ -33,7 +33,7 @@ pub fn peel_forward(
         tracing::debug!(
             packet_hash,
             my_fp = my_fp.to_string(),
-            peeler = peeler.to_string(),
+            peeler = next_peeler.to_string(),
             "peel_forward on raw packet"
         );
         if last_hop_fp != my_fp {
@@ -41,7 +41,7 @@ pub fn peel_forward(
             tracing::trace!("incr'ed debt");
         }
 
-        if peeler == my_fp {
+        if next_peeler == my_fp {
             // I am the designated peeler, peel and forward towards next peeler
             let now = Instant::now();
             let peeled: PeeledPacket = pkt.peel(ctx.get(GLOBAL_ONION_SK))?;
@@ -53,17 +53,11 @@ pub fn peel_forward(
             match peeled {
                 PeeledPacket::Forward { next_peeler, pkt } => {
                     if next_peeler == my_fp {
-                        peel_forward(ctx, my_fp, peeler, pkt);
+                        peel_forward(ctx, my_fp, next_peeler, pkt);
                         return Ok(());
                     }
 
                     if let Some(next_hop) = one_hop_closer(ctx, next_peeler) {
-                        tracing::debug!(
-                            packet_hash,
-                            "entries in neigh table at this point: {:?}",
-                            ctx.get(NEIGH_TABLE_NEW)
-                        );
-
                         let conn = ctx
                             .get(NEIGH_TABLE_NEW)
                             .get(&next_hop)
@@ -108,17 +102,17 @@ pub fn peel_forward(
         } else {
             tracing::debug!(
                 packet_hash,
-                peeler = peeler.to_string(),
+                peeler = next_peeler.to_string(),
                 "we are not the peeler"
             );
             // we are not peeler, forward the packet a step closer to peeler
 
-            if let Some(next_hop) = one_hop_closer(ctx, peeler) {
+            if let Some(next_hop) = one_hop_closer(ctx, next_peeler) {
                 let conn = ctx
                     .get(NEIGH_TABLE_NEW)
                     .get(&next_hop)
                     .context(format!("could not find this next hop {next_hop}"))?;
-                let _ = conn.try_send((pkt, peeler));
+                let _ = conn.try_send((pkt, next_peeler));
             } else {
                 log::warn!("no route found, dropping packet");
             }

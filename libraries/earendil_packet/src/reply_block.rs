@@ -13,7 +13,6 @@ use crate::{
 pub struct ReplyBlock {
     pub header: RawHeader,
     pub e2e_dest: OnionPublic,
-    pub first_peeler: Fingerprint,
 }
 
 impl ReplyBlock {
@@ -52,7 +51,6 @@ impl ReplyBlock {
             Self {
                 header,
                 e2e_dest: my_anon_opk,
-                first_peeler: route[0].next_fingerprint,
             },
             (rb_id, rb_degarbler),
         ))

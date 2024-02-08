@@ -137,7 +137,7 @@ pub async fn send_n2r(
         peel_forward(
             ctx,
             ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-            reply_block.first_peeler,
+            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             raw_packet,
         );
     } else {
