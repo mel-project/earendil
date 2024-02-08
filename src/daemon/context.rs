@@ -140,11 +140,7 @@ pub async fn send_n2r(
             raw_packet,
         );
     } else {
-        let route = ctx
-            .get(RELAY_GRAPH)
-            .read()
-            .rand_hops(3, &ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
-            .ok_or(SendMessageError::NoRoute(dst_fp))?;
+        let route = ctx.get(RELAY_GRAPH).read().rand_hops(3);
         let instructs = {
             let graph = ctx.get(RELAY_GRAPH).read();
             route_to_instructs(route, &graph)
@@ -193,11 +189,7 @@ pub async fn send_reply_blocks(
 
     tracing::trace!("sending a batch of {count} reply blocks to {dst_fp}");
 
-    let route = ctx
-        .get(RELAY_GRAPH)
-        .read()
-        .rand_hops(3, &ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
-        .ok_or(SendMessageError::NoRoute(dst_fp))?;
+    let route = ctx.get(RELAY_GRAPH).read().rand_hops(3);
     let their_opk = ctx
         .get(RELAY_GRAPH)
         .read()
@@ -206,11 +198,7 @@ pub async fn send_reply_blocks(
         .onion_pk;
     let instructs = route_to_instructs(route.clone(), ctx.get(RELAY_GRAPH).read().deref())?;
     // currently the path for every one of them is the same; will want to change this in the future
-    let reverse_route = ctx
-        .get(RELAY_GRAPH)
-        .read()
-        .rand_hops(3, &ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
-        .ok_or(SendMessageError::NoRoute(dst_fp))?;
+    let reverse_route = ctx.get(RELAY_GRAPH).read().rand_hops(3);
     let reverse_instructs = route_to_instructs(reverse_route, ctx.get(RELAY_GRAPH).read().deref())?;
 
     let mut rbs: Vec<ReplyBlock> = vec![];
