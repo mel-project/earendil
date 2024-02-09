@@ -63,7 +63,7 @@ mod tests {
                 Ok(PeeledPacket::Forward {
                     next_peeler: _,
                     pkt: next_packet,
-                    delay,
+                    delay_ms: delay,
                 }) => {
                     peeled_packet = next_packet;
                 }
@@ -162,7 +162,7 @@ mod tests {
                 PeeledPacket::Forward {
                     next_peeler: _,
                     pkt: next_packet,
-                    delay,
+                    delay_ms: delay,
                 } => {
                     peeled_packet = next_packet;
                 }

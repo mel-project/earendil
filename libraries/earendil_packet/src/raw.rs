@@ -1,5 +1,7 @@
+use std::hash::Hash;
+
 use arrayref::array_ref;
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{ByteHash, Pod, Zeroable};
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use rand::{Rng, RngCore};
 use rand_distr::Exp;
@@ -14,7 +16,7 @@ use crate::{
 
 /// A raw, on-the-wire Earendil packet.
 #[repr(C)]
-#[derive(Pod, Clone, Copy, Zeroable, Debug)]
+#[derive(Pod, Clone, Copy, Zeroable, Debug, PartialEq, Eq, Hash)]
 pub struct RawPacket {
     pub header: RawHeader,
     pub onion_body: [u8; 8192],
@@ -45,12 +47,12 @@ pub enum PacketPeelError {
     InnerPacketOpenError,
 }
 
-const LOW_LATENCY: u16 = 50;
+const LOW_LATENCY_MS: u16 = 50;
 
 fn sample_delay(avg: u16) -> u16 {
     let exp = Exp::new(1.0 / avg as f64).expect("avg must be greater than zero");
     let mut rng = rand::thread_rng();
-    (rng.sample(exp) * avg as f64) as u16
+    rng.sample(exp) as u16
 }
 
 impl RawPacket {
@@ -193,7 +195,7 @@ impl RawPacket {
                     header: bytemuck::cast(peeled_header),
                     onion_body: peeled_body,
                 },
-                delay: sample_delay(LOW_LATENCY),
+                delay_ms: sample_delay(LOW_LATENCY_MS),
             }
         } else if metadata[0] == 0 {
             // otherwise, the packet is addressed to us!
@@ -224,7 +226,7 @@ impl RawPacket {
 }
 
 /// The raw, encrypted header of an Earendil packet.
-#[derive(Pod, Clone, Copy, Zeroable, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Pod, Clone, Copy, Zeroable, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct RawHeader {
     /// Box-encrypted, 21-byte flag (1 byte) + fingerprint OR metadata (20 bytes)
@@ -237,12 +239,12 @@ pub struct RawHeader {
 
 /// A "peeled" Earendil packet.
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PeeledPacket {
     Forward {
         next_peeler: Fingerprint,
         pkt: RawPacket,
-        delay: u16,
+        delay_ms: u16,
     },
     Received {
         from: Fingerprint,

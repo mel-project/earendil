@@ -8,7 +8,8 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
-    crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
+    crypt::OnionSecret, Dock, InnerPacket, Message, PeeledPacket, RawPacket, ReplyBlock,
+    ReplyDegarbler,
 };
 use earendil_topology::RelayGraph;
 
@@ -25,8 +26,8 @@ use crate::{
 };
 
 use super::{
-    db::db_read, debts::Debts, peel_forward::peel_forward, reply_block_store::ReplyBlockStore,
-    rrb_balance::replenish_rrb, settlement::Settlements,
+    db::db_read, debts::Debts, delay_queue::DelayQueue, peel_forward::peel_forward,
+    reply_block_store::ReplyBlockStore, rrb_balance::replenish_rrb, settlement::Settlements,
 };
 
 pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
@@ -109,6 +110,9 @@ pub static DEBTS: CtxField<Debts> = |ctx| {
 };
 
 pub static SETTLEMENTS: CtxField<Settlements> = |ctx| Settlements::new(ctx.init().auto_settle);
+
+type NextPeeler = Fingerprint;
+pub static DELAY_QUEUE: CtxField<DelayQueue<(RawPacket, NextPeeler)>> = |_| DelayQueue::new();
 
 /// Sends a raw N2R message with the given parameters.
 #[tracing::instrument(skip(ctx, content))]

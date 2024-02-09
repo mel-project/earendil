@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::Context;
 use earendil_crypt::Fingerprint;
@@ -7,8 +7,8 @@ use earendil_packet::{InnerPacket, PeeledPacket, RawPacket};
 use crate::{
     daemon::{
         context::{
-            ANON_DESTS, DEBTS, DEGARBLERS, GLOBAL_IDENTITY, GLOBAL_ONION_SK, NEIGH_TABLE_NEW,
-            RELAY_GRAPH,
+            ANON_DESTS, DEBTS, DEGARBLERS, DELAY_QUEUE, GLOBAL_IDENTITY, GLOBAL_ONION_SK,
+            NEIGH_TABLE_NEW, RELAY_GRAPH,
         },
         rrb_balance::{decrement_rrb_balance, replenish_rrb},
     },
@@ -54,26 +54,15 @@ pub fn peel_forward(
                 PeeledPacket::Forward {
                     next_peeler,
                     pkt,
-                    delay,
+                    delay_ms,
                 } => {
                     if next_peeler == my_fp {
                         peel_forward(ctx, my_fp, next_peeler, pkt);
                         return Ok(());
                     }
 
-                    if let Some(next_hop) = one_hop_closer(ctx, next_peeler) {
-                        let conn = ctx
-                            .get(NEIGH_TABLE_NEW)
-                            .get(&next_hop)
-                            .context(format!("could not find this next hop {next_hop}"))?;
-
-                        let _ = conn.try_send((pkt, next_peeler));
-                        if next_hop != my_fp {
-                            ctx.get(DEBTS).incr_outgoing(next_hop);
-                        }
-                    } else {
-                        log::warn!("no route found to next peeler {next_peeler}");
-                    }
+                    let emit_time = Instant::now() + Duration::from_millis(delay_ms as u64);
+                    ctx.get(DELAY_QUEUE).insert((pkt, next_peeler), emit_time);
                 }
                 PeeledPacket::Received {
                     from: src_fp,
@@ -128,7 +117,7 @@ pub fn peel_forward(
     }
 }
 
-fn one_hop_closer(ctx: &DaemonContext, dest_fp: Fingerprint) -> Option<Fingerprint> {
+pub fn one_hop_closer(ctx: &DaemonContext, dest_fp: Fingerprint) -> Option<Fingerprint> {
     let route = ctx
         .get(RELAY_GRAPH)
         .read()

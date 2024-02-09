@@ -15,6 +15,7 @@ mod socks5;
 mod tcp_forward;
 mod udp_forward;
 
+use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
@@ -57,10 +58,11 @@ use crate::{
     haven_util::{haven_loop, HAVEN_FORWARD_DOCK},
 };
 
-use self::context::DEBTS;
+use self::context::{DEBTS, DELAY_QUEUE, NEIGH_TABLE_NEW};
 pub use self::control_protocol_impl::ControlProtErr;
 
 use self::db::db_write;
+use self::peel_forward::one_hop_closer;
 use self::{context::GLOBAL_IDENTITY, control_protocol_impl::ControlProtocolImpl};
 
 pub struct Daemon {
@@ -159,6 +161,11 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         RespawnStrategy::Immediate,
         clone!([ctx], move || rendezvous_forward_loop(ctx.clone())
             .map_err(log_error("rendezvous_forward_loop"))),
+    );
+
+    let _packet_dispatch_loop = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([ctx], move || packet_dispatch_loop(ctx.clone())),
     );
 
     let _haven_loops: Vec<Immortal> = ctx
@@ -368,6 +375,28 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 tracing::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
             }
         };
+    }
+}
+
+#[tracing::instrument(skip(ctx))]
+async fn packet_dispatch_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    let delay_queue = ctx.get(DELAY_QUEUE);
+    loop {
+        let (pkt, next_peeler) = delay_queue.pop().await;
+        if let Some(next_hop) = one_hop_closer(&ctx, next_peeler) {
+            let conn = ctx
+                .get(NEIGH_TABLE_NEW)
+                .get(&next_hop)
+                .context(format!("could not find this next hop {next_hop}"))?;
+
+            let _ = conn.try_send((pkt, next_peeler));
+            let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+            if next_hop != my_fp {
+                ctx.get(DEBTS).incr_outgoing(next_hop);
+            }
+        } else {
+            tracing::warn!("no route found to next peeler {next_peeler}");
+        }
     }
 }
 
