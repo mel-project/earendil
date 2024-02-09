@@ -51,7 +51,11 @@ pub fn peel_forward(
                 now.elapsed()
             ));
             match peeled {
-                PeeledPacket::Forward { next_peeler, pkt } => {
+                PeeledPacket::Forward {
+                    next_peeler,
+                    pkt,
+                    delay,
+                } => {
                     if next_peeler == my_fp {
                         peel_forward(ctx, my_fp, next_peeler, pkt);
                         return Ok(());

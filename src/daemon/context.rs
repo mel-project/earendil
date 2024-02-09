@@ -194,7 +194,7 @@ fn forward_route(ctx: &DaemonContext, dst_fp: Fingerprint) -> anyhow::Result<Vec
     }
     route.push(dst_fp);
     route.insert(0, ctx.get(GLOBAL_IDENTITY).public().fingerprint());
-    tracing::error!("forward route formed: {:?}", route);
+    tracing::debug!("forward route formed: {:?}", route);
     Ok(route)
 }
 
@@ -204,7 +204,7 @@ fn reply_route(ctx: &DaemonContext, src_fp: Fingerprint) -> anyhow::Result<Vec<F
     route.push(random_neigh_of(ctx, my_fp)?);
     route.push(ctx.get(GLOBAL_IDENTITY).public().fingerprint());
     route.insert(0, src_fp);
-    tracing::error!("reply route formed: {:?}", route);
+    tracing::debug!("reply route formed: {:?}", route);
     Ok(route)
 }
 

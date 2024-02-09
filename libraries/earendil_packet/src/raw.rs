@@ -1,7 +1,8 @@
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
 use earendil_crypt::{Fingerprint, IdentitySecret};
-use rand::RngCore;
+use rand::{Rng, RngCore};
+use rand_distr::Exp;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 use thiserror::Error;
@@ -44,6 +45,14 @@ pub enum PacketPeelError {
     InnerPacketOpenError,
 }
 
+const LOW_LATENCY: u16 = 50;
+
+fn sample_delay(avg: u16) -> u16 {
+    let exp = Exp::new(1.0 / avg as f64).expect("avg must be greater than zero");
+    let mut rng = rand::thread_rng();
+    (rng.sample(exp) * avg as f64) as u16
+}
+
 impl RawPacket {
     pub fn new_normal(
         route: &[ForwardInstruction],
@@ -68,6 +77,7 @@ impl RawPacket {
                 .map_err(|_| PacketConstructError::MessageTooBig)?,
         })
     }
+
     /// Creates a new RawPacket along with a vector of the shared secrets used to encrypt each layer of the onion body, given a payload and the series of relays that the packet is supposed to be peeled by.
     pub(crate) fn new(
         route: &[ForwardInstruction],
@@ -183,6 +193,7 @@ impl RawPacket {
                     header: bytemuck::cast(peeled_header),
                     onion_body: peeled_body,
                 },
+                delay: sample_delay(LOW_LATENCY),
             }
         } else if metadata[0] == 0 {
             // otherwise, the packet is addressed to us!
@@ -231,6 +242,7 @@ pub enum PeeledPacket {
     Forward {
         next_peeler: Fingerprint,
         pkt: RawPacket,
+        delay: u16,
     },
     Received {
         from: Fingerprint,
