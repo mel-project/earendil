@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use earendil_crypt::Fingerprint;
@@ -25,7 +25,7 @@ pub fn peel_forward(
     pkt: RawPacket,
 ) {
     let inner = || {
-        let packet_hash = blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8882]>(pkt)).to_string();
+        let packet_hash = blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8902]>(pkt)).to_string();
         let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
         if !ctx.get(DEBTS).is_within_debt_limit(&last_hop_fp) {
             anyhow::bail!("received pkt from neighbor who owes us too much money -_-");

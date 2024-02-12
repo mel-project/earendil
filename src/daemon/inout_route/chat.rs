@@ -2,7 +2,6 @@ use crate::daemon::inout_route::LinkClient;
 use crate::daemon::settlement::{SettlementProof, SettlementRequest};
 use crate::daemon::{context::DaemonContext, db::db_read};
 use anyhow::Context;
-use colored::Colorize;
 use dashmap::DashMap;
 use earendil_crypt::Fingerprint;
 use serde::{Deserialize, Serialize};
@@ -129,8 +128,8 @@ pub async fn send_chat_msg(
                 let req_msg_str = format!("sent you a settlement request for {amount}. Accept with '!accept' or reject with '!reject'.");
                 let req_msg = format!(
                     "<{}> {}",
-                    my_sk.public().fingerprint().to_string().purple().bold(),
-                    req_msg_str.purple().bold()
+                    my_sk.public().fingerprint().to_string(),
+                    req_msg_str
                 );
 
                 match client.push_chat(req_msg.clone()).await {
@@ -141,7 +140,6 @@ pub async fn send_chat_msg(
                 let response = client
                     .start_settlement(SettlementRequest::new(my_sk, amount, proof))
                     .await;
-                dbg!(&response);
                 let res_msg = match response {
                     Ok(Some(res)) => {
                         let descriptor = ctx
@@ -154,23 +152,14 @@ pub async fn send_chat_msg(
                             .verify(res.to_sign().as_bytes(), &res.signature)?;
 
                         format!("<{dest}> accepted your settlement request for {amount} micromel")
-                            .green()
-                            .bold()
                     }
                     Ok(None) => {
                         format!("<{dest}> rejected your settlement request for {amount} micromel")
-                            .red()
-                            .bold()
                     }
-                    Err(e) => format!("error sending <{dest}> a settlement request: {e}")
-                        .red()
-                        .bold(),
+                    Err(e) => format!("error sending <{dest}> a settlement request: {e}"),
                 };
 
-                chats.insert(
-                    dest,
-                    ChatEntry::new_incoming(format!("{}", res_msg.bold().blue())),
-                );
+                chats.insert(dest, ChatEntry::new_incoming(res_msg));
             }
         }
     } else if msg == "!accept" {
