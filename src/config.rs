@@ -34,7 +34,6 @@ pub struct ConfigFile {
     pub out_routes: BTreeMap<String, OutRouteConfig>,
 
     /// Contains the automatic settlement difficulty if accepted
-    #[serde(default)]
     pub auto_settle: Option<AutoSettle>,
 
     /// List of all client configs for udp forwarding

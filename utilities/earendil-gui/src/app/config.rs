@@ -72,6 +72,9 @@ impl ConfigState {
 
     /// Realize as an actual daemon configuration.
     pub fn realize(&self) -> anyhow::Result<ConfigFile> {
+        if self.raw_yaml.is_empty() {
+            anyhow::bail!("empty");
+        }
         let cfg: ConfigFile = serde_yaml::from_str(&self.raw_yaml)?;
         Ok(cfg)
     }
