@@ -4,8 +4,9 @@ use std::{
 };
 
 use anyhow::Context;
+use blake3::Hash;
 use bytes::Bytes;
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, PeeledPacket, RawPacket, ReplyBlock,
@@ -113,6 +114,8 @@ pub static SETTLEMENTS: CtxField<Settlements> = |ctx| Settlements::new(ctx.init(
 
 type NextPeeler = Fingerprint;
 pub static DELAY_QUEUE: CtxField<DelayQueue<(RawPacket, NextPeeler)>> = |_| DelayQueue::new();
+
+pub static PKTS_SEEN: CtxField<DashSet<Hash>> = |_| DashSet::new();
 
 /// Sends a raw N2R message with the given parameters.
 #[tracing::instrument(skip(ctx, content))]

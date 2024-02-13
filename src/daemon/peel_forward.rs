@@ -8,7 +8,7 @@ use crate::{
     daemon::{
         context::{
             ANON_DESTS, DEBTS, DEGARBLERS, DELAY_QUEUE, GLOBAL_IDENTITY, GLOBAL_ONION_SK,
-            NEIGH_TABLE_NEW, RELAY_GRAPH,
+            NEIGH_TABLE_NEW, PKTS_SEEN, RELAY_GRAPH,
         },
         rrb_balance::{decrement_rrb_balance, replenish_rrb},
     },
@@ -25,13 +25,22 @@ pub fn peel_forward(
     pkt: RawPacket,
 ) {
     let inner = || {
-        let packet_hash = blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8902]>(pkt)).to_string();
+        let pkts_seen = ctx.get(PKTS_SEEN);
+        let packet_hash = blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8902]>(pkt));
+
+        if pkts_seen.contains(&packet_hash) {
+            anyhow::bail!("received replayed pkt {packet_hash}");
+        } else {
+            pkts_seen.insert(packet_hash);
+        }
+
         let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
         if !ctx.get(DEBTS).is_within_debt_limit(&last_hop_fp) {
             anyhow::bail!("received pkt from neighbor who owes us too much money -_-");
         }
+
         tracing::debug!(
-            packet_hash,
+            packet_hash = packet_hash.to_string(),
             my_fp = my_fp.to_string(),
             peeler = next_peeler.to_string(),
             "peel_forward on raw packet"
@@ -78,7 +87,10 @@ pub fn peel_forward(
             ))?
                         .1;
                     let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
-                    tracing::debug!(packet_hash, "packet has been degarbled!");
+                    tracing::debug!(
+                        packet_hash = packet_hash.to_string(),
+                        "packet has been degarbled!"
+                    );
 
                     // TODO
                     decrement_rrb_balance(ctx, reply_degarbler.my_anon_isk(), src_fp);
@@ -94,7 +106,7 @@ pub fn peel_forward(
             }
         } else {
             tracing::debug!(
-                packet_hash,
+                packet_hash = packet_hash.to_string(),
                 peeler = next_peeler.to_string(),
                 "we are not the peeler"
             );
