@@ -29,6 +29,7 @@ use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 
 use nursery_macro::nursery;
+use smol::Task;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use stdcode::StdcodeSerializeExt;
@@ -67,7 +68,7 @@ use self::{context::GLOBAL_IDENTITY, control_protocol_impl::ControlProtocolImpl}
 
 pub struct Daemon {
     pub(crate) ctx: DaemonContext,
-    _task: Immortal,
+    _task: Task<()>,
 }
 
 impl Daemon {
@@ -76,9 +77,8 @@ impl Daemon {
         let ctx = DaemonContext::new(config);
         let context = ctx.clone();
         tracing::info!("starting background task for main_daemon");
-        let task = Immortal::spawn(async move {
-            main_daemon(context).await.unwrap();
-            panic!("daemon failed to start!")
+        let task = smol::spawn(async move {
+            let _ = main_daemon(context).await;
         });
         Ok(Self { ctx, _task: task })
     }
