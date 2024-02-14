@@ -3,14 +3,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::Context;
 use blake3::Hash;
 use bytes::Bytes;
 use dashmap::{DashMap, DashSet};
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
-    crypt::OnionSecret, Dock, InnerPacket, Message, PeeledPacket, RawPacket, ReplyBlock,
-    ReplyDegarbler,
+    crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
 use earendil_topology::RelayGraph;
 
@@ -150,7 +148,11 @@ pub async fn send_n2r(
             raw_packet,
         );
     } else {
-        let route = forward_route(ctx, dst_fp).map_err(|_| SendMessageError::NoRoute(dst_fp))?;
+        let route = match forward_route(ctx, dst_fp) {
+            Some(r) => r,
+            None => return Err(SendMessageError::NoRoute(dst_fp)),
+        };
+
         let instructs = {
             let graph = ctx.get(RELAY_GRAPH).read();
             route_to_instructs(route.clone(), &graph)
@@ -188,7 +190,7 @@ pub async fn send_n2r(
     Ok(())
 }
 
-fn forward_route(ctx: &DaemonContext, dst_fp: Fingerprint) -> anyhow::Result<Vec<Fingerprint>> {
+fn forward_route(ctx: &DaemonContext, dst_fp: Fingerprint) -> Option<Vec<Fingerprint>> {
     let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
     // if the destination is a client, then the penultimate must be a random neighbor of it
     let is_relay = if let Some(id) = ctx.get(RELAY_GRAPH).read().identity(&dst_fp) {
@@ -197,34 +199,38 @@ fn forward_route(ctx: &DaemonContext, dst_fp: Fingerprint) -> anyhow::Result<Vec
         false
     };
     if !is_relay {
-        route.push(random_neigh_of(ctx, dst_fp)?);
+        match random_neigh_of(ctx, dst_fp) {
+            Some(neigh) => route.push(neigh),
+            None => return None,
+        }
     }
     route.push(dst_fp);
     route.insert(0, ctx.get(GLOBAL_IDENTITY).public().fingerprint());
     tracing::debug!("forward route formed: {:?}", route);
-    Ok(route)
+    Some(route)
 }
 
-fn reply_route(ctx: &DaemonContext, src_fp: Fingerprint) -> anyhow::Result<Vec<Fingerprint>> {
+fn reply_route(ctx: &DaemonContext, src_fp: Fingerprint) -> Option<Vec<Fingerprint>> {
     let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
     let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
-    route.push(random_neigh_of(ctx, my_fp)?);
+    match random_neigh_of(ctx, my_fp) {
+        Some(neigh) => route.push(neigh),
+        None => return None,
+    }
     route.push(ctx.get(GLOBAL_IDENTITY).public().fingerprint());
     route.insert(0, src_fp);
     tracing::debug!("reply route formed: {:?}", route);
-    Ok(route)
+    Some(route)
 }
 
-fn random_neigh_of(ctx: &DaemonContext, fp: Fingerprint) -> anyhow::Result<Fingerprint> {
+fn random_neigh_of(ctx: &DaemonContext, fp: Fingerprint) -> Option<Fingerprint> {
     let my_neighs = ctx
         .get(RELAY_GRAPH)
         .read()
         .neighbors(&fp)
         .map(|s| s.collect_vec())
         .unwrap_or_default();
-    Ok(*my_neighs
-        .choose(&mut rand::thread_rng())
-        .context("no neighbors to choose a random one from")?)
+    my_neighs.choose(&mut rand::thread_rng()).copied()
 }
 
 #[tracing::instrument(skip(ctx))]
@@ -242,7 +248,11 @@ pub async fn send_reply_blocks(
 
     tracing::trace!("sending a batch of {count} reply blocks to {dst_fp}");
 
-    let route = forward_route(ctx, dst_fp).unwrap();
+    let route = match forward_route(ctx, dst_fp) {
+        Some(r) => r,
+        None => return Err(SendMessageError::NoRoute(dst_fp)),
+    };
+
     let their_opk = ctx
         .get(RELAY_GRAPH)
         .read()
@@ -251,7 +261,11 @@ pub async fn send_reply_blocks(
         .onion_pk;
     let instructs = route_to_instructs(route.clone(), ctx.get(RELAY_GRAPH).read().deref())?;
     // currently the path for every one of them is the same; will want to change this in the future
-    let reverse_route = reply_route(ctx, dst_fp).unwrap();
+    let reverse_route = match reply_route(ctx, dst_fp) {
+        Some(r) => r,
+        None => return Err(SendMessageError::NoRoute(dst_fp)),
+    };
+
     let reverse_instructs = route_to_instructs(reverse_route, ctx.get(RELAY_GRAPH).read().deref())?;
 
     let mut rbs: Vec<ReplyBlock> = vec![];
