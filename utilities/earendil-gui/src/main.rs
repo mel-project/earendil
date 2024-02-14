@@ -28,7 +28,7 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
     eframe::run_native(
-        "earendil GUI",
+        "earendil",
         native_options,
         Box::new(|cc| Box::new(app::App::new(cc))),
     )?;

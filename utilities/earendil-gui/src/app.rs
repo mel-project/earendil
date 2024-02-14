@@ -82,6 +82,8 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        ctx.request_repaint_after(Duration::from_secs(1));
+
         egui::TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.selected_tab, TabName::Dashboard, "Dashboard");

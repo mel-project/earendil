@@ -155,7 +155,7 @@ pub async fn send_n2r(
             let graph = ctx.get(RELAY_GRAPH).read();
             route_to_instructs(route.clone(), &graph)
         }?;
-        tracing::debug!(
+        tracing::trace!(
             "*************************** translated this route to instructions: {:?}",
             route
         );

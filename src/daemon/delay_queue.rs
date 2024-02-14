@@ -20,7 +20,7 @@ impl<T: Hash + Eq> DelayQueue<T> {
     /// inserts `item` with delay
     pub fn insert(&self, item: T, emit_time: Instant) {
         let _ = self.priority_queue.lock().push(item, Reverse(emit_time));
-        eprintln!("notifying!");
+        // eprintln!("notifying!");
         self.event.notify(1);
     }
 

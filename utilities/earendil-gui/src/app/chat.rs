@@ -23,7 +23,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
     };
 
     ui.columns(2, |cols| {
-        cols[0].vertical(|ui| ui.heading("Peer Selection"));
+        cols[0].vertical(|ui| ui.heading("Select a Peer"));
         cols[1].vertical(|ui| ui.heading(chat_heading));
     });
     ui.separator();
