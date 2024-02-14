@@ -24,7 +24,7 @@ use crate::{app::refresh_cell::RefreshCell, subscriber::LOGS};
 
 use self::{
     chat::render_chat,
-    config::{ConfigState, DaemonMode},
+    config::{parse_config_yaml, ConfigState, DaemonMode},
     daemon_wrap::DaemonWrap,
     modal_state::{ModalState, Severity},
 };
@@ -242,7 +242,7 @@ impl App {
                 self.daemon = Some(Promise::spawn_thread("daemon-starter", move || {
                     std::env::set_current_dir(config::earendil_config_dir())?;
                     let config_file =
-                        serde_yaml::from_str(&daemon_cfg).context("could not parse config file")?;
+                        parse_config_yaml(&daemon_cfg).context("could not parse config file")?;
                     let daemon = Daemon::init(config_file).context("cannot start daemon")?;
                     smol::future::block_on(daemon.control_client().graph_dump(false))
                         .context("could not get graph dump")?;

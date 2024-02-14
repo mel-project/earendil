@@ -239,40 +239,34 @@ fn haven_ii() {
 
         helpers::sleep(5).await;
 
-        let alice_task = async {
-            alice_skt
-                .send_to(Bytes::copy_from_slice(to_bob), bob_haven_fp)
-                .await
-                .unwrap();
+        alice_skt
+            .send_to(Bytes::copy_from_slice(to_bob), bob_haven_fp)
+            .await
+            .unwrap();
 
-            let (from_bob, _) = alice_skt
-                .recv_from()
-                .timeout(Duration::from_secs(20))
-                .await
-                .unwrap()
-                .unwrap();
+        let (from_alice, _) = bob_skt
+            .recv_from()
+            .timeout(Duration::from_secs(10))
+            .await
+            .unwrap()
+            .unwrap();
+        Timer::after(Duration::from_millis(100)).await;
+        assert_eq!(from_alice.as_ref(), to_bob);
 
-            assert_eq!(from_bob.as_ref(), to_alice);
-        };
+        bob_skt
+            .send_to(Bytes::copy_from_slice(to_alice), alice_anon_fp)
+            .timeout(Duration::from_secs(10))
+            .await
+            .unwrap()
+            .unwrap();
 
-        let bob_task = async {
-            let (from_alice, _) = bob_skt
-                .recv_from()
-                .timeout(Duration::from_secs(10))
-                .await
-                .unwrap()
-                .unwrap();
-            Timer::after(Duration::from_millis(100)).await;
-            bob_skt
-                .send_to(Bytes::copy_from_slice(to_alice), alice_anon_fp)
-                .timeout(Duration::from_secs(10))
-                .await
-                .unwrap()
-                .unwrap();
+        let (from_bob, _) = alice_skt
+            .recv_from()
+            .timeout(Duration::from_secs(20))
+            .await
+            .unwrap()
+            .unwrap();
 
-            assert_eq!(from_alice.as_ref(), to_bob);
-        };
-
-        alice_task.race(bob_task).await
+        assert_eq!(from_bob.as_ref(), to_alice);
     });
 }

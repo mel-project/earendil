@@ -286,7 +286,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 /// Loop that handles the persistence of contex state
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
-        tracing::debug!("syncing DB...");
+        tracing::debug!("DBDBDBDB syncing DB...");
         let global_id = ctx.get(GLOBAL_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
         let debts = ctx.get(DEBTS).as_bytes()?;
