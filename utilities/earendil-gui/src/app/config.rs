@@ -73,7 +73,7 @@ impl ConfigState {
     /// Realize as an actual daemon configuration.
     pub fn realize(&self) -> anyhow::Result<ConfigFile> {
         if self.raw_yaml.is_empty() {
-            anyhow::bail!("empty config file")
+            anyhow::bail!("empty")
         }
         parse_config_yaml(&self.raw_yaml)
     }

@@ -139,7 +139,7 @@ fn render_convo(
     their_fp: Fingerprint,
 ) {
     egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.set_height(ui.available_height());
+        ui.set_height(ui.available_height() - 25.0);
 
         for (is_mine, msg, time) in tuple_chat {
             let time: DateTime<Local> = time.into();
