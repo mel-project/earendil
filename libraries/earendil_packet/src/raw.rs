@@ -47,7 +47,7 @@ pub enum PacketPeelError {
     InnerPacketOpenError,
 }
 
-const LOW_LATENCY_MS: u16 = 50;
+const LOW_LATENCY_MS: u16 = 5;
 
 fn sample_delay(avg: u16) -> u16 {
     let exp = Exp::new(1.0 / avg as f64).expect("avg must be greater than zero");
