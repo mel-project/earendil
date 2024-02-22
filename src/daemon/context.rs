@@ -209,7 +209,8 @@ fn forward_route(ctx: &DaemonContext, dst_fp: Fingerprint) -> Option<Vec<Fingerp
     let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
     // if the destination is a client, then the penultimate must be a random neighbor of it
     let is_relay = if let Some(id) = ctx.get(RELAY_GRAPH).read().identity(&dst_fp) {
-        id.is_relay
+        // the relay graph contains *only* relays. So if dest_fp is in the relay grpah, then it's a relay!
+        true
     } else {
         false
     };

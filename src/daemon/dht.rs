@@ -93,17 +93,7 @@ pub async fn dht_get(
 }
 
 fn dht_key_to_fps(ctx: &DaemonContext, key: &str) -> Vec<Fingerprint> {
-    let mut all_nodes: Vec<Fingerprint> = ctx
-        .get(RELAY_GRAPH)
-        .read()
-        .all_nodes()
-        .filter(|fp| {
-            ctx.get(RELAY_GRAPH)
-                .read()
-                .identity(fp)
-                .map_or(false, |id| id.is_relay)
-        })
-        .collect();
+    let mut all_nodes: Vec<Fingerprint> = ctx.get(RELAY_GRAPH).read().all_nodes().collect();
     all_nodes.sort_unstable_by_key(|fp| *blake3::hash(&(key, fp).stdcode()).as_bytes());
     all_nodes
 }

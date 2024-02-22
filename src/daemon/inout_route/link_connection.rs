@@ -277,12 +277,7 @@ impl LinkProtocol for LinkProtocolImpl {
     async fn adjacencies(&self, fps: Vec<Fingerprint>) -> Vec<AdjacencyDescriptor> {
         let rg = self.ctx.get(RELAY_GRAPH).read();
         fps.into_iter()
-            .flat_map(|fp| {
-                rg.adjacencies(&fp).into_iter().flatten().filter(|adj| {
-                    rg.identity(&adj.left).map_or(false, |id| id.is_relay)
-                        && rg.identity(&adj.right).map_or(false, |id| id.is_relay)
-                })
-            })
+            .flat_map(|fp| rg.adjacencies(&fp).into_iter().flatten())
             .dedup()
             .collect()
     }

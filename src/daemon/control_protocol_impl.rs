@@ -194,20 +194,6 @@ impl ControlProtocol for ControlProtocolImpl {
                 .get(RELAY_GRAPH)
                 .read()
                 .all_adjacencies()
-                .filter(|adj| {
-                    // only display relays
-                    self.ctx
-                        .get(RELAY_GRAPH)
-                        .read()
-                        .identity(&adj.left)
-                        .map_or(false, |id| id.is_relay)
-                        && self
-                            .ctx
-                            .get(RELAY_GRAPH)
-                            .read()
-                            .identity(&adj.right)
-                            .map_or(false, |id| id.is_relay)
-                })
                 .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
                 .fold(String::new(), |acc, adj| {
                     acc + &format!(
@@ -246,7 +232,7 @@ impl ControlProtocol for ControlProtocolImpl {
                             "{:?} [label={:?}, shape={}]\n",
                             node_str,
                             get_node_label(&node),
-                            (if desc.is_relay { "oval" } else { "rect" }).to_string()
+                            "oval".to_string()
                                 + (if self.ctx.get(NEIGH_TABLE_NEW).contains_key(&node) {
                                     ", color=lightpink,style=filled"
                                 } else {

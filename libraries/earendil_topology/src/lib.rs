@@ -145,7 +145,6 @@ impl RelayGraph {
     pub fn rand_relays(&self, num: usize) -> Vec<Fingerprint> {
         self.all_nodes()
             .filter_map(|n| self.identity(&n))
-            .filter(|id| id.is_relay)
             .map(|id| id.identity_pk.fingerprint())
             .choose_multiple(&mut rand::thread_rng(), num)
     }
@@ -325,10 +324,9 @@ impl AdjacencyDescriptor {
     }
 }
 
-/// An identity descriptor, signed by the owner of an identity. Declares that the identity owns a particular onion key, as well as implicitly
+/// A relay identity descriptor, signed by the owner of an identity. Declares that the identity owns a particular onion key, as well as implicitly
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IdentityDescriptor {
-    pub is_relay: bool,
     pub identity_pk: IdentityPublic,
     pub onion_pk: OnionPublic,
 
@@ -339,11 +337,10 @@ pub struct IdentityDescriptor {
 
 impl IdentityDescriptor {
     /// Creates an IdentityDescriptor from our own IdentitySecret
-    pub fn new(my_identity: &IdentitySecret, my_onion: &OnionSecret, is_relay: bool) -> Self {
+    pub fn new(my_identity: &IdentitySecret, my_onion: &OnionSecret) -> Self {
         let identity_pk = my_identity.public();
         let onion_pk = my_onion.public();
         let mut descr = IdentityDescriptor {
-            is_relay,
             identity_pk,
             onion_pk,
             sig: Bytes::new(),
