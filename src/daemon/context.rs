@@ -8,7 +8,8 @@ use bytes::Bytes;
 use dashmap::{DashMap, DashSet};
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
-    crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
+    crypt::{OnionPublic, OnionSecret},
+    Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
 use earendil_topology::RelayGraph;
 
@@ -25,8 +26,8 @@ use crate::{
 };
 
 use super::{
-    db::db_read, debts::Debts, delay_queue::DelayQueue, peel_forward::peel_forward,
-    reply_block_store::ReplyBlockStore, rrb_balance::replenish_rrb, settlement::Settlements,
+    db::db_read, debts::Debts, delay_queue::DelayQueue, reply_block_store::ReplyBlockStore,
+    rrb_balance::replenish_rrb, settlement::Settlements,
 };
 
 pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
@@ -161,15 +162,21 @@ pub async fn send_n2r(
                 "*************************** translated this route to instructions: {:?}",
                 route
             );
-            let their_opk = ctx
+            let dest_opk = ctx
                 .get(RELAY_GRAPH)
                 .read()
                 .identity(&dst_fp)
                 .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
                 .onion_pk;
+            let dest_is_relay = if let Some(id) = ctx.get(RELAY_GRAPH).read().identity(&dst_fp) {
+                id.is_relay
+            } else {
+                false
+            };
             let wrapped_onion = RawPacket::new_normal(
                 &instructs,
-                &their_opk,
+                &dest_opk,
+                dest_is_relay,
                 InnerPacket::Message(Message::new(src_dock, dst_dock, content.clone())),
                 &src_idsk,
             )?;
@@ -223,7 +230,7 @@ fn forward_route(ctx: &DaemonContext, dst_fp: Fingerprint) -> Option<Vec<Fingerp
     Some(route)
 }
 
-fn reply_route(ctx: &DaemonContext, src_fp: Fingerprint) -> Option<Vec<Fingerprint>> {
+fn reply_route(ctx: &DaemonContext) -> Option<Vec<Fingerprint>> {
     let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
     let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
     match random_neigh_of(ctx, my_fp) {
@@ -266,15 +273,27 @@ pub async fn send_reply_blocks(
     };
     let first_peeler = route[0];
 
-    let their_opk = ctx
+    let dest_opk = ctx
         .get(RELAY_GRAPH)
         .read()
         .identity(&dst_fp)
         .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
         .onion_pk;
+    let dest_is_relay = if let Some(id) = ctx.get(RELAY_GRAPH).read().identity(&dst_fp) {
+        id.is_relay
+    } else {
+        false
+    };
+    let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+    let am_i_relay = if let Some(id) = ctx.get(RELAY_GRAPH).read().identity(&my_fp) {
+        id.is_relay
+    } else {
+        false
+    };
+
     let instructs = route_to_instructs(route.clone(), ctx.get(RELAY_GRAPH).read().deref())?;
     // currently the path for every one of them is the same; will want to change this in the future
-    let reverse_route = match reply_route(ctx, dst_fp) {
+    let reverse_route = match reply_route(ctx) {
         Some(r) => r,
         None => return Err(SendMessageError::NoRoute(dst_fp)),
     };
@@ -287,6 +306,7 @@ pub async fn send_reply_blocks(
             &reverse_instructs,
             first_peeler,
             &ctx.get(GLOBAL_ONION_SK).public(),
+            am_i_relay,
             my_anon_osk.clone(),
             my_anon_isk,
         )
@@ -296,7 +316,8 @@ pub async fn send_reply_blocks(
     }
     let wrapped_rb_onion = RawPacket::new_normal(
         &instructs,
-        &their_opk,
+        &dest_opk,
+        dest_is_relay,
         InnerPacket::ReplyBlocks(rbs),
         &my_anon_isk,
     )?;

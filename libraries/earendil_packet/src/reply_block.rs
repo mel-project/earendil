@@ -22,7 +22,8 @@ impl ReplyBlock {
     pub fn new(
         route: &[ForwardInstruction],
         first_peeler: Fingerprint,
-        my_opk: &OnionPublic,
+        dest_opk: &OnionPublic,
+        dest_is_relay: bool,
         my_anon_osk: OnionSecret,
         my_anon_isk: IdentitySecret,
     ) -> Result<(Self, (u64, ReplyDegarbler)), PacketConstructError> {
@@ -35,7 +36,8 @@ impl ReplyBlock {
 
         let (raw_packet, shared_secs) = RawPacket::new(
             route,
-            my_opk,
+            dest_opk,
+            dest_is_relay,
             InnerPacket::Message(Message {
                 source_dock: 0u32,
                 dest_dock: 0u32,

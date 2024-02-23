@@ -97,9 +97,18 @@ mod tests {
         let alice_osk = OnionSecret::generate();
         let alice_opk = alice_osk.public();
         let alice_isk = IdentitySecret::generate();
+        let is_relay = true;
+        let first_peeler = Fingerprint::from_bytes(&[10; 20]);
 
-        let (rb, _) = ReplyBlock::new(&route, &alice_opk, OnionSecret::generate(), alice_isk)
-            .expect("failed to create reply block");
+        let (rb, _) = ReplyBlock::new(
+            &route,
+            first_peeler,
+            &alice_opk,
+            is_relay,
+            OnionSecret::generate(),
+            alice_isk,
+        )
+        .expect("failed to create reply block");
         rb
     }
 

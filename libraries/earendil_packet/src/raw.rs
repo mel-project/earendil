@@ -58,11 +58,12 @@ fn sample_delay(avg: u16) -> u16 {
 impl RawPacket {
     pub fn new_normal(
         route: &[ForwardInstruction],
-        destination: &OnionPublic,
+        dest_opk: &OnionPublic,
+        dest_is_relay: bool,
         payload: InnerPacket,
         my_isk: &IdentitySecret,
     ) -> Result<Self, PacketConstructError> {
-        let (raw, _) = Self::new(route, destination, payload, &[0; 20], my_isk)?;
+        let (raw, _) = Self::new(route, dest_opk, dest_is_relay, payload, &[0; 20], my_isk)?;
         Ok(raw)
     }
 
@@ -87,7 +88,8 @@ impl RawPacket {
     /// Creates a new RawPacket along with a vector of the shared secrets used to encrypt each layer of the onion body, given a payload and the series of relays that the packet is supposed to be peeled by.
     pub(crate) fn new(
         route: &[ForwardInstruction],
-        destination: &OnionPublic,
+        dest_opk: &OnionPublic,
+        dest_is_relay: bool,
         payload: InnerPacket,
         metadata: &[u8; 20],
         my_isk: &IdentitySecret,
@@ -106,13 +108,14 @@ impl RawPacket {
 
             // Encrypt for the destination, so that when the destination peels, it receives a PeeledPacket::Receive
             let mut buffer = [0; 23];
+
             buffer[1..21].copy_from_slice(&metadata[..]);
 
             // Encode packet latency into metadata
             buffer[21..].copy_from_slice(&delay.to_le_bytes());
 
-            let (header_outer, our_sk) = box_encrypt(&buffer, destination);
-            let shared_sec = our_sk.shared_secret(destination);
+            let (header_outer, our_sk) = box_encrypt(&buffer, &dest_opk);
+            let shared_sec = our_sk.shared_secret(&dest_opk);
             let onion_body = {
                 let body_key = blake3::keyed_hash(b"body____________________________", &shared_sec);
                 let mut new = sealed_payload;
@@ -136,9 +139,15 @@ impl RawPacket {
                 vec![shared_sec],
             ))
         } else {
-            let (next_hop, mut shared_secs) =
-                RawPacket::new(&route[1..], destination, payload, metadata, my_isk)?;
-            let mut buffer = [1; 23];
+            let (next_hop, mut shared_secs) = RawPacket::new(
+                &route[1..],
+                dest_opk,
+                dest_is_relay,
+                payload,
+                metadata,
+                my_isk,
+            )?;
+            let mut buffer = if dest_is_relay { [1; 23] } else { [2; 23] };
             buffer[1..21].copy_from_slice(route[0].next_fingerprint.as_bytes());
             buffer[21..].copy_from_slice(&delay.to_le_bytes());
             let (header_outer, our_sk) = box_encrypt(&buffer, &route[0].this_pubkey);
@@ -197,7 +206,23 @@ impl RawPacket {
             new
         };
 
-        Ok(if metadata[0] == 1 {
+        Ok(if metadata[0] == 2 {
+            // if the metadata starts with 2, then we need to forward to a client.
+            // the 20 remaining bytes in the metadata indicate the client ID of the next guy.
+            let fingerprint = Fingerprint::from_bytes(array_ref![metadata, 1, 20]);
+            let delay_bytes: [u8; 2] = match metadata[21..] {
+                [a, b] => [a, b],
+                _ => return Err(PacketPeelError::InnerPacketOpenError),
+            };
+            PeeledPacket::Forward {
+                next_peeler: fingerprint,
+                pkt: RawPacket {
+                    header: bytemuck::cast(peeled_header),
+                    onion_body: peeled_body,
+                },
+                delay_ms: u16::from_le_bytes(delay_bytes),
+            }
+        } else if metadata[0] == 1 {
             // if the metadata starts with 1, then we need to forward to the next guy.
             // the 20 remaining bytes in the metadata indicate the fingerprint of the next guy.
             let fingerprint = Fingerprint::from_bytes(array_ref![metadata, 1, 20]);

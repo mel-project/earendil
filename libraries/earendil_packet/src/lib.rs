@@ -49,9 +49,12 @@ mod tests {
 
         let forward_instructions: Vec<ForwardInstruction> =
             route.iter().map(|(inst, _)| *inst).collect();
+        let is_relay = true;
+
         let (packet, _) = RawPacket::new(
             &forward_instructions,
             &destination,
+            is_relay,
             InnerPacket::Message(msg.clone()),
             &[0; 20],
             &my_isk,
@@ -63,7 +66,7 @@ mod tests {
                 Ok(PeeledPacket::Forward {
                     next_peeler: _,
                     pkt: next_packet,
-                    delay_ms: delay,
+                    delay_ms: _delay,
                 }) => {
                     peeled_packet = next_packet;
                 }
@@ -135,11 +138,19 @@ mod tests {
             .iter()
             .map(|(inst, _)| *inst)
             .collect();
+        let first_peeler = Fingerprint::from_bytes(&[10; 20]);
+        let is_relay = true;
 
         // Prepare reply block
-        let (reply_block, (_, reply_degarbler)) =
-            ReplyBlock::new(&route, &alice_opk, OnionSecret::generate(), alice_isk)
-                .expect("Failed to create reply block");
+        let (reply_block, (_, reply_degarbler)) = ReplyBlock::new(
+            &route,
+            first_peeler,
+            &alice_opk,
+            is_relay,
+            OnionSecret::generate(),
+            alice_isk,
+        )
+        .expect("Failed to create reply block");
 
         // Prepare message using header from reply block
         let body = "hello world from reply block!";
@@ -162,7 +173,7 @@ mod tests {
                 PeeledPacket::Forward {
                     next_peeler: _,
                     pkt: next_packet,
-                    delay_ms: delay,
+                    delay_ms: _delay,
                 } => {
                     peeled_packet = next_packet;
                 }

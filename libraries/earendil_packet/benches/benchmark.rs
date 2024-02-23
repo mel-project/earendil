@@ -46,12 +46,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let my_isk = IdentitySecret::generate();
         let my_osk = OnionSecret::generate();
         let my_opk = my_osk.public();
+        let is_relay = true;
 
         c.bench_function(&format!("{route_length}-hop RawPacket construction"), |b| {
             b.iter(|| {
                 black_box(RawPacket::new_normal(
                     &route,
                     &destination,
+                    is_relay,
                     payload.clone(),
                     &my_isk,
                 ))
@@ -60,13 +62,17 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
         let my_anon_osk = OnionSecret::generate();
         let my_anon_isk = IdentitySecret::generate();
+        let first_peeler = Fingerprint::from_bytes(&[10; 20]);
+
         c.bench_function(
             &format!("{route_length}-hop ReplyBlock construction"),
             |b| {
                 b.iter(|| {
                     black_box(ReplyBlock::new(
                         &route,
+                        first_peeler,
                         &my_opk,
+                        is_relay,
                         my_anon_osk.clone(),
                         my_anon_isk,
                     ))
