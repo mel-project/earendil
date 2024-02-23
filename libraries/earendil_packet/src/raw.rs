@@ -72,11 +72,15 @@ impl RawPacket {
         payload: InnerPacket,
         my_isk: &IdentitySecret,
     ) -> Result<Self, PacketConstructError> {
+        let mut raw = payload
+            .encode(my_isk)
+            .map_err(|_| PacketConstructError::MessageTooBig)?;
+
+        stream_dencrypt(&reply_block.stream_key, &[0; 12], &mut raw);
+
         Ok(Self {
             header: reply_block.header,
-            onion_body: payload
-                .encode(my_isk)
-                .map_err(|_| PacketConstructError::MessageTooBig)?,
+            onion_body: raw,
         })
     }
 

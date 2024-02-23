@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentitySecret};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -13,6 +14,7 @@ use crate::{
 pub struct ReplyBlock {
     pub header: RawHeader,
     pub e2e_dest: OnionPublic,
+    pub stream_key: [u8; 32],
 }
 
 impl ReplyBlock {
@@ -41,16 +43,19 @@ impl ReplyBlock {
             &my_anon_isk,
         )?;
         let header = raw_packet.header;
+        let stream_key = rand::thread_rng().gen();
 
         let rb_degarbler = ReplyDegarbler {
             shared_secs,
             my_anon_osk,
             my_anon_isk,
+            stream_key,
         };
         Ok((
             Self {
                 header,
                 e2e_dest: my_anon_opk,
+                stream_key,
             },
             (rb_id, rb_degarbler),
         ))
@@ -62,6 +67,7 @@ pub struct ReplyDegarbler {
     shared_secs: Vec<[u8; 32]>,
     my_anon_osk: OnionSecret,
     my_anon_isk: IdentitySecret,
+    stream_key: [u8; 32],
 }
 
 impl ReplyDegarbler {
@@ -73,6 +79,7 @@ impl ReplyDegarbler {
             let body_key = blake3::keyed_hash(b"body____________________________", shared_sec);
             stream_dencrypt(body_key.as_bytes(), &[0; 12], raw);
         }
+        stream_dencrypt(&self.stream_key, &[0; 12], &mut raw[..]);
         InnerPacket::decode(raw)
     }
 
