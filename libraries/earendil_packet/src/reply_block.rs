@@ -15,11 +15,13 @@ pub struct ReplyBlock {
     pub header: RawHeader,
     pub e2e_dest: OnionPublic,
     pub stream_key: [u8; 32],
+    pub first_peeler: Fingerprint,
 }
 
 impl ReplyBlock {
     pub fn new(
         route: &[ForwardInstruction],
+        first_peeler: Fingerprint,
         my_opk: &OnionPublic,
         my_anon_osk: OnionSecret,
         my_anon_isk: IdentitySecret,
@@ -56,6 +58,7 @@ impl ReplyBlock {
                 header,
                 e2e_dest: my_anon_opk,
                 stream_key,
+                first_peeler,
             },
             (rb_id, rb_degarbler),
         ))

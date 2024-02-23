@@ -70,8 +70,8 @@ pub fn peel_forward(
                 }
                 PeeledPacket::Received {
                     from: src_fp,
-                    pkt: inner,
-                } => process_inner_pkt(ctx, inner, src_fp, my_fp)?,
+                    pkt: inner_pkt,
+                } => process_inner_pkt(ctx, inner_pkt, src_fp, my_fp)?,
                 PeeledPacket::GarbledReply { id, mut pkt } => {
                     let reply_degarbler = ctx
                         .get(DEGARBLERS)

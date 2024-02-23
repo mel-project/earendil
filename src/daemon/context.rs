@@ -132,7 +132,8 @@ pub async fn send_n2r(
         tracing::trace!("send message took {:?}", send_msg_time);
     });
 
-    let src_anon = &src_idsk != ctx.get(GLOBAL_IDENTITY);
+    let my_sk = ctx.get(GLOBAL_IDENTITY);
+    let src_anon = &src_idsk != my_sk;
 
     let maybe_reply_block = ctx.get(ANON_DESTS).lock().pop(&dst_fp);
     if let Some(reply_block) = maybe_reply_block {
@@ -141,18 +142,16 @@ pub async fn send_n2r(
         }
         let inner = InnerPacket::Message(Message::new(src_dock, dst_dock, content));
         let raw_packet = RawPacket::new_reply(&reply_block, inner, &src_idsk)?;
-        peel_forward(
-            ctx,
-            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-            raw_packet,
-        );
+        let emit_time = Instant::now();
+        ctx.get(DELAY_QUEUE)
+            .insert((raw_packet, reply_block.first_peeler), emit_time);
     } else {
         let fallible = || -> Result<(), SendMessageError> {
             let route = match forward_route(ctx, dst_fp) {
                 Some(r) => r,
                 None => return Err(SendMessageError::NoRoute(dst_fp)),
             };
+            let first_peeler = route[0];
 
             let instructs = {
                 let graph = ctx.get(RELAY_GRAPH).read();
@@ -180,13 +179,10 @@ pub async fn send_n2r(
                 replenish_rrb(ctx, src_idsk, dst_fp)?;
             }
 
-            // we send the onion by treating it as a message addressed to ourselves
-            peel_forward(
-                ctx,
-                ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-                ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-                wrapped_onion,
-            );
+            let emit_time = Instant::now();
+            ctx.get(DELAY_QUEUE)
+                .insert((wrapped_onion, first_peeler), emit_time);
+
             Ok(())
         };
 
@@ -215,12 +211,14 @@ fn forward_route(ctx: &DaemonContext, dst_fp: Fingerprint) -> Option<Vec<Fingerp
     };
     if !is_relay {
         match random_neigh_of(ctx, dst_fp) {
-            Some(neigh) => route.push(neigh),
+            Some(neigh) => {
+                route.pop();
+                route.push(neigh);
+            }
             None => return None,
         }
     }
     route.push(dst_fp);
-    route.insert(0, ctx.get(GLOBAL_IDENTITY).public().fingerprint());
     tracing::debug!("forward route formed: {:?}", route);
     Some(route)
 }
@@ -233,7 +231,6 @@ fn reply_route(ctx: &DaemonContext, src_fp: Fingerprint) -> Option<Vec<Fingerpri
         None => return None,
     }
     route.push(ctx.get(GLOBAL_IDENTITY).public().fingerprint());
-    route.insert(0, src_fp);
     tracing::debug!("reply route formed: {:?}", route);
     Some(route)
 }
@@ -267,6 +264,7 @@ pub async fn send_reply_blocks(
         Some(r) => r,
         None => return Err(SendMessageError::NoRoute(dst_fp)),
     };
+    let first_peeler = route[0];
 
     let their_opk = ctx
         .get(RELAY_GRAPH)
@@ -287,6 +285,7 @@ pub async fn send_reply_blocks(
     for _ in 0..count {
         let (rb, (id, degarbler)) = ReplyBlock::new(
             &reverse_instructs,
+            first_peeler,
             &ctx.get(GLOBAL_ONION_SK).public(),
             my_anon_osk.clone(),
             my_anon_isk,
@@ -302,12 +301,9 @@ pub async fn send_reply_blocks(
         &my_anon_isk,
     )?;
 
-    // we send the onion by treating it as a message addressed to ourselves
-    peel_forward(
-        ctx,
-        ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-        ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-        wrapped_rb_onion,
-    );
+    let emit_time = Instant::now();
+    ctx.get(DELAY_QUEUE)
+        .insert((wrapped_rb_onion, first_peeler), emit_time);
+
     Ok(())
 }
