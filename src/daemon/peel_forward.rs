@@ -65,11 +65,6 @@ pub fn peel_forward(
                     pkt,
                     delay_ms,
                 } => {
-                    if next_peeler == my_fp {
-                        peel_forward(ctx, my_fp, next_peeler, pkt);
-                        return Ok(());
-                    }
-
                     let emit_time = Instant::now() + Duration::from_millis(delay_ms as u64);
                     ctx.get(DELAY_QUEUE).insert((pkt, next_peeler), emit_time);
                 }

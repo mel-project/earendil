@@ -39,6 +39,7 @@ use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
 use crate::control_protocol::ControlClient;
+use crate::daemon::peel_forward::peel_forward;
 use crate::{
     config::ConfigFile,
     daemon::context::{GLOBAL_ONION_SK, RELAY_GRAPH},
@@ -383,17 +384,18 @@ async fn packet_dispatch_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let delay_queue = ctx.get(DELAY_QUEUE);
     loop {
         let (pkt, next_peeler) = delay_queue.pop().await;
-        if let Some(next_hop) = one_hop_closer(&ctx, next_peeler) {
+        let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+
+        if next_peeler == my_fp {
+            peel_forward(&ctx, my_fp, next_peeler, pkt);
+        } else if let Some(next_hop) = one_hop_closer(&ctx, next_peeler) {
             let conn = ctx
                 .get(NEIGH_TABLE_NEW)
                 .get(&next_hop)
                 .context(format!("could not find this next hop {next_hop}"))?;
 
             let _ = conn.try_send((pkt, next_peeler));
-            let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
-            if next_hop != my_fp {
-                ctx.get(DEBTS).incr_outgoing(next_hop);
-            }
+            ctx.get(DEBTS).incr_outgoing(next_hop);
         } else {
             tracing::warn!("no route found to next peeler {next_peeler}");
         }
