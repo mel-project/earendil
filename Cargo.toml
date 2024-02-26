@@ -10,7 +10,7 @@ license = "ISC"
 description="A decentralized, censorship-resistant, and incentive-compatible packet-routing overlay network"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
+ 
 [dependencies]
 anyctx = "0.1"
 serde = { version = "1.0.188", features = ["derive"] }
