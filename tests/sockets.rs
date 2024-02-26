@@ -5,7 +5,7 @@ use bytes::Bytes;
 use earendil::{config::ConfigFile, daemon::Daemon, socket::Socket};
 use earendil_crypt::IdentitySecret;
 use once_cell::sync::Lazy;
-use smol::{future::FutureExt, Timer};
+use smol::{Timer};
 use smol_timeout::TimeoutExt;
 use tracing_test::traced_test;
 

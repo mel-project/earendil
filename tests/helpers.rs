@@ -16,7 +16,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use smol::Timer;
 use sosistab2_obfsudp::ObfsUdpSecret;
 use std::net::TcpStream;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{util::SubscriberInitExt};
 
 type InRoutes = Vec<(String, InRouteConfig)>;
 type OutRoutes = Vec<(String, OutRouteConfig)>;

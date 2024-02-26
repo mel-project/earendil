@@ -227,7 +227,7 @@ impl ControlProtocol for ControlProtocolImpl {
                     .all_nodes()
                     .fold(String::new(), |acc, node| {
                         let node_str = node.to_string();
-                        let desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
+                        let _desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
                         acc + &format!(
                             "{:?} [label={:?}, shape={}]\n",
                             node_str,

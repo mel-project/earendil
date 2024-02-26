@@ -126,11 +126,7 @@ pub async fn send_chat_msg(
             if let Some(client) = chats.clients.get(&dest) {
                 let proof = SettlementProof::Manual;
                 let req_msg_str = format!("sent you a settlement request for {amount}. Accept with '!accept' or reject with '!reject'.");
-                let req_msg = format!(
-                    "<{}> {}",
-                    my_sk.public().fingerprint().to_string(),
-                    req_msg_str
-                );
+                let req_msg = format!("<{}> {}", my_sk.public().fingerprint(), req_msg_str);
 
                 match client.push_chat(req_msg.clone()).await {
                     Ok(_) => chats.insert(dest, ChatEntry::new_outgoing(msg)),
@@ -164,7 +160,7 @@ pub async fn send_chat_msg(
         }
     } else if msg == "!accept" {
         if let Some(request) = settlements.get_request(&dest) {
-            match settlements.accept_response(&ctx, dest, request).await {
+            match settlements.accept_response(ctx, dest, request).await {
                 Ok(_) => chats.insert(dest, ChatEntry::new_outgoing(msg)),
                 Err(e) => log::warn!("error pushing chat: {e}"),
             }

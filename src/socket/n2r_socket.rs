@@ -18,7 +18,6 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use crate::{
     daemon::context::{send_n2r, DaemonContext, GLOBAL_IDENTITY, SOCKET_RECV_QUEUES},
-    log_error,
     socket::SocketRecvError,
 };
 
