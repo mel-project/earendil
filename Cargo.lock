@@ -247,6 +247,16 @@ dependencies = [
 [[package]]
 name = "anyctx"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fe5a3722bef0d71b976d7ed31de07523d1359e944e174e4c1af24ee8a4755e3"
+dependencies = [
+ "ahash 0.8.8",
+ "dashmap",
+]
+
+[[package]]
+name = "anyctx"
+version = "0.1.0"
 source = "git+https://github.com/nullchinchilla/anyctx.git#f4b4c407e0de27375dfaca564af4479c9816fcc6"
 dependencies = [
  "ahash 0.8.8",
@@ -1749,7 +1759,7 @@ checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
 name = "earendil"
 version = "0.0.1"
 dependencies = [
- "anyctx",
+ "anyctx 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "anyhow",
  "async-event",
  "async-trait",
@@ -1810,7 +1820,7 @@ dependencies = [
 name = "earendil-gui"
 version = "0.1.0"
 dependencies = [
- "anyctx",
+ "anyctx 0.1.0 (git+https://github.com/nullchinchilla/anyctx.git)",
  "anyhow",
  "async-std",
  "chrono",
