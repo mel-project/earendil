@@ -2,6 +2,9 @@
 name = "earendil_topology"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/mel-project/earendil"
+license = "ISC"
+description="TBD"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,5 +25,5 @@ arrayref = "0.3.7"
 rand = "0.8.5"
 indexmap = { version = "1.9.3", features = ["serde"] }
 thiserror= "1.0.49"
-earendil_crypt={path="../earendil_crypt"}
+earendil_crypt={version="0.1",path="../earendil_crypt"}
 
