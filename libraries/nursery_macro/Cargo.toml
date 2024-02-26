@@ -2,6 +2,9 @@
 name = "nursery_macro"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/mel-project/earendil"
+license = "ISC"
+description="TBD"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
