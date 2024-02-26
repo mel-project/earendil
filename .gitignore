@@ -8,3 +8,5 @@ perf*
 *.terraform/
 *.tfstate*
 **/generated_earendil_configs/**
+
+*.log

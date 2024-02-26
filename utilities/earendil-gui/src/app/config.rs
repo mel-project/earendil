@@ -72,7 +72,15 @@ impl ConfigState {
 
     /// Realize as an actual daemon configuration.
     pub fn realize(&self) -> anyhow::Result<ConfigFile> {
-        let cfg: ConfigFile = serde_yaml::from_str(&self.raw_yaml)?;
-        Ok(cfg)
+        if self.raw_yaml.is_empty() {
+            anyhow::bail!("empty")
+        }
+        parse_config_yaml(&self.raw_yaml)
     }
+}
+
+pub fn parse_config_yaml(yaml: &str) -> anyhow::Result<ConfigFile> {
+    let json: serde_json::Value = serde_yaml::from_str(yaml)?;
+    let cfg: ConfigFile = serde_json::from_value(json)?;
+    Ok(cfg)
 }

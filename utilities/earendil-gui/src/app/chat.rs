@@ -23,7 +23,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
     };
 
     ui.columns(2, |cols| {
-        cols[0].vertical(|ui| ui.heading("Peer Selection"));
+        cols[0].vertical(|ui| ui.heading("Select a Peer"));
         cols[1].vertical(|ui| ui.heading(chat_heading));
     });
     ui.separator();
@@ -139,7 +139,7 @@ fn render_convo(
     their_fp: Fingerprint,
 ) {
     egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.set_height(ui.available_height());
+        ui.set_height(ui.available_height() - 25.0);
 
         for (is_mine, msg, time) in tuple_chat {
             let time: DateTime<Local> = time.into();

@@ -2,7 +2,7 @@ use regex::Regex;
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
-    fs::{self, File},
+    fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,

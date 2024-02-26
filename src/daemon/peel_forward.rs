@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use earendil_crypt::Fingerprint;
@@ -7,7 +7,8 @@ use earendil_packet::{InnerPacket, PeeledPacket, RawPacket};
 use crate::{
     daemon::{
         context::{
-            ANON_DESTS, DEBTS, DEGARBLERS, GLOBAL_IDENTITY, GLOBAL_ONION_SK, NEIGH_TABLE_NEW,
+            ANON_DESTS, DEBTS, DEGARBLERS, DELAY_QUEUE, GLOBAL_IDENTITY, GLOBAL_ONION_SK,
+            NEIGH_TABLE_NEW, PKTS_SEEN, RELAY_GRAPH,
         },
         rrb_balance::{decrement_rrb_balance, replenish_rrb},
     },
@@ -17,73 +18,108 @@ use crate::{
 use super::context::{DaemonContext, SOCKET_RECV_QUEUES};
 
 #[tracing::instrument(skip(ctx, pkt))]
-pub fn peel_forward(ctx: &DaemonContext, last_hop_fp: Fingerprint, pkt: RawPacket) {
+pub fn peel_forward(
+    ctx: &DaemonContext,
+    last_hop_fp: Fingerprint,
+    next_peeler: Fingerprint,
+    pkt: RawPacket,
+) {
     let inner = || {
+        let pkts_seen = ctx.get(PKTS_SEEN);
+        let packet_hash = blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8902]>(pkt));
+
+        if pkts_seen.contains(&packet_hash) {
+            anyhow::bail!("received replayed pkt {packet_hash}");
+        } else {
+            pkts_seen.insert(packet_hash);
+        }
+
+        let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
         if !ctx.get(DEBTS).is_within_debt_limit(&last_hop_fp) {
             anyhow::bail!("received pkt from neighbor who owes us too much money -_-");
         }
-        tracing::trace!(
-            "peel_forward on raw packet with hash {}",
-            blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8882]>(pkt))
+
+        tracing::debug!(
+            packet_hash = packet_hash.to_string(),
+            my_fp = my_fp.to_string(),
+            peeler = next_peeler.to_string(),
+            "peel_forward on raw packet"
         );
-        if last_hop_fp != ctx.get(GLOBAL_IDENTITY).public().fingerprint() {
+        if last_hop_fp != my_fp {
             ctx.get(DEBTS).incr_incoming(last_hop_fp);
             tracing::trace!("incr'ed debt");
         }
 
-        let now = Instant::now();
-        let peeled = pkt.peel(ctx.get(GLOBAL_ONION_SK))?;
+        if next_peeler == my_fp {
+            // I am the designated peeler, peel and forward towards next peeler
+            let now = Instant::now();
+            let peeled: PeeledPacket = pkt.peel(ctx.get(GLOBAL_ONION_SK))?;
 
-        scopeguard::defer!(tracing::trace!(
-            "message peel forward took {:?}",
-            now.elapsed()
-        ));
-        match peeled {
-            PeeledPacket::Forward {
-                to: next_hop,
-                pkt: inner,
-            } => {
+            scopeguard::defer!(tracing::trace!(
+                "message peel forward took {:?}",
+                now.elapsed()
+            ));
+            match peeled {
+                PeeledPacket::Forward {
+                    next_peeler,
+                    pkt,
+                    delay_ms,
+                } => {
+                    if next_peeler == my_fp {
+                        peel_forward(ctx, my_fp, next_peeler, pkt);
+                        return Ok(());
+                    }
+
+                    let emit_time = Instant::now() + Duration::from_millis(delay_ms as u64);
+                    ctx.get(DELAY_QUEUE).insert((pkt, next_peeler), emit_time);
+                }
+                PeeledPacket::Received {
+                    from: src_fp,
+                    pkt: inner,
+                } => process_inner_pkt(ctx, inner, src_fp, my_fp)?,
+                PeeledPacket::GarbledReply { id, mut pkt } => {
+                    let reply_degarbler = ctx
+                        .get(DEGARBLERS)
+                        .remove(&id)
+                        .context(format!(
+                "no degarbler for this garbled pkt with id {id}, despite {} items in the degarbler",
+                ctx.get(DEGARBLERS).len()
+            ))?
+                        .1;
+                    let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
+                    tracing::debug!(
+                        packet_hash = packet_hash.to_string(),
+                        "packet has been degarbled!"
+                    );
+
+                    // TODO
+                    decrement_rrb_balance(ctx, reply_degarbler.my_anon_isk(), src_fp);
+                    replenish_rrb(ctx, reply_degarbler.my_anon_isk(), src_fp)?;
+
+                    process_inner_pkt(
+                        ctx,
+                        inner,
+                        src_fp,
+                        reply_degarbler.my_anon_isk().public().fingerprint(),
+                    )?;
+                }
+            }
+        } else {
+            tracing::debug!(
+                packet_hash = packet_hash.to_string(),
+                peeler = next_peeler.to_string(),
+                "we are not the peeler"
+            );
+            // we are not peeler, forward the packet a step closer to peeler
+
+            if let Some(next_hop) = one_hop_closer(ctx, next_peeler) {
                 let conn = ctx
                     .get(NEIGH_TABLE_NEW)
                     .get(&next_hop)
                     .context(format!("could not find this next hop {next_hop}"))?;
-                let _ = conn.try_send(inner);
-                if next_hop != ctx.get(GLOBAL_IDENTITY).public().fingerprint() {
-                    ctx.get(DEBTS).incr_outgoing(next_hop);
-                }
-            }
-            PeeledPacket::Received {
-                from: src_fp,
-                pkt: inner,
-            } => process_inner_pkt(
-                ctx,
-                inner,
-                src_fp,
-                ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-            )?,
-            PeeledPacket::GarbledReply { id, mut pkt } => {
-                tracing::trace!("received garbled packet");
-                let reply_degarbler = ctx
-                    .get(DEGARBLERS)
-                    .remove(&id)
-                    .context(format!(
-                "no degarbler for this garbled pkt with id {id}, despite {} items in the degarbler",
-                ctx.get(DEGARBLERS).len()
-            ))?
-                    .1;
-                let (inner, src_fp) = reply_degarbler.degarble(&mut pkt)?;
-                tracing::trace!("packet has been degarbled!");
-
-                // TODO
-                decrement_rrb_balance(ctx, reply_degarbler.my_anon_isk(), src_fp);
-                replenish_rrb(ctx, reply_degarbler.my_anon_isk(), src_fp)?;
-
-                process_inner_pkt(
-                    ctx,
-                    inner,
-                    src_fp,
-                    reply_degarbler.my_anon_isk().public().fingerprint(),
-                )?;
+                let _ = conn.try_send((pkt, next_peeler));
+            } else {
+                log::warn!("no route found, dropping packet");
             }
         }
         Ok(())
@@ -91,6 +127,14 @@ pub fn peel_forward(ctx: &DaemonContext, last_hop_fp: Fingerprint, pkt: RawPacke
     if let Err(err) = inner() {
         tracing::warn!("could not peel_forward: {:?}", err)
     }
+}
+
+pub fn one_hop_closer(ctx: &DaemonContext, dest_fp: Fingerprint) -> Option<Fingerprint> {
+    let route = ctx
+        .get(RELAY_GRAPH)
+        .read()
+        .find_shortest_path(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dest_fp)?;
+    route.get(1).cloned()
 }
 
 #[tracing::instrument(skip(ctx, inner))]

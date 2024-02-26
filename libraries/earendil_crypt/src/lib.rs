@@ -8,6 +8,7 @@ use argon2::Argon2;
 use arrayref::array_ref;
 use base32::Alphabet;
 use base64::{engine::general_purpose, Engine as _};
+use bytemuck::{Pod, Zeroable};
 use bytes::Bytes;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -131,7 +132,10 @@ impl IdentitySecret {
 }
 
 /// An Earendil node fingerprint, uniquely identifying a relay or client.
-#[derive(Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
+#[repr(C)]
+#[derive(
+    Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize, Pod, Zeroable,
+)]
 pub struct Fingerprint([u8; 20]);
 
 impl Display for Fingerprint {

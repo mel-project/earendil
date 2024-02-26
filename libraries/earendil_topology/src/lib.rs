@@ -7,7 +7,7 @@ use bytes::Bytes;
 use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret, VerifyError};
 use earendil_packet::crypt::{OnionPublic, OnionSecret};
 use indexmap::IndexMap;
-use rand::Rng;
+use rand::{seq::IteratorRandom, Rng};
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
 
@@ -84,6 +84,19 @@ impl RelayGraph {
         Ok(())
     }
 
+    /// Returns a list of neighbors to the given Fingerprint.
+    pub fn neighbors(&self, fp: &Fingerprint) -> Option<impl Iterator<Item = Fingerprint> + '_> {
+        let id = self.id(fp)?;
+        let neighs = self.adjacency.get(&id)?;
+        Some(
+            neighs
+                .iter()
+                .copied()
+                .filter_map(move |neigh_id| self.id_to_fp.get(&neigh_id))
+                .copied(),
+        )
+    }
+
     /// Returns the adjacencies next to the given Fingerprint.
     /// None is returned if the given Fingerprint is not present in the graph.
     pub fn adjacencies(
@@ -126,6 +139,14 @@ impl RelayGraph {
         self.documents
             .get_index(rand::thread_rng().gen_range(0..self.documents.len()))
             .map(|v| v.1.clone())
+    }
+
+    /// Picks a certain number of random relays.
+    pub fn rand_relays(&self, num: usize) -> Vec<Fingerprint> {
+        self.all_nodes()
+            .filter_map(|n| self.identity(&n))
+            .map(|id| id.identity_pk.fingerprint())
+            .choose_multiple(&mut rand::thread_rng(), num)
     }
 
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.
@@ -303,10 +324,9 @@ impl AdjacencyDescriptor {
     }
 }
 
-/// An identity descriptor, signed by the owner of an identity. Declares that the identity owns a particular onion key, as well as implicitly
+/// A relay identity descriptor, signed by the owner of an identity. Declares that the identity owns a particular onion key, as well as implicitly
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IdentityDescriptor {
-    pub is_relay: bool,
     pub identity_pk: IdentityPublic,
     pub onion_pk: OnionPublic,
 
@@ -317,11 +337,10 @@ pub struct IdentityDescriptor {
 
 impl IdentityDescriptor {
     /// Creates an IdentityDescriptor from our own IdentitySecret
-    pub fn new(my_identity: &IdentitySecret, my_onion: &OnionSecret, is_relay: bool) -> Self {
+    pub fn new(my_identity: &IdentitySecret, my_onion: &OnionSecret) -> Self {
         let identity_pk = my_identity.public();
         let onion_pk = my_onion.public();
         let mut descr = IdentityDescriptor {
-            is_relay,
             identity_pk,
             onion_pk,
             sig: Bytes::new(),

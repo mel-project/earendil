@@ -5,6 +5,7 @@ mod debts;
 pub(crate) mod dht;
 
 mod db;
+mod delay_queue;
 mod inout_route;
 mod peel_forward;
 mod reply_block_store;
@@ -14,6 +15,7 @@ mod socks5;
 mod tcp_forward;
 mod udp_forward;
 
+use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
@@ -27,6 +29,7 @@ use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 
 use nursery_macro::nursery;
+use smol::Task;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use stdcode::StdcodeSerializeExt;
@@ -56,15 +59,16 @@ use crate::{
     haven_util::{haven_loop, HAVEN_FORWARD_DOCK},
 };
 
-use self::context::DEBTS;
+use self::context::{DEBTS, DELAY_QUEUE, NEIGH_TABLE_NEW};
 pub use self::control_protocol_impl::ControlProtErr;
 
 use self::db::db_write;
+use self::peel_forward::one_hop_closer;
 use self::{context::GLOBAL_IDENTITY, control_protocol_impl::ControlProtocolImpl};
 
 pub struct Daemon {
     pub(crate) ctx: DaemonContext,
-    _task: Immortal,
+    _task: Task<()>,
 }
 
 impl Daemon {
@@ -73,9 +77,8 @@ impl Daemon {
         let ctx = DaemonContext::new(config);
         let context = ctx.clone();
         tracing::info!("starting background task for main_daemon");
-        let task = Immortal::spawn(async move {
-            main_daemon(context).await.unwrap();
-            panic!("daemon failed to start!")
+        let task = smol::spawn(async move {
+            let _ = main_daemon(context).await;
         });
         Ok(Self { ctx, _task: task })
     }
@@ -126,22 +129,24 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         )
     });
 
-    let _identity_refresh_loop = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([ctx], move || clone!([ctx], async move {
-            // first insert ourselves
-            let am_i_relay = !ctx.init().in_routes.is_empty();
-            ctx.get(RELAY_GRAPH)
-                .write()
-                .insert_identity(IdentityDescriptor::new(
-                    ctx.get(GLOBAL_IDENTITY),
-                    ctx.get(GLOBAL_ONION_SK),
-                    am_i_relay,
-                ))?;
-            smol::Timer::after(Duration::from_secs(60)).await;
-            anyhow::Ok(())
-        })),
-    );
+    let am_i_relay = !ctx.init().in_routes.is_empty();
+    if am_i_relay {
+        let _identity_refresh_loop = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([ctx], move || clone!([ctx], async move {
+                // first insert ourselves
+                ctx.get(RELAY_GRAPH)
+                    .write()
+                    .insert_identity(IdentityDescriptor::new(
+                        ctx.get(GLOBAL_IDENTITY),
+                        ctx.get(GLOBAL_ONION_SK),
+                    ))?;
+                smol::Timer::after(Duration::from_secs(60)).await;
+                anyhow::Ok(())
+            })),
+        );
+    }
+
     let _control_protocol = Immortal::respawn(
         RespawnStrategy::Immediate,
         clone!([ctx], move || control_protocol_loop(ctx.clone())
@@ -158,6 +163,11 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         RespawnStrategy::Immediate,
         clone!([ctx], move || rendezvous_forward_loop(ctx.clone())
             .map_err(log_error("rendezvous_forward_loop"))),
+    );
+
+    let _packet_dispatch_loop = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([ctx], move || packet_dispatch_loop(ctx.clone())),
     );
 
     let _haven_loops: Vec<Immortal> = ctx
@@ -278,7 +288,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 /// Loop that handles the persistence of contex state
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
-        tracing::debug!("syncing DB...");
+        tracing::debug!("DBDBDBDB syncing DB...");
         let global_id = ctx.get(GLOBAL_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
         let debts = ctx.get(DEBTS).as_bytes()?;
@@ -367,6 +377,28 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 tracing::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
             }
         };
+    }
+}
+
+#[tracing::instrument(skip(ctx))]
+async fn packet_dispatch_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    let delay_queue = ctx.get(DELAY_QUEUE);
+    loop {
+        let (pkt, next_peeler) = delay_queue.pop().await;
+        if let Some(next_hop) = one_hop_closer(&ctx, next_peeler) {
+            let conn = ctx
+                .get(NEIGH_TABLE_NEW)
+                .get(&next_hop)
+                .context(format!("could not find this next hop {next_hop}"))?;
+
+            let _ = conn.try_send((pkt, next_peeler));
+            let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+            if next_hop != my_fp {
+                ctx.get(DEBTS).incr_outgoing(next_hop);
+            }
+        } else {
+            tracing::warn!("no route found to next peeler {next_peeler}");
+        }
     }
 }
 

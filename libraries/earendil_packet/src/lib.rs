@@ -61,8 +61,9 @@ mod tests {
         for (_, our_sk) in route {
             match peeled_packet.peel(our_sk) {
                 Ok(PeeledPacket::Forward {
-                    to: _,
+                    next_peeler: _,
                     pkt: next_packet,
+                    delay_ms: _,
                 }) => {
                     peeled_packet = next_packet;
                 }
@@ -159,8 +160,9 @@ mod tests {
         for (_, our_sk) in &route_with_onion_secrets {
             match peeled_packet.peel(our_sk).expect("Failed to peel packet") {
                 PeeledPacket::Forward {
-                    to: _,
+                    next_peeler: _,
                     pkt: next_packet,
+                    delay_ms: _,
                 } => {
                     peeled_packet = next_packet;
                 }

@@ -1,5 +1,4 @@
 use earendil::{
-    daemon::Daemon,
     socket::Socket,
     stream::{Stream, StreamListener},
 };

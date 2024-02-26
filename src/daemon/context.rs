@@ -3,8 +3,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+use blake3::Hash;
 use bytes::Bytes;
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
@@ -15,7 +16,8 @@ use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};
 use once_cell::sync::Lazy;
 use parking_lot::{Mutex, RwLock};
-use smol::channel::Sender;
+use rand::seq::SliceRandom;
+use smol::{channel::Sender, Timer};
 
 use crate::{
     config::ConfigFile, control_protocol::SendMessageError, daemon::route_to_instructs,
@@ -23,12 +25,8 @@ use crate::{
 };
 
 use super::{
-    db::db_read,
-    debts::Debts,
-    peel_forward::peel_forward,
-    reply_block_store::ReplyBlockStore,
-    rrb_balance::replenish_rrb,
-    settlement::{Seed, Settlements},
+    db::db_read, debts::Debts, delay_queue::DelayQueue, peel_forward::peel_forward,
+    reply_block_store::ReplyBlockStore, rrb_balance::replenish_rrb, settlement::Settlements,
 };
 
 pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
@@ -79,7 +77,7 @@ pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
 };
 pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBlockStore::new());
 
-pub static NEIGH_TABLE_NEW: CtxField<Cache<Fingerprint, Sender<RawPacket>>> = |_| {
+pub static NEIGH_TABLE_NEW: CtxField<Cache<Fingerprint, Sender<(RawPacket, Fingerprint)>>> = |_| {
     CacheBuilder::default()
         .time_to_live(Duration::from_secs(120))
         .build()
@@ -112,8 +110,13 @@ pub static DEBTS: CtxField<Debts> = |ctx| {
 
 pub static SETTLEMENTS: CtxField<Settlements> = |ctx| Settlements::new(ctx.init().auto_settle);
 
+type NextPeeler = Fingerprint;
+pub static DELAY_QUEUE: CtxField<DelayQueue<(RawPacket, NextPeeler)>> = |_| DelayQueue::new();
+
+pub static PKTS_SEEN: CtxField<DashSet<Hash>> = |_| DashSet::new();
+
 /// Sends a raw N2R message with the given parameters.
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, content))]
 pub async fn send_n2r(
     ctx: &DaemonContext,
     src_idsk: IdentitySecret,
@@ -122,6 +125,7 @@ pub async fn send_n2r(
     dst_dock: Dock,
     content: Vec<Bytes>,
 ) -> Result<(), SendMessageError> {
+    tracing::debug!("calling send_n2r here");
     let now = Instant::now();
     let _guard = scopeguard::guard((), |_| {
         let send_msg_time = now.elapsed();
@@ -140,44 +144,109 @@ pub async fn send_n2r(
         peel_forward(
             ctx,
             ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             raw_packet,
         );
     } else {
-        let route = ctx
-            .get(RELAY_GRAPH)
-            .read()
-            .find_shortest_path(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
-            .ok_or(SendMessageError::NoRoute(dst_fp))?;
-        let instructs = {
-            let graph = ctx.get(RELAY_GRAPH).read();
-            route_to_instructs(route, &graph)
-        }?;
-        let their_opk = ctx
-            .get(RELAY_GRAPH)
-            .read()
-            .identity(&dst_fp)
-            .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
-            .onion_pk;
-        let wrapped_onion = RawPacket::new_normal(
-            &instructs,
-            &their_opk,
-            InnerPacket::Message(Message::new(src_dock, dst_dock, content)),
-            &src_idsk,
-        )?;
+        let fallible = || -> Result<(), SendMessageError> {
+            let route = match forward_route(ctx, dst_fp) {
+                Some(r) => r,
+                None => return Err(SendMessageError::NoRoute(dst_fp)),
+            };
 
-        // if anon source, send RBs
-        if src_anon {
-            replenish_rrb(ctx, src_idsk, dst_fp)?;
+            let instructs = {
+                let graph = ctx.get(RELAY_GRAPH).read();
+                route_to_instructs(route.clone(), &graph)
+            }?;
+            tracing::trace!(
+                "*************************** translated this route to instructions: {:?}",
+                route
+            );
+            let their_opk = ctx
+                .get(RELAY_GRAPH)
+                .read()
+                .identity(&dst_fp)
+                .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
+                .onion_pk;
+            let wrapped_onion = RawPacket::new_normal(
+                &instructs,
+                &their_opk,
+                InnerPacket::Message(Message::new(src_dock, dst_dock, content.clone())),
+                &src_idsk,
+            )?;
+
+            // if anon source, send RBs
+            if src_anon {
+                replenish_rrb(ctx, src_idsk, dst_fp)?;
+            }
+
+            // we send the onion by treating it as a message addressed to ourselves
+            peel_forward(
+                ctx,
+                ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+                ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+                wrapped_onion,
+            );
+            Ok(())
+        };
+
+        match fallible() {
+            Ok(()) => (),
+            Err(e) => {
+                tracing::warn!(
+                    "error sending packet with no reply blocks; retrying in one second: {e}"
+                );
+
+                Timer::after(Duration::from_secs(1)).await;
+                fallible()?;
+            }
         }
-
-        // we send the onion by treating it as a message addressed to ourselves
-        peel_forward(
-            ctx,
-            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-            wrapped_onion,
-        );
     }
     Ok(())
+}
+
+fn forward_route(ctx: &DaemonContext, dst_fp: Fingerprint) -> Option<Vec<Fingerprint>> {
+    let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
+    // if the destination is a client, then the penultimate must be a random neighbor of it
+    let is_relay = if ctx.get(RELAY_GRAPH).read().identity(&dst_fp).is_some() {
+        // the relay graph contains *only* relays. So if dest_fp is in the relay grpah, then it's a relay!
+        true
+    } else {
+        false
+    };
+    if !is_relay {
+        match random_neigh_of(ctx, dst_fp) {
+            Some(neigh) => route.push(neigh),
+            None => return None,
+        }
+    }
+    route.push(dst_fp);
+    route.insert(0, ctx.get(GLOBAL_IDENTITY).public().fingerprint());
+    tracing::debug!("forward route formed: {:?}", route);
+    Some(route)
+}
+
+fn reply_route(ctx: &DaemonContext, src_fp: Fingerprint) -> Option<Vec<Fingerprint>> {
+    let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+    let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
+    match random_neigh_of(ctx, my_fp) {
+        Some(neigh) => route.push(neigh),
+        None => return None,
+    }
+    route.push(ctx.get(GLOBAL_IDENTITY).public().fingerprint());
+    route.insert(0, src_fp);
+    tracing::debug!("reply route formed: {:?}", route);
+    Some(route)
+}
+
+fn random_neigh_of(ctx: &DaemonContext, fp: Fingerprint) -> Option<Fingerprint> {
+    let my_neighs = ctx
+        .get(RELAY_GRAPH)
+        .read()
+        .neighbors(&fp)
+        .map(|s| s.collect_vec())
+        .unwrap_or_default();
+    my_neighs.choose(&mut rand::thread_rng()).copied()
 }
 
 #[tracing::instrument(skip(ctx))]
@@ -195,11 +264,11 @@ pub async fn send_reply_blocks(
 
     tracing::trace!("sending a batch of {count} reply blocks to {dst_fp}");
 
-    let route = ctx
-        .get(RELAY_GRAPH)
-        .read()
-        .find_shortest_path(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dst_fp)
-        .ok_or(SendMessageError::NoRoute(dst_fp))?;
+    let route = match forward_route(ctx, dst_fp) {
+        Some(r) => r,
+        None => return Err(SendMessageError::NoRoute(dst_fp)),
+    };
+
     let their_opk = ctx
         .get(RELAY_GRAPH)
         .read()
@@ -208,11 +277,11 @@ pub async fn send_reply_blocks(
         .onion_pk;
     let instructs = route_to_instructs(route.clone(), ctx.get(RELAY_GRAPH).read().deref())?;
     // currently the path for every one of them is the same; will want to change this in the future
-    let reverse_route = ctx
-        .get(RELAY_GRAPH)
-        .read()
-        .find_shortest_path(&dst_fp, &ctx.get(GLOBAL_IDENTITY).public().fingerprint())
-        .ok_or(SendMessageError::NoRoute(dst_fp))?;
+    let reverse_route = match reply_route(ctx, dst_fp) {
+        Some(r) => r,
+        None => return Err(SendMessageError::NoRoute(dst_fp)),
+    };
+
     let reverse_instructs = route_to_instructs(reverse_route, ctx.get(RELAY_GRAPH).read().deref())?;
 
     let mut rbs: Vec<ReplyBlock> = vec![];
@@ -233,13 +302,11 @@ pub async fn send_reply_blocks(
         InnerPacket::ReplyBlocks(rbs),
         &my_anon_isk,
     )?;
-    tracing::trace!(
-        "inject_asif_incoming on route = {:?}",
-        route.iter().map(|s| s.to_string()).collect_vec()
-    );
+
     // we send the onion by treating it as a message addressed to ourselves
     peel_forward(
         ctx,
+        ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
         ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
         wrapped_rb_onion,
     );

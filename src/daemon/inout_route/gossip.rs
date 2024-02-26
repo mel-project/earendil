@@ -117,7 +117,7 @@ async fn gossip_graph(
     neighbor_idpk: &IdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
-    let remote_fingerprint = neighbor_idpk.fingerprint();
+    let _remote_fingerprint = neighbor_idpk.fingerprint();
     let all_known_nodes = ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();
     // tracing::info!("num known nodes: {}", all_known_nodes.len());
     let random_sample = all_known_nodes
