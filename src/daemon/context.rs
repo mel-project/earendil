@@ -6,10 +6,9 @@ use std::{
 use blake3::Hash;
 use bytes::Bytes;
 use dashmap::{DashMap, DashSet};
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{ClientId, Fingerprint, IdentitySecret};
 use earendil_packet::{
-    crypt::{OnionPublic, OnionSecret},
-    Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
+    crypt::OnionSecret, Dock, InnerPacket, Message, RawPacket, ReplyBlock, ReplyDegarbler,
 };
 use earendil_topology::RelayGraph;
 
@@ -83,6 +82,13 @@ pub static NEIGH_TABLE_NEW: CtxField<Cache<Fingerprint, Sender<(RawPacket, Finge
         .time_to_live(Duration::from_secs(120))
         .build()
 }; // TODO a better solution for deletion
+
+pub static CLIENT_TABLE: CtxField<Cache<ClientId, Sender<(RawPacket, Fingerprint)>>> = |_| {
+    CacheBuilder::default()
+        .time_to_live(Duration::from_secs(120))
+        .build()
+};
+
 pub static SOCKET_RECV_QUEUES: CtxField<DashMap<Endpoint, Sender<(Message, Fingerprint)>>> =
     |_| Default::default();
 pub static DEGARBLERS: CtxField<DashMap<u64, ReplyDegarbler>> = |_| Default::default();

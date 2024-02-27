@@ -275,7 +275,7 @@ impl HavenIdentitySecret {
     }
 }
 
-/// An Earendil node fingerprint, uniquely identifying a relay or client.
+/// A haven fingerprint is used to uniquely identify Earendil havens
 #[repr(C)]
 #[derive(
     Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize, Pod, Zeroable,

@@ -223,7 +223,7 @@ impl RawPacket {
                 delay_ms: u16::from_le_bytes(delay_bytes),
             }
         } else if metadata[0] == 1 {
-            // if the metadata starts with 1, then we need to forward to the next guy.
+            // if the metadata starts with 1, then we need to forward to a relay.
             // the 20 remaining bytes in the metadata indicate the fingerprint of the next guy.
             let fingerprint = Fingerprint::from_bytes(array_ref![metadata, 1, 20]);
             let delay_bytes: [u8; 2] = match metadata[21..] {
