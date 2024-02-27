@@ -327,12 +327,10 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             spawn!(async move {
                 let req: JrpcRequest = serde_json::from_str(&String::from_utf8(req.to_vec())?)?;
                 let resp = service.respond_raw(req).await;
-                socket
-                    .send_to(
-                        Bytes::from(serde_json::to_string(&resp)?.into_bytes()),
-                        endpoint,
-                    )
-                    .await?;
+                socket.send_to(
+                    Bytes::from(serde_json::to_string(&resp)?.into_bytes()),
+                    endpoint,
+                )?;
 
                 anyhow::Ok(())
             })
@@ -371,7 +369,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             }
             if is_valid_dest || is_seen_src {
                 let body: Bytes = (inner, src_ep).stdcode().into();
-                socket.send_to(body, dest_ep).await?;
+                socket.send_to(body, dest_ep)?;
             } else {
                 tracing::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
             }

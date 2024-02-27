@@ -8,7 +8,7 @@ use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{AnonDest, Fingerprint, IdentitySecret, RelayFingerprint};
 use earendil_packet::{Dock, Message};
 use futures_util::TryFutureExt;
 use rand::Rng;
@@ -22,7 +22,7 @@ use crate::{
     socket::SocketRecvError,
 };
 
-use super::{Endpoint, SocketSendError};
+use super::{AnonEndpoint, Endpoint, RelayEndpoint, SocketSendError};
 
 #[derive(Clone)]
 pub struct N2rSocket {
@@ -101,7 +101,7 @@ impl N2rSocket {
         }
     }
 
-    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
+    pub fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
         let _ = self.send_outgoing.try_send((body, endpoint));
         Ok(())
     }
@@ -189,5 +189,54 @@ impl Drop for BoundDock {
         self.ctx
             .get(SOCKET_RECV_QUEUES)
             .remove(&Endpoint::new(self.fp, self.dock));
+    }
+}
+
+#[derive(Clone)]
+pub struct N2rRelaySocket {
+    bound_dock: Arc<BoundDock>,
+    recv_incoming: Receiver<(Message, AnonDest)>, // relays can only ever receive communication from clients
+    incoming_queue: Arc<ConcurrentQueue<(Bytes, AnonEndpoint)>>,
+
+    send_outgoing: Sender<(Bytes, AnonEndpoint)>,
+    _send_batcher: Arc<Immortal>,
+}
+
+impl N2rRelaySocket {
+    pub fn bind(ctx: DaemonContext, dock: Option<Dock>) -> Self {
+        // always uses the long-term idsk of the relay
+        todo!()
+    }
+
+    pub fn send_to(&self, body: Bytes, endpoint: AnonEndpoint) -> Result<(), SocketSendError> {
+        todo!()
+    }
+
+    pub fn recv_from(&self) -> Result<(Bytes, AnonEndpoint), SocketRecvError> {
+        todo!()
+    }
+}
+
+#[derive(Clone)]
+pub struct N2rClientSocket {
+    bound_dock: Arc<BoundDock>,
+    recv_incoming: Receiver<(Message, RelayFingerprint)>, // relays can only ever receive communication from clients
+    incoming_queue: Arc<ConcurrentQueue<(Bytes, RelayEndpoint)>>,
+
+    send_outgoing: Sender<(Bytes, RelayEndpoint)>,
+    _send_batcher: Arc<Immortal>,
+}
+
+impl N2rClientSocket {
+    pub async fn bind(ctx: DaemonContext, dock: Option<Dock>) -> Self {
+        todo!()
+    }
+
+    pub fn send_to(&self, body: Bytes, endpoint: RelayEndpoint) -> Result<(), SocketSendError> {
+        todo!()
+    }
+
+    pub async fn recv_from(&self) -> Result<(Bytes, RelayEndpoint), SocketRecvError> {
+        todo!()
     }
 }

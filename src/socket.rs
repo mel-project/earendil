@@ -1,7 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use bytes::Bytes;
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{AnonDest, Fingerprint, HavenFingerprint, IdentitySecret, RelayFingerprint};
 use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -63,7 +63,7 @@ impl Socket {
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
         match &self.inner {
-            InnerSocket::N2r(s) => s.send_to(body, endpoint).await,
+            InnerSocket::N2r(s) => s.send_to(body, endpoint),
             InnerSocket::Haven(s) => s.send_to(body, endpoint).await,
         }
     }
@@ -134,4 +134,22 @@ impl FromStr for Endpoint {
         let dock = u32::from_str(elems[1])?;
         Ok(Endpoint::new(fp, dock))
     }
+}
+
+#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct RelayEndpoint {
+    pub fingerprint: RelayFingerprint,
+    pub dock: Dock,
+}
+
+#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct HavenEndpoint {
+    pub fingerprint: HavenFingerprint,
+    pub dock: Dock,
+}
+
+#[derive(Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct AnonEndpoint {
+    pub client_id: AnonDest,
+    pub dock: Dock,
 }

@@ -44,9 +44,7 @@ impl RpcTransport for GlobalRpcTransport {
         let mut timeout: Duration;
 
         loop {
-            socket
-                .send_to(serde_json::to_string(&req)?.into(), endpoint)
-                .await?;
+            socket.send_to(serde_json::to_string(&req)?.into(), endpoint)?;
             // tracing::debug!(
             //     "=====> x{retries} {}/{} ({:?})",
             //     self.dest_fp,

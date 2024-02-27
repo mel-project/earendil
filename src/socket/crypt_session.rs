@@ -139,7 +139,7 @@ async fn enc_task(
                 Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
             }
         };
-        n2r_skt.send_to(fwd_body.into(), rendezvous_ep).await?;
+        n2r_skt.send_to(fwd_body.into(), rendezvous_ep)?;
         anyhow::Ok(())
     };
 

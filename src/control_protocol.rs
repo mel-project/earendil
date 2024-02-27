@@ -220,6 +220,8 @@ pub async fn main_control(
             }
             ChatCommand::Send { dest, msg } => client.send_chat_msg(dest, msg).await??,
         },
+        ControlCommand::BindN2rRelay { skt_id, dock } => todo!(),
+        ControlCommand::BindN2rClient { skt_id, dock } => todo!(),
     }
     Ok(())
 }

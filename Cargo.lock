@@ -1846,6 +1846,7 @@ dependencies = [
  "bytemuck",
  "bytes",
  "ed25519-consensus 2.1.0",
+ "hex",
  "rand 0.8.5",
  "serde",
  "stdcode",

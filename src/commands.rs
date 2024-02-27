@@ -18,6 +18,24 @@ pub enum ControlCommand {
         dock: Option<Dock>,
     },
 
+    BindN2rRelay {
+        #[arg(long)]
+        /// tag for this socket
+        skt_id: String,
+        #[arg(long)]
+        /// specific dock to bind to
+        dock: Option<Dock>,
+    },
+
+    BindN2rClient {
+        #[arg(long)]
+        /// tag for this socket
+        skt_id: String,
+        #[arg(long)]
+        /// specific dock to bind to
+        dock: Option<Dock>,
+    },
+
     /// Binds to a HavenSocket.
     BindHaven {
         #[arg(long)]
