@@ -35,7 +35,7 @@ pub fn peel_forward(
         }
 
         let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
-        if !ctx.get(DEBTS).is_within_debt_limit(&last_hop_fp) {
+        if !ctx.get(DEBTS).relay_is_within_debt_limit(&last_hop_fp) {
             anyhow::bail!("received pkt from neighbor who owes us too much money -_-");
         }
 
@@ -46,7 +46,7 @@ pub fn peel_forward(
             "peel_forward on raw packet"
         );
         if last_hop_fp != my_fp {
-            ctx.get(DEBTS).incr_incoming(last_hop_fp);
+            ctx.get(DEBTS).incr_relay_incoming(last_hop_fp);
             tracing::trace!("incr'ed debt");
         }
 

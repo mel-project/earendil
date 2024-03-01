@@ -1,6 +1,6 @@
 use crate::socket::Endpoint;
 use clap::{arg, Subcommand};
-use earendil_crypt::Fingerprint;
+use earendil_crypt::{ClientId, Fingerprint};
 use earendil_packet::Dock;
 
 #[derive(Subcommand)]
@@ -140,18 +140,33 @@ pub enum ChatCommand {
 
     /// start an interactive chat session with a neighbor
     Start {
-        /// The fingerprint (or partial fingerprint) of the user to start a chat with.
-        fp_prefix: String,
+        /// The fingerprint or client id of the neighbor to start a chat with.
+        /// Accepts prefixes.
+        prefix: String,
     },
 
-    /// Pulls conversation between you and neighbor
-    Get {
+    /// Pulls conversation between you and neighboring client
+    GetClient {
+        #[arg(short, long)]
+        neighbor: ClientId,
+    },
+
+    /// Pulls conversation between you and neighboring relay
+    GetRelay {
         #[arg(short, long)]
         neighbor: Fingerprint,
     },
 
-    /// Sends a single chat message to dest
-    Send {
+    /// Sends a single chat message to client
+    SendClient {
+        #[arg(short, long)]
+        dest: ClientId,
+        #[arg(short, long)]
+        msg: String,
+    },
+
+    /// Sends a single chat message to relay
+    SendRelay {
         #[arg(short, long)]
         dest: Fingerprint,
         #[arg(short, long)]

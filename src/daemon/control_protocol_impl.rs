@@ -7,7 +7,7 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use dashmap::DashMap;
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{ClientId, Fingerprint, IdentitySecret};
 use earendil_packet::Dock;
 use itertools::Itertools;
 use moka::sync::Cache;
@@ -25,7 +25,7 @@ use crate::{
         ChatError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs,
     },
     daemon::{
-        context::{DEBTS, NEIGH_TABLE_NEW, RELAY_GRAPH},
+        context::{CLIENT_TABLE, DEBTS, NEIGH_TABLE_NEW, RELAY_GRAPH},
         DaemonContext,
     },
     global_rpc::transport::GlobalRpcTransport,
@@ -178,14 +178,25 @@ impl ControlProtocol for ControlProtocolImpl {
             "rect"
         };
         if human {
-            let all_neighs = self.ctx.get(NEIGH_TABLE_NEW).iter().map(|s| *s.0).fold(
+            let clients = self.ctx.get(CLIENT_TABLE).iter().map(|s| *s.0).fold(
                 String::new(),
                 |acc, neigh| {
                     let fp = neigh;
                     acc + &format!(
                         "\n{:?}\nnet debt: {:?}\n",
                         fp.to_string(),
-                        self.ctx.get(DEBTS).net_debt_est(&fp)
+                        self.ctx.get(DEBTS).client_net_debt_est(&fp)
+                    )
+                },
+            );
+            let relays = self.ctx.get(NEIGH_TABLE_NEW).iter().map(|s| *s.0).fold(
+                String::new(),
+                |acc, neigh| {
+                    let fp = neigh;
+                    acc + &format!(
+                        "\n{:?}\nnet debt: {:?}\n",
+                        fp.to_string(),
+                        self.ctx.get(DEBTS).relay_net_debt_est(&fp)
                     )
                 },
             );
@@ -217,8 +228,8 @@ impl ControlProtocol for ControlProtocolImpl {
                     )
                 });
             format!(
-                "My fingerprint:\n{}\t[{}]\n\nMy neighbors:{}\nRelay graph:\n{}",
-                my_fp, relay_or_client, all_neighs, all_adjs
+                "My fingerprint:\n{}\t[{}]\n\nMy neighbors:{}\n{}\nRelay graph:\n{}",
+                my_fp, relay_or_client, clients, relays, all_adjs
             )
         } else {
             let all_adjs = self
@@ -313,20 +324,34 @@ impl ControlProtocol for ControlProtocolImpl {
             )
     }
 
-    async fn list_neighbors(&self) -> Vec<Fingerprint> {
-        chat::list_neighbors(&self.ctx)
+    async fn list_clients(&self) -> Vec<ClientId> {
+        chat::list_clients(&self.ctx)
+    }
+
+    async fn list_relays(&self) -> Vec<Fingerprint> {
+        chat::list_relays(&self.ctx)
     }
 
     async fn list_chats(&self) -> String {
         chat::list_chats(&self.ctx)
     }
 
-    async fn get_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)> {
-        chat::get_chat(&self.ctx, neigh)
+    async fn get_client_chat(&self, neigh: ClientId) -> Vec<(bool, String, SystemTime)> {
+        chat::get_client_chat(&self.ctx, neigh)
     }
 
-    async fn send_chat_msg(&self, dest: Fingerprint, msg: String) -> Result<(), ChatError> {
-        chat::send_chat_msg(&self.ctx, dest, msg)
+    async fn get_relay_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)> {
+        chat::get_relay_chat(&self.ctx, neigh)
+    }
+
+    async fn send_client_chat_msg(&self, dest: ClientId, msg: String) -> Result<(), ChatError> {
+        chat::send_client_chat_msg(&self.ctx, dest, msg)
+            .await
+            .map_err(|e| ChatError::Send(e.to_string()))
+    }
+
+    async fn send_relay_chat_msg(&self, dest: Fingerprint, msg: String) -> Result<(), ChatError> {
+        chat::send_relay_chat_msg(&self.ctx, dest, msg)
             .await
             .map_err(|e| ChatError::Send(e.to_string()))
     }

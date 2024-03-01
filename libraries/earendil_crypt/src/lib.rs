@@ -26,7 +26,7 @@ pub fn kdf_from_human(human: &str, salt: &str) -> [u8; 32] {
 /// The public half of an "identity" on the network.
 ///
 /// Underlying representation is a Ed25519 public key.
-#[derive(Serialize, Debug, Deserialize, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
 pub struct IdentityPublic([u8; 32]);
 
 impl TryFrom<Vec<u8>> for IdentityPublic {
@@ -40,6 +40,14 @@ impl TryFrom<Vec<u8>> for IdentityPublic {
 impl AsRef<[u8]> for IdentityPublic {
     fn as_ref(&self) -> &[u8] {
         &self.0
+    }
+}
+
+impl Debug for IdentityPublic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("IdentityPublic")
+            .field(&self.fingerprint())
+            .finish()
     }
 }
 
@@ -75,7 +83,7 @@ impl IdentityPublic {
 /// The secret half of an "identity" on the network.
 ///
 /// Underlying representation is a Ed25519 "seed".
-#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq, Copy, Hash, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq, Copy, Hash)]
 pub struct IdentitySecret([u8; 32]);
 
 impl IdentitySecret {
@@ -97,6 +105,14 @@ impl FromStr for IdentitySecret {
         } else {
             Err(base64::DecodeError::InvalidLength)
         }
+    }
+}
+
+impl Debug for IdentitySecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("IdentityPublic")
+            .field(&self.public().fingerprint())
+            .finish()
     }
 }
 

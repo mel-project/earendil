@@ -2,7 +2,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use bytes::Bytes;
-use earendil_crypt::{Fingerprint, IdentityPublic};
+use earendil_crypt::{ClientId, Fingerprint, IdentityPublic};
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};
@@ -16,9 +16,9 @@ use super::{link_protocol::LinkClient, DaemonContext};
 
 pub static STARTUP_TIME: CtxField<Instant> = |_| Instant::now();
 
-/// Loop that gossips things around
+/// Loop for gossipping with a relay
 #[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
-pub async fn gossip_loop(
+pub async fn client_gossip_with_relay_loop(
     ctx: DaemonContext,
     neighbor_idpk: IdentityPublic,
     link_client: LinkClient,
@@ -29,7 +29,38 @@ pub async fn gossip_loop(
     ));
     loop {
         let once = async {
-            if let Err(err) = gossip_once(&ctx, neighbor_idpk, &link_client).await {
+            if let Err(err) = client_gossip_once_with_relay(&ctx, neighbor_idpk, &link_client).await
+            {
+                tracing::warn!(
+                    "gossip with {} failed: {:?}",
+                    neighbor_idpk.fingerprint(),
+                    err
+                );
+            }
+        };
+        // pin_mut!(once);
+        if once.timeout(Duration::from_secs(10)).await.is_none() {
+            tracing::warn!("gossip once timed out");
+        };
+        smol::Timer::after(gossip_interval(ctx.get(STARTUP_TIME))).await;
+    }
+}
+
+/// Loop for gossipping with a relay
+#[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
+pub async fn relay_gossip_with_relay_loop(
+    ctx: DaemonContext,
+    neighbor_idpk: IdentityPublic,
+    link_client: LinkClient,
+) -> anyhow::Result<()> {
+    scopeguard::defer!(tracing::info!(
+        "gossip loop for {} stopped",
+        neighbor_idpk.fingerprint()
+    ));
+    loop {
+        let once = async {
+            if let Err(err) = relay_gossip_once_with_relay(&ctx, neighbor_idpk, &link_client).await
+            {
                 tracing::warn!(
                     "gossip with {} failed: {:?}",
                     neighbor_idpk.fingerprint(),
@@ -47,7 +78,20 @@ pub async fn gossip_loop(
 
 /// One round of gossip with a particular neighbor.
 #[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
-async fn gossip_once(
+async fn client_gossip_once_with_relay(
+    ctx: &DaemonContext,
+    neighbor_idpk: IdentityPublic,
+    link_client: &LinkClient,
+) -> anyhow::Result<()> {
+    // tracing::trace!("gossip_once to {}", neighbor_idpk.fingerprint());
+    fetch_identity(ctx, &neighbor_idpk, link_client).await?;
+    gossip_graph_with_relay(ctx, link_client).await?;
+    Ok(())
+}
+
+/// One round of gossip with a particular neighbor.
+#[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
+async fn relay_gossip_once_with_relay(
     ctx: &DaemonContext,
     neighbor_idpk: IdentityPublic,
     link_client: &LinkClient,
@@ -55,7 +99,7 @@ async fn gossip_once(
     // tracing::trace!("gossip_once to {}", neighbor_idpk.fingerprint());
     fetch_identity(ctx, &neighbor_idpk, link_client).await?;
     sign_adjacency(ctx, &neighbor_idpk, link_client).await?;
-    gossip_graph(ctx, &neighbor_idpk, link_client).await?;
+    gossip_graph_with_relay(ctx, link_client).await?;
     Ok(())
 }
 
@@ -111,23 +155,16 @@ async fn sign_adjacency(
 }
 
 // Step 3: Gossip the relay graph, by asking info about random nodes.
-#[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
-async fn gossip_graph(
+#[tracing::instrument(skip(ctx, link_client))]
+async fn gossip_graph_with_relay(
     ctx: &DaemonContext,
-    neighbor_idpk: &IdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
-    let remote_fingerprint = neighbor_idpk.fingerprint();
     let all_known_nodes = ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();
-    // tracing::info!("num known nodes: {}", all_known_nodes.len());
     let random_sample = all_known_nodes
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
         .copied()
         .collect_vec();
-    // tracing::trace!(
-    //     "asking {remote_fingerprint} for neighbors of {} neighbors!",
-    //     random_sample.len()
-    // );
     let adjacencies = link_client.adjacencies(random_sample).await?;
     for adjacency in adjacencies {
         let left_fp = adjacency.left;
@@ -180,4 +217,94 @@ fn gossip_interval(start_time: &Instant) -> Duration {
     let with_jitter = rng.gen_range(interval_secs..(interval_secs * 2.));
 
     Duration::from_secs_f64(with_jitter)
+}
+
+/// Loop for gossipping with a client
+#[tracing::instrument(skip(ctx, client_id, link_client))]
+pub async fn gossip_with_client_loop(
+    ctx: DaemonContext,
+    client_id: ClientId,
+    link_client: LinkClient,
+) -> anyhow::Result<()> {
+    scopeguard::defer!(tracing::info!(
+        "gossip loop for client {} stopped",
+        client_id
+    ));
+    loop {
+        let once = async {
+            if let Err(err) = gossip_once_with_client(&ctx, &link_client).await {
+                tracing::warn!("gossip with client {} failed: {:?}", client_id, err);
+            }
+        };
+
+        if once.timeout(Duration::from_secs(10)).await.is_none() {
+            tracing::warn!("gossip once timed out");
+        };
+        smol::Timer::after(gossip_interval(ctx.get(STARTUP_TIME))).await;
+    }
+}
+/// One round of gossip with a particular neighbor.
+#[tracing::instrument(skip(ctx, link_client))]
+async fn gossip_once_with_client(
+    ctx: &DaemonContext,
+    link_client: &LinkClient,
+) -> anyhow::Result<()> {
+    gossip_graph_with_client(ctx, link_client).await?;
+    Ok(())
+}
+
+// Step 3: Gossip the relay graph, by asking info about random nodes.
+#[tracing::instrument(skip(ctx, link_client))]
+async fn gossip_graph_with_client(
+    ctx: &DaemonContext,
+    link_client: &LinkClient,
+) -> anyhow::Result<()> {
+    let all_known_nodes = ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();
+    let random_sample = all_known_nodes
+        .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
+        .copied()
+        .collect_vec();
+
+    let adjacencies = link_client.adjacencies(random_sample).await?;
+    for adjacency in adjacencies {
+        let left_fp = adjacency.left;
+        let right_fp = adjacency.right;
+
+        static IDENTITY_CACHE: CtxField<Cache<Fingerprint, IdentityDescriptor>> = |_| {
+            CacheBuilder::default()
+                .time_to_live(Duration::from_secs(60))
+                .build()
+        };
+
+        let left_id = if let Some(val) = ctx.get(IDENTITY_CACHE).get(&left_fp) {
+            Some(val)
+        } else {
+            link_client
+                .identity(left_fp)
+                .await?
+                .tap_some(|id| ctx.get(IDENTITY_CACHE).insert(left_fp, id.clone()))
+        };
+
+        let right_id = if let Some(val) = ctx.get(IDENTITY_CACHE).get(&right_fp) {
+            Some(val)
+        } else {
+            link_client
+                .identity(right_fp)
+                .await?
+                .tap_some(|id| ctx.get(IDENTITY_CACHE).insert(right_fp, id.clone()))
+        };
+
+        // fetch and insert the identities. we unconditionally do this since identity descriptors may change over time
+        if let Some(left_id) = left_id {
+            ctx.get(RELAY_GRAPH).write().insert_identity(left_id)?
+        }
+
+        if let Some(right_id) = right_id {
+            ctx.get(RELAY_GRAPH).write().insert_identity(right_id)?
+        }
+
+        // insert the adjacency
+        ctx.get(RELAY_GRAPH).write().insert_adjacency(adjacency)?
+    }
+    Ok(())
 }

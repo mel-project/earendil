@@ -387,13 +387,14 @@ async fn packet_dispatch_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         if next_peeler == my_fp {
             peel_forward(&ctx, my_fp, next_peeler, pkt);
         } else if let Some(next_hop) = one_hop_closer(&ctx, next_peeler) {
+            // todo: client_one_hop_closer/relay_one_hop_closer
             let conn = ctx
                 .get(NEIGH_TABLE_NEW)
                 .get(&next_hop)
                 .context(format!("could not find this next hop {next_hop}"))?;
 
             let _ = conn.try_send((pkt, next_peeler));
-            ctx.get(DEBTS).incr_outgoing(next_hop);
+            ctx.get(DEBTS).incr_relay_outgoing(next_hop);
         } else {
             tracing::warn!("no route found to next peeler {next_peeler}");
         }

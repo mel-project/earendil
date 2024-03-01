@@ -13,9 +13,6 @@ use crate::daemon::settlement::{Seed, SettlementRequest, SettlementResponse};
 #[nanorpc_derive]
 #[async_trait]
 pub trait LinkProtocol {
-    /// Challenge the other end to prove their identity.
-    async fn authenticate(&self) -> AuthResponse;
-
     /// A method that returns some random info. Used for keepalive and statistics.
     async fn info(&self) -> InfoResponse;
 
@@ -31,18 +28,25 @@ pub trait LinkProtocol {
     /// Gets all the adjacency-descriptors adjacent to the given fingerprints. This is called repeatedly to eventually discover the entire graph.
     async fn adjacencies(&self, fps: Vec<Fingerprint>) -> Vec<AdjacencyDescriptor>;
 
-    /// Pushes how much it will cost the neighbor to send me a packet, denominated in microMEL/packet
+    /// Pushes how much it will cost a client to send me a packet, denominated in microMEL/packet
     /// debt_limit = max amount neighbor is allowed to owe me before I stop forwarding their packets.
-    async fn push_price(&self, price: u64, debt_limit: u64);
+    async fn client_push_price(&self, price: u64, debt_limit: u64);
+
+    /// Pushes how much it will cost a relay neighbor to send me a packet, denominated in microMEL/packet
+    /// debt_limit = max amount neighbor is allowed to owe me before I stop forwarding their packets.
+    async fn relay_push_price(&self, price: u64, debt_limit: u64);
 
     /// Sends a settlement request and waits until a response is received or the call times out.
     async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse>;
 
-    /// Send a chat message to the other end of the link.
-    async fn push_chat(&self, msg: String);
+    /// Send a chat message to a client on the other end of the link.
+    async fn push_chat_client(&self, msg: String);
+
+    /// Send a chat message to the relay on the other end of the link.
+    async fn push_chat_relay(&self, msg: String);
 
     /// Request a MelPoW seed (used to create an automatic payment proof).
-    async fn request_seed(&self) -> Option<Seed>;
+    async fn request_seed(&self) -> Seed;
 }
 
 /// Response to an authentication challenge.

@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use colored::{ColoredString, Colorize};
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{ClientId, Fingerprint, IdentitySecret};
 use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
     Dock, PacketConstructError,
@@ -28,14 +28,14 @@ pub async fn main_control(
     control_command: ControlCommand,
     connect: SocketAddr,
 ) -> anyhow::Result<()> {
-    let client = ControlClient::from(HttpRpcTransport::new(connect));
+    let link = ControlClient::from(HttpRpcTransport::new(connect));
     match control_command {
         ControlCommand::BindN2r {
             skt_id,
             anon_id,
             dock,
         } => {
-            client.bind_n2r(skt_id, anon_id, dock).await?;
+            link.bind_n2r(skt_id, anon_id, dock).await?;
         }
         ControlCommand::BindHaven {
             skt_id,
@@ -43,10 +43,10 @@ pub async fn main_control(
             dock,
             rendezvous,
         } => {
-            client.bind_haven(skt_id, anon_id, dock, rendezvous).await?;
+            link.bind_haven(skt_id, anon_id, dock, rendezvous).await?;
         }
         ControlCommand::SktInfo { skt_id } => {
-            let skt_info = client.skt_info(skt_id).await??;
+            let skt_info = link.skt_info(skt_id).await??;
             println!("{skt_info}")
         }
         ControlCommand::SendMsg {
@@ -54,16 +54,15 @@ pub async fn main_control(
             dest: destination,
             msg: message,
         } => {
-            client
-                .send_message(SendMessageArgs {
-                    socket_id,
-                    destination,
-                    content: Bytes::copy_from_slice(message.as_bytes()),
-                })
-                .await??;
+            link.send_message(SendMessageArgs {
+                socket_id,
+                destination,
+                content: Bytes::copy_from_slice(message.as_bytes()),
+            })
+            .await??;
         }
         ControlCommand::RecvMsg { skt_id: socket_id } => {
-            match client.recv_message(socket_id.clone()).await? {
+            match link.recv_message(socket_id.clone()).await? {
                 Ok((msg, src)) => println!("{:?} from {}", msg, src),
                 Err(e) => println!("error receiving message: {e}"),
             }
@@ -77,7 +76,7 @@ pub async fn main_control(
             let args: Result<Vec<serde_json::Value>, _> =
                 args.into_iter().map(|a| serde_yaml::from_str(&a)).collect();
             let args = args.context("arguments not YAML")?;
-            let res = client
+            let res = link
                 .send_global_rpc(GlobalRpcArgs {
                     id,
                     destination,
@@ -97,10 +96,10 @@ pub async fn main_control(
                 OnionPublic::from_str(&onion_pk)?,
                 rendezvous_fingerprint,
             );
-            client.insert_rendezvous(locator).await??;
+            link.insert_rendezvous(locator).await??;
         }
         ControlCommand::GetRendezvous { key } => {
-            let locator = client.get_rendezvous(key).await??;
+            let locator = link.get_rendezvous(key).await??;
             if let Some(locator) = locator {
                 println!("{:?}", locator);
             } else {
@@ -116,10 +115,10 @@ pub async fn main_control(
             let locator = HavenLocator::new(id_sk, OnionSecret::generate().public(), fingerprint);
             eprintln!("created haven locator: {:?}", &locator);
 
-            client.insert_rendezvous(locator.clone()).await??;
+            link.insert_rendezvous(locator.clone()).await??;
             eprintln!("inserted haven locator... sleeping for 5s");
 
-            if let Some(fetched_locator) = client.get_rendezvous(id_pk.fingerprint()).await?? {
+            if let Some(fetched_locator) = link.get_rendezvous(id_pk.fingerprint()).await?? {
                 eprintln!("got haven locator: {:?}", &fetched_locator);
                 assert_eq!(locator.rendezvous_point, fetched_locator.rendezvous_point);
             } else {
@@ -127,98 +126,148 @@ pub async fn main_control(
             }
         }
         ControlCommand::GraphDump { human } => {
-            let res = client.graph_dump(human).await?;
+            let res = link.graph_dump(human).await?;
             println!("{res}");
         }
         ControlCommand::MyRoutes => {
-            let routes = client.my_routes().await?;
+            let routes = link.my_routes().await?;
             println!("{}", serde_yaml::to_string(&routes)?);
         }
         ControlCommand::HavensInfo => {
-            for info in client.havens_info().await? {
+            for info in link.havens_info().await? {
                 println!("{} - {}", info.0, info.1);
             }
         }
         ControlCommand::ListDebts => {
-            for debt in client.list_debts().await? {
+            for debt in link.list_debts().await? {
                 println!("{:?}", debt);
             }
         }
         ControlCommand::ListSettlements => {
-            for settlement in client.list_settlements().await? {
+            for settlement in link.list_settlements().await? {
                 println!("{:?}", settlement);
             }
         }
         ControlCommand::Chat { chat_command } => match chat_command {
             ChatCommand::List => {
-                let res = client.list_chats().await?;
+                let res = link.list_chats().await?;
                 println!("{res}");
             }
-            ChatCommand::Start { fp_prefix } => {
-                let neighbors = client.list_neighbors().await?;
+            ChatCommand::Start { prefix } => {
+                let clients = link.list_clients().await?;
+                let relays = link.list_relays().await?;
+                let client = client_by_prefix(clients, &prefix)?;
+                let relay = relay_by_prefix(relays, &prefix)?;
 
-                let neighbor = match neigh_by_prefix(neighbors, fp_prefix) {
-                    Ok(neigh) => {
-                        println!("<starting chat with {}>", earendil_blue(&neigh.to_string()));
-                        neigh
-                    }
-                    Err(e) => {
-                        println!("{e}");
-                        return Ok(());
-                    }
-                };
+                if client.is_some() && relay.is_none() {
+                    let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
+                    let link = Arc::new(link);
+                    let link_clone = link.clone();
 
-                let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
-                let client = Arc::new(client);
-                let listen_client = client.clone();
+                    let _listen_loop = smolscale::spawn(async move {
+                        loop {
+                            let msgs = if let Ok(msgs) = link.get_client_chat(client.unwrap()).await
+                            {
+                                msgs
+                            } else {
+                                println!("error fetching messages");
+                                Timer::after(Duration::from_secs(1)).await;
+                                continue;
+                            };
+                            for (is_mine, text, time) in msgs {
+                                let msg = (is_mine, text.clone(), time);
+                                if !displayed.contains(&msg) {
+                                    println!("{}", pretty_entry(is_mine, text, time));
+                                    displayed.insert(msg);
+                                }
+                            }
+                        }
+                    });
 
-                let _listen_loop = smolscale::spawn(async move {
                     loop {
-                        let msgs = if let Ok(msgs) = client.get_chat(neighbor).await {
-                            msgs
-                        } else {
-                            println!("error fetching messages");
-                            Timer::after(Duration::from_secs(1)).await;
-                            continue;
-                        };
-                        for (is_mine, text, time) in msgs {
-                            let msg = (is_mine, text.clone(), time);
-                            if !displayed.contains(&msg) {
-                                println!("{}", pretty_entry(is_mine, text, time));
-                                displayed.insert(msg);
+                        let _ = std::io::stdout().flush();
+                        let message = smol::unblock(|| {
+                            let mut message = String::new();
+                            std::io::stdin()
+                                .read_line(&mut message)
+                                .expect("Failed to read line");
+
+                            message.trim().to_string()
+                        })
+                        .await;
+
+                        if !message.is_empty() {
+                            let msg = message.to_string();
+                            match link_clone.send_client_chat_msg(client.unwrap(), msg).await {
+                                Ok(_) => continue,
+                                Err(e) => println!("ERROR: {e}"),
                             }
                         }
                     }
-                });
+                } else if client.is_none() && relay.is_some() {
+                    let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
+                    let link = Arc::new(link);
+                    let link_clone = link.clone();
 
-                loop {
-                    let _ = std::io::stdout().flush();
-                    let message = smol::unblock(|| {
-                        let mut message = String::new();
-                        std::io::stdin()
-                            .read_line(&mut message)
-                            .expect("Failed to read line");
+                    let _listen_loop = smolscale::spawn(async move {
+                        loop {
+                            let msgs = if let Ok(msgs) = link.get_relay_chat(relay.unwrap()).await {
+                                msgs
+                            } else {
+                                println!("error fetching messages");
+                                Timer::after(Duration::from_secs(1)).await;
+                                continue;
+                            };
+                            for (is_mine, text, time) in msgs {
+                                let msg = (is_mine, text.clone(), time);
+                                if !displayed.contains(&msg) {
+                                    println!("{}", pretty_entry(is_mine, text, time));
+                                    displayed.insert(msg);
+                                }
+                            }
+                        }
+                    });
 
-                        message.trim().to_string()
-                    })
-                    .await;
+                    loop {
+                        let _ = std::io::stdout().flush();
+                        let message = smol::unblock(|| {
+                            let mut message = String::new();
+                            std::io::stdin()
+                                .read_line(&mut message)
+                                .expect("Failed to read line");
 
-                    if !message.is_empty() {
-                        let msg = message.to_string();
-                        match listen_client.send_chat_msg(neighbor, msg).await {
-                            Ok(_) => continue,
-                            Err(e) => println!("ERROR: {e}"),
+                            message.trim().to_string()
+                        })
+                        .await;
+
+                        if !message.is_empty() {
+                            let msg = message.to_string();
+                            match link_clone.send_relay_chat_msg(relay.unwrap(), msg).await {
+                                Ok(_) => continue,
+                                Err(e) => println!("ERROR: {e}"),
+                            }
                         }
                     }
+                } else if client.is_none() && relay.is_none() {
+                    anyhow::bail!("no neighbor with this prefix")
+                } else {
+                    anyhow::bail!("more than one neighbor with this prefix")
                 }
             }
-            ChatCommand::Get { neighbor } => {
-                let entries = client.get_chat(neighbor).await?;
+            ChatCommand::GetClient { neighbor } => {
+                let entries = link.get_client_chat(neighbor).await?;
                 for (is_mine, text, time) in entries {
                     println!("{}", pretty_entry(is_mine, text, time));
                 }
             }
-            ChatCommand::Send { dest, msg } => client.send_chat_msg(dest, msg).await??,
+            ChatCommand::GetRelay { neighbor } => {
+                let entries = link.get_relay_chat(neighbor).await?;
+                for (is_mine, text, time) in entries {
+                    println!("{}", pretty_entry(is_mine, text, time));
+                }
+            }
+            ChatCommand::SendClient { dest, msg } => link.send_client_chat_msg(dest, msg).await??,
+            ChatCommand::SendRelay { dest, msg } => link.send_relay_chat_msg(dest, msg).await??,
         },
         ControlCommand::BindN2rRelay { skt_id, dock } => todo!(),
         ControlCommand::BindN2rClient { skt_id, dock } => todo!(),
@@ -244,17 +293,31 @@ fn right_arrow() -> ColoredString {
     earendil_blue("->")
 }
 
-fn neigh_by_prefix(fingerprints: Vec<Fingerprint>, prefix: String) -> anyhow::Result<Fingerprint> {
-    let valid: Vec<Fingerprint> = fingerprints
+fn client_by_prefix(clients: Vec<ClientId>, prefix: &str) -> anyhow::Result<Option<ClientId>> {
+    let valid: Vec<ClientId> = clients
         .into_iter()
         .filter(|fp| fp.to_string().starts_with(&prefix))
         .collect();
     if valid.len() == 1 {
-        Ok(valid[0])
-    } else if valid.len() > 1 {
-        anyhow::bail!("ERROR: multiple neighbors have this prefix! Try a longer prefix.")
+        Ok(Some(valid[0]))
+    } else if valid.len() == 0 {
+        Ok(None)
     } else {
-        anyhow::bail!("ERROR: no neighbor with this prefix. Exiting...")
+        anyhow::bail!("Multiple clients have this prefix! Try a longer prefix.")
+    }
+}
+
+fn relay_by_prefix(relays: Vec<Fingerprint>, prefix: &str) -> anyhow::Result<Option<Fingerprint>> {
+    let valid: Vec<Fingerprint> = relays
+        .into_iter()
+        .filter(|fp| fp.to_string().starts_with(&prefix))
+        .collect();
+    if valid.len() == 1 {
+        Ok(Some(valid[0]))
+    } else if valid.len() == 0 {
+        Ok(None)
+    } else {
+        anyhow::bail!("Multiple relays have this prefix! Try a longer prefix.")
     }
 }
 
@@ -307,13 +370,19 @@ pub trait ControlProtocol {
         fingerprint: Fingerprint,
     ) -> Result<Option<HavenLocator>, DhtError>;
 
-    async fn list_neighbors(&self) -> Vec<Fingerprint>;
+    async fn list_clients(&self) -> Vec<ClientId>;
+
+    async fn list_relays(&self) -> Vec<Fingerprint>;
 
     async fn list_chats(&self) -> String;
 
-    async fn get_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)>;
+    async fn get_client_chat(&self, neigh: ClientId) -> Vec<(bool, String, SystemTime)>;
 
-    async fn send_chat_msg(&self, dest: Fingerprint, msg: String) -> Result<(), ChatError>;
+    async fn get_relay_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)>;
+
+    async fn send_client_chat_msg(&self, dest: ClientId, msg: String) -> Result<(), ChatError>;
+
+    async fn send_relay_chat_msg(&self, dest: Fingerprint, msg: String) -> Result<(), ChatError>;
 
     async fn list_debts(&self) -> Vec<String>;
 

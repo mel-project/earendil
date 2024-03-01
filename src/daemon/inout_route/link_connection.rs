@@ -10,14 +10,13 @@ use async_trait::async_trait;
 use bytemuck::{Pod, Zeroable};
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
-use earendil_crypt::{Fingerprint, IdentityPublic};
+use earendil_crypt::{ClientId, Fingerprint, IdentityPublic};
 use earendil_packet::RawPacket;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use futures_util::AsyncWriteExt;
 use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nursery_macro::nursery;
-use once_cell::sync::OnceCell;
 
 use rand::Rng;
 use smol::{
@@ -33,42 +32,16 @@ use sosistab2::Multiplex;
 
 use crate::daemon::{
     context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
+    inout_route::chat::{incoming_client_chat, incoming_relay_chat},
+    one_hop_closer,
     peel_forward::peel_forward,
     settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse},
 };
 
 use super::{
-    chat::incoming_chat,
-    link_protocol::{AuthResponse, InfoResponse, LinkClient, LinkProtocol, LinkService},
+    link_protocol::{InfoResponse, LinkProtocol, LinkService},
     DaemonContext,
 };
-
-/// Authenticates the other side of the link, from a single Pipe. Unlike in Geph, n2n Multiplexes in earendil all contain one pipe each.
-pub async fn link_authenticate(
-    mplex: Arc<Multiplex>,
-    their_fp: Option<Fingerprint>,
-) -> anyhow::Result<IdentityPublic> {
-    let rpc = LinkRpcTransport::new(mplex.clone());
-    let client = LinkClient::from(rpc);
-
-    let resp = client
-        .authenticate()
-        .await
-        .context("did not respond to authenticate")?;
-
-    resp.verify(&mplex.peer_pk().context("could not obtain peer_pk")?)
-        .context("did not authenticate correctly")?;
-    if let Some(their_fp) = their_fp {
-        if their_fp != resp.full_pk.fingerprint() {
-            anyhow::bail!(
-                "neighbor fingerprint {} different from configured {}",
-                resp.full_pk.fingerprint(),
-                their_fp
-            )
-        }
-    }
-    Ok(resp.full_pk)
-}
 
 /// Main loop for the connection.
 #[tracing::instrument(skip(service, mplex, recv_outgoing))]
@@ -76,13 +49,23 @@ pub async fn connection_loop(
     service: Arc<LinkService<LinkProtocolImpl>>,
     mplex: Arc<Multiplex>,
     recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
+    i_am_client: bool,
 ) -> anyhow::Result<()> {
-    let _onion_keepalive = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([mplex, recv_outgoing, service], move || {
-            onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
-        }),
-    );
+    let _onion_keepalive = if i_am_client {
+        Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([mplex, recv_outgoing, service], move || {
+                client_onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
+            }),
+        )
+    } else {
+        Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([mplex, recv_outgoing, service], move || {
+                relay_onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
+            }),
+        )
+    };
 
     nursery!({
         loop {
@@ -104,7 +87,13 @@ pub async fn connection_loop(
                     anyhow::Ok(())
                 })
                 .detach(),
-                "onion_packets" => spawn!(handle_onion_packets(
+                "client_onion" => spawn!(handle_client_onion(
+                    service.clone(),
+                    stream,
+                    recv_outgoing.clone(),
+                ))
+                .detach(),
+                "relay_onion" => spawn!(handle_relay_onion(
                     service.clone(),
                     stream,
                     recv_outgoing.clone(),
@@ -119,19 +108,31 @@ pub async fn connection_loop(
 }
 
 #[tracing::instrument(skip(service, mplex, recv_outgoing))]
-async fn onion_keepalive(
+async fn client_onion_keepalive(
     service: Arc<LinkService<LinkProtocolImpl>>,
     mplex: Arc<Multiplex>,
     recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
 ) -> anyhow::Result<()> {
     loop {
-        let stream = mplex.open_conn("onion_packets").await?;
-        handle_onion_packets(service.clone(), stream, recv_outgoing.clone()).await?;
+        let stream = mplex.open_conn("client_onion").await?;
+        handle_client_onion(service.clone(), stream, recv_outgoing.clone()).await?;
+    }
+}
+
+#[tracing::instrument(skip(service, mplex, recv_outgoing))]
+async fn relay_onion_keepalive(
+    service: Arc<LinkService<LinkProtocolImpl>>,
+    mplex: Arc<Multiplex>,
+    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
+) -> anyhow::Result<()> {
+    loop {
+        let stream = mplex.open_conn("relay_onion").await?;
+        handle_relay_onion(service.clone(), stream, recv_outgoing.clone()).await?;
     }
 }
 
 #[tracing::instrument(skip(service, conn, recv_outgoing))]
-async fn handle_onion_packets(
+async fn handle_client_onion(
     service: Arc<LinkService<LinkProtocolImpl>>,
     conn: sosistab2::Stream,
     recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
@@ -156,8 +157,70 @@ async fn handle_onion_packets(
             let PacketWithPeeler { pkt, peeler } = *bytemuck::try_from_bytes(&pkt)
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
-            if let Some(other_fp) = service.0.remote_pk.get() {
-                peel_forward(&service.0.ctx, other_fp.fingerprint(), peeler, pkt);
+            let my_fp = service.0.ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+
+            if peeler == my_fp {
+                peel_forward(&service.0.ctx, my_fp, peeler, pkt);
+            } else if let Some(next_hop) = one_hop_closer(&service.0.ctx, peeler) {
+                let conn = service
+                    .0
+                    .ctx
+                    .get(NEIGH_TABLE_NEW)
+                    .get(&next_hop)
+                    .context(format!("could not find this next hop {next_hop}"))?;
+
+                let _ = conn.try_send((pkt, peeler));
+                service.0.ctx.get(DEBTS).incr_relay_outgoing(next_hop);
+            } else {
+                tracing::warn!("no route found to next peeler {peeler}");
+            }
+        }
+    };
+    up.race(dn).await
+}
+
+#[tracing::instrument(skip(service, conn, recv_outgoing))]
+async fn handle_relay_onion(
+    service: Arc<LinkService<LinkProtocolImpl>>,
+    conn: sosistab2::Stream,
+    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
+) -> anyhow::Result<()> {
+    #[repr(C)]
+    #[derive(Clone, Copy, Pod, Zeroable)]
+    struct PacketWithPeeler {
+        pkt: RawPacket,
+        peeler: Fingerprint,
+    }
+    let up = async {
+        loop {
+            let (pkt, peeler) = recv_outgoing.recv().await?;
+            let pkt_with_peeler = PacketWithPeeler { pkt, peeler };
+            conn.send_urel(bytemuck::bytes_of(&pkt_with_peeler).to_vec().into())
+                .await?;
+        }
+    };
+    let dn = async {
+        loop {
+            let pkt = conn.recv_urel().await?;
+            let PacketWithPeeler { pkt, peeler } = *bytemuck::try_from_bytes(&pkt)
+                .ok()
+                .context("incoming urel packet of the wrong size to be an onion packet")?;
+            let my_fp = service.0.ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+
+            if peeler == my_fp {
+                peel_forward(&service.0.ctx, my_fp, peeler, pkt);
+            } else if let Some(next_hop) = one_hop_closer(&service.0.ctx, peeler) {
+                let conn = service
+                    .0
+                    .ctx
+                    .get(NEIGH_TABLE_NEW)
+                    .get(&next_hop)
+                    .context(format!("could not find this next hop {next_hop}"))?;
+
+                let _ = conn.try_send((pkt, peeler));
+                service.0.ctx.get(DEBTS).incr_relay_outgoing(next_hop);
+            } else {
+                tracing::warn!("no route found to next peeler {peeler}");
             }
         }
     };
@@ -216,17 +279,13 @@ impl RpcTransport for LinkRpcTransport {
 pub struct LinkProtocolImpl {
     pub ctx: DaemonContext,
     pub mplex: Arc<Multiplex>,
-    pub remote_pk: Arc<OnceCell<IdentityPublic>>,
+    pub remote_client_id: Option<ClientId>,
+    pub remote_relay_pk: Option<IdentityPublic>,
     pub max_outgoing_price: u64,
 }
 
 #[async_trait]
 impl LinkProtocol for LinkProtocolImpl {
-    async fn authenticate(&self) -> AuthResponse {
-        let local_pk = self.mplex.local_pk();
-        AuthResponse::new(self.ctx.get(GLOBAL_IDENTITY), &local_pk)
-    }
-
     async fn info(&self) -> InfoResponse {
         InfoResponse {
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -288,21 +347,30 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn push_price(&self, price: u64, debt_limit: u64) {
+    async fn client_push_price(&self, price: u64, debt_limit: u64) {
         tracing::trace!("received push price");
-        let remote_fp = match self.remote_pk.get() {
-            Some(rpk) => rpk.fingerprint(),
-            None => {
-                return;
-            }
-        };
-
+        let remote_client_id = self.remote_client_id.unwrap();
         if price > self.max_outgoing_price {
-            tracing::warn!("neigh {} price too high! YOU SHOULD MANUALLY REMOVE THIS NEIGHBOR UNTIL YOU RESOLVE THE ISSUE", remote_fp);
-        } else {
+            tracing::warn!("neigh {} price too high! YOU SHOULD MANUALLY REMOVE THIS NEIGHBOR UNTIL YOU RESOLVE THE ISSUE", remote_client_id);
             self.ctx
                 .get(DEBTS)
-                .insert_outgoing_price(remote_fp, price, debt_limit);
+                .insert_client_outgoing_price(remote_client_id, price, debt_limit);
+            tracing::trace!("Successfully registered {} price!", remote_client_id);
+        }
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn relay_push_price(&self, price: u64, debt_limit: u64) {
+        dbg!(&self.remote_client_id);
+        dbg!(&self.remote_relay_pk);
+
+        tracing::trace!("received push price");
+        let remote_fp = self.remote_relay_pk.unwrap().fingerprint();
+        if price > self.max_outgoing_price {
+            tracing::warn!("neigh {} price too high! YOU SHOULD MANUALLY REMOVE THIS NEIGHBOR UNTIL YOU RESOLVE THE ISSUE", remote_fp);
+            self.ctx
+                .get(DEBTS)
+                .insert_relay_outgoing_price(remote_fp, price, debt_limit);
             tracing::trace!("Successfully registered {} price!", remote_fp);
         }
     }
@@ -341,35 +409,38 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn push_chat(&self, msg: String) {
-        if let Some(neighbor) = self.remote_pk.get() {
-            log::debug!("pushing chat: {}", msg.clone());
-            incoming_chat(&self.ctx, neighbor.fingerprint(), msg);
-        }
+    async fn push_chat_client(&self, msg: String) {
+        log::debug!("pushing chat: {}", msg.clone());
+        incoming_client_chat(&self.ctx, self.remote_client_id.unwrap(), msg);
     }
 
     #[tracing::instrument(skip(self))]
-    async fn request_seed(&self) -> Option<Seed> {
+    async fn push_chat_relay(&self, msg: String) {
+        log::debug!("pushing chat: {}", msg.clone());
+        incoming_relay_chat(&self.ctx, self.remote_relay_pk.unwrap().fingerprint(), msg);
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn request_seed(&self) -> Seed {
         let seed = rand::thread_rng().gen();
         let seed_cache = &self.ctx.get(SETTLEMENTS).seed_cache;
+        let remote_fp = self
+            .remote_relay_pk
+            .expect("you cannot ask a client for a seed")
+            .fingerprint();
 
-        if let Some(pk) = self.remote_pk.get() {
-            let fp = pk.fingerprint();
-            match seed_cache.get(&fp) {
-                Some(mut seeds) => {
-                    seeds.insert(seed);
-                    seed_cache.insert(fp, seeds);
-                    return Some(seed);
-                }
-                None => {
-                    let mut seed_set = HashSet::new();
-                    seed_set.insert(seed);
-                    seed_cache.insert(fp, seed_set);
-                    return Some(seed);
-                }
+        match seed_cache.get(&remote_fp) {
+            Some(mut seeds) => {
+                seeds.insert(seed);
+                seed_cache.insert(remote_fp, seeds);
+                seed
+            }
+            None => {
+                let mut seed_set = HashSet::new();
+                seed_set.insert(seed);
+                seed_cache.insert(remote_fp, seed_set);
+                seed
             }
         }
-
-        None
     }
 }

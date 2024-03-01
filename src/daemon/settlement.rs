@@ -201,43 +201,44 @@ impl Settlements {
         ctx: &DaemonContext,
         request: SettlementRequest,
     ) -> anyhow::Result<Option<SettlementResponse>> {
-        let initiator_pk = request.clone().initiator_pk;
-        initiator_pk.verify(request.to_sign().as_bytes(), &request.signature)?;
+        todo!();
+        // let initiator_pk = request.clone().initiator_pk;
+        // initiator_pk.verify(request.to_sign().as_bytes(), &request.signature)?;
 
-        match &request.payment_proof {
-            SettlementProof::Automatic(AutoSettleProof {
-                seed,
-                difficulty,
-                proof,
-            }) => {
-                let proof =
-                    melpow::Proof::from_bytes(proof).context("unable to deserialize mel proof")?;
-                if let Some(mut seeds) = self.seed_cache.get(&initiator_pk.fingerprint()) {
-                    if seeds.contains(seed) && proof.verify(seed, *difficulty, Hasher) {
-                        let debts = ctx.get(DEBTS);
-                        let amount = difficulty_to_micromel(*difficulty);
+        // match &request.payment_proof {
+        //     SettlementProof::Automatic(AutoSettleProof {
+        //         seed,
+        //         difficulty,
+        //         proof,
+        //     }) => {
+        //         let proof =
+        //             melpow::Proof::from_bytes(proof).context("unable to deserialize mel proof")?;
+        //         if let Some(mut seeds) = self.seed_cache.get(&initiator_pk.fingerprint()) {
+        //             if seeds.contains(seed) && proof.verify(seed, *difficulty, Hasher) {
+        //                 let debts = ctx.get(DEBTS);
+        //                 let amount = difficulty_to_micromel(*difficulty);
 
-                        debts.deduct_settlement(initiator_pk.fingerprint(), amount);
-                        seeds.remove(seed);
+        //                 debts.deduct_settlement(initiator_pk.fingerprint(), amount);
+        //                 seeds.remove(seed);
 
-                        if let Some(current_debt) = debts.net_debt_est(&initiator_pk.fingerprint())
-                        {
-                            tracing::debug!(
-                                "processed auto_settle debt with {}",
-                                &initiator_pk.fingerprint()
-                            );
-                            return Ok(Some(SettlementResponse::new(
-                                *ctx.get(GLOBAL_IDENTITY),
-                                request,
-                                current_debt,
-                            )));
-                        }
-                    }
-                }
-            }
-            _ => return Err(anyhow::anyhow!("expected automatic settlement proof")),
-        };
-        Ok(None)
+        //                 if let Some(current_debt) = debts.net_debt_est(&initiator_pk.fingerprint())
+        //                 {
+        //                     tracing::debug!(
+        //                         "processed auto_settle debt with {}",
+        //                         &initiator_pk.fingerprint()
+        //                     );
+        //                     return Ok(Some(SettlementResponse::new(
+        //                         *ctx.get(GLOBAL_IDENTITY),
+        //                         request,
+        //                         current_debt,
+        //                     )));
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     _ => return Err(anyhow::anyhow!("expected automatic settlement proof")),
+        // };
+        // Ok(None)
     }
 
     pub async fn accept_response(
@@ -246,22 +247,23 @@ impl Settlements {
         neighbor: Fingerprint,
         request: SettlementRequest,
     ) -> anyhow::Result<()> {
-        let debts = ctx.get(DEBTS);
-        let current_debt = debts
-            .net_debt_est(&neighbor)
-            .context("unable to retrieve net debt")?;
-        let deduct_amount = request.decrease;
-        let settled_debt = current_debt.saturating_sub(deduct_amount as i128);
-        let my_sk = ctx.get(GLOBAL_IDENTITY);
-        let response = SettlementResponse::new(*my_sk, request, settled_debt);
+        todo!();
+        // let debts = ctx.get(DEBTS);
+        // let current_debt = debts
+        //     .net_debt_est(&neighbor)
+        //     .context("unable to retrieve net debt")?;
+        // let deduct_amount = request.decrease;
+        // let settled_debt = current_debt.saturating_sub(deduct_amount as i128);
+        // let my_sk = ctx.get(GLOBAL_IDENTITY);
+        // let response = SettlementResponse::new(*my_sk, request, settled_debt);
 
-        if let Some(settlement) = self.pending.get(&neighbor) {
-            settlement.send_res.send(Some(response)).await?;
-            debts.deduct_settlement(neighbor, deduct_amount);
-        }
+        // if let Some(settlement) = self.pending.get(&neighbor) {
+        //     settlement.send_res.send(Some(response)).await?;
+        //     debts.deduct_settlement(neighbor, deduct_amount);
+        // }
 
-        self.pending.remove(&neighbor);
-        Ok(())
+        // self.pending.remove(&neighbor);
+        // Ok(())
     }
 
     pub async fn reject_response(&self, neighbor: &Fingerprint) -> anyhow::Result<()> {
