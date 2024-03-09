@@ -8,7 +8,7 @@ use earendil::{
     socket::Socket,
     stream::{Stream, StreamListener},
 };
-use earendil_crypt::IdentitySecret;
+use earendil_crypt::RelayIdentitySecret;
 use futures_util::{io::AsyncWriteExt, AsyncReadExt};
 use smol::Timer;
 use smolscale::reaper::TaskReaper;
@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     .init();
     smolscale::block_on(async {
         let client_daemon = spawn_daemon("./config/alice.yaml")?;
-        let client_socket = Socket::bind_n2r(&client_daemon, IdentitySecret::generate(), None);
+        let client_socket = Socket::bind_n2r(&client_daemon, RelayIdentitySecret::generate(), None);
 
         Timer::after(Duration::from_secs(1)).await;
 

@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
 use dashmap::DashMap;
-use earendil_crypt::{ClientId, Fingerprint};
+use earendil_crypt::{ClientId, RelayFingerprint};
 use serde::{Deserialize, Serialize};
 
 pub struct Debts {
     client_incoming_prices: DashMap<ClientId, PriceInfo>,
     client_outgoing_prices: DashMap<ClientId, PriceInfo>,
-    relay_incoming_prices: DashMap<Fingerprint, PriceInfo>,
-    relay_outgoing_prices: DashMap<Fingerprint, PriceInfo>,
+    relay_incoming_prices: DashMap<RelayFingerprint, PriceInfo>,
+    relay_outgoing_prices: DashMap<RelayFingerprint, PriceInfo>,
     client_balances: DashMap<ClientId, Balances>,
-    relay_balances: DashMap<Fingerprint, Balances>,
+    relay_balances: DashMap<RelayFingerprint, Balances>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -45,7 +45,12 @@ impl Debts {
             .insert(neigh, PriceInfo { price, debt_limit });
     }
 
-    pub fn insert_relay_incoming_price(&self, neigh: Fingerprint, price: u64, debt_limit: u64) {
+    pub fn insert_relay_incoming_price(
+        &self,
+        neigh: RelayFingerprint,
+        price: u64,
+        debt_limit: u64,
+    ) {
         let _ = self
             .relay_incoming_prices
             .insert(neigh, PriceInfo { price, debt_limit });
@@ -57,23 +62,18 @@ impl Debts {
             .insert(neigh, PriceInfo { price, debt_limit });
     }
 
-    pub fn insert_relay_outgoing_price(&self, neigh: Fingerprint, price: u64, debt_limit: u64) {
+    pub fn insert_relay_outgoing_price(
+        &self,
+        neigh: RelayFingerprint,
+        price: u64,
+        debt_limit: u64,
+    ) {
         let _ = self
             .relay_outgoing_prices
             .insert(neigh, PriceInfo { price, debt_limit });
     }
 
-    pub fn incr_client_outgoing(&self, neigh: ClientId) {
-        if let Some(price_info) = self.client_outgoing_prices.get(&neigh) {
-            let to_add = price_info.price;
-            self.client_balances
-                .entry(neigh)
-                .or_default()
-                .client_outgoing_balance += to_add;
-        }
-    }
-
-    pub fn incr_relay_outgoing(&self, neigh: Fingerprint) {
+    pub fn incr_relay_outgoing(&self, neigh: RelayFingerprint) {
         if let Some(price_info) = self.relay_outgoing_prices.get(&neigh) {
             let to_add = price_info.price;
             self.relay_balances
@@ -93,7 +93,7 @@ impl Debts {
         }
     }
 
-    pub fn incr_relay_incoming(&self, neigh: Fingerprint) {
+    pub fn incr_relay_incoming(&self, neigh: RelayFingerprint) {
         if let Some(price_info) = self.relay_incoming_prices.get(&neigh) {
             let to_add = price_info.price;
             self.relay_balances
@@ -110,7 +110,7 @@ impl Debts {
             .client_incoming_balance = new_debt;
     }
 
-    fn insert_relay_incoming(&self, neigh: Fingerprint, new_debt: u64) {
+    fn insert_relay_incoming(&self, neigh: RelayFingerprint, new_debt: u64) {
         self.relay_balances
             .entry(neigh)
             .or_default()
@@ -123,7 +123,7 @@ impl Debts {
             .map(|b| b.client_incoming_balance as i128 - b.client_outgoing_balance as i128)
     }
 
-    pub fn relay_net_debt_est(&self, neigh: &Fingerprint) -> Option<i128> {
+    pub fn relay_net_debt_est(&self, neigh: &RelayFingerprint) -> Option<i128> {
         self.relay_balances
             .get(neigh)
             .map(|b| b.relay_incoming_balance as i128 - b.relay_outgoing_balance as i128)
@@ -140,7 +140,7 @@ impl Debts {
         true
     }
 
-    pub fn relay_is_within_debt_limit(&self, neigh: &Fingerprint) -> bool {
+    pub fn relay_is_within_debt_limit(&self, neigh: &RelayFingerprint) -> bool {
         if let Some(price_info) = self.relay_incoming_prices.get(neigh) {
             if let Some(net) = self.relay_net_debt_est(neigh) {
                 if net > price_info.debt_limit as i128 {
@@ -183,7 +183,7 @@ impl Debts {
         }
     }
 
-    pub fn deduct_relay_settlement(&self, neigh: Fingerprint, amount: u64) {
+    pub fn deduct_relay_settlement(&self, neigh: RelayFingerprint, amount: u64) {
         if let Some(current_debt) = self.relay_net_debt_est(&neigh) {
             let debt = current_debt - amount as i128;
             let settled_debt = if debt > 0 { debt as u64 } else { 0 };
@@ -197,7 +197,7 @@ impl Debts {
             .iter()
             .map(|item| (*item.key(), item.value().clone()))
             .collect();
-        let relay_incoming_prices: HashMap<Fingerprint, PriceInfo> = self
+        let relay_incoming_prices: HashMap<RelayFingerprint, PriceInfo> = self
             .relay_incoming_prices
             .iter()
             .map(|item| (*item.key(), item.value().clone()))
@@ -207,7 +207,7 @@ impl Debts {
             .iter()
             .map(|item| (*item.key(), item.value().clone()))
             .collect();
-        let relay_outgoing_prices: HashMap<Fingerprint, PriceInfo> = self
+        let relay_outgoing_prices: HashMap<RelayFingerprint, PriceInfo> = self
             .relay_outgoing_prices
             .iter()
             .map(|item| (*item.key(), item.value().clone()))
@@ -217,7 +217,7 @@ impl Debts {
             .iter()
             .map(|item| (*item.key(), item.value().clone()))
             .collect();
-        let relay_balances: HashMap<Fingerprint, Balances> = self
+        let relay_balances: HashMap<RelayFingerprint, Balances> = self
             .relay_balances
             .iter()
             .map(|item| (*item.key(), item.value().clone()))
@@ -243,23 +243,24 @@ impl Debts {
             relay_balances,
         ): (
             HashMap<ClientId, PriceInfo>,
-            HashMap<Fingerprint, PriceInfo>,
+            HashMap<RelayFingerprint, PriceInfo>,
             HashMap<ClientId, PriceInfo>,
-            HashMap<Fingerprint, PriceInfo>,
+            HashMap<RelayFingerprint, PriceInfo>,
             HashMap<ClientId, Balances>,
-            HashMap<Fingerprint, Balances>,
+            HashMap<RelayFingerprint, Balances>,
         ) = stdcode::deserialize(&bytes)?;
 
         let client_incoming_prices: DashMap<ClientId, PriceInfo> =
             client_incoming_prices.into_iter().collect();
-        let relay_incoming_prices: DashMap<Fingerprint, PriceInfo> =
+        let relay_incoming_prices: DashMap<RelayFingerprint, PriceInfo> =
             relay_incoming_prices.into_iter().collect();
         let client_outgoing_prices: DashMap<ClientId, PriceInfo> =
             client_outgoing_prices.into_iter().collect();
-        let relay_outgoing_prices: DashMap<Fingerprint, PriceInfo> =
+        let relay_outgoing_prices: DashMap<RelayFingerprint, PriceInfo> =
             relay_outgoing_prices.into_iter().collect();
         let client_balances: DashMap<ClientId, Balances> = client_balances.into_iter().collect();
-        let relay_balances: DashMap<Fingerprint, Balances> = relay_balances.into_iter().collect();
+        let relay_balances: DashMap<RelayFingerprint, Balances> =
+            relay_balances.into_iter().collect();
 
         Ok(Debts {
             client_incoming_prices,

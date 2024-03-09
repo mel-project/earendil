@@ -11,7 +11,7 @@ pub use reply_block::*;
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
-    use earendil_crypt::{Fingerprint, IdentitySecret};
+    use earendil_crypt::{AnonDest, RelayFingerprint, RelayIdentitySecret, SourceId};
 
     use crate::crypt::OnionSecret;
 
@@ -23,11 +23,11 @@ mod tests {
                 let our_sk = OnionSecret::generate();
                 let this_pubkey = our_sk.public();
 
-                let next_fingerprint = Fingerprint::from_bytes(&[10; 20]);
+                let next_hop = RelayFingerprint::from_bytes(&[10; 32]);
                 (
                     ForwardInstruction {
                         this_pubkey,
-                        next_fingerprint,
+                        next_hop,
                     },
                     our_sk,
                 )
@@ -38,7 +38,7 @@ mod tests {
     fn test_packet_route(
         route: &[(ForwardInstruction, OnionSecret)],
     ) -> Result<(), PacketConstructError> {
-        let my_isk = IdentitySecret::generate();
+        let my_isk = RelayIdentitySecret::generate();
         let destination_sk = OnionSecret::generate();
         let destination = destination_sk.public();
         let msg = Message {
@@ -49,15 +49,15 @@ mod tests {
 
         let forward_instructions: Vec<ForwardInstruction> =
             route.iter().map(|(inst, _)| *inst).collect();
-        let is_relay = true;
+        let is_client = false;
 
         let (packet, _) = RawPacket::new(
             &forward_instructions,
             &destination,
-            is_relay,
+            is_client,
             InnerPacket::Message(msg.clone()),
-            &[0; 20],
-            &my_isk,
+            &[0; 32],
+            SourceId::Relay(my_isk.public().fingerprint()),
         )?;
 
         let mut peeled_packet = packet;
@@ -129,7 +129,7 @@ mod tests {
         use crate::RawPacket;
 
         // Generate  identity secrets
-        let alice_isk = IdentitySecret::generate();
+        let alice_anon_id = AnonDest::new();
         let alice_osk = OnionSecret::generate();
         let alice_opk = alice_osk.public();
         // Generate 5-hop route
@@ -138,19 +138,12 @@ mod tests {
             .iter()
             .map(|(inst, _)| *inst)
             .collect();
-        let first_peeler = Fingerprint::from_bytes(&[10; 20]);
-        let is_relay = true;
+        let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
 
         // Prepare reply block
-        let (reply_block, (_, reply_degarbler)) = ReplyBlock::new(
-            &route,
-            first_peeler,
-            &alice_opk,
-            is_relay,
-            OnionSecret::generate(),
-            alice_isk,
-        )
-        .expect("Failed to create reply block");
+        let (reply_block, (_, reply_degarbler)) =
+            ReplyBlock::new(&route, first_peeler, &alice_opk, alice_anon_id)
+                .expect("Failed to create reply block");
 
         // Prepare message using header from reply block
         let body = "hello world from reply block!";
@@ -162,7 +155,7 @@ mod tests {
         let packet = RawPacket::new_reply(
             &reply_block,
             InnerPacket::Message(message.clone()),
-            &alice_isk,
+            &SourceId::Anon(alice_anon_id),
         )
         .expect("Failed to create reply packet");
 
@@ -184,6 +177,7 @@ mod tests {
         let mut peeled_reply = if let PeeledPacket::GarbledReply {
             id: _,
             pkt: peeled_reply,
+            client_id: _,
         } = peeled_packet
             .peel(&alice_osk)
             .expect("Failed to peel packet")

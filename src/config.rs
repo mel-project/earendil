@@ -1,14 +1,14 @@
 use std::{collections::BTreeMap, io::Write, net::SocketAddr, path::PathBuf};
 
 use anyhow::Context;
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
 use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fs::OpenOptions;
 use tracing::instrument;
 
-use crate::socket::Endpoint;
+use crate::socket::HavenEndpoint;
 
 /// A YAML-serializable configuration file
 #[derive(Serialize, Deserialize, Clone)]
@@ -72,7 +72,7 @@ pub enum InRouteConfig {
 pub enum OutRouteConfig {
     Obfsudp {
         #[serde_as(as = "serde_with::DisplayFromStr")]
-        fingerprint: Fingerprint,
+        fingerprint: RelayFingerprint,
         #[serde_as(as = "serde_with::DisplayFromStr")]
         connect: SocketAddr,
         #[serde_as(as = "serde_with::hex::Hex")]
@@ -88,7 +88,7 @@ pub enum OutRouteConfig {
 pub struct UdpForwardConfig {
     pub listen: SocketAddr,
     #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub remote: Endpoint,
+    pub remote: HavenEndpoint,
 }
 
 #[serde_as]
@@ -97,7 +97,7 @@ pub struct UdpForwardConfig {
 pub struct TcpForwardConfig {
     pub listen: SocketAddr,
     #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub remote: Endpoint,
+    pub remote: HavenEndpoint,
 }
 
 #[serde_as]
@@ -116,7 +116,7 @@ pub enum Fallback {
     PassThrough,
     SimpleProxy {
         #[serde_as(as = "serde_with::DisplayFromStr")]
-        remote: Endpoint,
+        remote: HavenEndpoint,
     },
 }
 
@@ -126,7 +126,7 @@ pub struct HavenForwardConfig {
     #[serde(flatten)]
     pub identity: Identity,
     #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub rendezvous: Fingerprint,
+    pub rendezvous: RelayFingerprint,
     pub handler: ForwardHandler,
 }
 
@@ -158,11 +158,11 @@ pub enum Identity {
 impl Identity {
     #[instrument(skip(self))]
     /// Actualizes this into an actual identity.
-    pub fn actualize(&self) -> anyhow::Result<IdentitySecret> {
+    pub fn actualize_relay(&self) -> anyhow::Result<RelayIdentitySecret> {
         match self {
             Identity::IdentitySeed(seed) => {
                 tracing::warn!("initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!");
-                Ok(IdentitySecret::from_seed(seed))
+                Ok(RelayIdentitySecret::from_seed(seed))
             }
             Identity::IdentityFile(file) => {
                 loop {
@@ -171,11 +171,46 @@ impl Identity {
                         let bts: [u8; 32] = (&bts[..])
                             .try_into()
                             .context("identity file not of the right length")?;
-                        return Ok(IdentitySecret::from_bytes(&bts));
+                        return Ok(RelayIdentitySecret::from_bytes(&bts));
                     } else {
                         tracing::info!("identity file {:?} does not exist yet, so creating", file);
                         // create it here
-                        let identity = IdentitySecret::generate();
+                        let identity = RelayIdentitySecret::generate();
+                        let mut options = OpenOptions::new();
+                        options.create(true).write(true);
+
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::prelude::OpenOptionsExt;
+                            options.mode(0o600);
+                        }
+
+                        let mut file = options.open(file)?;
+                        file.write_all(identity.as_bytes())?;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn actualize_haven(&self) -> anyhow::Result<HavenIdentitySecret> {
+        match self {
+            Identity::IdentitySeed(seed) => {
+                tracing::warn!("initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!");
+                Ok(HavenIdentitySecret::from_seed(seed))
+            }
+            Identity::IdentityFile(file) => {
+                loop {
+                    let bts = std::fs::read(file);
+                    if let Ok(bts) = bts {
+                        let bts: [u8; 32] = (&bts[..])
+                            .try_into()
+                            .context("identity file not of the right length")?;
+                        return Ok(HavenIdentitySecret::from_bytes(&bts));
+                    } else {
+                        tracing::info!("identity file {:?} does not exist yet, so creating", file);
+                        // create it here
+                        let identity = HavenIdentitySecret::generate();
                         let mut options = OpenOptions::new();
                         options.create(true).write(true);
 

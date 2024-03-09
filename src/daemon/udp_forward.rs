@@ -1,12 +1,15 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use clone_macro::clone;
-use earendil_crypt::IdentitySecret;
+use earendil_crypt::HavenIdentitySecret;
 use moka::sync::{Cache, CacheBuilder};
 use smol::net::UdpSocket;
 use smolscale::immortal::Immortal;
 
-use crate::{config::UdpForwardConfig, socket::Socket};
+use crate::{
+    config::UdpForwardConfig,
+    socket::{Endpoint, Socket},
+};
 
 use super::DaemonContext;
 
@@ -43,7 +46,7 @@ pub async fn udp_forward_loop(
         let src_earendil_skt = demux_table.get_with(src_udp_addr, || {
             let earendil_skt = Arc::new(Socket::bind_haven_internal(
                 ctx.clone(),
-                IdentitySecret::generate(),
+                HavenIdentitySecret::generate(),
                 None,
                 None,
             ));
@@ -61,7 +64,7 @@ pub async fn udp_forward_loop(
         // using the earendil socket associated with the src_udp_addr
         src_earendil_skt
             .0
-            .send_to(msg.into(), udp_fwd_cfg.remote)
+            .send_to(msg.into(), Endpoint::Haven(udp_fwd_cfg.remote))
             .await?;
     }
 }

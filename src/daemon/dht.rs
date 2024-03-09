@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Context;
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{HavenFingerprint, RelayFingerprint};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use moka::sync::{Cache, CacheBuilder};
 use stdcode::StdcodeSerializeExt;
@@ -16,7 +16,7 @@ use super::context::{CtxField, DaemonContext, RELAY_GRAPH};
 
 const DHT_REDUNDANCY: usize = 3;
 
-static DHT_CACHE: CtxField<Cache<Fingerprint, HavenLocator>> = |_| {
+static DHT_CACHE: CtxField<Cache<HavenFingerprint, HavenLocator>> = |_| {
     CacheBuilder::default()
         .time_to_live(Duration::from_secs(60))
         .build()
@@ -27,14 +27,13 @@ static DHT_CACHE: CtxField<Cache<Fingerprint, HavenLocator>> = |_| {
 pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator) {
     let key = locator.identity_pk.fingerprint();
     let replicas = dht_key_to_fps(ctx, &key.to_string());
-    let anon_isk = IdentitySecret::generate();
     let mut gatherer = FuturesUnordered::new();
 
     for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
         let locator = locator.clone();
         gatherer.push(async move {
             tracing::trace!("key {key} inserting into remote replica {replica}");
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(ctx.clone(), anon_isk, replica));
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(ctx.clone(), replica));
             anyhow::Ok(
                 gclient
                     .dht_insert(locator.clone(), false)
@@ -54,17 +53,16 @@ pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator) {
 /// Obtain a locator from the DHT.
 pub async fn dht_get(
     ctx: &DaemonContext,
-    fingerprint: Fingerprint,
+    fingerprint: HavenFingerprint,
 ) -> Result<Option<HavenLocator>, DhtError> {
     if let Some(locator) = ctx.get(DHT_CACHE).get(&fingerprint) {
         return Ok(Some(locator));
     }
     let replicas = dht_key_to_fps(ctx, &fingerprint.to_string());
     let mut gatherer = FuturesUnordered::new();
-    let anon_isk = IdentitySecret::generate();
     for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
         gatherer.push(async move {
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(ctx.clone(), anon_isk, replica));
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(ctx.clone(), replica));
             anyhow::Ok(gclient.dht_get(fingerprint, false).await?)
         })
     }
@@ -92,18 +90,8 @@ pub async fn dht_get(
     retval
 }
 
-fn dht_key_to_fps(ctx: &DaemonContext, key: &str) -> Vec<Fingerprint> {
-    let mut all_nodes: Vec<Fingerprint> = ctx
-        .get(RELAY_GRAPH)
-        .read()
-        .all_nodes()
-        .filter(|fp| {
-            ctx.get(RELAY_GRAPH)
-                .read()
-                .identity(fp)
-                .map_or(false, |id| id.is_relay)
-        })
-        .collect();
+fn dht_key_to_fps(ctx: &DaemonContext, key: &str) -> Vec<RelayFingerprint> {
+    let mut all_nodes: Vec<RelayFingerprint> = ctx.get(RELAY_GRAPH).read().all_nodes().collect();
     all_nodes.sort_unstable_by_key(|fp| *blake3::hash(&(key, fp).stdcode()).as_bytes());
     all_nodes
 }

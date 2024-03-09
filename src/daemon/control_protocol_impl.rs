@@ -7,7 +7,9 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use dashmap::DashMap;
-use earendil_crypt::{ClientId, Fingerprint, IdentitySecret};
+use earendil_crypt::{
+    ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret,
+};
 use earendil_packet::Dock;
 use itertools::Itertools;
 use moka::sync::Cache;
@@ -30,7 +32,7 @@ use crate::{
     },
     global_rpc::transport::GlobalRpcTransport,
     haven_util::HavenLocator,
-    socket::{Endpoint, Socket, SocketRecvError, SocketSendError},
+    socket::{RelayEndpoint, Socket, SocketRecvError, SocketSendError},
 };
 
 use super::{
@@ -58,11 +60,12 @@ impl ControlProtocolImpl {
 #[async_trait]
 impl ControlProtocol for ControlProtocolImpl {
     async fn bind_n2r(&self, socket_id: String, anon_id: Option<String>, dock: Option<Dock>) {
-        let anon_id = anon_id
-            .map(|id| self.anon_identities.lock().get(&id))
-            .unwrap_or_else(|| *self.ctx.get(GLOBAL_IDENTITY));
-        let socket = Socket::bind_n2r_internal(self.ctx.clone(), anon_id, dock);
-        self.sockets.insert(socket_id, socket);
+        todo!();
+        // let anon_id = anon_id
+        //     .map(|id| self.anon_identities.lock().get(&id))
+        //     .unwrap_or_else(|| *self.ctx.get(GLOBAL_IDENTITY));
+        // let socket = Socket::bind_n2r_internal(self.ctx.clone(), anon_id, dock);
+        // self.sockets.insert(socket_id, socket);
     }
 
     async fn bind_haven(
@@ -70,21 +73,20 @@ impl ControlProtocol for ControlProtocolImpl {
         socket_id: String,
         anon_id: Option<String>,
         dock: Option<Dock>,
-        rendezvous_point: Option<Fingerprint>,
+        rendezvous_point: Option<RelayFingerprint>,
     ) {
-        let isk = anon_id
-            .map(|id| self.anon_identities.lock().get(&id))
-            .unwrap_or_else(|| *self.ctx.get(GLOBAL_IDENTITY));
+        let isk = HavenIdentitySecret::generate();
         let socket = Socket::bind_haven_internal(self.ctx.clone(), isk, dock, rendezvous_point);
         self.sockets.insert(socket_id, socket);
     }
 
-    async fn skt_info(&self, skt_id: String) -> Result<Endpoint, ControlProtErr> {
-        if let Some(skt) = self.sockets.get(&skt_id) {
-            Ok(skt.local_endpoint())
-        } else {
-            Err(ControlProtErr::NoSocket)
-        }
+    async fn skt_info(&self, skt_id: String) -> Result<RelayEndpoint, ControlProtErr> {
+        todo!();
+        // if let Some(skt) = self.sockets.get(&skt_id) {
+        //     Ok(skt.local_endpoint())
+        // } else {
+        //     Err(ControlProtErr::NoSocket)
+        // }
     }
 
     async fn havens_info(&self) -> Vec<(String, String)> {
@@ -95,7 +97,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .map(|haven_cfg| {
                 let fp = haven_cfg
                     .identity
-                    .actualize()
+                    .actualize_haven()
                     .unwrap()
                     .public()
                     .fingerprint();
@@ -124,21 +126,26 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtErr> {
-        if let Some(socket) = self.sockets.get(&args.socket_id) {
-            socket.send_to(args.content, args.destination).await?;
-            Ok(())
-        } else {
-            Err(ControlProtErr::NoSocket)
-        }
+        todo!();
+        // if let Some(socket) = self.sockets.get(&args.socket_id) {
+        //     socket.send_to(args.content, args.destination).await?;
+        //     Ok(())
+        // } else {
+        //     Err(ControlProtErr::NoSocket)
+        // }
     }
 
-    async fn recv_message(&self, socket_id: String) -> Result<(Bytes, Endpoint), ControlProtErr> {
-        if let Some(socket) = self.sockets.get(&socket_id) {
-            let recvd = socket.recv_from().await?;
-            Ok(recvd)
-        } else {
-            Err(ControlProtErr::NoSocket)
-        }
+    async fn recv_message(
+        &self,
+        socket_id: String,
+    ) -> Result<(Bytes, RelayEndpoint), ControlProtErr> {
+        todo!();
+        // if let Some(socket) = self.sockets.get(&socket_id) {
+        //     let recvd = socket.recv_from_haven().await?;
+        //     Ok(recvd)
+        // } else {
+        //     Err(ControlProtErr::NoSocket)
+        // }
     }
 
     async fn my_routes(&self) -> serde_json::Value {
@@ -205,20 +212,6 @@ impl ControlProtocol for ControlProtocolImpl {
                 .get(RELAY_GRAPH)
                 .read()
                 .all_adjacencies()
-                .filter(|adj| {
-                    // only display relays
-                    self.ctx
-                        .get(RELAY_GRAPH)
-                        .read()
-                        .identity(&adj.left)
-                        .map_or(false, |id| id.is_relay)
-                        && self
-                            .ctx
-                            .get(RELAY_GRAPH)
-                            .read()
-                            .identity(&adj.right)
-                            .map_or(false, |id| id.is_relay)
-                })
                 .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
                 .fold(String::new(), |acc, adj| {
                     acc + &format!(
@@ -257,7 +250,7 @@ impl ControlProtocol for ControlProtocolImpl {
                             "{:?} [label={:?}, shape={}]\n",
                             node_str,
                             get_node_label(&node),
-                            (if desc.is_relay { "oval" } else { "rect" }).to_string()
+                            "oval".to_string()
                                 + (if self.ctx.get(NEIGH_TABLE_NEW).contains_key(&node) {
                                     ", color=lightpink,style=filled"
                                 } else {
@@ -282,11 +275,7 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         send_args: GlobalRpcArgs,
     ) -> Result<serde_json::Value, GlobalRpcError> {
-        let client = GlobalRpcTransport::new(
-            self.ctx.clone(),
-            IdentitySecret::generate(),
-            send_args.destination,
-        );
+        let client = GlobalRpcTransport::new(self.ctx.clone(), send_args.destination);
         let res = if let Some(res) = client
             .call(&send_args.method, &send_args.args)
             .await
@@ -311,7 +300,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn get_rendezvous(
         &self,
-        fingerprint: Fingerprint,
+        fingerprint: HavenFingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
         dht_get(&self.ctx, fingerprint)
             .timeout(Duration::from_secs(30))
@@ -328,7 +317,7 @@ impl ControlProtocol for ControlProtocolImpl {
         chat::list_clients(&self.ctx)
     }
 
-    async fn list_relays(&self) -> Vec<Fingerprint> {
+    async fn list_relays(&self) -> Vec<RelayFingerprint> {
         chat::list_relays(&self.ctx)
     }
 
@@ -340,7 +329,7 @@ impl ControlProtocol for ControlProtocolImpl {
         chat::get_client_chat(&self.ctx, neigh)
     }
 
-    async fn get_relay_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)> {
+    async fn get_relay_chat(&self, neigh: RelayFingerprint) -> Vec<(bool, String, SystemTime)> {
         chat::get_relay_chat(&self.ctx, neigh)
     }
 
@@ -350,7 +339,11 @@ impl ControlProtocol for ControlProtocolImpl {
             .map_err(|e| ChatError::Send(e.to_string()))
     }
 
-    async fn send_relay_chat_msg(&self, dest: Fingerprint, msg: String) -> Result<(), ChatError> {
+    async fn send_relay_chat_msg(
+        &self,
+        dest: RelayFingerprint,
+        msg: String,
+    ) -> Result<(), ChatError> {
         chat::send_relay_chat_msg(&self.ctx, dest, msg)
             .await
             .map_err(|e| ChatError::Send(e.to_string()))
@@ -365,13 +358,13 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 }
 
-fn get_node_label(fp: &Fingerprint) -> String {
+fn get_node_label(fp: &RelayFingerprint) -> String {
     let node = fp.to_string();
     format!("{}..{}", &node[..4], &node[node.len() - 4..node.len()])
 }
 
 struct AnonIdentities {
-    map: Cache<String, IdentitySecret>,
+    map: Cache<String, RelayIdentitySecret>,
 }
 
 impl AnonIdentities {
@@ -383,10 +376,11 @@ impl AnonIdentities {
         Self { map }
     }
 
-    pub fn get(&mut self, id: &str) -> IdentitySecret {
+    pub fn get(&mut self, id: &str) -> RelayIdentitySecret {
         let pseudo_secret = blake3::hash(id.as_bytes());
-        self.map
-            .get_with_by_ref(id, || IdentitySecret::from_bytes(pseudo_secret.as_bytes()))
+        self.map.get_with_by_ref(id, || {
+            RelayIdentitySecret::from_bytes(pseudo_secret.as_bytes())
+        })
     }
 }
 

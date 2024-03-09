@@ -19,7 +19,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{NodeId, RelayFingerprint, RelayIdentitySecret};
 use earendil_packet::ForwardInstruction;
 
 use earendil_topology::{IdentityDescriptor, RelayGraph};
@@ -39,7 +39,10 @@ use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
 use crate::control_protocol::ControlClient;
-use crate::daemon::peel_forward::peel_forward;
+use crate::daemon::socks5::socks5_loop;
+use crate::daemon::tcp_forward::tcp_forward_loop;
+use crate::socket::n2r_socket::N2rRelaySocket;
+use crate::socket::{AnonEndpoint, HavenEndpoint};
 use crate::{
     config::ConfigFile,
     daemon::context::{GLOBAL_ONION_SK, RELAY_GRAPH},
@@ -52,8 +55,6 @@ use crate::{
 };
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
 use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
-use crate::{daemon::socks5::socks5_loop, socket::Endpoint};
-use crate::{daemon::tcp_forward::tcp_forward_loop, socket::n2r_socket::N2rSocket};
 use crate::{daemon::udp_forward::udp_forward_loop, log_error};
 use crate::{
     global_rpc::server::REGISTERED_HAVENS,
@@ -64,7 +65,7 @@ use self::context::{DEBTS, DELAY_QUEUE, NEIGH_TABLE_NEW};
 pub use self::control_protocol_impl::ControlProtErr;
 
 use self::db::db_write;
-use self::peel_forward::one_hop_closer;
+use self::peel_forward::{client_one_hop_closer, peel_forward, relay_one_hop_closer};
 use self::{context::GLOBAL_IDENTITY, control_protocol_impl::ControlProtocolImpl};
 
 pub struct Daemon {
@@ -84,7 +85,7 @@ impl Daemon {
         Ok(Self { ctx, _task: task })
     }
 
-    pub fn identity(&self) -> IdentitySecret {
+    pub fn identity(&self) -> RelayIdentitySecret {
         *self.ctx.get(GLOBAL_IDENTITY)
     }
 
@@ -134,13 +135,11 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         RespawnStrategy::Immediate,
         clone!([ctx], move || clone!([ctx], async move {
             // first insert ourselves
-            let am_i_relay = !ctx.init().in_routes.is_empty();
             ctx.get(RELAY_GRAPH)
                 .write()
                 .insert_identity(IdentityDescriptor::new(
                     ctx.get(GLOBAL_IDENTITY),
                     ctx.get(GLOBAL_ONION_SK),
-                    am_i_relay,
                 ))?;
             smol::Timer::after(Duration::from_secs(60)).await;
             anyhow::Ok(())
@@ -314,11 +313,7 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 #[instrument(skip(ctx))]
 /// Loop that listens to and handles incoming GlobalRpc requests
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let socket = Arc::new(N2rSocket::bind(
-        ctx.clone(),
-        *ctx.get(GLOBAL_IDENTITY),
-        Some(GLOBAL_RPC_DOCK),
-    ));
+    let socket = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(GLOBAL_RPC_DOCK)));
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
     nursery!(loop {
         let socket = socket.clone();
@@ -342,36 +337,43 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 #[instrument(skip(ctx))]
 /// Loop that listens to and handles incoming haven forwarding requests
 async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let seen_srcs: Cache<(Endpoint, Endpoint), ()> = Cache::builder()
+    let socket = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(HAVEN_FORWARD_DOCK)));
+    let cache: Cache<AnonEndpoint, HavenEndpoint> = Cache::builder()
         .max_capacity(100_000)
         .time_to_idle(Duration::from_secs(60 * 60))
         .build();
 
-    let socket = Arc::new(N2rSocket::bind(
-        ctx.clone(),
-        *ctx.get(GLOBAL_IDENTITY),
-        Some(HAVEN_FORWARD_DOCK),
-    ));
-
     loop {
         if let Ok((msg, src_ep)) = socket.recv_from().await {
             let ctx = ctx.clone();
-            let (inner, dest_ep): (Bytes, Endpoint) = stdcode::deserialize(&msg)?;
-            tracing::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
-
-            let is_valid_dest = ctx
+            let src_is_client = ctx
                 .get(REGISTERED_HAVENS)
-                .contains_key(&dest_ep.fingerprint);
-            let is_seen_src = seen_srcs.contains_key(&(dest_ep, src_ep));
+                .get_by_key(&src_ep.anon_dest)
+                .is_none();
 
-            if is_valid_dest {
-                seen_srcs.insert((src_ep, dest_ep), ());
-            }
-            if is_valid_dest || is_seen_src {
-                let body: Bytes = (inner, src_ep).stdcode().into();
-                socket.send_to(body, dest_ep)?;
+            if src_is_client {
+                let (inner, dest_ep): (Bytes, HavenEndpoint) = stdcode::deserialize(&msg)?;
+                tracing::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
+
+                if let Some(haven_anon_id) = ctx
+                    .get(REGISTERED_HAVENS)
+                    .get_by_value(&dest_ep.fingerprint)
+                {
+                    let body: Bytes = (inner, src_ep).stdcode().into();
+
+                    cache.insert(src_ep, dest_ep);
+                    socket.send_to(body, AnonEndpoint::new(haven_anon_id, dest_ep.dock))?;
+                } else {
+                    tracing::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
+                }
             } else {
-                tracing::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
+                let (inner, dest_ep): (Bytes, AnonEndpoint) = stdcode::deserialize(&msg)?;
+                tracing::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
+
+                if let Some(haven) = cache.get(&dest_ep) {
+                    let body: Bytes = (inner, haven).stdcode().into();
+                    socket.send_to(body, dest_ep)?;
+                }
             }
         };
     }
@@ -379,30 +381,43 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
 #[tracing::instrument(skip(ctx))]
 async fn packet_dispatch_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    let i_am_client = ctx.init().in_routes.is_empty();
     let delay_queue = ctx.get(DELAY_QUEUE);
     loop {
-        let (pkt, next_peeler) = delay_queue.pop().await;
-        let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+        let (pkt, peeler) = delay_queue.pop().await;
 
-        if next_peeler == my_fp {
-            peel_forward(&ctx, my_fp, next_peeler, pkt);
-        } else if let Some(next_hop) = one_hop_closer(&ctx, next_peeler) {
-            // todo: client_one_hop_closer/relay_one_hop_closer
-            let conn = ctx
-                .get(NEIGH_TABLE_NEW)
-                .get(&next_hop)
-                .context(format!("could not find this next hop {next_hop}"))?;
+        if i_am_client {
+            if let Some(next_hop) = client_one_hop_closer(&ctx, peeler) {
+                let conn = ctx
+                    .get(NEIGH_TABLE_NEW)
+                    .get(&next_hop)
+                    .context(format!("could not find this next hop {next_hop}"))?;
 
-            let _ = conn.try_send((pkt, next_peeler));
-            ctx.get(DEBTS).incr_relay_outgoing(next_hop);
+                let _ = conn.try_send((pkt, next_hop));
+                ctx.get(DEBTS).incr_relay_outgoing(next_hop);
+            }
         } else {
-            tracing::warn!("no route found to next peeler {next_peeler}");
+            let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+
+            if peeler == my_fp {
+                // todo: don't allow ourselves to be the first hop when choosing forward routes
+                peel_forward(&ctx, NodeId::Relay(my_fp), peeler, pkt).await;
+            } else if let Some(next_hop) = relay_one_hop_closer(&ctx, peeler) {
+                let conn = ctx
+                    .get(NEIGH_TABLE_NEW)
+                    .get(&next_hop)
+                    .context(format!("could not find this next hop {next_hop}"))?;
+
+                let _ = conn.try_send((pkt, peeler));
+            } else {
+                tracing::warn!("no route found to next peeler {peeler}");
+            }
         }
     }
 }
 
 fn route_to_instructs(
-    route: Vec<Fingerprint>,
+    route: Vec<RelayFingerprint>,
     relay_graph: &RelayGraph,
 ) -> Result<Vec<ForwardInstruction>, SendMessageError> {
     route
@@ -410,13 +425,14 @@ fn route_to_instructs(
         .map(|wind| {
             let this = wind[0];
             let next = wind[1];
+
             let this_pubkey = relay_graph
                 .identity(&this)
                 .ok_or(SendMessageError::NoOnionPublic(this))?
                 .onion_pk;
             Ok(ForwardInstruction {
                 this_pubkey,
-                next_fingerprint: next,
+                next_hop: next,
             })
         })
         .collect()

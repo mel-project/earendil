@@ -4,7 +4,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret, VerifyError};
+use earendil_crypt::{RelayFingerprint, RelayIdentityPublic, RelayIdentitySecret, VerifyError};
 use earendil_packet::crypt::{OnionPublic, OnionSecret};
 use indexmap::IndexMap;
 use rand::{seq::IteratorRandom, Rng};
@@ -17,8 +17,8 @@ use stdcode::StdcodeSerializeExt;
 #[derive(Default, Serialize, Deserialize)]
 pub struct RelayGraph {
     unalloc_id: u64,
-    fp_to_id: HashMap<Fingerprint, u64>,
-    id_to_fp: HashMap<u64, Fingerprint>,
+    fp_to_id: HashMap<RelayFingerprint, u64>,
+    id_to_fp: HashMap<u64, RelayFingerprint>,
     id_to_descriptor: HashMap<u64, IdentityDescriptor>,
     adjacency: HashMap<u64, HashSet<u64>>,
     documents: IndexMap<(u64, u64), AdjacencyDescriptor>,
@@ -47,7 +47,7 @@ impl RelayGraph {
     }
 
     /// Looks up the identity descriptor of a fingerprint.
-    pub fn identity(&self, fingerprint: &Fingerprint) -> Option<IdentityDescriptor> {
+    pub fn identity(&self, fingerprint: &RelayFingerprint) -> Option<IdentityDescriptor> {
         let id = self.id(fingerprint)?;
         self.id_to_descriptor.get(&id).cloned()
     }
@@ -85,7 +85,10 @@ impl RelayGraph {
     }
 
     /// Returns a list of neighbors to the given Fingerprint.
-    pub fn neighbors(&self, fp: &Fingerprint) -> Option<impl Iterator<Item = Fingerprint> + '_> {
+    pub fn neighbors(
+        &self,
+        fp: &RelayFingerprint,
+    ) -> Option<impl Iterator<Item = RelayFingerprint> + '_> {
         let id = self.id(fp)?;
         let neighs = self.adjacency.get(&id)?;
         Some(
@@ -101,7 +104,7 @@ impl RelayGraph {
     /// None is returned if the given Fingerprint is not present in the graph.
     pub fn adjacencies(
         &self,
-        fp: &Fingerprint,
+        fp: &RelayFingerprint,
     ) -> Option<impl Iterator<Item = AdjacencyDescriptor> + '_> {
         let fp = *fp;
         let id = self.id(&fp)?;
@@ -127,7 +130,7 @@ impl RelayGraph {
     }
 
     /// Returns all the nodes.
-    pub fn all_nodes(&self) -> impl Iterator<Item = Fingerprint> + '_ {
+    pub fn all_nodes(&self) -> impl Iterator<Item = RelayFingerprint> + '_ {
         self.fp_to_id.keys().copied()
     }
 
@@ -142,10 +145,9 @@ impl RelayGraph {
     }
 
     /// Picks a certain number of random relays.
-    pub fn rand_relays(&self, num: usize) -> Vec<Fingerprint> {
+    pub fn rand_relays(&self, num: usize) -> Vec<RelayFingerprint> {
         self.all_nodes()
             .filter_map(|n| self.identity(&n))
-            .filter(|id| id.is_relay)
             .map(|id| id.identity_pk.fingerprint())
             .choose_multiple(&mut rand::thread_rng(), num)
     }
@@ -154,9 +156,9 @@ impl RelayGraph {
     /// bypassing any Fingerprint in the blacklist.
     pub fn find_shortest_path(
         &self,
-        start_fp: &Fingerprint,
-        end_fp: &Fingerprint,
-    ) -> Option<Vec<Fingerprint>> {
+        start_fp: &RelayFingerprint,
+        end_fp: &RelayFingerprint,
+    ) -> Option<Vec<RelayFingerprint>> {
         let start_id = self.id(start_fp)?;
         let end_id = self.id(end_fp)?;
 
@@ -253,7 +255,7 @@ impl RelayGraph {
         self.adjacency.retain(|_, neighbors| !neighbors.is_empty());
     }
 
-    fn alloc_id(&mut self, fp: &Fingerprint) -> u64 {
+    fn alloc_id(&mut self, fp: &RelayFingerprint) -> u64 {
         if let Some(val) = self.fp_to_id.get(fp) {
             *val
         } else {
@@ -265,7 +267,7 @@ impl RelayGraph {
         }
     }
 
-    fn id(&self, fp: &Fingerprint) -> Option<u64> {
+    fn id(&self, fp: &RelayFingerprint) -> Option<u64> {
         self.fp_to_id.get(fp).copied()
     }
 
@@ -306,8 +308,8 @@ impl RelayGraph {
 /// The signatures are computed with respect to the descriptor with the signature-fields zeroed out.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AdjacencyDescriptor {
-    pub left: Fingerprint,
-    pub right: Fingerprint,
+    pub left: RelayFingerprint,
+    pub right: RelayFingerprint,
 
     pub left_sig: Bytes,
     pub right_sig: Bytes,
@@ -328,8 +330,7 @@ impl AdjacencyDescriptor {
 /// An identity descriptor, signed by the owner of an identity. Declares that the identity owns a particular onion key, as well as implicitly
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IdentityDescriptor {
-    pub is_relay: bool,
-    pub identity_pk: IdentityPublic,
+    pub identity_pk: RelayIdentityPublic,
     pub onion_pk: OnionPublic,
 
     pub sig: Bytes,
@@ -339,11 +340,10 @@ pub struct IdentityDescriptor {
 
 impl IdentityDescriptor {
     /// Creates an IdentityDescriptor from our own IdentitySecret
-    pub fn new(my_identity: &IdentitySecret, my_onion: &OnionSecret, is_relay: bool) -> Self {
+    pub fn new(my_identity: &RelayIdentitySecret, my_onion: &OnionSecret) -> Self {
         let identity_pk = my_identity.public();
         let onion_pk = my_onion.public();
         let mut descr = IdentityDescriptor {
-            is_relay,
             identity_pk,
             onion_pk,
             sig: Bytes::new(),

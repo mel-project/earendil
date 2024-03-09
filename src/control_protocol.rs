@@ -1,12 +1,12 @@
 use crate::commands::{ChatCommand, ControlCommand};
-use crate::socket::Endpoint;
+use crate::socket::RelayEndpoint;
 use crate::{daemon::ControlProtErr, haven_util::HavenLocator};
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use colored::{ColoredString, Colorize};
-use earendil_crypt::{ClientId, Fingerprint, IdentitySecret};
+use earendil_crypt::{ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
     Dock, PacketConstructError,
@@ -92,7 +92,7 @@ pub async fn main_control(
             rendezvous_fingerprint,
         } => {
             let locator = HavenLocator::new(
-                IdentitySecret::from_str(&identity_sk)?,
+                HavenIdentitySecret::from_str(&identity_sk)?,
                 OnionPublic::from_str(&onion_pk)?,
                 rendezvous_fingerprint,
             );
@@ -107,10 +107,10 @@ pub async fn main_control(
             }
         }
         ControlCommand::RendezvousHavenTest => {
-            let mut fingerprint_bytes = [0; 20];
+            let mut fingerprint_bytes = [0; 32];
             rand::thread_rng().fill_bytes(&mut fingerprint_bytes);
-            let fingerprint = Fingerprint::from_bytes(&fingerprint_bytes);
-            let id_sk = IdentitySecret::generate();
+            let fingerprint = RelayFingerprint::from_bytes(&fingerprint_bytes);
+            let id_sk = HavenIdentitySecret::generate();
             let id_pk = id_sk.public();
             let locator = HavenLocator::new(id_sk, OnionSecret::generate().public(), fingerprint);
             eprintln!("created haven locator: {:?}", &locator);
@@ -307,8 +307,11 @@ fn client_by_prefix(clients: Vec<ClientId>, prefix: &str) -> anyhow::Result<Opti
     }
 }
 
-fn relay_by_prefix(relays: Vec<Fingerprint>, prefix: &str) -> anyhow::Result<Option<Fingerprint>> {
-    let valid: Vec<Fingerprint> = relays
+fn relay_by_prefix(
+    relays: Vec<RelayFingerprint>,
+    prefix: &str,
+) -> anyhow::Result<Option<RelayFingerprint>> {
+    let valid: Vec<RelayFingerprint> = relays
         .into_iter()
         .filter(|fp| fp.to_string().starts_with(&prefix))
         .collect();
@@ -343,16 +346,19 @@ pub trait ControlProtocol {
         socket_id: String,
         anon_id: Option<String>,
         dock: Option<Dock>,
-        rendezvous_point: Option<Fingerprint>,
+        rendezvous_point: Option<RelayFingerprint>,
     );
 
-    async fn skt_info(&self, skt_id: String) -> Result<Endpoint, ControlProtErr>;
+    async fn skt_info(&self, skt_id: String) -> Result<RelayEndpoint, ControlProtErr>;
 
     async fn havens_info(&self) -> Vec<(String, String)>;
 
     async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtErr>;
 
-    async fn recv_message(&self, socket_id: String) -> Result<(Bytes, Endpoint), ControlProtErr>;
+    async fn recv_message(
+        &self,
+        socket_id: String,
+    ) -> Result<(Bytes, RelayEndpoint), ControlProtErr>;
 
     async fn send_global_rpc(
         &self,
@@ -367,22 +373,26 @@ pub trait ControlProtocol {
 
     async fn get_rendezvous(
         &self,
-        fingerprint: Fingerprint,
+        fingerprint: HavenFingerprint,
     ) -> Result<Option<HavenLocator>, DhtError>;
 
     async fn list_clients(&self) -> Vec<ClientId>;
 
-    async fn list_relays(&self) -> Vec<Fingerprint>;
+    async fn list_relays(&self) -> Vec<RelayFingerprint>;
 
     async fn list_chats(&self) -> String;
 
     async fn get_client_chat(&self, neigh: ClientId) -> Vec<(bool, String, SystemTime)>;
 
-    async fn get_relay_chat(&self, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)>;
+    async fn get_relay_chat(&self, neigh: RelayFingerprint) -> Vec<(bool, String, SystemTime)>;
 
     async fn send_client_chat_msg(&self, dest: ClientId, msg: String) -> Result<(), ChatError>;
 
-    async fn send_relay_chat_msg(&self, dest: Fingerprint, msg: String) -> Result<(), ChatError>;
+    async fn send_relay_chat_msg(
+        &self,
+        dest: RelayFingerprint,
+        msg: String,
+    ) -> Result<(), ChatError>;
 
     async fn list_debts(&self) -> Vec<String>;
 
@@ -392,15 +402,19 @@ pub trait ControlProtocol {
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum SendMessageError {
     #[error("no route to the given destination {0}")]
-    NoRoute(Fingerprint),
+    NoRoute(RelayFingerprint),
     #[error(transparent)]
     PacketConstructError(#[from] PacketConstructError),
     #[error("no onion public key for fingerprint {0}")]
-    NoOnionPublic(Fingerprint),
+    NoOnionPublic(RelayFingerprint),
     #[error("failed to construct reply block")]
     ReplyBlockFailed,
     #[error("cannot use anonymous id to communicate with anonymous id")]
     NoAnonId,
+    #[error("mismatched nodes")]
+    MismatchedNodes,
+    #[error("client id not found")]
+    NoClientId,
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
@@ -416,7 +430,7 @@ pub enum DhtError {
 pub struct SendMessageArgs {
     pub socket_id: String,
     #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub destination: Endpoint,
+    pub destination: RelayEndpoint,
     #[serde_as(as = "serde_with::base64::Base64")]
     pub content: Bytes,
 }
@@ -426,7 +440,7 @@ pub struct SendMessageArgs {
 pub struct GlobalRpcArgs {
     pub id: Option<String>,
     #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub destination: Fingerprint,
+    pub destination: RelayFingerprint,
     pub method: String,
     pub args: Vec<serde_json::Value>,
 }

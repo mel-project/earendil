@@ -6,7 +6,7 @@ use std::{
 
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
+use earendil_crypt::{AnonDest, HavenIdentityPublic, HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::{crypt::OnionPublic, Dock};
 use futures_util::io;
 use moka::sync::{Cache, CacheBuilder};
@@ -23,7 +23,7 @@ use stdcode::StdcodeSerializeExt;
 use crate::{
     config::{ForwardHandler, HavenForwardConfig},
     daemon::context::DaemonContext,
-    socket::{Endpoint, Socket},
+    socket::{Endpoint, RelayEndpoint, Socket},
     stream::StreamListener,
 };
 
@@ -31,17 +31,17 @@ pub const HAVEN_FORWARD_DOCK: Dock = 100002;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HavenLocator {
-    pub identity_pk: IdentityPublic,
+    pub identity_pk: HavenIdentityPublic,
     pub onion_pk: OnionPublic,
-    pub rendezvous_point: Fingerprint,
+    pub rendezvous_point: RelayFingerprint,
     pub signature: Bytes,
 }
 
 impl HavenLocator {
     pub fn new(
-        identity_sk: IdentitySecret,
+        identity_sk: HavenIdentitySecret,
         onion_pk: OnionPublic,
-        rendezvous_fingerprint: Fingerprint,
+        rendezvous_fingerprint: RelayFingerprint,
     ) -> HavenLocator {
         let identity_pk = identity_sk.public();
         let locator = HavenLocator {
@@ -75,14 +75,16 @@ impl HavenLocator {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RegisterHavenReq {
-    pub identity_pk: IdentityPublic,
+    pub anon_id: AnonDest,
+    pub identity_pk: HavenIdentityPublic,
     pub sig: Bytes,
     pub unix_timestamp: u64,
 }
 
 impl RegisterHavenReq {
-    pub fn new(identity_sk: IdentitySecret) -> Self {
+    pub fn new(my_anon_id: AnonDest, identity_sk: HavenIdentitySecret) -> Self {
         let mut reg = Self {
+            anon_id: my_anon_id,
             identity_pk: identity_sk.public(),
             sig: Bytes::new(),
             unix_timestamp: SystemTime::now()
@@ -134,17 +136,19 @@ async fn udp_forward(
     async fn down_loop(
         udp_skt: Arc<UdpSocket>,
         earendil_skt: Arc<Socket>,
-        earendil_dest: Endpoint,
+        earendil_dest: RelayEndpoint,
     ) -> anyhow::Result<()> {
         loop {
             let mut buf = [0; 10_000];
             let (n, _) = udp_skt.recv_from(&mut buf).await?;
             let msg = buf[..n].to_vec();
-            earendil_skt.send_to(msg.into(), earendil_dest).await?;
+            earendil_skt
+                .send_to(msg.into(), Endpoint::Relay(earendil_dest))
+                .await?;
         }
     }
 
-    let haven_id = haven_cfg.identity.actualize()?;
+    let haven_id = haven_cfg.identity.actualize_haven()?;
     tracing::debug!(
         "UDP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
@@ -156,29 +160,31 @@ async fn udp_forward(
         Some(listen_dock),
         Some(haven_cfg.rendezvous),
     ));
-    let dmux_table: Cache<Endpoint, (Arc<UdpSocket>, Arc<Immortal>)> = CacheBuilder::default()
+    let dmux_table: Cache<RelayEndpoint, (Arc<UdpSocket>, Arc<Immortal>)> = CacheBuilder::default()
         .time_to_idle(Duration::from_secs(60 * 60))
         .build();
 
     // up loop forwards traffic from destination Earendil endpoint to the destination UDP socket address
     loop {
         let (message, src_endpoint) = earendil_skt.recv_from().await?;
-        let udp_socket = if let Some((socket, _)) = dmux_table.get(&src_endpoint) {
-            socket
-        } else {
-            let socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
-            let down_task = Immortal::respawn(
-                smolscale::immortal::RespawnStrategy::Immediate,
-                clone!([earendil_skt, socket], move || {
-                    down_loop(socket.clone(), earendil_skt.clone(), src_endpoint)
-                }),
-            );
-            dmux_table.insert(src_endpoint, (socket.clone(), Arc::new(down_task)));
+        if let Endpoint::Relay(src_ep) = src_endpoint {
+            let udp_socket = if let Some((socket, _)) = dmux_table.get(&src_ep) {
+                socket
+            } else {
+                let socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+                let down_task = Immortal::respawn(
+                    smolscale::immortal::RespawnStrategy::Immediate,
+                    clone!([earendil_skt, socket], move || {
+                        down_loop(socket.clone(), earendil_skt.clone(), src_ep)
+                    }),
+                );
+                dmux_table.insert(src_ep, (socket.clone(), Arc::new(down_task)));
 
-            socket
-        };
+                socket
+            };
 
-        udp_socket.send_to(&message, upstream).await?;
+            udp_socket.send_to(&message, upstream).await?;
+        }
     }
 }
 
@@ -188,7 +194,7 @@ async fn tcp_forward(
     listen_dock: Dock,
     upstream: SocketAddr,
 ) -> anyhow::Result<()> {
-    let haven_id = haven_cfg.identity.actualize()?;
+    let haven_id = haven_cfg.identity.actualize_haven()?;
     tracing::debug!(
         "TCP forward haven fingerprint: {}",
         haven_id.public().fingerprint()
@@ -223,7 +229,7 @@ async fn simple_proxy(
     haven_cfg: HavenForwardConfig,
     listen_dock: u32,
 ) -> Result<(), anyhow::Error> {
-    let haven_id = haven_cfg.identity.actualize()?;
+    let haven_id = haven_cfg.identity.actualize_haven()?;
     tracing::debug!(
         "simple proxy haven fingerprint: {}",
         haven_id.public().fingerprint()

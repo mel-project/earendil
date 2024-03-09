@@ -1,35 +1,26 @@
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::RelayFingerprint;
 use futures_util::{future, FutureExt};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
 use smol::Timer;
 
 use crate::{
     daemon::context::DaemonContext,
-    socket::{n2r_socket::N2rSocket, Endpoint},
+    socket::{n2r_socket::N2rClientSocket, RelayEndpoint},
 };
 
 use super::GLOBAL_RPC_DOCK;
 
 pub struct GlobalRpcTransport {
     ctx: DaemonContext,
-    anon_isk: IdentitySecret,
-    dest_fp: Fingerprint,
+    dest_fp: RelayFingerprint,
 }
 
 impl GlobalRpcTransport {
-    pub fn new(
-        ctx: DaemonContext,
-        anon_isk: IdentitySecret,
-        dest_fp: Fingerprint,
-    ) -> GlobalRpcTransport {
-        GlobalRpcTransport {
-            ctx,
-            anon_isk,
-            dest_fp,
-        }
+    pub fn new(ctx: DaemonContext, dest_fp: RelayFingerprint) -> GlobalRpcTransport {
+        GlobalRpcTransport { ctx, dest_fp }
     }
 }
 
@@ -38,8 +29,8 @@ impl RpcTransport for GlobalRpcTransport {
     type Error = anyhow::Error;
 
     async fn call_raw(&self, req: JrpcRequest) -> Result<JrpcResponse, Self::Error> {
-        let endpoint = Endpoint::new(self.dest_fp, GLOBAL_RPC_DOCK);
-        let socket = N2rSocket::bind(self.ctx.clone(), self.anon_isk, None);
+        let endpoint = RelayEndpoint::new(self.dest_fp, GLOBAL_RPC_DOCK);
+        let socket = N2rClientSocket::bind(self.ctx.clone(), None);
         let mut retries = 0;
         let mut timeout: Duration;
 

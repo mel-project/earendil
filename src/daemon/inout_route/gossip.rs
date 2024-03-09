@@ -2,7 +2,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use bytes::Bytes;
-use earendil_crypt::{ClientId, Fingerprint, IdentityPublic};
+use earendil_crypt::{ClientId, RelayFingerprint, RelayIdentityPublic};
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use itertools::Itertools;
 use moka::sync::{Cache, CacheBuilder};
@@ -20,7 +20,7 @@ pub static STARTUP_TIME: CtxField<Instant> = |_| Instant::now();
 #[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 pub async fn client_gossip_with_relay_loop(
     ctx: DaemonContext,
-    neighbor_idpk: IdentityPublic,
+    neighbor_idpk: RelayIdentityPublic,
     link_client: LinkClient,
 ) -> anyhow::Result<()> {
     scopeguard::defer!(tracing::info!(
@@ -50,7 +50,7 @@ pub async fn client_gossip_with_relay_loop(
 #[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 pub async fn relay_gossip_with_relay_loop(
     ctx: DaemonContext,
-    neighbor_idpk: IdentityPublic,
+    neighbor_idpk: RelayIdentityPublic,
     link_client: LinkClient,
 ) -> anyhow::Result<()> {
     scopeguard::defer!(tracing::info!(
@@ -80,7 +80,7 @@ pub async fn relay_gossip_with_relay_loop(
 #[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 async fn client_gossip_once_with_relay(
     ctx: &DaemonContext,
-    neighbor_idpk: IdentityPublic,
+    neighbor_idpk: RelayIdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     // tracing::trace!("gossip_once to {}", neighbor_idpk.fingerprint());
@@ -93,7 +93,7 @@ async fn client_gossip_once_with_relay(
 #[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 async fn relay_gossip_once_with_relay(
     ctx: &DaemonContext,
-    neighbor_idpk: IdentityPublic,
+    neighbor_idpk: RelayIdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     // tracing::trace!("gossip_once to {}", neighbor_idpk.fingerprint());
@@ -107,7 +107,7 @@ async fn relay_gossip_once_with_relay(
 #[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 async fn fetch_identity(
     ctx: &DaemonContext,
-    neighbor_idpk: &IdentityPublic,
+    neighbor_idpk: &RelayIdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
@@ -126,7 +126,7 @@ async fn fetch_identity(
 #[tracing::instrument(skip(ctx, neighbor_idpk, link_client))]
 async fn sign_adjacency(
     ctx: &DaemonContext,
-    neighbor_idpk: &IdentityPublic,
+    neighbor_idpk: &RelayIdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
@@ -170,7 +170,7 @@ async fn gossip_graph_with_relay(
         let left_fp = adjacency.left;
         let right_fp = adjacency.right;
 
-        static IDENTITY_CACHE: CtxField<Cache<Fingerprint, IdentityDescriptor>> = |_| {
+        static IDENTITY_CACHE: CtxField<Cache<RelayFingerprint, IdentityDescriptor>> = |_| {
             CacheBuilder::default()
                 .time_to_live(Duration::from_secs(60))
                 .build()
@@ -270,7 +270,7 @@ async fn gossip_graph_with_client(
         let left_fp = adjacency.left;
         let right_fp = adjacency.right;
 
-        static IDENTITY_CACHE: CtxField<Cache<Fingerprint, IdentityDescriptor>> = |_| {
+        static IDENTITY_CACHE: CtxField<Cache<RelayFingerprint, IdentityDescriptor>> = |_| {
             CacheBuilder::default()
                 .time_to_live(Duration::from_secs(60))
                 .build()

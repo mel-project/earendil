@@ -5,7 +5,7 @@ use std::{
 
 use anyctx::AnyCtx;
 use chrono::{DateTime, Local};
-use earendil_crypt::Fingerprint;
+use earendil_crypt::RelayFingerprint;
 use egui::{mutex::Mutex, Color32};
 use smol::block_on;
 
@@ -32,7 +32,9 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
         let control = Arc::new(async_std::sync::Mutex::new(daemon.control()));
         let control_clone = control.clone();
 
-        static NEIGHBORS: fn(&AnyCtx<()>) -> Mutex<RefreshCell<anyhow::Result<Vec<Fingerprint>>>> =
+        static NEIGHBORS: fn(
+            &AnyCtx<()>,
+        ) -> Mutex<RefreshCell<anyhow::Result<Vec<RelayFingerprint>>>> =
             |_| Mutex::new(RefreshCell::new());
         let mut neighbors = app.state.get(NEIGHBORS).lock();
         let neighbors = neighbors.get_or_refresh(Duration::from_millis(100), || {
@@ -135,8 +137,8 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
 fn render_convo(
     ui: &mut egui::Ui,
     tuple_chat: Vec<(bool, String, SystemTime)>,
-    my_fp: Fingerprint,
-    their_fp: Fingerprint,
+    my_fp: RelayFingerprint,
+    their_fp: RelayFingerprint,
 ) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.set_height(ui.available_height() - 25.0);
@@ -162,7 +164,7 @@ fn render_convo(
     });
 }
 
-fn render_fp(ui: &mut egui::Ui, fp: Fingerprint) {
+fn render_fp(ui: &mut egui::Ui, fp: RelayFingerprint) {
     let bytes = fp.as_bytes();
     let r_bytes = &bytes[0..6];
     let g_bytes = &bytes[6..12];
@@ -189,7 +191,7 @@ fn render_input(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
     prefs: &mut Prefs,
-    dest: Fingerprint,
+    dest: RelayFingerprint,
 ) {
     ui.horizontal(|ui| {
         let response = ui.add(

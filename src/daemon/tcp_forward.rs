@@ -1,9 +1,13 @@
-use earendil_crypt::IdentitySecret;
+use earendil_crypt::HavenIdentitySecret;
 use futures_util::io;
 use nursery_macro::nursery;
 use smol::{future::FutureExt, net::TcpListener};
 
-use crate::{config::TcpForwardConfig, socket::Socket, stream::Stream};
+use crate::{
+    config::TcpForwardConfig,
+    socket::{Endpoint, Socket},
+    stream::Stream,
+};
 
 use super::DaemonContext;
 
@@ -20,8 +24,9 @@ pub async fn tcp_forward_loop(
         let client_addr = tcp_stream.peer_addr()?;
         tracing::debug!(client_addr = ?client_addr, "connecting to remote...");
         let earendil_socket =
-            Socket::bind_haven_internal(ctx.clone(), IdentitySecret::generate(), None, None);
-        let earendil_stream = Stream::connect(earendil_socket, tcp_fwd_cfg.remote).await?;
+            Socket::bind_haven_internal(ctx.clone(), HavenIdentitySecret::generate(), None, None);
+        let earendil_stream =
+            Stream::connect(earendil_socket, Endpoint::Haven(tcp_fwd_cfg.remote)).await?;
         tracing::debug!(client_addr = ?client_addr, "connected successfully");
         spawn!(async move {
             io::copy(tcp_stream.clone(), &mut earendil_stream.clone())

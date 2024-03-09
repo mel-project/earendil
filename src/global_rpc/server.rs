@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use moka::sync::Cache;
 
 use crate::{
+    bicache::Bicache,
     control_protocol::DhtError,
     daemon::{
         context::{CtxField, DaemonContext},
@@ -11,7 +12,7 @@ use crate::{
     },
     haven_util::{HavenLocator, RegisterHavenReq},
 };
-use earendil_crypt::{Fingerprint, VerifyError};
+use earendil_crypt::{AnonDest, HavenFingerprint, VerifyError};
 
 use super::GlobalRpcProtocol;
 
@@ -25,17 +26,14 @@ impl GlobalRpcImpl {
     }
 }
 
-static LOCAL_DHT_SHARD: CtxField<Cache<Fingerprint, HavenLocator>> = |_| {
+static LOCAL_DHT_SHARD: CtxField<Cache<HavenFingerprint, HavenLocator>> = |_| {
     Cache::builder()
         .time_to_live(Duration::from_secs(600))
         .build()
 };
 
-pub static REGISTERED_HAVENS: CtxField<Cache<Fingerprint, ()>> = |_| {
-    Cache::builder()
-        .time_to_live(Duration::from_secs(3600))
-        .build()
-};
+pub static REGISTERED_HAVENS: CtxField<Bicache<AnonDest, HavenFingerprint>> =
+    |_| Bicache::new(3600);
 
 #[async_trait]
 impl GlobalRpcProtocol for GlobalRpcImpl {
@@ -60,7 +58,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
 
     async fn dht_get(
         &self,
-        key: Fingerprint,
+        key: HavenFingerprint,
         recurse: bool,
     ) -> Result<Option<HavenLocator>, DhtError> {
         if let Some(val) = self.ctx.get(LOCAL_DHT_SHARD).get(&key) {
@@ -78,7 +76,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             .verify(registration.to_sign().as_bytes(), &registration.sig)?;
         self.ctx
             .get(REGISTERED_HAVENS)
-            .insert(registration.identity_pk.fingerprint(), ());
+            .insert(registration.anon_id, registration.identity_pk.fingerprint());
         Ok(())
     }
 }

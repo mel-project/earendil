@@ -3,7 +3,7 @@ use std::{env, time::Duration};
 use anyhow::Context;
 use bytes::Bytes;
 use earendil::{config::ConfigFile, daemon::Daemon, socket::Socket};
-use earendil_crypt::IdentitySecret;
+use earendil_crypt::RelayIdentitySecret;
 use once_cell::sync::Lazy;
 use smol::{future::FutureExt, Timer};
 use smol_timeout::TimeoutExt;
@@ -96,7 +96,7 @@ fn n2r_reply_blocks() {
 
     // choose alice and charlie daemons
     let alice = clients.pop().unwrap();
-    let alice_isk = IdentitySecret::generate();
+    let alice_isk = RelayIdentitySecret::generate();
     let alice_skt = Socket::bind_n2r(&alice, alice_isk, None);
     let charlie = relays.pop().unwrap();
     let charlie_isk = charlie.identity();
@@ -150,10 +150,10 @@ fn haven() {
     Lazy::force(&START_DAEMONS);
 
     // spin up alice, bob, and charlie daemons
-    let alice_isk = IdentitySecret::generate();
+    let alice_isk = RelayIdentitySecret::generate();
     let alice_skt = Socket::bind_haven(&ALICE_DAEMON, alice_isk, None, None);
 
-    let derek_isk = IdentitySecret::generate();
+    let derek_isk = RelayIdentitySecret::generate();
     let derek_skt = Socket::bind_haven(
         &DEREK_DAEMON,
         derek_isk,
@@ -220,12 +220,12 @@ fn haven_ii() {
         helpers::sleep(5).await;
         let alice = clients.pop().unwrap();
 
-        let alice_anon_isk = IdentitySecret::generate();
+        let alice_anon_isk = RelayIdentitySecret::generate();
         let alice_skt = Socket::bind_haven(&alice, alice_anon_isk, None, None);
         let alice_anon_fp = alice_skt.local_endpoint();
 
         let bob = relays.pop().unwrap();
-        let bob_haven_isk = IdentitySecret::generate();
+        let bob_haven_isk = RelayIdentitySecret::generate();
         let bob_skt = Socket::bind_haven(
             &bob,
             bob_haven_isk,

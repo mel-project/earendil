@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{ClientId, RelayFingerprint, SourceId};
 use rand::{Rng, RngCore};
 use rand_distr::Exp;
 use serde::{Deserialize, Serialize};
@@ -14,12 +14,14 @@ use crate::{
     InnerPacket, ReplyBlock,
 };
 
+pub type RawBody = [u8; 8192];
+
 /// A raw, on-the-wire Earendil packet.
 #[repr(C)]
 #[derive(Pod, Clone, Copy, Zeroable, Debug, PartialEq, Eq, Hash)]
 pub struct RawPacket {
     pub header: RawHeader,
-    pub onion_body: [u8; 8192],
+    pub onion_body: RawBody,
 }
 
 /// An instruction for forwarding one layer of the onion.
@@ -27,8 +29,8 @@ pub struct RawPacket {
 pub struct ForwardInstruction {
     /// The DH public key of this hop
     pub this_pubkey: OnionPublic,
-    /// The unique fingerprint of the next hop
-    pub next_fingerprint: Fingerprint,
+    /// The unique id of the next hop
+    pub next_hop: RelayFingerprint,
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
@@ -37,6 +39,8 @@ pub enum PacketConstructError {
     TooManyHops,
     #[error("message too big")]
     MessageTooBig,
+    #[error("mismatched nodes")]
+    MismatchedNodes,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -59,11 +63,10 @@ impl RawPacket {
     pub fn new_normal(
         route: &[ForwardInstruction],
         dest_opk: &OnionPublic,
-        dest_is_relay: bool,
         payload: InnerPacket,
-        my_isk: &IdentitySecret,
+        my_id: SourceId,
     ) -> Result<Self, PacketConstructError> {
-        let (raw, _) = Self::new(route, dest_opk, dest_is_relay, payload, &[0; 20], my_isk)?;
+        let (raw, _) = Self::new(route, dest_opk, false, payload, &[0; 32], my_id)?;
         Ok(raw)
     }
 
@@ -71,10 +74,10 @@ impl RawPacket {
     pub fn new_reply(
         reply_block: &ReplyBlock,
         payload: InnerPacket,
-        my_isk: &IdentitySecret,
+        my_id: &SourceId,
     ) -> Result<Self, PacketConstructError> {
         let mut raw = payload
-            .encode(my_isk)
+            .encode(my_id)
             .map_err(|_| PacketConstructError::MessageTooBig)?;
 
         stream_dencrypt(&reply_block.stream_key, &[0; 12], &mut raw);
@@ -89,10 +92,10 @@ impl RawPacket {
     pub(crate) fn new(
         route: &[ForwardInstruction],
         dest_opk: &OnionPublic,
-        dest_is_relay: bool,
+        dest_is_client: bool,
         payload: InnerPacket,
-        metadata: &[u8; 20],
-        my_isk: &IdentitySecret,
+        metadata: &[u8; 32],
+        my_id: SourceId,
     ) -> Result<(Self, Vec<[u8; 32]>), PacketConstructError> {
         if route.len() >= 10 {
             return Err(PacketConstructError::TooManyHops);
@@ -103,16 +106,28 @@ impl RawPacket {
         // Use a recursive algorithm. Base case: the route is empty
         if route.is_empty() {
             let sealed_payload = payload
-                .encode(my_isk)
+                .encode(&my_id)
                 .map_err(|_| PacketConstructError::MessageTooBig)?;
 
-            // Encrypt for the destination, so that when the destination peels, it receives a PeeledPacket::Receive
-            let mut buffer = [0; 23];
+            let buffer = if dest_is_client {
+                // we need to forward to a client so metadata starts with 2
+                let mut buffer = [2; 35];
 
-            buffer[1..21].copy_from_slice(&metadata[..]);
+                // encode client id and rb id
+                buffer[1..17].copy_from_slice(metadata);
 
-            // Encode packet latency into metadata
-            buffer[21..].copy_from_slice(&delay.to_le_bytes());
+                buffer
+            } else {
+                // this packet's dest is a relay, so metadata starts with 0
+                let mut buffer = [0; 35];
+
+                // encode relay fingerprint
+                buffer[1..35].copy_from_slice(metadata);
+                // encode packet latency
+                buffer[33..].copy_from_slice(&delay.to_be_bytes());
+
+                buffer
+            };
 
             let (header_outer, our_sk) = box_encrypt(&buffer, &dest_opk);
             let shared_sec = our_sk.shared_secret(&dest_opk);
@@ -139,17 +154,21 @@ impl RawPacket {
                 vec![shared_sec],
             ))
         } else {
+            // we need to forward to a relay so metadata starts with 1
+            let mut buffer = [1; 35];
+            // encode relay fingerprint
+            buffer[1..33].copy_from_slice(route[0].next_hop.as_bytes());
+
             let (next_hop, mut shared_secs) = RawPacket::new(
                 &route[1..],
                 dest_opk,
-                dest_is_relay,
+                dest_is_client,
                 payload,
                 metadata,
-                my_isk,
+                my_id,
             )?;
-            let mut buffer = if dest_is_relay { [1; 23] } else { [2; 23] };
-            buffer[1..21].copy_from_slice(route[0].next_fingerprint.as_bytes());
-            buffer[21..].copy_from_slice(&delay.to_le_bytes());
+
+            buffer[33..].copy_from_slice(&delay.to_be_bytes());
             let (header_outer, our_sk) = box_encrypt(&buffer, &route[0].this_pubkey);
             let shared_sec = our_sk.shared_secret(&route[0].this_pubkey);
             let onion_body = {
@@ -187,7 +206,7 @@ impl RawPacket {
         // First, decode the header
         let (metadata, their_pk) = box_decrypt(&self.header.outer, our_sk)
             .map_err(|_| PacketPeelError::DecryptionError)?;
-        assert_eq!(metadata.len(), 23);
+        assert_eq!(metadata.len(), 35);
         let shared_sec = our_sk.shared_secret(&their_pk);
 
         // Then, peel the header
@@ -207,26 +226,22 @@ impl RawPacket {
         };
 
         Ok(if metadata[0] == 2 {
-            // if the metadata starts with 2, then we need to forward to a client.
-            // the 20 remaining bytes in the metadata indicate the client ID of the next guy.
-            let fingerprint = Fingerprint::from_bytes(array_ref![metadata, 1, 20]);
-            let delay_bytes: [u8; 2] = match metadata[21..] {
-                [a, b] => [a, b],
-                _ => return Err(PacketPeelError::InnerPacketOpenError),
-            };
-            PeeledPacket::Forward {
-                next_peeler: fingerprint,
-                pkt: RawPacket {
-                    header: bytemuck::cast(peeled_header),
-                    onion_body: peeled_body,
-                },
-                delay_ms: u16::from_le_bytes(delay_bytes),
+            // if the metadata starts with 2, then we need to forward to a client
+            // the subsequent 8 bytes in the metadata indicate the client ID of the next guy.
+            // bytes 9..17 (inclusive!) is a 64-bit reply block identifier that we will use to pair this packet with the reply block we generated, with which the other side garbled this message.
+            let client_id: u64 = u64::from_be_bytes(array_ref![metadata, 1, 8].clone());
+            let id_bts = array_ref![metadata, 9, 8];
+            let rb_id = u64::from_be_bytes(*id_bts);
+            PeeledPacket::GarbledReply {
+                client_id,
+                id: rb_id,
+                pkt: peeled_body,
             }
         } else if metadata[0] == 1 {
             // if the metadata starts with 1, then we need to forward to a relay.
             // the 20 remaining bytes in the metadata indicate the fingerprint of the next guy.
-            let fingerprint = Fingerprint::from_bytes(array_ref![metadata, 1, 20]);
-            let delay_bytes: [u8; 2] = match metadata[21..] {
+            let fingerprint = RelayFingerprint::from_bytes(array_ref![metadata, 1, 32]);
+            let delay_bytes: [u8; 2] = match metadata[33..] {
                 [a, b] => [a, b],
                 _ => return Err(PacketPeelError::InnerPacketOpenError),
             };
@@ -236,29 +251,15 @@ impl RawPacket {
                     header: bytemuck::cast(peeled_header),
                     onion_body: peeled_body,
                 },
-                delay_ms: u16::from_le_bytes(delay_bytes),
+                delay_ms: u16::from_be_bytes(delay_bytes),
             }
         } else if metadata[0] == 0 {
-            // otherwise, the packet is addressed to us!
-            // But how should we handle it? That's decided by the remainder
-            let inner_metadata = *array_ref![metadata, 1, 20];
-            // the remainder is all zeros. it means that this packet is ungarbled and a normal packet
-            if inner_metadata == [0; 20] {
-                let (inner_pkt, fp) = InnerPacket::decode(&peeled_body)
-                    .map_err(|_| PacketPeelError::InnerPacketOpenError)?;
-                PeeledPacket::Received {
-                    from: fp,
-                    pkt: inner_pkt,
-                }
-            } else {
-                // it is a "backwards" packet that is garbled through using a reply block.
-                // bytes 1..8 (inclusive!) is a 64-bit reply block identifier that we will use to pair this packet with the reply block we generated, with which the other side garbled this message.
-                let id_bts = array_ref![metadata, 1, 8];
-                let id = u64::from_be_bytes(*id_bts);
-                PeeledPacket::GarbledReply {
-                    id,
-                    pkt: peeled_body,
-                }
+            // otherwise, the packet is ours
+            let (inner_pkt, fp) = InnerPacket::decode(&peeled_body)
+                .map_err(|_| PacketPeelError::InnerPacketOpenError)?;
+            PeeledPacket::Received {
+                from: fp,
+                pkt: inner_pkt,
             }
         } else {
             return Err(PacketPeelError::InnerPacketOpenError);
@@ -283,15 +284,16 @@ pub struct RawHeader {
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeeledPacket {
     Forward {
-        next_peeler: Fingerprint,
+        next_peeler: RelayFingerprint,
         pkt: RawPacket,
         delay_ms: u16,
     },
     Received {
-        from: Fingerprint,
+        from: SourceId,
         pkt: InnerPacket,
     },
     GarbledReply {
+        client_id: ClientId,
         id: u64,
         pkt: [u8; 8192],
     },

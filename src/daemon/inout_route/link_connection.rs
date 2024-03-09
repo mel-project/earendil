@@ -10,8 +10,8 @@ use async_trait::async_trait;
 use bytemuck::{Pod, Zeroable};
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
-use earendil_crypt::{ClientId, Fingerprint, IdentityPublic};
-use earendil_packet::RawPacket;
+use earendil_crypt::{ClientId, NodeId, RelayFingerprint, RelayIdentityPublic};
+use earendil_packet::{RawBody, RawPacket};
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use futures_util::AsyncWriteExt;
 use itertools::Itertools;
@@ -31,10 +31,10 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use sosistab2::Multiplex;
 
 use crate::daemon::{
-    context::{DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
+    context::{DEBTS, DEGARBLERS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
     inout_route::chat::{incoming_client_chat, incoming_relay_chat},
-    one_hop_closer,
-    peel_forward::peel_forward,
+    peel_forward::{client_process_inner_pkt, peel_forward, relay_one_hop_closer},
+    rrb_balance::{decrement_rrb_balance, replenish_rrb},
     settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse},
 };
 
@@ -43,29 +43,33 @@ use super::{
     DaemonContext,
 };
 
-/// Main loop for the connection.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct PacketWithPeeler {
+    pkt: RawPacket,
+    peeler: RelayFingerprint,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct RawBodyWithRbId {
+    body: RawBody,
+    rb_id: u64,
+}
+
+/// Manages connections for clients.
 #[tracing::instrument(skip(service, mplex, recv_outgoing))]
-pub async fn connection_loop(
+pub async fn client_relay_connection_loop(
     service: Arc<LinkService<LinkProtocolImpl>>,
     mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
-    i_am_client: bool,
+    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
 ) -> anyhow::Result<()> {
-    let _onion_keepalive = if i_am_client {
-        Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([mplex, recv_outgoing, service], move || {
-                client_onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
-            }),
-        )
-    } else {
-        Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([mplex, recv_outgoing, service], move || {
-                relay_onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
-            }),
-        )
-    };
+    let _onion_keepalive = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([mplex, recv_outgoing, service], move || {
+            client_relay_onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
+        }),
+    );
 
     nursery!({
         loop {
@@ -87,13 +91,103 @@ pub async fn connection_loop(
                     anyhow::Ok(())
                 })
                 .detach(),
-                "client_onion" => spawn!(handle_client_onion(
+                "onion_packets" => spawn!(relay_handle_onion(
                     service.clone(),
                     stream,
                     recv_outgoing.clone(),
                 ))
                 .detach(),
-                "relay_onion" => spawn!(handle_relay_onion(
+                other => {
+                    tracing::error!("could not handle {other}");
+                }
+            }
+        }
+    })
+}
+
+/// Manages connections for relay connected to other relays.
+#[tracing::instrument(skip(service, mplex, recv_outgoing))]
+pub async fn relay_connection_loop(
+    service: Arc<LinkService<LinkProtocolImpl>>,
+    mplex: Arc<Multiplex>,
+    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
+) -> anyhow::Result<()> {
+    let _onion_keepalive = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([mplex, recv_outgoing, service], move || {
+            relay_onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
+        }),
+    );
+
+    nursery!({
+        loop {
+            let service = service.clone();
+            let mut stream = mplex.accept_conn().await?;
+
+            match stream.label() {
+                "n2n_control" => spawn!(async move {
+                    let mut stream_lines = BufReader::new(stream.clone()).lines();
+                    while let Some(line) = stream_lines.next().await {
+                        let line = line?;
+                        let req: JrpcRequest = serde_json::from_str(&line)?;
+                        // tracing::debug!(method = req.method, "LinkRPC request received");
+                        let resp = service.respond_raw(req).await;
+                        stream
+                            .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
+                            .await?;
+                    }
+                    anyhow::Ok(())
+                })
+                .detach(),
+                "onion_packets" => spawn!(relay_handle_onion(
+                    service.clone(),
+                    stream,
+                    recv_outgoing.clone(),
+                ))
+                .detach(),
+                other => {
+                    tracing::error!("could not handle {other}");
+                }
+            }
+        }
+    })
+}
+
+/// Manages connections for clients.
+#[tracing::instrument(skip(service, mplex, recv_outgoing))]
+pub async fn relay_client_connection_loop(
+    service: Arc<LinkService<LinkProtocolImpl>>,
+    mplex: Arc<Multiplex>,
+    recv_outgoing: Receiver<(RawBody, u64)>,
+) -> anyhow::Result<()> {
+    let _onion_keepalive = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([mplex, recv_outgoing, service], move || {
+            relay_client_onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
+        }),
+    );
+
+    nursery!({
+        loop {
+            let service = service.clone();
+            let mut stream = mplex.accept_conn().await?;
+
+            match stream.label() {
+                "n2n_control" => spawn!(async move {
+                    let mut stream_lines = BufReader::new(stream.clone()).lines();
+                    while let Some(line) = stream_lines.next().await {
+                        let line = line?;
+                        let req: JrpcRequest = serde_json::from_str(&line)?;
+                        // tracing::debug!(method = req.method, "LinkRPC request received");
+                        let resp = service.respond_raw(req).await;
+                        stream
+                            .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
+                            .await?;
+                    }
+                    anyhow::Ok(())
+                })
+                .detach(),
+                "onion_packets" => spawn!(relay_client_handle_onion(
                     service.clone(),
                     stream,
                     recv_outgoing.clone(),
@@ -108,14 +202,14 @@ pub async fn connection_loop(
 }
 
 #[tracing::instrument(skip(service, mplex, recv_outgoing))]
-async fn client_onion_keepalive(
+async fn client_relay_onion_keepalive(
     service: Arc<LinkService<LinkProtocolImpl>>,
     mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
+    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
 ) -> anyhow::Result<()> {
     loop {
-        let stream = mplex.open_conn("client_onion").await?;
-        handle_client_onion(service.clone(), stream, recv_outgoing.clone()).await?;
+        let stream = mplex.open_conn("onion_packets").await?;
+        client_relay_handle_onion(service.clone(), stream, recv_outgoing.clone()).await?;
     }
 }
 
@@ -123,26 +217,73 @@ async fn client_onion_keepalive(
 async fn relay_onion_keepalive(
     service: Arc<LinkService<LinkProtocolImpl>>,
     mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
+    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
 ) -> anyhow::Result<()> {
     loop {
-        let stream = mplex.open_conn("relay_onion").await?;
-        handle_relay_onion(service.clone(), stream, recv_outgoing.clone()).await?;
+        let stream = mplex.open_conn("onion_packets").await?;
+        relay_handle_onion(service.clone(), stream, recv_outgoing.clone()).await?;
+    }
+}
+
+#[tracing::instrument(skip(service, mplex, recv_outgoing))]
+async fn relay_client_onion_keepalive(
+    service: Arc<LinkService<LinkProtocolImpl>>,
+    mplex: Arc<Multiplex>,
+    recv_outgoing: Receiver<(RawBody, u64)>,
+) -> anyhow::Result<()> {
+    loop {
+        let stream = mplex.open_conn("onion_packets").await?;
+        relay_client_handle_onion(service.clone(), stream, recv_outgoing.clone()).await?;
     }
 }
 
 #[tracing::instrument(skip(service, conn, recv_outgoing))]
-async fn handle_client_onion(
+async fn client_relay_handle_onion(
     service: Arc<LinkService<LinkProtocolImpl>>,
     conn: sosistab2::Stream,
-    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
+    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
 ) -> anyhow::Result<()> {
-    #[repr(C)]
-    #[derive(Clone, Copy, Pod, Zeroable)]
-    struct PacketWithPeeler {
-        pkt: RawPacket,
-        peeler: Fingerprint,
-    }
+    let up = async {
+        loop {
+            let (pkt, peeler) = recv_outgoing.recv().await?;
+            let pkt_with_peeler = PacketWithPeeler { pkt, peeler };
+            conn.send_urel(bytemuck::bytes_of(&pkt_with_peeler).to_vec().into())
+                .await?;
+        }
+    };
+    let dn = async {
+        loop {
+            let pkt = conn.recv_urel().await?;
+            let RawBodyWithRbId { mut body, rb_id } = *bytemuck::try_from_bytes(&pkt)
+                .ok()
+                .context("incoming urel packet of the wrong size to be an onion packet")?;
+
+            let reply_degarbler = service
+                .0
+                .ctx
+                .get(DEGARBLERS)
+                .remove(&rb_id)
+                .context(format!("no degarbler for pkt with id {rb_id}"))?
+                .1;
+            let (inner, src_fp) = reply_degarbler.degarble(&mut body)?;
+
+            tracing::debug!("packet has been degarbled!");
+
+            decrement_rrb_balance(&service.0.ctx, reply_degarbler.my_anon_id(), src_fp);
+            replenish_rrb(&service.0.ctx, reply_degarbler.my_anon_id(), src_fp)?;
+
+            client_process_inner_pkt(&service.0.ctx, inner, src_fp, reply_degarbler.my_anon_id())?;
+        }
+    };
+    up.race(dn).await
+}
+
+#[tracing::instrument(skip(service, conn, recv_outgoing))]
+async fn relay_handle_onion(
+    service: Arc<LinkService<LinkProtocolImpl>>,
+    conn: sosistab2::Stream,
+    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
+) -> anyhow::Result<()> {
     let up = async {
         loop {
             let (pkt, peeler) = recv_outgoing.recv().await?;
@@ -160,8 +301,13 @@ async fn handle_client_onion(
             let my_fp = service.0.ctx.get(GLOBAL_IDENTITY).public().fingerprint();
 
             if peeler == my_fp {
-                peel_forward(&service.0.ctx, my_fp, peeler, pkt);
-            } else if let Some(next_hop) = one_hop_closer(&service.0.ctx, peeler) {
+                if let Some(pk) = service.0.remote_relay_pk {
+                    peel_forward(&service.0.ctx, NodeId::Relay(pk.fingerprint()), peeler, pkt)
+                        .await;
+                } else {
+                    anyhow::bail!("no fingerprint found for link")
+                }
+            } else if let Some(next_hop) = relay_one_hop_closer(&service.0.ctx, peeler) {
                 let conn = service
                     .0
                     .ctx
@@ -180,22 +326,16 @@ async fn handle_client_onion(
 }
 
 #[tracing::instrument(skip(service, conn, recv_outgoing))]
-async fn handle_relay_onion(
+async fn relay_client_handle_onion(
     service: Arc<LinkService<LinkProtocolImpl>>,
     conn: sosistab2::Stream,
-    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
+    recv_outgoing: Receiver<(RawBody, u64)>,
 ) -> anyhow::Result<()> {
-    #[repr(C)]
-    #[derive(Clone, Copy, Pod, Zeroable)]
-    struct PacketWithPeeler {
-        pkt: RawPacket,
-        peeler: Fingerprint,
-    }
     let up = async {
         loop {
-            let (pkt, peeler) = recv_outgoing.recv().await?;
-            let pkt_with_peeler = PacketWithPeeler { pkt, peeler };
-            conn.send_urel(bytemuck::bytes_of(&pkt_with_peeler).to_vec().into())
+            let (body, rb_id) = recv_outgoing.recv().await?;
+            let raw_body_with_rb_id = RawBodyWithRbId { body, rb_id };
+            conn.send_urel(bytemuck::bytes_of(&raw_body_with_rb_id).to_vec().into())
                 .await?;
         }
     };
@@ -208,8 +348,12 @@ async fn handle_relay_onion(
             let my_fp = service.0.ctx.get(GLOBAL_IDENTITY).public().fingerprint();
 
             if peeler == my_fp {
-                peel_forward(&service.0.ctx, my_fp, peeler, pkt);
-            } else if let Some(next_hop) = one_hop_closer(&service.0.ctx, peeler) {
+                if let Some(id) = service.0.remote_client_id {
+                    peel_forward(&service.0.ctx, NodeId::Client(id), peeler, pkt).await;
+                } else {
+                    anyhow::bail!("no client id found for link")
+                }
+            } else if let Some(next_hop) = relay_one_hop_closer(&service.0.ctx, peeler) {
                 let conn = service
                     .0
                     .ctx
@@ -280,7 +424,7 @@ pub struct LinkProtocolImpl {
     pub ctx: DaemonContext,
     pub mplex: Arc<Multiplex>,
     pub remote_client_id: Option<ClientId>,
-    pub remote_relay_pk: Option<IdentityPublic>,
+    pub remote_relay_pk: Option<RelayIdentityPublic>,
     pub max_outgoing_price: u64,
 }
 
@@ -328,20 +472,15 @@ impl LinkProtocol for LinkProtocolImpl {
         Some(left_incomplete)
     }
 
-    async fn identity(&self, fp: Fingerprint) -> Option<IdentityDescriptor> {
+    async fn identity(&self, fp: RelayFingerprint) -> Option<IdentityDescriptor> {
         self.ctx.get(RELAY_GRAPH).read().identity(&fp)
     }
 
     #[tracing::instrument(skip(self))]
-    async fn adjacencies(&self, fps: Vec<Fingerprint>) -> Vec<AdjacencyDescriptor> {
+    async fn adjacencies(&self, fps: Vec<RelayFingerprint>) -> Vec<AdjacencyDescriptor> {
         let rg = self.ctx.get(RELAY_GRAPH).read();
         fps.into_iter()
-            .flat_map(|fp| {
-                rg.adjacencies(&fp).into_iter().flatten().filter(|adj| {
-                    rg.identity(&adj.left).map_or(false, |id| id.is_relay)
-                        && rg.identity(&adj.right).map_or(false, |id| id.is_relay)
-                })
-            })
+            .flat_map(|fp| rg.adjacencies(&fp).into_iter().flatten())
             .dedup()
             .collect()
     }

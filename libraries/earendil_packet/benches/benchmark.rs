@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{AnonDest, RelayFingerprint, SourceId};
 use earendil_packet::{
     crypt::OnionSecret, ForwardInstruction, InnerPacket, Message, RawPacket, ReplyBlock,
 };
@@ -11,11 +11,11 @@ fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, OnionSecr
             let our_sk = OnionSecret::generate();
             let this_pubkey = our_sk.public();
 
-            let next_fingerprint = Fingerprint::from_bytes(&[10; 20]);
+            let next_hop = RelayFingerprint::from_bytes(&[10; 32]);
             (
                 ForwardInstruction {
                     this_pubkey,
-                    next_fingerprint,
+                    next_hop,
                 },
                 our_sk,
             )
@@ -43,40 +43,27 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             dest_dock: 0u32,
             body: vec![Bytes::from_static(b"hello world")],
         });
-        let my_isk = IdentitySecret::generate();
+        let my_anon_id = AnonDest::new();
         let my_osk = OnionSecret::generate();
         let my_opk = my_osk.public();
-        let is_relay = true;
 
         c.bench_function(&format!("{route_length}-hop RawPacket construction"), |b| {
             b.iter(|| {
                 black_box(RawPacket::new_normal(
                     &route,
                     &destination,
-                    is_relay,
                     payload.clone(),
-                    &my_isk,
+                    SourceId::Anon(my_anon_id),
                 ))
             });
         });
 
-        let my_anon_osk = OnionSecret::generate();
-        let my_anon_isk = IdentitySecret::generate();
-        let first_peeler = Fingerprint::from_bytes(&[10; 20]);
+        let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
 
         c.bench_function(
             &format!("{route_length}-hop ReplyBlock construction"),
             |b| {
-                b.iter(|| {
-                    black_box(ReplyBlock::new(
-                        &route,
-                        first_peeler,
-                        &my_opk,
-                        is_relay,
-                        my_anon_osk.clone(),
-                        my_anon_isk,
-                    ))
-                });
+                b.iter(|| black_box(ReplyBlock::new(&route, first_peeler, &my_opk, my_anon_id)));
             },
         );
     }

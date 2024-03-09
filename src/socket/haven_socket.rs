@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{AnonDest, HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::{crypt::OnionSecret, Dock};
 use moka::sync::Cache;
 use smol::{
@@ -19,21 +19,21 @@ use crate::{
 
 use super::{
     crypt_session::{CryptSession, HavenMsg},
-    n2r_socket::N2rSocket,
-    Endpoint, SocketRecvError, SocketSendError,
+    n2r_socket::N2rClientSocket,
+    HavenEndpoint, SocketRecvError, SocketSendError,
 };
 
 pub struct HavenSocket {
     ctx: DaemonContext,
-    n2r_socket: N2rSocket,
-    identity_sk: IdentitySecret,
-    rendezvous_point: Option<Fingerprint>,
+    n2r_socket: N2rClientSocket,
+    identity_sk: HavenIdentitySecret,
+    rendezvous_point: Option<RelayFingerprint>,
     _register_haven_task: Option<Task<()>>,
     /// mapping between destination endpoints and encryption sessions
-    crypt_sessions: Cache<Endpoint, CryptSession>,
+    crypt_sessions: Cache<HavenEndpoint, CryptSession>,
     /// buffer for decrypted incoming messages
-    recv_incoming_decrypted: Receiver<(Bytes, Endpoint)>,
-    send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
+    recv_incoming_decrypted: Receiver<(Bytes, HavenEndpoint)>,
+    send_incoming_decrypted: Sender<(Bytes, HavenEndpoint)>,
     /// task that dispatches not-yet decrypted incoming packets to their right encrypters
     _recv_task: Immortal,
 }
@@ -42,12 +42,12 @@ impl HavenSocket {
     #[tracing::instrument(skip(ctx))]
     pub fn bind(
         ctx: DaemonContext,
-        isk: IdentitySecret,
+        isk: HavenIdentitySecret,
         dock: Option<Dock>,
-        rendezvous_point: Option<Fingerprint>,
+        rendezvous_point: Option<RelayFingerprint>,
     ) -> HavenSocket {
-        let n2r_skt = N2rSocket::bind(ctx.clone(), isk, dock);
-        let encrypters: Cache<Endpoint, CryptSession> = Cache::builder()
+        let n2r_skt = N2rClientSocket::bind(ctx.clone(), dock);
+        let encrypters: Cache<HavenEndpoint, CryptSession> = Cache::builder()
             .max_capacity(100_000)
             .time_to_live(Duration::from_secs(60 * 30))
             .build();
@@ -74,14 +74,15 @@ impl HavenSocket {
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
             tracing::debug!("binding haven with rendezvous_point {}", rob);
             let context = ctx.clone();
+            let registration_anon_id = AnonDest::new();
             let registration_isk = isk;
             let task = smolscale::spawn(async move {
                 // generate a new onion keypair
                 let onion_sk = OnionSecret::generate();
                 let onion_pk = onion_sk.public();
                 // register forwarding with the rendezvous relay node
-                let gclient = GlobalRpcClient(GlobalRpcTransport::new(context.clone(), isk, rob));
-                let forward_req = RegisterHavenReq::new(registration_isk);
+                let gclient = GlobalRpcClient(GlobalRpcTransport::new(context.clone(), rob));
+                let forward_req = RegisterHavenReq::new(registration_anon_id, registration_isk);
                 loop {
                     match gclient
                         .alloc_forward(forward_req.clone())
@@ -138,7 +139,11 @@ impl HavenSocket {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
+    pub async fn send_to(
+        &self,
+        body: Bytes,
+        endpoint: HavenEndpoint,
+    ) -> Result<(), SocketSendError> {
         log::debug!("sending a haven message");
         let enc = self
             .crypt_sessions
@@ -162,7 +167,7 @@ impl HavenSocket {
         }
     }
 
-    pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
+    pub async fn recv_from(&self) -> Result<(Bytes, HavenEndpoint), SocketRecvError> {
         Ok(self
             .recv_incoming_decrypted
             .recv()
@@ -170,22 +175,23 @@ impl HavenSocket {
             .expect("this must be infallible here, because the sending side is never dropped"))
     }
 
-    pub fn local_endpoint(&self) -> Endpoint {
-        self.n2r_socket.local_endpoint()
+    pub fn local_endpoint(&self) -> HavenEndpoint {
+        let n2r_endpoint = self.n2r_socket.local_endpoint();
+        HavenEndpoint::new(self.identity_sk.public().fingerprint(), n2r_endpoint.dock)
     }
 }
 
 async fn recv_task(
-    n2r_skt: N2rSocket,
-    encrypters: Cache<Endpoint, CryptSession>,
-    isk: IdentitySecret,
-    rob: Option<Fingerprint>,
-    send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
+    n2r_skt: N2rClientSocket,
+    encrypters: Cache<HavenEndpoint, CryptSession>,
+    isk: HavenIdentitySecret,
+    rob: Option<RelayFingerprint>,
+    send_incoming_decrypted: Sender<(Bytes, HavenEndpoint)>,
     ctx: DaemonContext,
 ) -> anyhow::Result<()> {
     loop {
         let (n2r_msg, _rendezvous_ep) = n2r_skt.recv_from().await?;
-        let (body, remote): (Bytes, Endpoint) = stdcode::deserialize(&n2r_msg)?;
+        let (body, remote): (Bytes, HavenEndpoint) = stdcode::deserialize(&n2r_msg)?;
         let haven_msg: HavenMsg = stdcode::deserialize(&body)?;
 
         let encrypter = encrypters.get(&remote);

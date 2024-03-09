@@ -1,8 +1,8 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use anyhow::Context;
-use earendil_crypt::{ClientId, Fingerprint, IdentityPublic};
-use earendil_packet::RawPacket;
+use earendil_crypt::{ClientId, RelayFingerprint, RelayIdentityPublic};
+use earendil_packet::{RawBody, RawPacket};
 use earendil_topology::IdentityDescriptor;
 use futures::{AsyncRead, AsyncWrite};
 use futures_util::TryFutureExt;
@@ -41,11 +41,17 @@ use crate::{
 };
 
 use self::{
-    link_connection::{connection_loop, LinkProtocolImpl, LinkRpcTransport},
+    link_connection::{
+        client_relay_connection_loop, relay_client_connection_loop, relay_connection_loop,
+        LinkProtocolImpl, LinkRpcTransport,
+    },
     link_protocol::{LinkClient, LinkService},
 };
 
-use super::{context::CLIENT_TABLE, DaemonContext};
+use super::{
+    context::{CLIENT_IDENTITIES, CLIENT_TABLE},
+    DaemonContext,
+};
 
 const CONNECTION_LIFETIME: Duration = Duration::from_secs(60);
 
@@ -96,7 +102,6 @@ async fn in_route_loop(
     let my_descriptor = stdcode::serialize(&IdentityDescriptor::new(
         ctx.get(GLOBAL_IDENTITY),
         ctx.get(GLOBAL_ONION_SK),
-        true,
     ))?;
 
     match node_type {
@@ -116,8 +121,6 @@ async fn in_route_loop(
                 max_outgoing_price: link_price.max_outgoing_price,
             }));
 
-            // todo:: start relay side of client-relay loop
-            println!("IN ROUTE LOOPER");
             relay_client_loop(ctx, mplex, client_id, link_price, service, recv_outgoing).await?;
         }
         NodeType::Relay => {
@@ -148,7 +151,6 @@ async fn in_route_loop(
             ctx.get(NEIGH_TABLE_NEW)
                 .insert(relay_descriptor.identity_pk.fingerprint(), send_outgoing);
 
-            // todo: start relay-relay loop
             relay_loop(
                 ctx,
                 mplex,
@@ -168,7 +170,7 @@ async fn in_route_loop(
 pub struct OutRouteContext {
     pub daemon_ctx: DaemonContext,
     pub out_route_name: String,
-    pub remote_fingerprint: Fingerprint,
+    pub remote_fingerprint: RelayFingerprint,
 }
 
 #[tracing::instrument(skip(context, cookie))]
@@ -230,17 +232,18 @@ pub async fn out_route_obfsudp(
 async fn out_route_loop(
     ctx: DaemonContext,
     mplex: Arc<Multiplex>,
-    their_fp: Fingerprint,
+    their_fp: RelayFingerprint,
     link_price: LinkPrice,
 ) -> anyhow::Result<()> {
     let mut stream = mplex.open_conn("!init_auth").await?;
     let i_am_client = ctx.init().in_routes.is_empty();
+    let my_id = rand::thread_rng().gen::<ClientId>();
 
     if i_am_client {
         let msg = stdcode::serialize(&NodeType::Client)?;
         send_message(&msg, &mut stream).await?;
 
-        let my_id = stdcode::serialize(&rand::thread_rng().gen::<ClientId>())?;
+        let my_id = stdcode::serialize(&my_id)?;
         send_message(&my_id, &mut stream).await?;
     } else {
         let msg = stdcode::serialize(&NodeType::Relay)?;
@@ -249,7 +252,6 @@ async fn out_route_loop(
         let my_descriptor = stdcode::serialize(&IdentityDescriptor::new(
             ctx.get(GLOBAL_IDENTITY),
             ctx.get(GLOBAL_ONION_SK),
-            true,
         ))?;
         send_message(&my_descriptor, &mut stream).await?;
     };
@@ -289,6 +291,8 @@ async fn out_route_loop(
     ctx.get(NEIGH_TABLE_NEW).insert(their_fp, send_outgoing);
 
     if i_am_client {
+        ctx.get(CLIENT_IDENTITIES).insert(their_fp, my_id);
+
         client_relay_loop(ctx, mplex, their_pk, link_price, service, recv_outgoing).await?;
     } else {
         relay_loop(ctx, mplex, their_pk, link_price, service, recv_outgoing).await?;
@@ -300,12 +304,12 @@ async fn out_route_loop(
 async fn relay_loop(
     ctx: DaemonContext,
     mplex: Arc<Multiplex>,
-    their_pk: IdentityPublic,
+    their_pk: RelayIdentityPublic,
     link_price: LinkPrice,
     service: Arc<LinkService<LinkProtocolImpl>>,
-    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
+    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
 ) -> anyhow::Result<()> {
-    let connection_loop = connection_loop(service, mplex.clone(), recv_outgoing, false);
+    let connection_loop = relay_connection_loop(service, mplex.clone(), recv_outgoing);
 
     connection_loop
         .race(async move {
@@ -406,12 +410,12 @@ async fn relay_loop(
 async fn client_relay_loop(
     ctx: DaemonContext,
     mplex: Arc<Multiplex>,
-    their_pk: IdentityPublic,
+    their_pk: RelayIdentityPublic,
     link_price: LinkPrice,
     service: Arc<LinkService<LinkProtocolImpl>>,
-    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
+    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
 ) -> anyhow::Result<()> {
-    let connection_loop = connection_loop(service, mplex.clone(), recv_outgoing, true);
+    let connection_loop = client_relay_connection_loop(service, mplex.clone(), recv_outgoing);
 
     connection_loop
         .race(async move {
@@ -514,9 +518,9 @@ async fn relay_client_loop(
     their_id: ClientId,
     link_price: LinkPrice,
     service: Arc<LinkService<LinkProtocolImpl>>,
-    recv_outgoing: Receiver<(RawPacket, Fingerprint)>,
+    recv_outgoing: Receiver<(RawBody, u64)>,
 ) -> anyhow::Result<()> {
-    let connection_loop = connection_loop(service, mplex.clone(), recv_outgoing, true);
+    let connection_loop = relay_client_connection_loop(service, mplex.clone(), recv_outgoing);
 
     connection_loop
         .race(async move {

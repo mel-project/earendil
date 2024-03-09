@@ -3,7 +3,9 @@ use std::time::Duration;
 
 use anyhow::Context;
 use bytes::Bytes;
-use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
+use earendil_crypt::{
+    HavenFingerprint, HavenIdentityPublic, HavenIdentitySecret, RelayFingerprint,
+};
 use earendil_packet::crypt::{AeadKey, OnionPublic, OnionSecret};
 use futures_util::{future::Shared, FutureExt};
 use replay_filter::ReplayFilter;
@@ -19,7 +21,9 @@ use stdcode::StdcodeSerializeExt;
 use crate::{control_protocol::DhtError, daemon::dht::dht_get};
 use crate::{daemon::context::DaemonContext, haven_util::HAVEN_FORWARD_DOCK};
 
-use super::{n2r_socket::N2rSocket, Endpoint};
+use super::n2r_socket::N2rClientSocket;
+use super::HavenEndpoint;
+use super::RelayEndpoint;
 
 #[derive(Clone)]
 pub struct CryptSession {
@@ -37,20 +41,20 @@ pub enum HavenMsg {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Handshake {
-    id_pk: IdentityPublic,
+    id_pk: HavenIdentityPublic,
     eph_pk: OnionPublic,
     sig: Bytes,
 }
 
 impl CryptSession {
     pub fn new(
-        my_isk: IdentitySecret,
-        remote: Endpoint,
-        rendezvous_fp: Option<Fingerprint>,
-        n2r_skt: N2rSocket,
-        send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
+        my_isk: HavenIdentitySecret,
+        remote: HavenEndpoint,
+        rendezvous_fp: Option<RelayFingerprint>,
+        n2r_skt: N2rClientSocket,
+        send_incoming_decrypted: Sender<(Bytes, HavenEndpoint)>,
         ctx: DaemonContext,
-        client_info: Option<(Handshake, Fingerprint)>,
+        client_info: Option<(Handshake, HavenFingerprint)>,
     ) -> anyhow::Result<Self> {
         if let Some((hs, fp)) = client_info.clone() {
             hs.id_pk.verify(hs.to_sign().as_bytes(), &hs.sig)?; // verify sig & src_fp
@@ -106,13 +110,13 @@ impl CryptSession {
 
 #[tracing::instrument(skip(n2r_skt, recv_incoming, recv_outgoing, client_hs, ctx))]
 async fn enc_task(
-    my_isk: IdentitySecret,
-    n2r_skt: N2rSocket,
-    remote: Endpoint,
-    rendezvous_fp: Option<Fingerprint>,
+    my_isk: HavenIdentitySecret,
+    n2r_skt: N2rClientSocket,
+    remote: HavenEndpoint,
+    rendezvous_fp: Option<RelayFingerprint>,
     recv_incoming: Receiver<HavenMsg>,
     recv_outgoing: Receiver<Bytes>,
-    send_incoming_decrypted: Sender<(Bytes, Endpoint)>,
+    send_incoming_decrypted: Sender<(Bytes, HavenEndpoint)>,
     client_hs: Option<Handshake>,
     ctx: DaemonContext,
 ) -> anyhow::Result<Infallible> {
@@ -121,7 +125,7 @@ async fn enc_task(
         let rendezvous_ep = match rendezvous_fp {
             Some(rob) => {
                 // We're the server
-                Endpoint::new(rob, HAVEN_FORWARD_DOCK)
+                RelayEndpoint::new(rob, HAVEN_FORWARD_DOCK)
             }
             None => {
                 // We're the client: look up Rob's addr in rendezvous dht
@@ -136,7 +140,7 @@ async fn enc_task(
                     )
                     .context(format!("DHT failed for {}", remote.fingerprint))?
                     .context(format!("DHT returned None for {}", remote.fingerprint))?;
-                Endpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
+                RelayEndpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
             }
         };
         n2r_skt.send_to(fwd_body.into(), rendezvous_ep)?;
@@ -213,7 +217,7 @@ async fn enc_task(
 
 impl Handshake {
     /// Creates a Handshake from an IdentitySecret
-    pub fn new(id_sk: &IdentitySecret, onion_sk: &OnionSecret) -> Self {
+    pub fn new(id_sk: &HavenIdentitySecret, onion_sk: &OnionSecret) -> Self {
         let id_pk = id_sk.public();
         let eph_pk = onion_sk.public();
         let mut hdsk = Handshake {

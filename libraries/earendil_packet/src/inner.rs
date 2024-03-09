@@ -1,7 +1,7 @@
 use arrayref::array_ref;
 use bincode::Options;
 use bytes::Bytes;
-use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
+use earendil_crypt::{AnonDest, RelayFingerprint, RelayIdentityPublic, SourceId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -28,7 +28,7 @@ pub type Dock = u32;
 
 #[derive(Serialize, Deserialize)]
 struct InnerPacketCiphertext {
-    source_sign_pk: IdentityPublic,
+    source_sign_pk: RelayIdentityPublic,
     epk_sig: Bytes,
     box_ctext: Bytes,
 }
@@ -41,6 +41,9 @@ pub enum DecodeError {
 
     #[error("decryption failed")]
     DecryptionFailed,
+
+    #[error("bad metadata")]
+    BadMetadata,
 }
 
 #[derive(Error, Debug)]
@@ -53,20 +56,40 @@ pub enum EncodeError {
 }
 
 impl InnerPacket {
-    /// From a raw payload, deduce the inner packet as well as the source fingerprint.
-    pub fn decode(raw: &[u8; 8192]) -> Result<(Self, Fingerprint), DecodeError> {
-        let src_fp = Fingerprint::from_bytes(array_ref![raw, 0, 20]);
+    /// From a raw payload, deduce the inner packet as well as the source id.
+    pub fn decode(raw: &[u8; 8192]) -> Result<(Self, SourceId), DecodeError> {
+        let src_node_id = match array_ref![raw, 0, 1] {
+            &[0u8] => {
+                let src_fp = RelayFingerprint::from_bytes(array_ref![raw, 1, 32]);
+                SourceId::Relay(src_fp)
+            }
+            &[1u8] => {
+                let anon_dest = AnonDest(array_ref![raw, 1, 16].clone());
+                SourceId::Anon(anon_dest)
+            }
+            _ => return Err(DecodeError::BadMetadata),
+        };
         let coder = bincode::DefaultOptions::new().allow_trailing_bytes();
         let msg: Self = coder
             .deserialize(&raw[20..])
             .map_err(DecodeError::BadPackaging)?;
-        Ok((msg, src_fp))
+        Ok((msg, src_node_id))
     }
 
-    /// Encodes into a raw payload, given our signing SK and their onion PK
-    pub fn encode(&self, my_isk: &IdentitySecret) -> Result<[u8; 8192], EncodeError> {
+    /// Encodes into a raw payload, given our node id
+    pub fn encode(&self, my_id: &SourceId) -> Result<[u8; 8192], EncodeError> {
         let mut toret = [0u8; 8192];
-        toret[..20].copy_from_slice(my_isk.public().fingerprint().as_bytes());
+
+        match my_id {
+            SourceId::Relay(fingerprint) => {
+                toret[0] = 0;
+                toret[1..33].copy_from_slice(fingerprint.as_bytes());
+            }
+            SourceId::Anon(anon_dest) => {
+                toret[0] = 1;
+                toret[1..17].copy_from_slice(&anon_dest.0);
+            }
+        }
         let coder = bincode::DefaultOptions::new().allow_trailing_bytes();
         coder
             .serialize_into(&mut toret[20..], &self)
@@ -88,13 +111,15 @@ impl Message {
 #[cfg(test)]
 mod tests {
 
+    use earendil_crypt::RelayIdentitySecret;
+
     use super::*;
 
     #[test]
     fn test_inner_packet_roundtrip() {
         // Step 1: Generate OnionSecret and IdentitySecret
 
-        let identity_secret = IdentitySecret::generate();
+        let identity_secret = RelayIdentitySecret::generate();
 
         // Step 2: Create an InnerPacket
         let inner_packet = InnerPacket::Message(Message::new(
@@ -103,9 +128,9 @@ mod tests {
             vec![Bytes::from("Hello, World!")],
         ));
 
-        // Step 3: Encrypt the InnerPacket
+        // Step 3: Encode the InnerPacket
         let encrypted_packet = inner_packet
-            .encode(&identity_secret)
+            .encode(&SourceId::Relay(identity_secret.public().fingerprint()))
             .expect("Can't encrypt packet");
 
         // Step 4: Decrypt the InnerPacket

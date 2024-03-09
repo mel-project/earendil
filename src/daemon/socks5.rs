@@ -1,7 +1,7 @@
 use std::{net::Ipv4Addr, str::FromStr};
 
 use anyhow::Context;
-use earendil_crypt::{Fingerprint, IdentitySecret};
+use earendil_crypt::{HavenFingerprint, HavenIdentitySecret};
 use futures_util::{io, TryFutureExt};
 use nursery_macro::nursery;
 use smol::{
@@ -14,7 +14,7 @@ use socksv5::v5::*;
 
 use crate::{
     config::{Fallback, Socks5},
-    socket::{Endpoint, Socket},
+    socket::{Endpoint, HavenEndpoint, Socket},
     stream::Stream,
 };
 
@@ -35,7 +35,7 @@ pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Resu
 }
 
 // this makes reply block handling a bit more efficient at the cost of some anonymity --- we should investigate a better way
-static SOCKS5_LOCAL_IDSK: CtxField<IdentitySecret> = |_| IdentitySecret::generate();
+static SOCKS5_LOCAL_IDSK: CtxField<HavenIdentitySecret> = |_| HavenIdentitySecret::generate();
 
 #[tracing::instrument(skip(ctx, client_stream, fallback))]
 async fn socks5_once(
@@ -73,13 +73,15 @@ async fn socks5_once(
 
     if let Some(top) = top_level {
         if top == "haven" {
-            let endpoint = Endpoint::new(
-                Fingerprint::from_str(split_domain.next().context("invalid Earendil address")?)?,
+            let endpoint = HavenEndpoint::new(
+                HavenFingerprint::from_str(
+                    split_domain.next().context("invalid Earendil address")?,
+                )?,
                 port.into(),
             );
             let earendil_skt =
                 Socket::bind_haven_internal(ctx.clone(), *ctx.get(SOCKS5_LOCAL_IDSK), None, None);
-            let earendil_stream = Stream::connect(earendil_skt, endpoint).await?;
+            let earendil_stream = Stream::connect(earendil_skt, Endpoint::Haven(endpoint)).await?;
 
             io::copy(client_stream.clone(), &mut earendil_stream.clone())
                 .race(io::copy(
@@ -106,7 +108,8 @@ async fn socks5_once(
                         None,
                         None,
                     );
-                    let mut remote_stream = Stream::connect(remote_skt, remote).await?;
+                    let mut remote_stream =
+                        Stream::connect(remote_skt, Endpoint::Haven(remote)).await?;
                     let prepend = (addr.len() as u16).to_be_bytes();
                     remote_stream.write(&prepend).await?;
 

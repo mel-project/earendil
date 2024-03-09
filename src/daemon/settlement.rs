@@ -9,7 +9,7 @@ use anyhow::Context;
 use blake3::Hash;
 use bytes::Bytes;
 use dashmap::DashMap;
-use earendil_crypt::{Fingerprint, IdentityPublic, IdentitySecret};
+use earendil_crypt::{RelayFingerprint, RelayIdentityPublic, RelayIdentitySecret};
 use melpow::{HashFunction, SVec};
 use moka::sync::{Cache, CacheBuilder};
 use serde::{Deserialize, Serialize};
@@ -48,7 +48,7 @@ pub struct SettlementRequest {
     decrease: u64,
     pub payment_proof: SettlementProof,
     signature: Bytes,
-    initiator_pk: Arc<IdentityPublic>,
+    initiator_pk: Arc<RelayIdentityPublic>,
 }
 
 impl fmt::Display for SettlementRequest {
@@ -64,7 +64,7 @@ impl fmt::Display for SettlementRequest {
 }
 
 impl SettlementRequest {
-    pub fn new(my_sk: IdentitySecret, decrease: u64, payment_proof: SettlementProof) -> Self {
+    pub fn new(my_sk: RelayIdentitySecret, decrease: u64, payment_proof: SettlementProof) -> Self {
         let mut request = Self {
             timestamp_ms: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -124,7 +124,7 @@ pub struct SettlementResponse {
 }
 
 impl SettlementResponse {
-    pub fn new(my_sk: IdentitySecret, request: SettlementRequest, current_debt: i128) -> Self {
+    pub fn new(my_sk: RelayIdentitySecret, request: SettlementRequest, current_debt: i128) -> Self {
         let mut response = Self {
             request,
             current_debt,
@@ -146,8 +146,8 @@ impl SettlementResponse {
 }
 
 pub struct Settlements {
-    pending: DashMap<Fingerprint, PendingSettlement>,
-    pub seed_cache: Cache<Fingerprint, HashSet<Seed>>,
+    pending: DashMap<RelayFingerprint, PendingSettlement>,
+    pub seed_cache: Cache<RelayFingerprint, HashSet<Seed>>,
     pub auto_settle: Option<AutoSettle>,
 }
 
@@ -244,7 +244,7 @@ impl Settlements {
     pub async fn accept_response(
         &self,
         ctx: &DaemonContext,
-        neighbor: Fingerprint,
+        neighbor: RelayFingerprint,
         request: SettlementRequest,
     ) -> anyhow::Result<()> {
         todo!();
@@ -266,7 +266,7 @@ impl Settlements {
         // Ok(())
     }
 
-    pub async fn reject_response(&self, neighbor: &Fingerprint) -> anyhow::Result<()> {
+    pub async fn reject_response(&self, neighbor: &RelayFingerprint) -> anyhow::Result<()> {
         if let Some(settlement) = self.pending.get(neighbor) {
             settlement.send_res.send(None).await?
         }
@@ -275,7 +275,7 @@ impl Settlements {
         Ok(())
     }
 
-    pub fn get_request(&self, neighbor: &Fingerprint) -> Option<SettlementRequest> {
+    pub fn get_request(&self, neighbor: &RelayFingerprint) -> Option<SettlementRequest> {
         self.pending.get(neighbor).map(|e| e.request.clone())
     }
 

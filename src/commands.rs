@@ -1,6 +1,6 @@
-use crate::socket::Endpoint;
+use crate::socket::RelayEndpoint;
 use clap::{arg, Subcommand};
-use earendil_crypt::{ClientId, Fingerprint};
+use earendil_crypt::{ClientId, HavenFingerprint, RelayFingerprint};
 use earendil_packet::Dock;
 
 #[derive(Subcommand)]
@@ -49,7 +49,7 @@ pub enum ControlCommand {
         dock: Option<Dock>,
         #[arg(long)]
         /// fingerprint of rendezvous point. Specify this if you are the haven server.
-        rendezvous: Option<Fingerprint>,
+        rendezvous: Option<RelayFingerprint>,
     },
 
     /// Prints the fingerprint and dock of a socket
@@ -68,7 +68,7 @@ pub enum ControlCommand {
         skt_id: String,
         #[arg(short, long)]
         /// destination fingerprint::dock
-        dest: Endpoint,
+        dest: RelayEndpoint,
         #[arg(short, long)]
         /// message
         msg: String,
@@ -86,7 +86,7 @@ pub enum ControlCommand {
         #[arg(long)]
         id: Option<String>,
         #[arg(short, long)]
-        dest: Fingerprint,
+        dest: RelayFingerprint,
         #[arg(short, long)]
         method: String,
         args: Vec<String>,
@@ -99,13 +99,13 @@ pub enum ControlCommand {
         #[arg(short, long)]
         onion_pk: String,
         #[arg(short, long)]
-        rendezvous_fingerprint: Fingerprint,
+        rendezvous_fingerprint: RelayFingerprint,
     },
 
     /// Looks up a rendezvous haven locator.
     GetRendezvous {
         #[arg(short, long)]
-        key: Fingerprint,
+        key: HavenFingerprint,
     },
 
     /// Insert and get a randomly generated HavenLocator.
@@ -154,7 +154,7 @@ pub enum ChatCommand {
     /// Pulls conversation between you and neighboring relay
     GetRelay {
         #[arg(short, long)]
-        neighbor: Fingerprint,
+        neighbor: RelayFingerprint,
     },
 
     /// Sends a single chat message to client
@@ -168,7 +168,7 @@ pub enum ChatCommand {
     /// Sends a single chat message to relay
     SendRelay {
         #[arg(short, long)]
-        dest: Fingerprint,
+        dest: RelayFingerprint,
         #[arg(short, long)]
         msg: String,
     },

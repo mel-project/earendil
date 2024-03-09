@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use earendil::{control_protocol::ControlClient, daemon::Daemon};
-use earendil_crypt::IdentitySecret;
+use earendil_crypt::RelayIdentitySecret;
 
 #[derive(Clone)]
 pub enum DaemonWrap {
@@ -20,7 +20,7 @@ impl DaemonWrap {
         }
     }
 
-    pub fn global_sk(&self) -> Option<IdentitySecret> {
+    pub fn global_sk(&self) -> Option<RelayIdentitySecret> {
         match self {
             DaemonWrap::Remote(_) => None, // todo: add control method?
             DaemonWrap::Embedded(d) => Some(d.identity()),

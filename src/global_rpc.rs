@@ -3,7 +3,7 @@ pub mod transport;
 
 use async_trait::async_trait;
 
-use earendil_crypt::Fingerprint;
+use earendil_crypt::HavenFingerprint;
 use earendil_crypt::VerifyError;
 use earendil_packet::Dock;
 
@@ -24,7 +24,7 @@ pub trait GlobalRpcProtocol {
 
     async fn dht_get(
         &self,
-        key: Fingerprint,
+        key: HavenFingerprint,
         recurse: bool,
     ) -> Result<Option<HavenLocator>, DhtError>;
 

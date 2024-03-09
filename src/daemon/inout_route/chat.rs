@@ -3,7 +3,7 @@ use crate::daemon::settlement::{SettlementProof, SettlementRequest};
 use crate::daemon::{context::DaemonContext, db::db_read};
 use anyhow::Context;
 use dashmap::DashMap;
-use earendil_crypt::{ClientId, Fingerprint};
+use earendil_crypt::{ClientId, RelayFingerprint};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, VecDeque},
@@ -45,7 +45,7 @@ pub fn incoming_client_chat(ctx: &DaemonContext, neighbor: ClientId, msg: String
     chats.insert_client(neighbor, entry);
 }
 
-pub fn incoming_relay_chat(ctx: &DaemonContext, neighbor: Fingerprint, msg: String) {
+pub fn incoming_relay_chat(ctx: &DaemonContext, neighbor: RelayFingerprint, msg: String) {
     let chats = ctx.get(CHATS);
     let entry = ChatEntry::new_incoming(msg);
     chats.insert_relay(neighbor, entry);
@@ -55,7 +55,7 @@ pub fn list_clients(ctx: &DaemonContext) -> Vec<ClientId> {
     ctx.get(CLIENT_TABLE).iter().map(|neigh| *neigh.0).collect()
 }
 
-pub fn list_relays(ctx: &DaemonContext) -> Vec<Fingerprint> {
+pub fn list_relays(ctx: &DaemonContext) -> Vec<RelayFingerprint> {
     ctx.get(NEIGH_TABLE_NEW)
         .iter()
         .map(|neigh| *neigh.0)
@@ -116,7 +116,7 @@ pub fn add_client_link(ctx: &DaemonContext, neighbor: ClientId, client: Arc<Link
     tracing::info!("added rpc client for neighbor: {neighbor}");
 }
 
-pub fn add_relay_link(ctx: &DaemonContext, neighbor: Fingerprint, client: Arc<LinkClient>) {
+pub fn add_relay_link(ctx: &DaemonContext, neighbor: RelayFingerprint, client: Arc<LinkClient>) {
     tracing::info!("about to add rpc client for neighbor: {neighbor}");
     ctx.get(CHATS).relay_links.insert(neighbor, client);
     tracing::info!("added rpc client for neighbor: {neighbor}");
@@ -126,7 +126,7 @@ pub fn remove_client_link(ctx: &DaemonContext, neighbor: &ClientId) {
     ctx.get(CHATS).client_links.remove(neighbor);
 }
 
-pub fn remove_relay_link(ctx: &DaemonContext, neighbor: &Fingerprint) {
+pub fn remove_relay_link(ctx: &DaemonContext, neighbor: &RelayFingerprint) {
     ctx.get(CHATS).relay_links.remove(neighbor);
 }
 
@@ -138,7 +138,10 @@ pub fn get_client_chat(ctx: &DaemonContext, neigh: ClientId) -> Vec<(bool, Strin
         .collect()
 }
 
-pub fn get_relay_chat(ctx: &DaemonContext, neigh: Fingerprint) -> Vec<(bool, String, SystemTime)> {
+pub fn get_relay_chat(
+    ctx: &DaemonContext,
+    neigh: RelayFingerprint,
+) -> Vec<(bool, String, SystemTime)> {
     ctx.get(CHATS)
         .get_relay(neigh)
         .iter()
@@ -235,7 +238,7 @@ pub async fn send_client_chat_msg(
 #[tracing::instrument(skip(ctx))]
 pub async fn send_relay_chat_msg(
     ctx: &DaemonContext,
-    dest: Fingerprint,
+    dest: RelayFingerprint,
     msg: String,
 ) -> anyhow::Result<()> {
     let chats = ctx.get(CHATS);
@@ -331,9 +334,9 @@ pub fn create_timestamp(now: SystemTime) -> String {
 #[derive(Clone)]
 struct Chats {
     client_history: DashMap<ClientId, VecDeque<ChatEntry>>,
-    relay_history: DashMap<Fingerprint, VecDeque<ChatEntry>>,
+    relay_history: DashMap<RelayFingerprint, VecDeque<ChatEntry>>,
     client_links: DashMap<ClientId, Arc<LinkClient>>,
-    relay_links: DashMap<Fingerprint, Arc<LinkClient>>,
+    relay_links: DashMap<RelayFingerprint, Arc<LinkClient>>,
     max_chat_len: usize,
 }
 
@@ -347,9 +350,9 @@ struct ChatEntry {
 impl Chats {
     fn new(max_chat_len: usize) -> Self {
         let client_history: DashMap<ClientId, VecDeque<ChatEntry>> = DashMap::new();
-        let relay_history: DashMap<Fingerprint, VecDeque<ChatEntry>> = DashMap::new();
+        let relay_history: DashMap<RelayFingerprint, VecDeque<ChatEntry>> = DashMap::new();
         let client_links: DashMap<ClientId, Arc<LinkClient>> = DashMap::new();
-        let relay_links: DashMap<Fingerprint, Arc<LinkClient>> = DashMap::new();
+        let relay_links: DashMap<RelayFingerprint, Arc<LinkClient>> = DashMap::new();
         Self {
             client_history,
             relay_history,
@@ -368,7 +371,7 @@ impl Chats {
         chat.push_back(entry);
     }
 
-    fn insert_relay(&self, neighbor: Fingerprint, entry: ChatEntry) {
+    fn insert_relay(&self, neighbor: RelayFingerprint, entry: ChatEntry) {
         let mut chat = self.relay_history.entry(neighbor).or_default();
         if chat.len() >= self.max_chat_len {
             chat.pop_front();
@@ -385,7 +388,7 @@ impl Chats {
             .collect()
     }
 
-    fn get_relay(&self, neighbor: Fingerprint) -> Vec<ChatEntry> {
+    fn get_relay(&self, neighbor: RelayFingerprint) -> Vec<ChatEntry> {
         self.relay_history
             .get(&neighbor)
             .iter()
@@ -396,7 +399,7 @@ impl Chats {
     fn into_bytes(self) -> anyhow::Result<Vec<u8>> {
         let client_history: HashMap<ClientId, VecDeque<ChatEntry>> =
             self.client_history.into_iter().collect();
-        let relay_history: HashMap<Fingerprint, VecDeque<ChatEntry>> =
+        let relay_history: HashMap<RelayFingerprint, VecDeque<ChatEntry>> =
             self.relay_history.into_iter().collect();
         Ok(stdcode::serialize(&(
             client_history,
@@ -408,7 +411,7 @@ impl Chats {
     fn from_bytes(bytes: Vec<u8>) -> anyhow::Result<Self> {
         let (client_history, relay_history, max_chat_len): (
             HashMap<ClientId, VecDeque<ChatEntry>>,
-            HashMap<Fingerprint, VecDeque<ChatEntry>>,
+            HashMap<RelayFingerprint, VecDeque<ChatEntry>>,
             usize,
         ) = stdcode::deserialize(&bytes)?;
         Ok(Self {

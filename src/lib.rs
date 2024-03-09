@@ -1,3 +1,4 @@
+pub mod bicache;
 pub mod commands;
 pub mod config;
 pub mod control_protocol;
