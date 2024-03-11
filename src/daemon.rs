@@ -155,6 +155,12 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                 anyhow::Ok(())
             })),
         );
+
+        let _rendezvous_forward_loop = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([ctx], move || rendezvous_forward_loop(ctx.clone())
+                .map_err(log_error("rendezvous_forward_loop"))),
+        );
     }
 
     let _state_cache_sync_loop = ctx.init().state_cache.clone().map(|_| {
@@ -175,12 +181,6 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         RespawnStrategy::Immediate,
         clone!([ctx], move || global_rpc_loop(ctx.clone())
             .map_err(log_error("global_rpc_loop"))),
-    );
-
-    let _rendezvous_forward_loop = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([ctx], move || rendezvous_forward_loop(ctx.clone())
-            .map_err(log_error("rendezvous_forward_loop"))),
     );
 
     let _packet_dispatch_loop = Immortal::respawn(
