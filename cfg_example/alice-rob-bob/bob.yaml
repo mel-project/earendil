@@ -28,18 +28,18 @@ out_routes:
       incoming_price: 1
       incoming_debt_limit: 1000000000
 
-# # server config
-# havens:
-#   # - identity: haven.asc
-#   #   rendezvous: 91fbz7f7b2fwy0xrvsyqqbwbmmqytdnr
-#   #   handler:
-#   #     type: udp_forward
-#   #     listen_dock: 69420
-#   #     upstream: 127.0.0.1:8814 # e.g. listening port of geph4-exit
-#   #
-#   # haven fingerprint: vtcwz1tvpgp7ccxzepmw0evb6cpa09t7
-#   - identity_seed: i-am-a-haven-pls-no-eat-me
-#     rendezvous: q29wsm1jpvg6j494kfdyf3wad5m92331 # rob's fingerprint
-#     handler:
-#       type: simple_proxy
-#       listen_dock: 69421
+# server config
+havens:
+  # - identity: haven.asc
+  #   rendezvous: 91fbz7f7b2fwy0xrvsyqqbwbmmqytdnr
+  #   handler:
+  #     type: udp_forward
+  #     listen_dock: 69420
+  #     upstream: 127.0.0.1:8814 # e.g. listening port of geph4-exit
+  #
+  # haven fingerprint: vtcwz1tvpgp7ccxzepmw0evb6cpa09t7
+  - identity_seed: i-am-a-haven-pls-no-eat-me
+    rendezvous: 04c48b49e5ba915e2f47655011a3aed75b3ac7e3b468bbc84b23884546312046
+    handler:
+      type: simple_proxy
+      listen_dock: 69421

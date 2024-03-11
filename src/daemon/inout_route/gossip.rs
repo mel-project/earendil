@@ -110,6 +110,7 @@ async fn fetch_identity(
     neighbor_idpk: &RelayIdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
+    tracing::debug!("fetching identity...");
     let remote_fingerprint = neighbor_idpk.fingerprint();
     // tracing::debug!("getting identity of {remote_fingerprint}");
 
@@ -129,6 +130,7 @@ async fn sign_adjacency(
     neighbor_idpk: &RelayIdentityPublic,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
+    tracing::debug!("signing adjacency...");
     let remote_fingerprint = neighbor_idpk.fingerprint();
     let my_sk = ctx
         .get(GLOBAL_IDENTITY)
@@ -162,6 +164,7 @@ async fn gossip_graph_with_relay(
     ctx: &DaemonContext,
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
+    tracing::debug!("gossipping relay graph...");
     let all_known_nodes = ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();
     let random_sample = all_known_nodes
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))

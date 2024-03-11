@@ -122,7 +122,7 @@ impl RawPacket {
                 let mut buffer = [0; 35];
 
                 // encode relay fingerprint
-                buffer[1..35].copy_from_slice(metadata);
+                buffer[1..33].copy_from_slice(metadata);
                 // encode packet latency
                 buffer[33..].copy_from_slice(&delay.to_be_bytes());
 

@@ -53,7 +53,7 @@ use super::{
     DaemonContext,
 };
 
-const CONNECTION_LIFETIME: Duration = Duration::from_secs(60);
+const CONNECTION_LIFETIME: Duration = Duration::from_secs(10);
 
 #[derive(Serialize, Deserialize)]
 enum NodeType {

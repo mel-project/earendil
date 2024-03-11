@@ -60,10 +60,8 @@ fn main() -> anyhow::Result<()> {
                 serde_json::to_string_pretty(&config_parsed)?
             );
             tracing::info!("about to init daemon!");
-            let _daemon = Daemon::init(config_parsed)?;
-            loop {
-                std::thread::park()
-            }
+            let daemon = Daemon::init(config_parsed)?;
+            anyhow::bail!(smol::future::block_on(daemon.wait_until_dead()))
         }
         Commands::Control {
             control_command,

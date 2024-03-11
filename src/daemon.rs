@@ -70,18 +70,16 @@ use self::{context::GLOBAL_IDENTITY, control_protocol_impl::ControlProtocolImpl}
 
 pub struct Daemon {
     pub(crate) ctx: DaemonContext,
-    _task: Task<()>,
+    _task: Task<anyhow::Result<()>>,
 }
 
 impl Daemon {
     /// Initializes the daemon and starts all background loops
     pub fn init(config: ConfigFile) -> anyhow::Result<Daemon> {
         let ctx = DaemonContext::new(config);
-        let context = ctx.clone();
+
         tracing::info!("starting background task for main_daemon");
-        let task = smol::spawn(async move {
-            let _ = main_daemon(context).await;
-        });
+        let task = smolscale::spawn(main_daemon(ctx.clone()));
         Ok(Self { ctx, _task: task })
     }
 
@@ -97,6 +95,10 @@ impl Daemon {
         ControlClient::from(DummyControlProtocolTransport {
             inner: ControlService(ControlProtocolImpl::new(self.ctx.clone())),
         })
+    }
+
+    pub async fn wait_until_dead(self) -> anyhow::Error {
+        self._task.await.unwrap_err()
     }
 }
 
@@ -114,14 +116,12 @@ impl RpcTransport for DummyControlProtocolTransport {
 }
 
 pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
-    let i_am_client = ctx.init().in_routes.is_empty();
+    let is_client = ctx.init().in_routes.is_empty();
+
+    scopeguard::defer!(tracing::info!(is_client, "daemon is now DROPPED!"));
 
     // Run the loops
-    if i_am_client {
-        tracing::info!("client daemon starting");
-
-        scopeguard::defer!(tracing::info!("client daemon is now DROPPED!"));
-    } else {
+    let _relay_loops = if !is_client {
         tracing::info!(
             "daemon starting with fingerprint {:?}",
             ctx.get(GLOBAL_IDENTITY)
@@ -140,7 +140,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             )
         });
 
-        let _identity_refresh_loop = Immortal::respawn(
+        let identity_refresh_loop = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx], move || clone!([ctx], async move {
                 tracing::debug!("WE ARE INSERTING OURSELVES");
@@ -157,18 +157,26 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             })),
         );
 
-        let _global_rpc_loop = Immortal::respawn(
+        let global_rpc_loop = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx], move || global_rpc_loop(ctx.clone())
                 .map_err(log_error("global_rpc_loop"))),
         );
 
-        let _rendezvous_forward_loop = Immortal::respawn(
+        let rendezvous_forward_loop = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx], move || rendezvous_forward_loop(ctx.clone())
                 .map_err(log_error("rendezvous_forward_loop"))),
         );
-    }
+
+        Some((
+            identity_refresh_loop,
+            global_rpc_loop,
+            rendezvous_forward_loop,
+        ))
+    } else {
+        None
+    };
 
     let _state_cache_sync_loop = ctx.init().state_cache.clone().map(|_| {
         Immortal::respawn(

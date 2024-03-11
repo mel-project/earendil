@@ -55,7 +55,7 @@ impl RelayGraph {
     /// Inserts an identity descriptor. Verifies its self-consistency.
     pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> Result<(), VerifyError> {
         tracing::debug!(
-            identity = debug(&identity),
+            identity = debug(identity.identity_pk.fingerprint()),
             "inserting an identity into relay graph"
         );
 
