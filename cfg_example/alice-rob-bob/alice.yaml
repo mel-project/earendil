@@ -1,7 +1,10 @@
 # client
 
-state_cache: alice.db
+# state_cache: alice.db
 control_listen: 127.0.0.1:11111
+
+# auto_settle:
+#   interval: 10
 
 out_routes:
   bob:
@@ -13,21 +16,6 @@ out_routes:
       max_outgoing_price: 100
       incoming_price: 1
       incoming_debt_limit: 1000000000
-
-
-# auto_settle:
-#   interval: 10
-
-# out_routes:
-#   rob:
-#     fingerprint: 2d2b5429d2c814c05c31bc67b3731817a1b09ba353f8b31b54dce7f149fa16a7
-#     protocol: obfsudp
-#     connect: 127.0.0.1:34567
-#     cookie: 11deaee1eb5b796e416d54ad56522083938ea38218e8e7ea00e7466a04b5b750
-#     link_price:
-#       max_outgoing_price: 100
-#       incoming_price: 1
-#       incoming_debt_limit: 1000000000
 
 # socks5:
 #   listen:

@@ -514,9 +514,6 @@ impl LinkProtocol for LinkProtocolImpl {
 
     #[tracing::instrument(skip(self))]
     async fn relay_push_price(&self, price: u64, debt_limit: u64) {
-        dbg!(&self.remote_client_id);
-        dbg!(&self.remote_relay_pk);
-
         tracing::trace!("received push price");
         let remote_fp = self.remote_relay_pk.unwrap().fingerprint();
         if price > self.max_outgoing_price {
