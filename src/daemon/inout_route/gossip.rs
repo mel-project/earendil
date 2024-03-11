@@ -245,6 +245,7 @@ pub async fn gossip_with_client_loop(
         smol::Timer::after(gossip_interval(ctx.get(STARTUP_TIME))).await;
     }
 }
+
 /// One round of gossip with a particular neighbor.
 #[tracing::instrument(skip(ctx, link_client))]
 async fn gossip_once_with_client(

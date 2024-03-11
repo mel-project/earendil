@@ -23,4 +23,5 @@ rand = "0.8.5"
 indexmap = { version = "1.9.3", features = ["serde"] }
 thiserror= "1.0.49"
 earendil_crypt={path="../earendil_crypt"}
+tracing = "0.1.40"
 

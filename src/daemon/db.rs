@@ -7,6 +7,7 @@ use std::str::FromStr;
 use super::context::{CtxField, DaemonContext};
 
 static DATABASE: CtxField<Option<SqlitePool>> = |ctx| {
+    tracing::debug!("INITIALIZING DATABASE");
     if let Some(db_path) = &ctx.init().state_cache {
         let options = SqliteConnectOptions::from_str(db_path.to_str().unwrap())
             .unwrap()

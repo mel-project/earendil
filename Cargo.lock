@@ -1898,6 +1898,7 @@ dependencies = [
  "slab",
  "stdcode",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

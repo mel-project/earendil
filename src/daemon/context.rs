@@ -34,6 +34,7 @@ pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
 pub type CtxField<T> = fn(&DaemonContext) -> T;
 
 pub static GLOBAL_IDENTITY: CtxField<Option<RelayIdentitySecret>> = |ctx| {
+    tracing::debug!("INITIALIZING GLOBAL IDENTITY");
     if ctx.init().in_routes.is_empty() {
         None
     } else {
@@ -68,6 +69,7 @@ pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
 pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
     let ctx = ctx.clone();
     smol::future::block_on(async move {
+        tracing::debug!("BLOCKING ON DB");
         match db_read(&ctx, "relay_graph")
             .await
             .ok()

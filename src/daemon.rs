@@ -143,6 +143,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         let _identity_refresh_loop = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx], move || clone!([ctx], async move {
+                tracing::debug!("WE ARE INSERTING OURSELVES");
                 // first insert ourselves
                 ctx.get(RELAY_GRAPH)
                     .write()
@@ -296,6 +297,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 
     // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
     while let Some(next) = route_tasks.next().await {
+        tracing::debug!("ROUTE TASK DIED !!!!");
         next?;
     }
 
