@@ -21,7 +21,11 @@ pub async fn peel_forward(
     next_peeler: RelayFingerprint,
     pkt: RawPacket,
 ) {
-    let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+    let my_fp = ctx
+        .get(GLOBAL_IDENTITY)
+        .expect("only relays have global identities")
+        .public()
+        .fingerprint();
     let inner = async {
         let pkts_seen = ctx.get(PKTS_SEEN);
         let packet_hash = blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8902]>(pkt));
@@ -146,10 +150,13 @@ pub fn relay_one_hop_closer(
     ctx: &DaemonContext,
     dest_fp: RelayFingerprint,
 ) -> Option<RelayFingerprint> {
-    let route = ctx
-        .get(RELAY_GRAPH)
-        .read()
-        .find_shortest_path(&ctx.get(GLOBAL_IDENTITY).public().fingerprint(), &dest_fp)?;
+    let route = ctx.get(RELAY_GRAPH).read().find_shortest_path(
+        &ctx.get(GLOBAL_IDENTITY)
+            .expect("only relays have global identities")
+            .public()
+            .fingerprint(),
+        &dest_fp,
+    )?;
     route.get(1).cloned()
 }
 

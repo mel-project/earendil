@@ -1,33 +1,33 @@
-# fingerprint: ck8am1yg0qgmkctyghvgcr85nbjyq47t
-identity_seed: alice-was-here
-state_cache: alice_state_cache.db
+state_cache: alice.db
 control_listen: 127.0.0.1:11111
+identity_seed: alice
+
 # auto_settle:
 #   interval: 10
 
-# in_routes:
-#   # arbitrary names, used for diagnositics and logging
-#   main_udp:
-#     protocol: obfsudp
-#     listen: 0.0.0.0:20000
-#     secret: labooyah hahaha lol smany
-
-out_routes:
-  rob:
-    fingerprint: q29wsm1jpvg6j494kfdyf3wad5m92331
+in_routes:
+  # arbitrary names, used for diagnositics and logging
+  main_udp:
     protocol: obfsudp
-    connect: 127.0.0.1:34567
-    cookie: 11deaee1eb5b796e416d54ad56522083938ea38218e8e7ea00e7466a04b5b750
-    link_price:
-      max_outgoing_price: 100
-      incoming_price: 1
-      incoming_debt_limit: 1000000000
+    listen: 0.0.0.0:20000
+    secret: labooyah hahaha lol smany
 
-socks5:
-  listen:
-    127.0.0.1:8081
-    # remote: v7c854h336wtphnk0eqjrydexmffvhgb:69421 # this has to be bob??
-    # remote: ar8rfz3mp32m8ffkh86q258kq21j9abk:69421 # this has to be rob??
-  fallback:
-    simple_proxy:
-      remote: yqem5bc2m218hqzdk01wbdak42ky715e:69421
+# out_routes:
+#   rob:
+#     fingerprint: q29wsm1jpvg6j494kfdyf3wad5m92331
+#     protocol: obfsudp
+#     connect: 127.0.0.1:34567
+#     cookie: 11deaee1eb5b796e416d54ad56522083938ea38218e8e7ea00e7466a04b5b750
+#     link_price:
+#       max_outgoing_price: 100
+#       incoming_price: 1
+#       incoming_debt_limit: 1000000000
+
+# socks5:
+#   listen:
+#     127.0.0.1:8081
+#     # remote: v7c854h336wtphnk0eqjrydexmffvhgb:69421 # this has to be bob??
+#     # remote: ar8rfz3mp32m8ffkh86q258kq21j9abk:69421 # this has to be rob??
+#   fallback:
+#     simple_proxy:
+#       remote: yqem5bc2m218hqzdk01wbdak42ky715e:69421

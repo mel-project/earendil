@@ -52,7 +52,10 @@ pub struct N2rRelaySocket {
 
 impl N2rRelaySocket {
     pub fn bind(ctx: DaemonContext, dock: Option<Dock>) -> Self {
-        let my_pk = ctx.get(GLOBAL_IDENTITY).public();
+        let my_pk = ctx
+            .get(GLOBAL_IDENTITY)
+            .expect("only relays have global identities")
+            .public();
         let my_fp = my_pk.fingerprint();
         let dock = if let Some(dock) = dock {
             dock

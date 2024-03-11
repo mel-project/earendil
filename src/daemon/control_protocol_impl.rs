@@ -160,7 +160,7 @@ impl ControlProtocol for ControlProtocolImpl {
                     (
                         k.clone(),
                         json!( {
-                            "fingerprint": format!("{}", self.ctx.get(GLOBAL_IDENTITY).public().fingerprint()),
+                            "fingerprint": format!("{}", self.ctx.get(GLOBAL_IDENTITY).expect("only relays have global identities").public().fingerprint()),
                             "connect": format!("<YOUR_IP>:{}", listen.port()),
                             "cookie": hex::encode(secret.to_public().as_bytes()),
                             "link_price": link_price,
@@ -176,6 +176,7 @@ impl ControlProtocol for ControlProtocolImpl {
         let my_fp = self
             .ctx
             .get(GLOBAL_IDENTITY)
+            .expect("only relays have global identities")
             .public()
             .fingerprint()
             .to_string();

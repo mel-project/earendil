@@ -85,7 +85,11 @@ impl Daemon {
         Ok(Self { ctx, _task: task })
     }
 
-    pub fn identity(&self) -> RelayIdentitySecret {
+    pub fn is_client(&self) -> bool {
+        self.ctx.init().in_routes.is_empty()
+    }
+
+    pub fn identity(&self) -> Option<RelayIdentitySecret> {
         *self.ctx.get(GLOBAL_IDENTITY)
     }
 
@@ -110,20 +114,50 @@ impl RpcTransport for DummyControlProtocolTransport {
 }
 
 pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
-    tracing::info!(
-        "daemon starting with fingerprint {}",
-        ctx.get(GLOBAL_IDENTITY).public().fingerprint()
-    );
-
-    scopeguard::defer!({
-        tracing::info!(
-            "daemon with fingerprint {} is now DROPPED!",
-            ctx.get(GLOBAL_IDENTITY).public().fingerprint()
-        )
-    });
+    let i_am_client = ctx.init().in_routes.is_empty();
 
     // Run the loops
-    let _db_sync_loop = ctx.init().db_path.clone().map(|_| {
+    if i_am_client {
+        tracing::info!("client daemon starting");
+
+        scopeguard::defer!(tracing::info!("client daemon is now DROPPED!"));
+    } else {
+        tracing::info!(
+            "daemon starting with fingerprint {:?}",
+            ctx.get(GLOBAL_IDENTITY)
+                .expect("only relays have global identities")
+                .public()
+                .fingerprint()
+        );
+
+        scopeguard::defer!({
+            tracing::info!(
+                "daemon with fingerprint {:?} is now DROPPED!",
+                ctx.get(GLOBAL_IDENTITY)
+                    .expect("only relays have global identities")
+                    .public()
+                    .fingerprint()
+            )
+        });
+
+        let _identity_refresh_loop = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([ctx], move || clone!([ctx], async move {
+                // first insert ourselves
+                ctx.get(RELAY_GRAPH)
+                    .write()
+                    .insert_identity(IdentityDescriptor::new(
+                        &ctx.get(GLOBAL_IDENTITY)
+                            .expect("only relays have global identities"),
+                        ctx.get(GLOBAL_ONION_SK),
+                    ))?;
+                smol::Timer::after(Duration::from_secs(60)).await;
+                anyhow::Ok(())
+            })),
+        );
+    }
+
+    let _state_cache_sync_loop = ctx.init().state_cache.clone().map(|_| {
         Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx], move || db_sync_loop(ctx.clone())
@@ -131,20 +165,6 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         )
     });
 
-    let _identity_refresh_loop = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([ctx], move || clone!([ctx], async move {
-            // first insert ourselves
-            ctx.get(RELAY_GRAPH)
-                .write()
-                .insert_identity(IdentityDescriptor::new(
-                    ctx.get(GLOBAL_IDENTITY),
-                    ctx.get(GLOBAL_ONION_SK),
-                ))?;
-            smol::Timer::after(Duration::from_secs(60)).await;
-            anyhow::Ok(())
-        })),
-    );
     let _control_protocol = Immortal::respawn(
         RespawnStrategy::Immediate,
         clone!([ctx], move || control_protocol_loop(ctx.clone())
@@ -397,7 +417,11 @@ async fn packet_dispatch_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 ctx.get(DEBTS).incr_relay_outgoing(next_hop);
             }
         } else {
-            let my_fp = ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+            let my_fp = ctx
+                .get(GLOBAL_IDENTITY)
+                .expect("only relays have global identities")
+                .public()
+                .fingerprint();
 
             if peeler == my_fp {
                 // todo: don't allow ourselves to be the first hop when choosing forward routes

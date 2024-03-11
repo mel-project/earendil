@@ -130,18 +130,20 @@ async fn sign_adjacency(
     link_client: &LinkClient,
 ) -> anyhow::Result<()> {
     let remote_fingerprint = neighbor_idpk.fingerprint();
-    if ctx.get(GLOBAL_IDENTITY).public().fingerprint() < remote_fingerprint {
+    let my_sk = ctx
+        .get(GLOBAL_IDENTITY)
+        .expect("only relays have global identities");
+    let my_fingerprint = my_sk.public().fingerprint();
+    if my_fingerprint < remote_fingerprint {
         // tracing::debug!("signing adjacency with {remote_fingerprint}");
         let mut left_incomplete = AdjacencyDescriptor {
-            left: ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+            left: my_fingerprint,
             right: remote_fingerprint,
             left_sig: Bytes::new(),
             right_sig: Bytes::new(),
             unix_timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         };
-        left_incomplete.left_sig = ctx
-            .get(GLOBAL_IDENTITY)
-            .sign(left_incomplete.to_sign().as_bytes());
+        left_incomplete.left_sig = my_sk.sign(left_incomplete.to_sign().as_bytes());
         let complete = link_client
             .sign_adjacency(left_incomplete)
             .await?

@@ -298,7 +298,13 @@ async fn relay_handle_onion(
             let PacketWithPeeler { pkt, peeler } = *bytemuck::try_from_bytes(&pkt)
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
-            let my_fp = service.0.ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+            let my_fp = service
+                .0
+                .ctx
+                .get(GLOBAL_IDENTITY)
+                .expect("only relays have global identities")
+                .public()
+                .fingerprint();
 
             if peeler == my_fp {
                 if let Some(pk) = service.0.remote_relay_pk {
@@ -345,7 +351,13 @@ async fn relay_client_handle_onion(
             let PacketWithPeeler { pkt, peeler } = *bytemuck::try_from_bytes(&pkt)
                 .ok()
                 .context("incoming urel packet of the wrong size to be an onion packet")?;
-            let my_fp = service.0.ctx.get(GLOBAL_IDENTITY).public().fingerprint();
+            let my_fp = service
+                .0
+                .ctx
+                .get(GLOBAL_IDENTITY)
+                .expect("only relays have global identities")
+                .public()
+                .fingerprint();
 
             if peeler == my_fp {
                 if let Some(id) = service.0.remote_client_id {
@@ -441,9 +453,14 @@ impl LinkProtocol for LinkProtocolImpl {
         &self,
         mut left_incomplete: AdjacencyDescriptor,
     ) -> Option<AdjacencyDescriptor> {
+        let my_sk = self
+            .ctx
+            .get(GLOBAL_IDENTITY)
+            .expect("only relays have global identities");
+        let my_fp = my_sk.public().fingerprint();
         // This must be a neighbor that is "left" of us
         let valid = left_incomplete.left < left_incomplete.right
-            && left_incomplete.right == self.ctx.get(GLOBAL_IDENTITY).public().fingerprint()
+            && left_incomplete.right == my_fp
             && self
                 .ctx
                 .get(NEIGH_TABLE_NEW)
@@ -454,10 +471,7 @@ impl LinkProtocol for LinkProtocolImpl {
             return None;
         }
         // Fill in the right-hand-side
-        let signature = self
-            .ctx
-            .get(GLOBAL_IDENTITY)
-            .sign(left_incomplete.to_sign().as_bytes());
+        let signature = my_sk.sign(left_incomplete.to_sign().as_bytes());
         left_incomplete.right_sig = signature;
 
         self.ctx

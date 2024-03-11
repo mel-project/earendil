@@ -33,29 +33,35 @@ use super::{
 pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
 pub type CtxField<T> = fn(&DaemonContext) -> T;
 
-pub static GLOBAL_IDENTITY: CtxField<RelayIdentitySecret> = |ctx| {
-    ctx.init()
-        .identity
-        .as_ref()
-        .map(|id| {
-            id.actualize_relay()
-                .expect("failed to initialize global identity")
-        })
-        .unwrap_or_else(|| {
-            let ctx = ctx.clone();
-            smol::future::block_on(async move {
-                match db_read(&ctx, "global_identity").await {
-                    Ok(Some(id)) => {
-                        if let Ok(id_bytes) = &id.try_into() {
-                            RelayIdentitySecret::from_bytes(id_bytes)
-                        } else {
-                            RelayIdentitySecret::generate()
+pub static GLOBAL_IDENTITY: CtxField<Option<RelayIdentitySecret>> = |ctx| {
+    if ctx.init().in_routes.is_empty() {
+        None
+    } else {
+        Some(
+            ctx.init()
+                .identity
+                .as_ref()
+                .map(|id| {
+                    id.actualize_relay()
+                        .expect("failed to initialize global identity")
+                })
+                .unwrap_or_else(|| {
+                    let ctx = ctx.clone();
+                    smol::future::block_on(async move {
+                        match db_read(&ctx, "global_identity").await {
+                            Ok(Some(id)) => {
+                                if let Ok(id_bytes) = &id.try_into() {
+                                    RelayIdentitySecret::from_bytes(id_bytes)
+                                } else {
+                                    RelayIdentitySecret::generate()
+                                }
+                            }
+                            _ => RelayIdentitySecret::generate(),
                         }
-                    }
-                    _ => RelayIdentitySecret::generate(),
-                }
-            })
-        })
+                    })
+                }),
+        )
+    }
 };
 
 pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
@@ -156,7 +162,12 @@ pub async fn send_reply(
             let raw_packet = RawPacket::new_reply(
                 &reply_block,
                 inner,
-                &SourceId::Relay(ctx.get(GLOBAL_IDENTITY).public().fingerprint()),
+                &SourceId::Relay(
+                    ctx.get(GLOBAL_IDENTITY)
+                        .expect("only relays have global identities")
+                        .public()
+                        .fingerprint(),
+                ),
             )?;
             let emit_time = Instant::now();
             ctx.get(DELAY_QUEUE)

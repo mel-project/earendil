@@ -100,7 +100,8 @@ async fn in_route_loop(
     let mut stream = mplex.accept_conn().await?;
     let node_type: NodeType = stdcode::deserialize(&receive_message(&mut stream).await?)?;
     let my_descriptor = stdcode::serialize(&IdentityDescriptor::new(
-        ctx.get(GLOBAL_IDENTITY),
+        &ctx.get(GLOBAL_IDENTITY)
+            .expect("only relays have global identities"),
         ctx.get(GLOBAL_ONION_SK),
     ))?;
 
@@ -250,7 +251,8 @@ async fn out_route_loop(
         send_message(&msg, &mut stream).await?;
 
         let my_descriptor = stdcode::serialize(&IdentityDescriptor::new(
-            ctx.get(GLOBAL_IDENTITY),
+            &ctx.get(GLOBAL_IDENTITY)
+                .expect("only relays have global identities"),
             ctx.get(GLOBAL_ONION_SK),
         ))?;
         send_message(&my_descriptor, &mut stream).await?;
@@ -371,7 +373,8 @@ async fn relay_loop(
                                 let difficulty = if difficulty > 64 { 64 } else { difficulty };
                                 let proof = SettlementProof::new_auto(seed, difficulty);
                                 let request = SettlementRequest::new(
-                                    *ctx.get(GLOBAL_IDENTITY),
+                                    ctx.get(GLOBAL_IDENTITY)
+                                        .expect("only relays have global identities"),
                                     difficulty_to_micromel(difficulty),
                                     proof,
                                 );
@@ -476,7 +479,8 @@ async fn client_relay_loop(
                                 let difficulty = if difficulty > 64 { 64 } else { difficulty };
                                 let proof = SettlementProof::new_auto(seed, difficulty);
                                 let request = SettlementRequest::new(
-                                    *ctx.get(GLOBAL_IDENTITY),
+                                    ctx.get(GLOBAL_IDENTITY)
+                                        .expect("only relays have global identities"),
                                     difficulty_to_micromel(difficulty),
                                     proof,
                                 );
@@ -580,7 +584,8 @@ async fn relay_client_loop(
                                 let difficulty = if difficulty > 64 { 64 } else { difficulty };
                                 let proof = SettlementProof::new_auto(seed, difficulty);
                                 let request = SettlementRequest::new(
-                                    *ctx.get(GLOBAL_IDENTITY),
+                                    ctx.get(GLOBAL_IDENTITY)
+                                        .expect("only relays have global identities"),
                                     difficulty_to_micromel(difficulty),
                                     proof,
                                 );

@@ -242,7 +242,9 @@ pub async fn send_relay_chat_msg(
     msg: String,
 ) -> anyhow::Result<()> {
     let chats = ctx.get(CHATS);
-    let my_sk = *ctx.get(GLOBAL_IDENTITY);
+    let my_sk = ctx
+        .get(GLOBAL_IDENTITY)
+        .expect("only relays have global identities");
     let settlements = ctx.get(SETTLEMENTS);
 
     if msg.starts_with("!settle ") {
