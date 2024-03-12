@@ -111,22 +111,22 @@ pub fn list_chats(ctx: &DaemonContext) -> String {
 }
 
 pub fn add_client_link(ctx: &DaemonContext, neighbor: ClientId, client: Arc<LinkClient>) {
-    tracing::info!("about to add rpc client for neighbor: {neighbor}");
+    tracing::info!("adding rpc client for neighbor: {neighbor}");
     ctx.get(CHATS).client_links.insert(neighbor, client);
-    tracing::info!("added rpc client for neighbor: {neighbor}");
 }
 
 pub fn add_relay_link(ctx: &DaemonContext, neighbor: RelayFingerprint, client: Arc<LinkClient>) {
-    tracing::info!("about to add rpc client for neighbor: {neighbor}");
+    tracing::info!("adding rpc client for neighbor: {neighbor}");
     ctx.get(CHATS).relay_links.insert(neighbor, client);
-    tracing::info!("added rpc client for neighbor: {neighbor}");
 }
 
 pub fn remove_client_link(ctx: &DaemonContext, neighbor: &ClientId) {
+    tracing::info!("removing rpc client for neighbor: {neighbor}");
     ctx.get(CHATS).client_links.remove(neighbor);
 }
 
 pub fn remove_relay_link(ctx: &DaemonContext, neighbor: &RelayFingerprint) {
+    tracing::info!("removing rpc client for neighbor: {neighbor}");
     ctx.get(CHATS).relay_links.remove(neighbor);
 }
 
