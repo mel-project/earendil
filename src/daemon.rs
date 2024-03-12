@@ -352,10 +352,12 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             spawn!(async move {
                 let req: JrpcRequest = serde_json::from_str(&String::from_utf8(req.to_vec())?)?;
                 let resp = service.respond_raw(req).await;
-                socket.send_to(
-                    Bytes::from(serde_json::to_string(&resp)?.into_bytes()),
-                    endpoint,
-                )?;
+                socket
+                    .send_to(
+                        Bytes::from(serde_json::to_string(&resp)?.into_bytes()),
+                        endpoint,
+                    )
+                    .await?;
 
                 anyhow::Ok(())
             })
@@ -392,7 +394,9 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     let body: Bytes = (inner, src_ep).stdcode().into();
 
                     cache.insert(src_ep, dest_ep);
-                    socket.send_to(body, AnonEndpoint::new(haven_anon_id, dest_ep.dock))?;
+                    socket
+                        .send_to(body, AnonEndpoint::new(haven_anon_id, dest_ep.dock))
+                        .await?;
                 } else {
                     tracing::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
                 }
@@ -402,7 +406,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
                 if let Some(haven) = cache.get(&dest_ep) {
                     let body: Bytes = (inner, haven).stdcode().into();
-                    socket.send_to(body, dest_ep)?;
+                    socket.send_to(body, dest_ep).await?;
                 }
             }
         };

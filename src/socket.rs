@@ -79,7 +79,7 @@ impl Socket {
         match &self.inner {
             InnerSocket::N2rRelay(s) => {
                 if let Endpoint::Anon(ep) = endpoint {
-                    s.send_to(body, ep)
+                    s.send_to(body, ep).await
                 } else {
                     Err(SocketSendError::N2rSendError(
                         SendMessageError::MismatchedNodes,
@@ -97,7 +97,7 @@ impl Socket {
             }
             InnerSocket::N2rClient(s) => {
                 if let Endpoint::Relay(ep) = endpoint {
-                    s.send_to(body, ep)
+                    s.send_to(body, ep).await
                 } else {
                     Err(SocketSendError::N2rSendError(
                         SendMessageError::MismatchedNodes,

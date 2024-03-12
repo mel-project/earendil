@@ -111,6 +111,7 @@ pub static CLIENT_SOCKET_RECV_QUEUES: CtxField<DashMap<AnonEndpoint, Sender<(Mes
     |_| Default::default();
 pub static RELAY_SOCKET_RECV_QUEUES: CtxField<DashMap<RelayEndpoint, Sender<(Message, SourceId)>>> =
     |_| Default::default();
+
 pub static DEGARBLERS: CtxField<DashMap<u64, ReplyDegarbler>> = |_| Default::default();
 
 pub static DEBTS: CtxField<Debts> = |ctx| {
@@ -143,12 +144,12 @@ pub static PKTS_SEEN: CtxField<DashSet<Hash>> = |_| DashSet::new();
 
 /// Sends a message with a replyblock with the given parameters.
 #[tracing::instrument(skip(ctx, content))]
-pub async fn send_reply(
+pub async fn n2r_reply(
     ctx: &DaemonContext,
     src_dock: Dock,
     anon_dest: AnonDest,
     dst_dock: Dock,
-    content: Vec<Bytes>,
+    content: Bytes,
 ) -> Result<(), SendMessageError> {
     tracing::debug!("calling send_reply here");
     let now = Instant::now();
@@ -198,13 +199,13 @@ pub async fn send_reply(
 
 /// Sends a raw N2R message with the given parameters.
 #[tracing::instrument(skip(ctx, content))]
-pub async fn send_n2r(
+pub async fn n2r_send(
     ctx: &DaemonContext,
     src: AnonDest,
     src_dock: Dock,
     dst_fp: RelayFingerprint,
     dst_dock: Dock,
-    content: Vec<Bytes>,
+    content: Bytes,
 ) -> Result<(), SendMessageError> {
     tracing::debug!("calling send_n2r here");
     let now = Instant::now();
@@ -320,6 +321,8 @@ pub async fn send_reply_blocks(
     let emit_time = Instant::now();
     ctx.get(DELAY_QUEUE)
         .insert((wrapped_rb_onion, first_peeler), emit_time);
+
+    tracing::debug!("****** OHHHH SENTTTT REPPPPLY BLOOOCKS *****");
 
     Ok(())
 }

@@ -66,6 +66,7 @@ melpow = "0.1.1"
 smolscale = "0.4.3"
 priority-queue = "1.4.0"
 async-event = "0.1.0"
+either = "1.10.0"
 
 [profile.dev]
 panic = 'abort'

@@ -35,7 +35,7 @@ impl ReplyBlock {
             InnerPacket::Message(Message {
                 source_dock: 0u32,
                 dest_dock: 0u32,
-                body: vec![Bytes::new()],
+                body: Bytes::new(),
             }),
             &metadata,
             SourceId::Anon(my_anon_id),

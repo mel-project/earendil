@@ -16,7 +16,7 @@ pub fn replenish_rrb(
     dst_fp: RelayFingerprint,
 ) -> Result<(), SendMessageError> {
     let _guard = LAWK.lock();
-    const BATCH_SIZE: usize = 10;
+    const BATCH_SIZE: usize = 5;
     while rb_balance(ctx, my_anon_id, dst_fp) < 100.0 {
         // we conservatively assume half get there
         ctx.get(BALANCE_TABLE).insert(
@@ -24,9 +24,13 @@ pub fn replenish_rrb(
             rb_balance(ctx, my_anon_id, dst_fp) + (BATCH_SIZE / 2) as f64,
         );
         let ctx = ctx.clone();
-        smolscale::spawn(
-            async move { send_reply_blocks(&ctx, BATCH_SIZE, my_anon_id, dst_fp).await },
-        )
+        smolscale::spawn(async move {
+            send_reply_blocks(&ctx, BATCH_SIZE, my_anon_id, dst_fp)
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error = debug(e), "reply blocks FAILED TO SEND!!!!!")
+                })
+        })
         .detach();
     }
     Ok(())

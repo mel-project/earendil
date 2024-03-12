@@ -87,8 +87,20 @@ pub async fn peel_forward(
                     relay_process_inner_pkt(ctx, pkt, from, my_fp)?
                 }
                 PeeledPacket::GarbledReply { id, pkt, client_id } => {
+                    tracing::debug!(
+                        id,
+                        client_id,
+                        "got a GARBLED REPLY to FORWARD to the CLIENT!!!"
+                    );
                     if let Some(client_link) = ctx.get(CLIENT_TABLE).get(&client_id) {
                         client_link.send((pkt, id)).await?;
+                    } else {
+                        tracing::warn!(
+                            "oh NOOO there is NOO client! Here are the clients that we DO have:"
+                        );
+                        for c in ctx.get(CLIENT_TABLE).iter() {
+                            tracing::warn!("  {}", c.0);
+                        }
                     }
                 }
             }
