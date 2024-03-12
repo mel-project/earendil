@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use colored::{ColoredString, Colorize};
-use earendil_crypt::{ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
+use earendil_crypt::{AnonDest, ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
     Dock, PacketConstructError,
@@ -407,14 +407,16 @@ pub enum SendMessageError {
     PacketConstructError(#[from] PacketConstructError),
     #[error("no onion public key for fingerprint {0}")]
     NoOnionPublic(RelayFingerprint),
-    #[error("failed to construct reply block")]
-    ReplyBlockFailed,
+    #[error("failed to construct reply block {0}")]
+    ReplyBlockFailed(String),
     #[error("cannot use anonymous id to communicate with anonymous id")]
     NoAnonId,
     #[error("mismatched nodes")]
     MismatchedNodes,
     #[error("client id not found")]
     NoClientId,
+    #[error("no reply blocks available for {0}")]
+    NoReplyBlocks(AnonDest),
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]

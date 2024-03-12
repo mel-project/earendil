@@ -175,7 +175,7 @@ pub async fn send_reply(
             ctx.get(DELAY_QUEUE)
                 .insert((raw_packet, reply_block.first_peeler), emit_time);
         } else {
-            return Err(SendMessageError::ReplyBlockFailed);
+            return Err(SendMessageError::NoReplyBlocks(anon_dest));
         };
 
         Ok(())
@@ -306,7 +306,7 @@ pub async fn send_reply_blocks(
     for _ in 0..count {
         let (rb, (id, degarbler)) =
             ReplyBlock::new(&reverse_instructs, first_peeler, &dest_opk, my_anon_id)
-                .map_err(|_| SendMessageError::ReplyBlockFailed)?;
+                .map_err(|e| SendMessageError::ReplyBlockFailed(e.to_string()))?;
         rbs.push(rb);
         ctx.get(DEGARBLERS).insert(id, degarbler);
     }
