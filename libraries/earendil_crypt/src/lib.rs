@@ -318,7 +318,7 @@ impl RelayFingerprint {
 
 #[repr(C)]
 #[derive(
-    Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize, Pod, Zeroable, Debug,
+    Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize, Pod, Zeroable,
 )]
 pub struct AnonDest(pub [u8; 16]);
 
@@ -330,6 +330,17 @@ impl AnonDest {
 }
 
 impl Display for AnonDest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let hex_string = self
+            .0
+            .iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<String>();
+        write!(f, "{}", hex_string)
+    }
+}
+
+impl Debug for AnonDest {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let hex_string = self
             .0
