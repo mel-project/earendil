@@ -153,7 +153,7 @@ impl RawPacket {
                         outer: header_outer.try_into().unwrap(),
                         inner: {
                             // We fill with garbage, since none of this will get read
-                            let mut bts = [0; 747];
+                            let mut bts = [0; INNER_HEADER_SIZE];
                             rand::thread_rng().fill_bytes(&mut bts);
                             bts
                         },
@@ -194,7 +194,7 @@ impl RawPacket {
                 let mut new_header_inner = *array_ref![
                     bytemuck::cast_ref::<_, [u8; OUTER_HEADER_SIZE]>(&next_hop.header),
                     0,
-                    747
+                    INNER_HEADER_SIZE
                 ];
                 stream_dencrypt(header_key.as_bytes(), &[0; 12], &mut new_header_inner);
                 new_header_inner
