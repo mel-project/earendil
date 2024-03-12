@@ -155,7 +155,7 @@ mod tests {
         let packet = RawPacket::new_reply(
             &reply_block,
             InnerPacket::Message(message.clone()),
-            &SourceId::Anon(alice_anon_id),
+            &SourceId::Relay(RelayFingerprint::from_bytes(&rand::random())),
         )
         .expect("Failed to create reply packet");
 

@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use std::{char::MAX, hash::Hash};
 
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
@@ -10,9 +10,20 @@ use serde_big_array::BigArray;
 use thiserror::Error;
 
 use crate::{
-    crypt::{box_decrypt, box_encrypt, stream_dencrypt, OnionPublic, OnionSecret},
+    crypt::{box_decrypt, box_encrypt, stream_dencrypt, OnionPublic, OnionSecret, BOX_OVERHEAD},
     InnerPacket, ReplyBlock,
 };
+
+const RAW_BODY_SIZE: usize = 8192;
+const MAX_HOPS: usize = 10;
+const LOW_LATENCY_MS: u16 = 15;
+const METADATA_BUFFER_SIZE: usize = 35;
+const FORWARD_TO_CLIENT_FLAG: u8 = 2;
+const FORWARD_TO_RELAY_FLAG: u8 = 1;
+const PACKET_IS_OURS_FLAG: u8 = 0;
+const OUTER_HEADER_SIZE: usize = std::mem::size_of::<RawHeader>();
+const INNER_HEADER_SIZE: usize = HEADER_LAYER_SIZE * (MAX_HOPS - 1);
+const HEADER_LAYER_SIZE: usize = METADATA_BUFFER_SIZE + BOX_OVERHEAD;
 
 pub type RawBody = [u8; 8192];
 
@@ -50,8 +61,6 @@ pub enum PacketPeelError {
     #[error("opening inner packet failed")]
     InnerPacketOpenError,
 }
-
-const LOW_LATENCY_MS: u16 = 15;
 
 fn sample_delay(avg: u16) -> u16 {
     let exp = Exp::new(1.0 / avg as f64).expect("avg must be greater than zero");
@@ -97,7 +106,7 @@ impl RawPacket {
         metadata: &[u8; 32],
         my_id: SourceId,
     ) -> Result<(Self, Vec<[u8; 32]>), PacketConstructError> {
-        if route.len() >= 10 {
+        if route.len() >= MAX_HOPS {
             return Err(PacketConstructError::TooManyHops);
         }
 
@@ -111,15 +120,15 @@ impl RawPacket {
 
             let buffer = if dest_is_client {
                 // we need to forward to a client so metadata starts with 2
-                let mut buffer = [2; 35];
+                let mut buffer = [2; METADATA_BUFFER_SIZE];
 
                 // encode client id and rb id
-                buffer[1..17].copy_from_slice(metadata);
+                buffer[1..17].copy_from_slice(&metadata[..16]);
 
                 buffer
             } else {
                 // this packet's dest is a relay, so metadata starts with 0
-                let mut buffer = [0; 35];
+                let mut buffer = [0; METADATA_BUFFER_SIZE];
 
                 // encode relay fingerprint
                 buffer[1..33].copy_from_slice(metadata);
@@ -144,7 +153,7 @@ impl RawPacket {
                         outer: header_outer.try_into().unwrap(),
                         inner: {
                             // We fill with garbage, since none of this will get read
-                            let mut bts = [0; 639];
+                            let mut bts = [0; 747];
                             rand::thread_rng().fill_bytes(&mut bts);
                             bts
                         },
@@ -182,8 +191,11 @@ impl RawPacket {
                     blake3::keyed_hash(b"header__________________________", &shared_sec);
                 // Shift the first 690-69 bytes of the next-hop header backwards by 69 bytes and encrypt.
                 // This drops the last 69 bytes, but we know that that cannot possibly include any useful info because of the 10-hop limit.
-                let mut new_header_inner =
-                    *array_ref![bytemuck::cast_ref::<_, [u8; 710]>(&next_hop.header), 0, 639];
+                let mut new_header_inner = *array_ref![
+                    bytemuck::cast_ref::<_, [u8; OUTER_HEADER_SIZE]>(&next_hop.header),
+                    0,
+                    747
+                ];
                 stream_dencrypt(header_key.as_bytes(), &[0; 12], &mut new_header_inner);
                 new_header_inner
             };
@@ -206,14 +218,14 @@ impl RawPacket {
         // First, decode the header
         let (metadata, their_pk) = box_decrypt(&self.header.outer, our_sk)
             .map_err(|_| PacketPeelError::DecryptionError)?;
-        assert_eq!(metadata.len(), 35);
+        assert_eq!(metadata.len(), METADATA_BUFFER_SIZE);
         let shared_sec = our_sk.shared_secret(&their_pk);
 
         // Then, peel the header
         let peeled_header = {
             let header_key = blake3::keyed_hash(b"header__________________________", &shared_sec);
-            let mut buffer = [0u8; 710];
-            buffer[..639].copy_from_slice(&self.header.inner);
+            let mut buffer = [0u8; OUTER_HEADER_SIZE];
+            buffer[..INNER_HEADER_SIZE].copy_from_slice(&self.header.inner);
             stream_dencrypt(header_key.as_bytes(), &[0; 12], &mut buffer);
             buffer
         };
@@ -225,11 +237,11 @@ impl RawPacket {
             new
         };
 
-        Ok(if metadata[0] == 2 {
+        Ok(if metadata[0] == FORWARD_TO_CLIENT_FLAG {
             // if the metadata starts with 2, then we need to forward to a client
             // the subsequent 8 bytes in the metadata indicate the client ID of the next guy.
             // bytes 9..17 (inclusive!) is a 64-bit reply block identifier that we will use to pair this packet with the reply block we generated, with which the other side garbled this message.
-            let client_id: u64 = u64::from_be_bytes(array_ref![metadata, 1, 8].clone());
+            let client_id: u64 = u64::from_be_bytes(*array_ref![metadata, 1, 8]);
             let id_bts = array_ref![metadata, 9, 8];
             let rb_id = u64::from_be_bytes(*id_bts);
             PeeledPacket::GarbledReply {
@@ -237,7 +249,7 @@ impl RawPacket {
                 id: rb_id,
                 pkt: peeled_body,
             }
-        } else if metadata[0] == 1 {
+        } else if metadata[0] == FORWARD_TO_RELAY_FLAG {
             // if the metadata starts with 1, then we need to forward to a relay.
             // the 20 remaining bytes in the metadata indicate the fingerprint of the next guy.
             let fingerprint = RelayFingerprint::from_bytes(array_ref![metadata, 1, 32]);
@@ -253,7 +265,7 @@ impl RawPacket {
                 },
                 delay_ms: u16::from_be_bytes(delay_bytes),
             }
-        } else if metadata[0] == 0 {
+        } else if metadata[0] == PACKET_IS_OURS_FLAG {
             // otherwise, the packet is ours
             let (inner_pkt, fp) = InnerPacket::decode(&peeled_body)
                 .map_err(|_| PacketPeelError::InnerPacketOpenError)?;
@@ -273,10 +285,10 @@ impl RawPacket {
 pub struct RawHeader {
     /// Box-encrypted, 21-byte flag (1 byte) + fingerprint OR metadata (20 bytes)
     #[serde(with = "BigArray")]
-    pub outer: [u8; 71],
+    pub outer: [u8; HEADER_LAYER_SIZE],
     /// Padding so that header is fixed-size
     #[serde(with = "BigArray")]
-    pub inner: [u8; 639],
+    pub inner: [u8; INNER_HEADER_SIZE],
 }
 
 /// A "peeled" Earendil packet.
@@ -295,6 +307,6 @@ pub enum PeeledPacket {
     GarbledReply {
         client_id: ClientId,
         id: u64,
-        pkt: [u8; 8192],
+        pkt: [u8; RAW_BODY_SIZE],
     },
 }

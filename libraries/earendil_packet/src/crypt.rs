@@ -119,6 +119,8 @@ pub enum AeadError {
     DecryptionFailed,
 }
 
+pub const BOX_OVERHEAD: usize = 48;
+
 /// Encrypts a message, with integrity protection, so that only the owner of a particular X25519 secret key can read it. Does not identify the sender.
 ///
 /// **Always** generates a fresh ephemeral keypair, returning it alongside the ciphertext.
