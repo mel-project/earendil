@@ -1,4 +1,4 @@
-use std::{char::MAX, hash::Hash};
+use std::hash::Hash;
 
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
@@ -21,9 +21,10 @@ const METADATA_BUFFER_SIZE: usize = 35;
 const FORWARD_TO_CLIENT_FLAG: u8 = 2;
 const FORWARD_TO_RELAY_FLAG: u8 = 1;
 const PACKET_IS_OURS_FLAG: u8 = 0;
-const OUTER_HEADER_SIZE: usize = std::mem::size_of::<RawHeader>();
+const RAW_HEADER_SIZE: usize = std::mem::size_of::<RawHeader>();
 const INNER_HEADER_SIZE: usize = HEADER_LAYER_SIZE * (MAX_HOPS - 1);
 const HEADER_LAYER_SIZE: usize = METADATA_BUFFER_SIZE + BOX_OVERHEAD;
+pub const RAW_PACKET_SIZE: usize = std::mem::size_of::<RawPacket>();
 
 pub type RawBody = [u8; 8192];
 
@@ -192,7 +193,7 @@ impl RawPacket {
                 // Shift the first 690-69 bytes of the next-hop header backwards by 69 bytes and encrypt.
                 // This drops the last 69 bytes, but we know that that cannot possibly include any useful info because of the 10-hop limit.
                 let mut new_header_inner = *array_ref![
-                    bytemuck::cast_ref::<_, [u8; OUTER_HEADER_SIZE]>(&next_hop.header),
+                    bytemuck::cast_ref::<_, [u8; RAW_HEADER_SIZE]>(&next_hop.header),
                     0,
                     INNER_HEADER_SIZE
                 ];
@@ -224,7 +225,7 @@ impl RawPacket {
         // Then, peel the header
         let peeled_header = {
             let header_key = blake3::keyed_hash(b"header__________________________", &shared_sec);
-            let mut buffer = [0u8; OUTER_HEADER_SIZE];
+            let mut buffer = [0u8; RAW_HEADER_SIZE];
             buffer[..INNER_HEADER_SIZE].copy_from_slice(&self.header.inner);
             stream_dencrypt(header_key.as_bytes(), &[0; 12], &mut buffer);
             buffer

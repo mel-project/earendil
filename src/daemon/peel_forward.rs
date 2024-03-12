@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use earendil_crypt::{AnonDest, NodeId, RelayFingerprint, SourceId};
-use earendil_packet::{InnerPacket, PeeledPacket, RawPacket};
+use earendil_packet::{InnerPacket, PeeledPacket, RawPacket, RAW_PACKET_SIZE};
 
 use crate::{
     daemon::context::{
@@ -28,7 +28,7 @@ pub async fn peel_forward(
         .fingerprint();
     let inner = async {
         let pkts_seen = ctx.get(PKTS_SEEN);
-        let packet_hash = blake3::hash(&bytemuck::cast::<RawPacket, [u8; 8902]>(pkt));
+        let packet_hash = blake3::hash(&bytemuck::cast::<RawPacket, [u8; RAW_PACKET_SIZE]>(pkt));
 
         if pkts_seen.contains(&packet_hash) {
             anyhow::bail!("received replayed pkt {packet_hash}");
