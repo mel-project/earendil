@@ -148,59 +148,45 @@ pub async fn send_n2r(
             raw_packet,
         );
     } else {
-        let fallible = || -> Result<(), SendMessageError> {
-            let route = match forward_route(ctx, dst_fp) {
-                Some(r) => r,
-                None => return Err(SendMessageError::NoRoute(dst_fp)),
-            };
-
-            let instructs = {
-                let graph = ctx.get(RELAY_GRAPH).read();
-                route_to_instructs(route.clone(), &graph)
-            }?;
-            tracing::trace!(
-                "*************************** translated this route to instructions: {:?}",
-                route
-            );
-            let their_opk = ctx
-                .get(RELAY_GRAPH)
-                .read()
-                .identity(&dst_fp)
-                .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
-                .onion_pk;
-            let wrapped_onion = RawPacket::new_normal(
-                &instructs,
-                &their_opk,
-                InnerPacket::Message(Message::new(src_dock, dst_dock, content.clone())),
-                &src_idsk,
-            )?;
-
-            // if anon source, send RBs
-            if src_anon {
-                replenish_rrb(ctx, src_idsk, dst_fp)?;
-            }
-
-            // we send the onion by treating it as a message addressed to ourselves
-            peel_forward(
-                ctx,
-                ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-                ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
-                wrapped_onion,
-            );
-            Ok(())
+        let route = match forward_route(ctx, dst_fp) {
+            Some(r) => r,
+            None => return Err(SendMessageError::NoRoute(dst_fp)),
         };
 
-        match fallible() {
-            Ok(()) => (),
-            Err(e) => {
-                tracing::warn!(
-                    "error sending packet with no reply blocks; retrying in one second: {e}"
-                );
+        let instructs = {
+            let graph = ctx.get(RELAY_GRAPH).read();
+            route_to_instructs(route.clone(), &graph)
+        }?;
+        tracing::trace!(
+            "*************************** translated this route to instructions: {:?}",
+            route
+        );
+        let their_opk = ctx
+            .get(RELAY_GRAPH)
+            .read()
+            .identity(&dst_fp)
+            .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
+            .onion_pk;
+        let wrapped_onion = RawPacket::new_normal(
+            &instructs,
+            &their_opk,
+            InnerPacket::Message(Message::new(src_dock, dst_dock, content.clone())),
+            &src_idsk,
+        )?;
 
-                Timer::after(Duration::from_secs(1)).await;
-                fallible()?;
-            }
+        // if anon source, send RBs
+        if src_anon {
+            replenish_rrb(ctx, src_idsk, dst_fp)?;
         }
+
+        // we send the onion by treating it as a message addressed to ourselves
+        peel_forward(
+            ctx,
+            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+            ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
+            wrapped_onion,
+        );
+        Ok(())
     }
     Ok(())
 }
