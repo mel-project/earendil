@@ -258,7 +258,7 @@ impl RawPacket {
                 [a, b] => [a, b],
                 _ => return Err(PacketPeelError::InnerPacketOpenError),
             };
-            PeeledPacket::Forward {
+            PeeledPacket::Relay {
                 next_peeler: fingerprint,
                 pkt: RawPacket {
                     header: bytemuck::cast(peeled_header),
@@ -296,7 +296,7 @@ pub struct RawHeader {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeeledPacket {
-    Forward {
+    Relay {
         next_peeler: RelayFingerprint,
         pkt: RawPacket,
         delay_ms: u16,

@@ -75,7 +75,7 @@ pub async fn peel_forward(
             ));
 
             match peeled {
-                PeeledPacket::Forward {
+                PeeledPacket::Relay {
                     next_peeler,
                     pkt,
                     delay_ms,
