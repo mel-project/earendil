@@ -186,7 +186,6 @@ pub async fn send_n2r(
             ctx.get(GLOBAL_IDENTITY).public().fingerprint(),
             wrapped_onion,
         );
-        Ok(())
     }
     Ok(())
 }
