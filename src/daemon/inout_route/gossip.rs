@@ -10,9 +10,9 @@ use rand::{seq::SliceRandom, thread_rng, Rng};
 use smol_timeout::TimeoutExt;
 use tap::TapOptional;
 
-use crate::daemon::context::{CtxField, GLOBAL_IDENTITY, RELAY_GRAPH};
+use crate::context::{CtxField, DaemonContext, GLOBAL_IDENTITY, RELAY_GRAPH};
 
-use super::{link_protocol::LinkClient, DaemonContext};
+use super::link_protocol::LinkClient;
 
 pub static STARTUP_TIME: CtxField<Instant> = |_| Instant::now();
 

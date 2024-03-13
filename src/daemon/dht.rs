@@ -12,7 +12,7 @@ use crate::{
     haven_util::HavenLocator,
 };
 
-use super::context::{CtxField, DaemonContext, RELAY_GRAPH};
+use crate::context::{CtxField, DaemonContext, RELAY_GRAPH};
 
 const DHT_REDUNDANCY: usize = 3;
 

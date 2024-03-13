@@ -7,7 +7,7 @@ use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
 use smol::Timer;
 
 use crate::{
-    daemon::context::DaemonContext,
+    context::DaemonContext,
     socket::{n2r_socket::N2rClientSocket, RelayEndpoint},
 };
 

@@ -5,7 +5,7 @@ use earendil_packet::ReplyBlock;
 use lru::LruCache;
 use parking_lot::Mutex;
 
-use crate::daemon::context::CtxField;
+use crate::context::CtxField;
 
 pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBlockStore::new());
 

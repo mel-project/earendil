@@ -7,7 +7,6 @@ use earendil_topology::IdentityDescriptor;
 use futures::{AsyncRead, AsyncWrite};
 use futures_util::TryFutureExt;
 use nursery_macro::nursery;
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use smol::{
     channel::Receiver,
@@ -22,22 +21,19 @@ pub mod chat;
 mod gossip;
 mod link_connection;
 mod link_protocol;
-
+use crate::context::{
+    DaemonContext, CLIENT_TABLE, DEBTS, GLOBAL_IDENTITY, GLOBAL_ONION_SK, MY_CLIENT_ID,
+    NEIGH_TABLE_NEW, SETTLEMENTS,
+};
 use crate::{
     config::{AutoSettle, LinkPrice},
-    daemon::{
-        context::{DEBTS, GLOBAL_IDENTITY, GLOBAL_ONION_SK, NEIGH_TABLE_NEW, SETTLEMENTS},
-        inout_route::{
-            chat::{add_client_link, add_relay_link, remove_client_link, remove_relay_link},
-            gossip::{
-                client_gossip_with_relay_loop, gossip_with_client_loop,
-                relay_gossip_with_relay_loop,
-            },
-        },
-        settlement::{
-            difficulty_to_micromel, onchain_multiplier, SettlementProof, SettlementRequest,
+    daemon::inout_route::{
+        chat::{add_client_link, add_relay_link, remove_client_link, remove_relay_link},
+        gossip::{
+            client_gossip_with_relay_loop, gossip_with_client_loop, relay_gossip_with_relay_loop,
         },
     },
+    settlement::{difficulty_to_micromel, onchain_multiplier, SettlementProof, SettlementRequest},
 };
 
 use self::{
@@ -46,11 +42,6 @@ use self::{
         LinkProtocolImpl, LinkRpcTransport,
     },
     link_protocol::{LinkClient, LinkService},
-};
-
-use super::{
-    context::{CtxField, CLIENT_TABLE},
-    DaemonContext,
 };
 
 const CONNECTION_LIFETIME: Duration = Duration::from_secs(10);

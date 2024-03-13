@@ -18,8 +18,8 @@ use smol::{
 use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 
+use crate::{context::DaemonContext, haven_util::HAVEN_FORWARD_DOCK};
 use crate::{control_protocol::DhtError, daemon::dht::dht_get};
-use crate::{daemon::context::DaemonContext, haven_util::HAVEN_FORWARD_DOCK};
 
 use super::n2r_socket::N2rClientSocket;
 use super::HavenEndpoint;

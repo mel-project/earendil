@@ -63,7 +63,7 @@ mod tests {
         let mut peeled_packet = packet;
         for (_, our_sk) in route {
             match peeled_packet.peel(our_sk) {
-                Ok(PeeledPacket::Forward {
+                Ok(PeeledPacket::Relay {
                     next_peeler: _,
                     pkt: next_packet,
                     delay_ms: _delay,
@@ -163,7 +163,7 @@ mod tests {
         let mut peeled_packet = packet;
         for (_, our_sk) in &route_with_onion_secrets {
             match peeled_packet.peel(our_sk).expect("Failed to peel packet") {
-                PeeledPacket::Forward {
+                PeeledPacket::Relay {
                     next_peeler: _,
                     pkt: next_packet,
                     delay_ms: _delay,

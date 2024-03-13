@@ -1,6 +1,7 @@
+use crate::context::DaemonContext;
 use crate::daemon::inout_route::LinkClient;
-use crate::daemon::settlement::{SettlementProof, SettlementRequest};
-use crate::daemon::{context::DaemonContext, db::db_read};
+use crate::db::db_read;
+use crate::settlement::{SettlementProof, SettlementRequest};
 use anyhow::Context;
 use dashmap::DashMap;
 use earendil_crypt::{ClientId, RelayFingerprint};
@@ -11,7 +12,7 @@ use std::{
     time::SystemTime,
 };
 
-use crate::daemon::context::{
+use crate::context::{
     CtxField, CLIENT_TABLE, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS,
 };
 

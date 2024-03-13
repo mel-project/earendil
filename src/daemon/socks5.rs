@@ -18,7 +18,7 @@ use crate::{
     stream::Stream,
 };
 
-use super::{context::CtxField, DaemonContext};
+use crate::context::{CtxField, DaemonContext};
 
 #[tracing::instrument(skip(ctx))]
 pub async fn socks5_loop(ctx: DaemonContext, socks5_cfg: Socks5) -> anyhow::Result<()> {

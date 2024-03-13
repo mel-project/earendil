@@ -22,7 +22,7 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::{
     config::{ForwardHandler, HavenForwardConfig},
-    daemon::context::DaemonContext,
+    context::DaemonContext,
     socket::{Endpoint, RelayEndpoint, Socket},
     stream::StreamListener,
 };

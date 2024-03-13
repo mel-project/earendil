@@ -30,18 +30,17 @@ use smol_timeout::TimeoutExt;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use sosistab2::Multiplex;
 
+use crate::context::{
+    DaemonContext, DEBTS, DEGARBLERS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS,
+};
 use crate::daemon::{
-    context::{DEBTS, DEGARBLERS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
     inout_route::chat::{incoming_client_chat, incoming_relay_chat},
     peel_forward::{client_process_inner_pkt, peel_forward, relay_one_hop_closer},
-    rrb_balance::{decrement_rrb_balance, replenish_rrb},
-    settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse},
+    rrb_balance::decrement_rrb_balance,
 };
+use crate::settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse};
 
-use super::{
-    link_protocol::{InfoResponse, LinkProtocol, LinkService},
-    DaemonContext,
-};
+use super::link_protocol::{InfoResponse, LinkProtocol, LinkService};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

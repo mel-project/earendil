@@ -6,12 +6,9 @@ use rand::prelude::*;
 use std::time::{Duration, Instant};
 
 use crate::{
+    context::{CtxField, DaemonContext, DEGARBLERS, MY_CLIENT_ID, NEIGH_TABLE_NEW, RELAY_GRAPH},
     control_protocol::SendMessageError,
-    daemon::context::{
-        CtxField, DaemonContext, DEGARBLERS, DELAY_QUEUE, MY_CLIENT_ID, NEIGH_TABLE_NEW,
-        RELAY_GRAPH,
-    },
-    n2r::{forward_route, route_to_instructs},
+    n2r::{delay_queue::DELAY_QUEUE, forward_route, route_to_instructs},
 };
 
 static LAWK: Mutex<()> = Mutex::new(());

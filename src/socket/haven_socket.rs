@@ -12,7 +12,8 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use std::time::Duration;
 
 use crate::{
-    daemon::{context::DaemonContext, dht::dht_insert},
+    context::DaemonContext,
+    daemon::dht::dht_insert,
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
     haven_util::{HavenLocator, RegisterHavenReq},
 };
@@ -20,7 +21,7 @@ use crate::{
 use super::{
     crypt_session::{CryptSession, HavenMsg},
     n2r_socket::N2rClientSocket,
-    HavenEndpoint, SocketRecvError, SocketSendError,
+    HavenEndpoint, SocketSendError,
 };
 
 pub struct HavenSocket {
@@ -139,11 +140,7 @@ impl HavenSocket {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn send_to(
-        &self,
-        body: Bytes,
-        endpoint: HavenEndpoint,
-    ) -> Result<(), SocketSendError> {
+    pub async fn send_to(&self, body: Bytes, endpoint: HavenEndpoint) -> anyhow::Result<()> {
         log::debug!("sending a haven message");
         let enc = self
             .crypt_sessions
@@ -161,13 +158,13 @@ impl HavenSocket {
             .map_err(|e| SocketSendError::HavenEncryptionError(e.to_string()))?;
         if let Err(e) = enc.send_outgoing(body).await {
             self.crypt_sessions.remove(&endpoint);
-            Err(SocketSendError::HavenEncryptionError(e.to_string()))
+            anyhow::bail!("haven encryption error {e}");
         } else {
             Ok(())
         }
     }
 
-    pub async fn recv_from(&self) -> Result<(Bytes, HavenEndpoint), SocketRecvError> {
+    pub async fn recv_from(&self) -> anyhow::Result<(Bytes, HavenEndpoint)> {
         Ok(self
             .recv_incoming_decrypted
             .recv()

@@ -5,14 +5,15 @@ use earendil_crypt::{AnonRemote, NodeId, RelayFingerprint, RemoteId};
 use earendil_packet::{InnerPacket, PeeledPacket, RawPacket, RAW_PACKET_SIZE};
 
 use crate::{
-    daemon::context::{
-        ANON_DESTS, CLIENT_SOCKET_RECV_QUEUES, CLIENT_TABLE, DEBTS, DELAY_QUEUE, GLOBAL_IDENTITY,
-        GLOBAL_ONION_SK, NEIGH_TABLE_NEW, PKTS_SEEN, RELAY_GRAPH, RELAY_SOCKET_RECV_QUEUES,
+    context::{
+        CLIENT_SOCKET_RECV_QUEUES, CLIENT_TABLE, DEBTS, GLOBAL_IDENTITY, GLOBAL_ONION_SK,
+        NEIGH_TABLE_NEW, PKTS_SEEN, RELAY_GRAPH,
     },
-    socket::{AnonEndpoint, RelayEndpoint},
+    delay_queue::DELAY_QUEUE,
+    socket::AnonEndpoint,
 };
 
-use super::context::DaemonContext;
+use crate::context::DaemonContext;
 
 #[tracing::instrument(skip(ctx, pkt))]
 pub async fn peel_forward(
@@ -191,37 +192,6 @@ pub fn client_process_inner_pkt(
         }
         InnerPacket::ReplyBlocks(_reply_blocks) => {
             tracing::warn!("clients shouldn't receive reply blocks");
-        }
-    }
-    Ok(())
-}
-
-#[tracing::instrument(skip(ctx, inner))]
-fn relay_process_inner_pkt(
-    ctx: &DaemonContext,
-    inner: InnerPacket,
-    src: RemoteId,
-    dest_fp: RelayFingerprint,
-) -> anyhow::Result<()> {
-    match inner {
-        InnerPacket::Message(msg) => {
-            tracing::debug!("received InnerPacket::Message");
-            let dest = RelayEndpoint::new(dest_fp, msg.dest_dock);
-            if let Some(send_incoming) = ctx.get(RELAY_SOCKET_RECV_QUEUES).get(&dest) {
-                send_incoming.try_send((msg, src))?;
-            } else {
-                anyhow::bail!("No socket listening on destination {dest}")
-            }
-        }
-        InnerPacket::ReplyBlocks(reply_blocks) => {
-            tracing::debug!("received a batch of ReplyBlocks");
-            for reply_block in reply_blocks {
-                if let RemoteId::Anon(dest) = src {
-                    ctx.get(ANON_DESTS).lock().insert(dest, reply_block);
-                } else {
-                    anyhow::bail!("no anon dest found for received reply blocks");
-                }
-            }
         }
     }
     Ok(())

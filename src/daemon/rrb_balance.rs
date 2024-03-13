@@ -4,9 +4,7 @@ use earendil_crypt::{AnonRemote, RelayFingerprint};
 use moka::sync::Cache;
 use parking_lot::Mutex;
 
-use crate::{control_protocol::SendMessageError, daemon::context::send_reply_blocks};
-
-use super::context::{CtxField, DaemonContext};
+use crate::context::{CtxField, DaemonContext};
 
 static LAWK: Mutex<()> = Mutex::new(());
 

@@ -9,10 +9,7 @@ use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    control_protocol::SendMessageError,
-    daemon::{context::DaemonContext, Daemon},
-};
+use crate::{context::DaemonContext, control_protocol::SendMessageError, daemon::Daemon};
 
 use self::{
     haven_socket::HavenSocket,
@@ -75,33 +72,27 @@ impl Socket {
         Self { inner }
     }
 
-    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> Result<(), SocketSendError> {
+    pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
         match &self.inner {
             InnerSocket::N2rRelay(s) => {
                 if let Endpoint::Anon(ep) = endpoint {
                     s.send_to(body, ep).await
                 } else {
-                    Err(SocketSendError::N2rSendError(
-                        SendMessageError::MismatchedNodes,
-                    ))
+                    anyhow::bail!("relay sockets can only send messages to client sockets");
                 }
             }
             InnerSocket::Haven(s) => {
                 if let Endpoint::Haven(ep) = endpoint {
                     s.send_to(body, ep).await
                 } else {
-                    Err(SocketSendError::N2rSendError(
-                        SendMessageError::MismatchedNodes,
-                    ))
+                    anyhow::bail!("haven sockets can only send haven messages to haven sockets");
                 }
             }
             InnerSocket::N2rClient(s) => {
                 if let Endpoint::Relay(ep) = endpoint {
                     s.send_to(body, ep).await
                 } else {
-                    Err(SocketSendError::N2rSendError(
-                        SendMessageError::MismatchedNodes,
-                    ))
+                    anyhow::bail!("client sockets can only send messages to server sockets");
                 }
             }
         }

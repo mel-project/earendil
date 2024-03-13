@@ -21,22 +21,21 @@ use smol_timeout::TimeoutExt;
 use sosistab2_obfsudp::ObfsUdpSecret;
 use thiserror::Error;
 
+use crate::context::{
+    CLIENT_TABLE, DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS,
+};
 use crate::{
     config::InRouteConfig,
     control_protocol::{
         ChatError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs,
     },
-    daemon::{
-        context::{CLIENT_TABLE, DEBTS, NEIGH_TABLE_NEW, RELAY_GRAPH},
-        DaemonContext,
-    },
+    daemon::DaemonContext,
     global_rpc::transport::GlobalRpcTransport,
     haven_util::HavenLocator,
     socket::{RelayEndpoint, Socket, SocketRecvError, SocketSendError},
 };
 
 use super::{
-    context::{GLOBAL_IDENTITY, SETTLEMENTS},
     dht::{dht_get, dht_insert},
     inout_route::chat,
 };

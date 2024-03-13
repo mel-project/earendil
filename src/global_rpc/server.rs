@@ -5,11 +5,9 @@ use moka::sync::Cache;
 
 use crate::{
     bicache::Bicache,
+    context::{CtxField, DaemonContext},
     control_protocol::DhtError,
-    daemon::{
-        context::{CtxField, DaemonContext},
-        dht::{dht_get, dht_insert},
-    },
+    daemon::dht::{dht_get, dht_insert},
     haven_util::{HavenLocator, RegisterHavenReq},
 };
 use earendil_crypt::{AnonRemote, HavenFingerprint, VerifyError};

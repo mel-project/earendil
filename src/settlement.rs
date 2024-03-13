@@ -18,7 +18,7 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::config::AutoSettle;
 
-use super::context::{DaemonContext, DEBTS, GLOBAL_IDENTITY};
+use crate::context::{DaemonContext, DEBTS, GLOBAL_IDENTITY};
 
 pub struct Hasher;
 

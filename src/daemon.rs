@@ -1,16 +1,12 @@
-pub(crate) mod context;
 mod control_protocol_impl;
 
-mod debts;
 pub(crate) mod dht;
 
-mod db;
 mod delay_queue;
 mod inout_route;
 mod peel_forward;
 mod reply_block_store;
 mod rrb_balance;
-mod settlement;
 mod socks5;
 mod tcp_forward;
 mod udp_forward;
@@ -38,14 +34,17 @@ use tracing::instrument;
 use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
+use crate::context::GLOBAL_IDENTITY;
+use crate::context::{DEBTS, NEIGH_TABLE_NEW};
 use crate::control_protocol::ControlClient;
 use crate::daemon::socks5::socks5_loop;
 use crate::daemon::tcp_forward::tcp_forward_loop;
+use crate::db::db_write;
 use crate::socket::n2r_socket::N2rRelaySocket;
 use crate::socket::{AnonEndpoint, HavenEndpoint};
 use crate::{
     config::ConfigFile,
-    daemon::context::{GLOBAL_ONION_SK, RELAY_GRAPH},
+    context::{GLOBAL_ONION_SK, RELAY_GRAPH},
     global_rpc::GLOBAL_RPC_DOCK,
 };
 use crate::{
@@ -53,20 +52,18 @@ use crate::{
     control_protocol::ControlService,
     daemon::inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
 };
+use crate::{context::DaemonContext, global_rpc::server::GlobalRpcImpl};
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
-use crate::{daemon::context::DaemonContext, global_rpc::server::GlobalRpcImpl};
 use crate::{daemon::udp_forward::udp_forward_loop, log_error};
 use crate::{
     global_rpc::server::REGISTERED_HAVENS,
     haven_util::{haven_loop, HAVEN_FORWARD_DOCK},
 };
 
-use self::context::{DEBTS, DELAY_QUEUE, NEIGH_TABLE_NEW};
 pub use self::control_protocol_impl::ControlProtErr;
 
-use self::db::db_write;
+use self::control_protocol_impl::ControlProtocolImpl;
 use self::peel_forward::{client_one_hop_closer, peel_forward, relay_one_hop_closer};
-use self::{context::GLOBAL_IDENTITY, control_protocol_impl::ControlProtocolImpl};
 
 pub struct Daemon {
     pub(crate) ctx: DaemonContext,

@@ -1,30 +1,23 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-    time::Duration,
-};
+use std::sync::Arc;
 
-use anyhow::Context;
 use bytes::Bytes;
-use clone_macro::clone;
-use concurrent_queue::ConcurrentQueue;
+
 use earendil_crypt::{AnonRemote, RelayFingerprint, RemoteId};
 use earendil_packet::{Dock, Message};
 use futures_util::TryFutureExt;
 use rand::Rng;
 
-use smol::channel::{Receiver, Sender};
-use smolscale::immortal::{Immortal, RespawnStrategy};
+use smol::channel::Receiver;
 
 use crate::{
-    daemon::context::{
-        n2r_reply, n2r_send, DaemonContext, ANON_IDENTITIES, CLIENT_SOCKET_RECV_QUEUES,
-        GLOBAL_IDENTITY, RELAY_SOCKET_RECV_QUEUES,
+    context::{
+        DaemonContext, CLIENT_SOCKET_RECV_QUEUES, GLOBAL_IDENTITY, RELAY_SOCKET_RECV_QUEUES,
     },
+    n2r,
     socket::SocketRecvError,
 };
 
-use super::{AnonEndpoint, RelayEndpoint, SocketSendError};
+use super::{AnonEndpoint, RelayEndpoint};
 
 struct RelayBoundDock {
     fp: RelayFingerprint,
@@ -91,12 +84,8 @@ impl N2rRelaySocket {
         }
     }
 
-    pub async fn send_to(
-        &self,
-        body: Bytes,
-        endpoint: AnonEndpoint,
-    ) -> Result<(), SocketSendError> {
-        n2r_reply(
+    pub async fn send_to(&self, body: Bytes, endpoint: AnonEndpoint) -> anyhow::Result<()> {
+        n2r::send_backward(
             &self.bound_dock.ctx,
             self.bound_dock.dock,
             endpoint.anon_dest,
@@ -188,12 +177,8 @@ impl N2rClientSocket {
         }
     }
 
-    pub async fn send_to(
-        &self,
-        body: Bytes,
-        endpoint: RelayEndpoint,
-    ) -> Result<(), SocketSendError> {
-        n2r_send(
+    pub async fn send_to(&self, body: Bytes, endpoint: RelayEndpoint) -> anyhow::Result<()> {
+        n2r::send_forward(
             &self.bound_dock.ctx,
             self.bound_dock.anon_id,
             self.bound_dock.dock,

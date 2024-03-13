@@ -1,4 +1,5 @@
 mod anon_dest;
+mod delay_queue;
 mod remote_rb;
 
 use std::time::Instant;
@@ -10,8 +11,8 @@ use earendil_packet::{Dock, ForwardInstruction, InnerPacket, Message, RawBody, R
 use smol::channel::{Receiver, Sender};
 
 use crate::{
-    daemon::context::{CtxField, DaemonContext, DEGARBLERS, DELAY_QUEUE, RELAY_GRAPH},
-    n2r::{anon_dest::ANON_DESTS, remote_rb::replenish_rrb},
+    context::{CtxField, DaemonContext, DEGARBLERS, RELAY_GRAPH},
+    n2r::{anon_dest::ANON_DESTS, delay_queue::DELAY_QUEUE, remote_rb::replenish_rrb},
     socket::{AnonEndpoint, RelayEndpoint},
 };
 
@@ -136,6 +137,16 @@ pub async fn send_forward(
         .insert((wrapped_onion, first_peeler), emit_time);
 
     Ok(())
+}
+
+pub async fn send_backward(
+    ctx: &DaemonContext,
+    src_dock: Dock,
+    dst: AnonRemote,
+    dst_dock: Dock,
+    content: Bytes,
+) -> anyhow::Result<()> {
+    todo!();
 }
 
 fn forward_route(ctx: &DaemonContext) -> anyhow::Result<Vec<RelayFingerprint>> {

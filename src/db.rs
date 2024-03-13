@@ -4,7 +4,7 @@ use sqlx::Row;
 use sqlx::SqlitePool;
 use std::str::FromStr;
 
-use super::context::{CtxField, DaemonContext};
+use crate::context::{CtxField, DaemonContext};
 
 static DATABASE: CtxField<Option<SqlitePool>> = |ctx| {
     tracing::debug!("INITIALIZING DATABASE");
