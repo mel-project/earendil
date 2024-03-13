@@ -4,7 +4,7 @@ pub(crate) mod dht;
 
 mod delay_queue;
 mod inout_route;
-mod peel_forward;
+
 mod reply_block_store;
 mod rrb_balance;
 mod socks5;
@@ -15,7 +15,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{NodeId, RelayFingerprint, RelayIdentitySecret};
+use earendil_crypt::{NeighborId, RelayFingerprint, RelayIdentitySecret};
 use earendil_packet::ForwardInstruction;
 
 use earendil_topology::{IdentityDescriptor, RelayGraph};
@@ -35,7 +35,7 @@ use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
 use crate::context::GLOBAL_IDENTITY;
-use crate::context::{DEBTS, NEIGH_TABLE_NEW};
+
 use crate::control_protocol::ControlClient;
 use crate::daemon::socks5::socks5_loop;
 use crate::daemon::tcp_forward::tcp_forward_loop;
@@ -63,7 +63,6 @@ use crate::{
 pub use self::control_protocol_impl::ControlProtErr;
 
 use self::control_protocol_impl::ControlProtocolImpl;
-use self::peel_forward::{client_one_hop_closer, peel_forward, relay_one_hop_closer};
 
 pub struct Daemon {
     pub(crate) ctx: DaemonContext,
@@ -189,11 +188,6 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             .map_err(log_error("control_protocol"))),
     );
 
-    let _packet_dispatch_loop = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([ctx], move || packet_dispatch_loop(ctx.clone())),
-    );
-
     let _haven_loops: Vec<Immortal> = ctx
         .init()
         .havens
@@ -316,12 +310,12 @@ async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         tracing::debug!("DBDBDBDB syncing DB...");
         let global_id = ctx.get(GLOBAL_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
-        let debts = ctx.get(DEBTS).as_bytes()?;
+        // let debts = ctx.get(DEBTS).as_bytes()?;
         let chats = inout_route::chat::serialize_chats(&ctx)?;
 
         db_write(&ctx, "global_identity", global_id).await?;
         db_write(&ctx, "relay_graph", graph).await?;
-        db_write(&ctx, "debts", debts).await?;
+        // db_write(&ctx, "debts", debts).await?;
         db_write(&ctx, "chats", chats).await?;
 
         smol::Timer::after(Duration::from_secs(10)).await;
@@ -407,47 +401,6 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 }
             }
         };
-    }
-}
-
-#[tracing::instrument(skip(ctx))]
-async fn packet_dispatch_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let i_am_client = ctx.init().in_routes.is_empty();
-    let delay_queue = ctx.get(DELAY_QUEUE);
-    loop {
-        let (pkt, peeler) = delay_queue.pop().await;
-
-        if i_am_client {
-            if let Some(next_hop) = client_one_hop_closer(&ctx, peeler) {
-                let conn = ctx
-                    .get(NEIGH_TABLE_NEW)
-                    .get(&next_hop)
-                    .context(format!("could not find this next hop {next_hop}"))?;
-
-                let _ = conn.try_send((pkt, next_hop));
-                ctx.get(DEBTS).incr_relay_outgoing(next_hop);
-            }
-        } else {
-            let my_fp = ctx
-                .get(GLOBAL_IDENTITY)
-                .expect("only relays have global identities")
-                .public()
-                .fingerprint();
-
-            if peeler == my_fp {
-                // todo: don't allow ourselves to be the first hop when choosing forward routes
-                peel_forward(&ctx, NodeId::Relay(my_fp), peeler, pkt).await;
-            } else if let Some(next_hop) = relay_one_hop_closer(&ctx, peeler) {
-                let conn = ctx
-                    .get(NEIGH_TABLE_NEW)
-                    .get(&next_hop)
-                    .context(format!("could not find this next hop {next_hop}"))?;
-
-                let _ = conn.try_send((pkt, peeler));
-            } else {
-                tracing::warn!("no route found to next peeler {peeler}");
-            }
-        }
     }
 }
 

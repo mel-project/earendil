@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use bytemuck::{Pod, Zeroable};
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
-use earendil_crypt::{ClientId, NodeId, RelayFingerprint, RelayIdentityPublic};
+use earendil_crypt::{ClientId, NeighborId, RelayFingerprint, RelayIdentityPublic};
 use earendil_packet::{RawBody, RawPacket};
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use futures_util::AsyncWriteExt;
@@ -35,12 +35,27 @@ use crate::context::{
 };
 use crate::daemon::{
     inout_route::chat::{incoming_client_chat, incoming_relay_chat},
-    peel_forward::{client_process_inner_pkt, peel_forward, relay_one_hop_closer},
     rrb_balance::decrement_rrb_balance,
 };
 use crate::settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse};
 
 use super::link_protocol::{InfoResponse, LinkProtocol, LinkService};
+
+pub struct LinkContext {
+    pub ctx: DaemonContext,
+    pub link_neighbor: NeighborId,
+    pub service: Arc<LinkService<LinkProtocolImpl>>,
+    pub mplex: Arc<Multiplex>,
+    pub recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
+}
+
+pub async fn link_listen(lctx: LinkContext) -> anyhow::Result<()> {
+    todo!()
+}
+
+pub async fn link_dial(lctx: LinkContext) -> anyhow::Result<()> {
+    todo!()
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -307,8 +322,13 @@ async fn relay_handle_onion(
 
             if peeler == my_fp {
                 if let Some(pk) = service.0.remote_relay_pk {
-                    peel_forward(&service.0.ctx, NodeId::Relay(pk.fingerprint()), peeler, pkt)
-                        .await;
+                    peel_forward(
+                        &service.0.ctx,
+                        NeighborId::Relay(pk.fingerprint()),
+                        peeler,
+                        pkt,
+                    )
+                    .await;
                 } else {
                     anyhow::bail!("no fingerprint found for link")
                 }
@@ -360,7 +380,7 @@ async fn relay_client_handle_onion(
 
             if peeler == my_fp {
                 if let Some(id) = service.0.remote_client_id {
-                    peel_forward(&service.0.ctx, NodeId::Client(id), peeler, pkt).await;
+                    peel_forward(&service.0.ctx, NeighborId::Client(id), peeler, pkt).await;
                 } else {
                     anyhow::bail!("no client id found for link")
                 }

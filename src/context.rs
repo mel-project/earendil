@@ -129,5 +129,3 @@ pub static MY_CLIENT_ID: CtxField<ClientId> = |_| {
 };
 
 pub static SETTLEMENTS: CtxField<Settlements> = |ctx| Settlements::new(ctx.init().auto_settle);
-
-pub static PKTS_SEEN: CtxField<DashSet<Hash>> = |_| DashSet::new();

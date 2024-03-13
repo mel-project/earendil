@@ -354,7 +354,7 @@ impl Debug for AnonRemote {
 pub type ClientId = u64;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash, Serialize, Deserialize)]
-pub enum NodeId {
+pub enum NeighborId {
     Relay(RelayFingerprint),
     Client(ClientId),
 }

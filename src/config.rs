@@ -49,6 +49,12 @@ pub struct ConfigFile {
     pub havens: Vec<HavenForwardConfig>,
 }
 
+impl ConfigFile {
+    pub fn is_client(&self) -> bool {
+        self.identity.is_none()
+    }
+}
+
 fn default_control_listen() -> SocketAddr {
     "127.0.0.1:18964".parse().unwrap()
 }

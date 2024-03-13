@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
-use earendil_crypt::{ClientId, RelayFingerprint, RemoteId};
+use earendil_crypt::{AnonRemote, ClientId, RelayFingerprint, RemoteId};
 use rand::{Rng, RngCore};
 use rand_distr::Exp;
 use serde::{Deserialize, Serialize};
@@ -268,10 +268,14 @@ impl RawPacket {
             }
         } else if metadata[0] == PACKET_IS_OURS_FLAG {
             // otherwise, the packet is ours
-            let (inner_pkt, fp) = InnerPacket::decode(&peeled_body)
+            let (inner_pkt, anon_remote) = InnerPacket::decode(&peeled_body)
                 .map_err(|_| PacketPeelError::InnerPacketOpenError)?;
+            let anon_remote = match anon_remote {
+                RemoteId::Relay(_) => return Err(PacketPeelError::InnerPacketOpenError),
+                RemoteId::Anon(anon) => anon,
+            };
             PeeledPacket::Received {
-                from: fp,
+                from: anon_remote,
                 pkt: inner_pkt,
             }
         } else {
@@ -302,7 +306,7 @@ pub enum PeeledPacket {
         delay_ms: u16,
     },
     Received {
-        from: RemoteId,
+        from: AnonRemote,
         pkt: InnerPacket,
     },
     GarbledReply {
