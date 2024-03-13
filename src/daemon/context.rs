@@ -21,7 +21,7 @@ use crate::{
     bicache::Bicache,
     config::ConfigFile,
     control_protocol::SendMessageError,
-    daemon::route_to_instructs,
+    daemon::{inout_route::MY_CLIENT_ID, route_to_instructs},
     socket::{AnonEndpoint, RelayEndpoint},
 };
 
@@ -100,7 +100,6 @@ pub static CLIENT_TABLE: CtxField<Cache<ClientId, Sender<(RawBody, u64)>>> = |_|
         .build()
 };
 
-pub static CLIENT_IDENTITIES: CtxField<Bicache<RelayFingerprint, ClientId>> = |_| Bicache::new(120);
 pub static ANON_IDENTITIES: CtxField<Cache<RelayFingerprint, AnonDest>> = |_| {
     CacheBuilder::default()
         .time_to_live(Duration::from_secs(120))
@@ -305,9 +304,14 @@ pub async fn send_reply_blocks(
 
     let mut rbs: Vec<ReplyBlock> = vec![];
     for _ in 0..count {
-        let (rb, (id, degarbler)) =
-            ReplyBlock::new(&reverse_instructs, first_peeler, &dest_opk, my_anon_id)
-                .map_err(|e| SendMessageError::ReplyBlockFailed(e.to_string()))?;
+        let (rb, (id, degarbler)) = ReplyBlock::new(
+            &reverse_instructs,
+            first_peeler,
+            &dest_opk,
+            *ctx.get(MY_CLIENT_ID),
+            my_anon_id,
+        )
+        .map_err(|e| SendMessageError::ReplyBlockFailed(e.to_string()))?;
         rbs.push(rb);
         ctx.get(DEGARBLERS).insert(id, degarbler);
     }

@@ -1,6 +1,7 @@
 use bytes::Bytes;
-use earendil_crypt::{AnonDest, RelayFingerprint, SourceId};
+use earendil_crypt::{AnonDest, ClientId, RelayFingerprint, SourceId};
 use rand::Rng;
+use rand_distr::num_traits::ToBytes;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -21,12 +22,14 @@ impl ReplyBlock {
         route: &[ForwardInstruction],
         first_peeler: RelayFingerprint,
         dest_opk: &OnionPublic,
+        my_client_id: ClientId,
         my_anon_id: AnonDest,
     ) -> Result<(Self, (u64, ReplyDegarbler)), PacketConstructError> {
         let rb_id: u64 = rand::random();
         let mut metadata = [0; 32];
         // metadata field for reply blocks: 8 bytes of a big-endian encoded unsigned integer, followed by 12 bytes of 0's
-        metadata[0..8].copy_from_slice(&rb_id.to_be_bytes());
+        metadata[0..8].copy_from_slice(&my_client_id.to_be_bytes());
+        metadata[8..16].copy_from_slice(&rb_id.to_be_bytes());
 
         let (raw_packet, shared_secs) = RawPacket::new(
             route,

@@ -100,7 +100,7 @@ mod tests {
         let alice_opk = alice_osk.public();
         let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
 
-        let (rb, _) = ReplyBlock::new(&route, first_peeler, &alice_opk, alice_anon_id)
+        let (rb, _) = ReplyBlock::new(&route, first_peeler, &alice_opk, 0, alice_anon_id)
             .expect("failed to create reply block");
         rb
     }

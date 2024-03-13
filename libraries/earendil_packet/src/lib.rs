@@ -142,7 +142,7 @@ mod tests {
 
         // Prepare reply block
         let (reply_block, (_, reply_degarbler)) =
-            ReplyBlock::new(&route, first_peeler, &alice_opk, alice_anon_id)
+            ReplyBlock::new(&route, first_peeler, &alice_opk, 0, alice_anon_id)
                 .expect("Failed to create reply block");
 
         // Prepare message using header from reply block

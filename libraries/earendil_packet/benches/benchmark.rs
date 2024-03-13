@@ -63,7 +63,15 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         c.bench_function(
             &format!("{route_length}-hop ReplyBlock construction"),
             |b| {
-                b.iter(|| black_box(ReplyBlock::new(&route, first_peeler, &my_opk, my_anon_id)));
+                b.iter(|| {
+                    black_box(ReplyBlock::new(
+                        &route,
+                        first_peeler,
+                        &my_opk,
+                        0,
+                        my_anon_id,
+                    ))
+                });
             },
         );
     }

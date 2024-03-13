@@ -49,7 +49,7 @@ use self::{
 };
 
 use super::{
-    context::{CLIENT_IDENTITIES, CLIENT_TABLE},
+    context::{CtxField, CLIENT_TABLE},
     DaemonContext,
 };
 
@@ -230,6 +230,11 @@ pub async fn out_route_obfsudp(
     }
 }
 
+pub static MY_CLIENT_ID: CtxField<ClientId> = |_| {
+    let rando = rand::random::<u64>();
+    rando / 100000 * 100000
+};
+
 async fn out_route_loop(
     ctx: DaemonContext,
     mplex: Arc<Multiplex>,
@@ -238,13 +243,12 @@ async fn out_route_loop(
 ) -> anyhow::Result<()> {
     let mut stream = mplex.open_conn("!init_auth").await?;
     let i_am_client = ctx.init().in_routes.is_empty();
-    let my_id = rand::thread_rng().gen::<ClientId>();
 
     if i_am_client {
         let msg = stdcode::serialize(&NodeType::Client)?;
         send_message(&msg, &mut stream).await?;
 
-        let my_id = stdcode::serialize(&my_id)?;
+        let my_id = stdcode::serialize(ctx.get(MY_CLIENT_ID))?;
         send_message(&my_id, &mut stream).await?;
     } else {
         let msg = stdcode::serialize(&NodeType::Relay)?;
@@ -293,8 +297,6 @@ async fn out_route_loop(
     ctx.get(NEIGH_TABLE_NEW).insert(their_fp, send_outgoing);
 
     if i_am_client {
-        ctx.get(CLIENT_IDENTITIES).insert(their_fp, my_id);
-
         client_relay_loop(ctx, mplex, their_pk, link_price, service, recv_outgoing).await?;
     } else {
         relay_loop(ctx, mplex, their_pk, link_price, service, recv_outgoing).await?;
