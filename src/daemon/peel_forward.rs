@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
-use earendil_crypt::{AnonDest, NodeId, RelayFingerprint, SourceId};
+use earendil_crypt::{AnonRemote, NodeId, RelayFingerprint, RemoteId};
 use earendil_packet::{InnerPacket, PeeledPacket, RawPacket, RAW_PACKET_SIZE};
 
 use crate::{
@@ -177,14 +177,14 @@ pub fn client_process_inner_pkt(
     ctx: &DaemonContext,
     inner: InnerPacket,
     src: RelayFingerprint,
-    anon_dest: AnonDest,
+    anon_dest: AnonRemote,
 ) -> anyhow::Result<()> {
     match inner {
         InnerPacket::Message(msg) => {
             tracing::debug!("client received InnerPacket::Message");
             let dest = AnonEndpoint::new(anon_dest, msg.dest_dock);
             if let Some(send_incoming) = ctx.get(CLIENT_SOCKET_RECV_QUEUES).get(&dest) {
-                send_incoming.try_send((msg, SourceId::Relay(src)))?;
+                send_incoming.try_send((msg, RemoteId::Relay(src)))?;
             } else {
                 anyhow::bail!("No socket listening on destination {dest}")
             }
@@ -200,7 +200,7 @@ pub fn client_process_inner_pkt(
 fn relay_process_inner_pkt(
     ctx: &DaemonContext,
     inner: InnerPacket,
-    src: SourceId,
+    src: RemoteId,
     dest_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
     match inner {
@@ -216,7 +216,7 @@ fn relay_process_inner_pkt(
         InnerPacket::ReplyBlocks(reply_blocks) => {
             tracing::debug!("received a batch of ReplyBlocks");
             for reply_block in reply_blocks {
-                if let SourceId::Anon(dest) = src {
+                if let RemoteId::Anon(dest) = src {
                     ctx.get(ANON_DESTS).lock().insert(dest, reply_block);
                 } else {
                     anyhow::bail!("no anon dest found for received reply blocks");

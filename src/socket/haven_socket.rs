@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{AnonDest, HavenIdentitySecret, RelayFingerprint};
+use earendil_crypt::{AnonRemote, HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::{crypt::OnionSecret, Dock};
 use moka::sync::Cache;
 use smol::{
@@ -74,7 +74,7 @@ impl HavenSocket {
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
             tracing::debug!("binding haven with rendezvous_point {}", rob);
             let context = ctx.clone();
-            let registration_anon_id = AnonDest::new();
+            let registration_anon_id = AnonRemote::new();
             let registration_isk = isk;
             let task = smolscale::spawn(async move {
                 // generate a new onion keypair

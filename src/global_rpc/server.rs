@@ -12,7 +12,7 @@ use crate::{
     },
     haven_util::{HavenLocator, RegisterHavenReq},
 };
-use earendil_crypt::{AnonDest, HavenFingerprint, VerifyError};
+use earendil_crypt::{AnonRemote, HavenFingerprint, VerifyError};
 
 use super::GlobalRpcProtocol;
 
@@ -32,7 +32,7 @@ static LOCAL_DHT_SHARD: CtxField<Cache<HavenFingerprint, HavenLocator>> = |_| {
         .build()
 };
 
-pub static REGISTERED_HAVENS: CtxField<Bicache<AnonDest, HavenFingerprint>> =
+pub static REGISTERED_HAVENS: CtxField<Bicache<AnonRemote, HavenFingerprint>> =
     |_| Bicache::new(3600);
 
 #[async_trait]

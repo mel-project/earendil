@@ -6,7 +6,7 @@ use std::{
 use blake3::Hash;
 use bytes::Bytes;
 use dashmap::{DashMap, DashSet};
-use earendil_crypt::{AnonDest, ClientId, RelayFingerprint, RelayIdentitySecret, SourceId};
+use earendil_crypt::{AnonRemote, ClientId, RelayFingerprint, RelayIdentitySecret, RemoteId};
 use earendil_packet::{
     crypt::OnionSecret, Dock, InnerPacket, Message, RawBody, RawPacket, ReplyBlock, ReplyDegarbler,
 };
@@ -21,7 +21,7 @@ use crate::{
     bicache::Bicache,
     config::ConfigFile,
     control_protocol::SendMessageError,
-    daemon::{inout_route::MY_CLIENT_ID, route_to_instructs},
+    daemon::route_to_instructs,
     socket::{AnonEndpoint, RelayEndpoint},
 };
 
@@ -100,15 +100,15 @@ pub static CLIENT_TABLE: CtxField<Cache<ClientId, Sender<(RawBody, u64)>>> = |_|
         .build()
 };
 
-pub static ANON_IDENTITIES: CtxField<Cache<RelayFingerprint, AnonDest>> = |_| {
+pub static ANON_IDENTITIES: CtxField<Cache<RelayFingerprint, AnonRemote>> = |_| {
     CacheBuilder::default()
         .time_to_live(Duration::from_secs(120))
         .build()
 };
 
-pub static CLIENT_SOCKET_RECV_QUEUES: CtxField<DashMap<AnonEndpoint, Sender<(Message, SourceId)>>> =
+pub static CLIENT_SOCKET_RECV_QUEUES: CtxField<DashMap<AnonEndpoint, Sender<(Message, RemoteId)>>> =
     |_| Default::default();
-pub static RELAY_SOCKET_RECV_QUEUES: CtxField<DashMap<RelayEndpoint, Sender<(Message, SourceId)>>> =
+pub static RELAY_SOCKET_RECV_QUEUES: CtxField<DashMap<RelayEndpoint, Sender<(Message, RemoteId)>>> =
     |_| Default::default();
 
 pub static DEGARBLERS: CtxField<DashMap<u64, ReplyDegarbler>> = |_| Default::default();
@@ -135,6 +135,11 @@ pub static DEBTS: CtxField<Debts> = |ctx| {
     })
 };
 
+pub static MY_CLIENT_ID: CtxField<ClientId> = |_| {
+    let rando = rand::random::<u64>();
+    rando / 100000 * 100000
+};
+
 pub static SETTLEMENTS: CtxField<Settlements> = |ctx| Settlements::new(ctx.init().auto_settle);
 
 pub static DELAY_QUEUE: CtxField<DelayQueue<(RawPacket, RelayFingerprint)>> = |_| DelayQueue::new();
@@ -146,7 +151,7 @@ pub static PKTS_SEEN: CtxField<DashSet<Hash>> = |_| DashSet::new();
 pub async fn n2r_reply(
     ctx: &DaemonContext,
     src_dock: Dock,
-    anon_dest: AnonDest,
+    anon_dest: AnonRemote,
     dst_dock: Dock,
     content: Bytes,
 ) -> Result<(), SendMessageError> {
@@ -164,7 +169,7 @@ pub async fn n2r_reply(
             let raw_packet = RawPacket::new_reply(
                 &reply_block,
                 inner,
-                &SourceId::Relay(
+                &RemoteId::Relay(
                     ctx.get(GLOBAL_IDENTITY)
                         .expect("only relays have global identities")
                         .public()
@@ -200,7 +205,7 @@ pub async fn n2r_reply(
 #[tracing::instrument(skip(ctx, content))]
 pub async fn n2r_send(
     ctx: &DaemonContext,
-    src: AnonDest,
+    src: AnonRemote,
     src_dock: Dock,
     dst_fp: RelayFingerprint,
     dst_dock: Dock,
@@ -237,7 +242,7 @@ pub async fn n2r_send(
         &instructs,
         &dest_opk,
         InnerPacket::Message(Message::new(src_dock, dst_dock, content.clone())),
-        SourceId::Anon(src),
+        RemoteId::Anon(src),
     )?;
 
     replenish_rrb(ctx, src, dst_fp)?;
@@ -275,7 +280,7 @@ fn reply_route(ctx: &DaemonContext) -> Option<Vec<RelayFingerprint>> {
 pub async fn send_reply_blocks(
     ctx: &DaemonContext,
     count: usize,
-    my_anon_id: AnonDest,
+    my_anon_id: AnonRemote,
     dst_fp: RelayFingerprint,
 ) -> Result<(), SendMessageError> {
     tracing::trace!("sending a batch of {count} reply blocks to {dst_fp}");
@@ -319,7 +324,7 @@ pub async fn send_reply_blocks(
         &instructs,
         &dest_opk,
         InnerPacket::ReplyBlocks(rbs),
-        SourceId::Anon(my_anon_id),
+        RemoteId::Anon(my_anon_id),
     )?;
 
     let emit_time = Instant::now();

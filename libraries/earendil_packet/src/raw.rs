@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
-use earendil_crypt::{ClientId, RelayFingerprint, SourceId};
+use earendil_crypt::{ClientId, RelayFingerprint, RemoteId};
 use rand::{Rng, RngCore};
 use rand_distr::Exp;
 use serde::{Deserialize, Serialize};
@@ -74,7 +74,7 @@ impl RawPacket {
         route: &[ForwardInstruction],
         dest_opk: &OnionPublic,
         payload: InnerPacket,
-        my_id: SourceId,
+        my_id: RemoteId,
     ) -> Result<Self, PacketConstructError> {
         let (raw, _) = Self::new(route, dest_opk, false, payload, &[0; 32], my_id)?;
         Ok(raw)
@@ -84,7 +84,7 @@ impl RawPacket {
     pub fn new_reply(
         reply_block: &ReplyBlock,
         payload: InnerPacket,
-        my_id: &SourceId,
+        my_id: &RemoteId,
     ) -> Result<Self, PacketConstructError> {
         let mut raw = payload
             .encode(my_id)
@@ -105,7 +105,7 @@ impl RawPacket {
         dest_is_client: bool,
         payload: InnerPacket,
         metadata: &[u8; 32],
-        my_id: SourceId,
+        my_id: RemoteId,
     ) -> Result<(Self, Vec<[u8; 32]>), PacketConstructError> {
         if route.len() >= MAX_HOPS {
             return Err(PacketConstructError::TooManyHops);
@@ -302,7 +302,7 @@ pub enum PeeledPacket {
         delay_ms: u16,
     },
     Received {
-        from: SourceId,
+        from: RemoteId,
         pkt: InnerPacket,
     },
     GarbledReply {

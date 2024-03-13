@@ -6,7 +6,7 @@ use std::{
 
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{AnonDest, HavenIdentityPublic, HavenIdentitySecret, RelayFingerprint};
+use earendil_crypt::{AnonRemote, HavenIdentityPublic, HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::{crypt::OnionPublic, Dock};
 use futures_util::io;
 use moka::sync::{Cache, CacheBuilder};
@@ -75,14 +75,14 @@ impl HavenLocator {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RegisterHavenReq {
-    pub anon_id: AnonDest,
+    pub anon_id: AnonRemote,
     pub identity_pk: HavenIdentityPublic,
     pub sig: Bytes,
     pub unix_timestamp: u64,
 }
 
 impl RegisterHavenReq {
-    pub fn new(my_anon_id: AnonDest, identity_sk: HavenIdentitySecret) -> Self {
+    pub fn new(my_anon_id: AnonRemote, identity_sk: HavenIdentitySecret) -> Self {
         let mut reg = Self {
             anon_id: my_anon_id,
             identity_pk: identity_sk.public(),

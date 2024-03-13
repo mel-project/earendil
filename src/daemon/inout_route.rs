@@ -230,11 +230,6 @@ pub async fn out_route_obfsudp(
     }
 }
 
-pub static MY_CLIENT_ID: CtxField<ClientId> = |_| {
-    let rando = rand::random::<u64>();
-    rando / 100000 * 100000
-};
-
 async fn out_route_loop(
     ctx: DaemonContext,
     mplex: Arc<Multiplex>,

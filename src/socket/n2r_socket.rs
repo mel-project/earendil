@@ -8,7 +8,7 @@ use anyhow::Context;
 use bytes::Bytes;
 use clone_macro::clone;
 use concurrent_queue::ConcurrentQueue;
-use earendil_crypt::{AnonDest, RelayFingerprint, SourceId};
+use earendil_crypt::{AnonRemote, RelayFingerprint, RemoteId};
 use earendil_packet::{Dock, Message};
 use futures_util::TryFutureExt;
 use rand::Rng;
@@ -43,7 +43,7 @@ impl Drop for RelayBoundDock {
 #[derive(Clone)]
 pub struct N2rRelaySocket {
     bound_dock: Arc<RelayBoundDock>,
-    recv_incoming: Receiver<(Message, SourceId)>, // relays can only ever receive communication from clients
+    recv_incoming: Receiver<(Message, RemoteId)>, // relays can only ever receive communication from clients
 }
 
 impl N2rRelaySocket {
@@ -114,7 +114,7 @@ impl N2rRelaySocket {
         })?;
 
         match source {
-            SourceId::Anon(anon_dest) => {
+            RemoteId::Anon(anon_dest) => {
                 let endpoint = AnonEndpoint::new(anon_dest, message.source_dock);
                 Ok((message.body.clone(), endpoint))
             }
@@ -128,7 +128,7 @@ impl N2rRelaySocket {
 }
 
 struct ClientBoundDock {
-    anon_id: AnonDest,
+    anon_id: AnonRemote,
     dock: Dock,
     ctx: DaemonContext,
 }
@@ -144,12 +144,12 @@ impl Drop for ClientBoundDock {
 #[derive(Clone)]
 pub struct N2rClientSocket {
     bound_dock: Arc<ClientBoundDock>,
-    recv_incoming: Receiver<(Message, SourceId)>, // relays can only ever receive communication from clients
+    recv_incoming: Receiver<(Message, RemoteId)>, // relays can only ever receive communication from clients
 }
 
 impl N2rClientSocket {
     pub fn bind(ctx: DaemonContext, dock: Option<Dock>) -> Self {
-        let my_anon_id = AnonDest::new();
+        let my_anon_id = AnonRemote::new();
         let dock = if let Some(dock) = dock {
             dock
         } else {
@@ -212,7 +212,7 @@ impl N2rClientSocket {
         })?;
 
         match source {
-            SourceId::Relay(fp) => {
+            RemoteId::Relay(fp) => {
                 let endpoint = RelayEndpoint::new(fp, message.source_dock);
                 Ok((message.body, endpoint))
             }

@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, num::NonZeroUsize};
 
-use earendil_crypt::AnonDest;
+use earendil_crypt::AnonRemote;
 use earendil_packet::ReplyBlock;
 use lru::LruCache;
 
@@ -32,7 +32,7 @@ impl ReplyBlockDeque {
 }
 
 pub struct ReplyBlockStore {
-    items: LruCache<AnonDest, ReplyBlockDeque>,
+    items: LruCache<AnonRemote, ReplyBlockDeque>,
 }
 
 impl Default for ReplyBlockStore {
@@ -48,14 +48,14 @@ impl ReplyBlockStore {
         Self { items }
     }
 
-    pub fn insert(&mut self, anon_dest: AnonDest, rb: ReplyBlock) {
+    pub fn insert(&mut self, anon_dest: AnonRemote, rb: ReplyBlock) {
         let deque = self
             .items
             .get_or_insert_mut(anon_dest, || ReplyBlockDeque::new(1000));
         deque.insert(rb);
     }
 
-    pub fn pop(&mut self, anon_dest: &AnonDest) -> Option<ReplyBlock> {
+    pub fn pop(&mut self, anon_dest: &AnonRemote) -> Option<ReplyBlock> {
         match self.items.get_mut(anon_dest) {
             Some(deque) => deque.pop(),
             None => None,
@@ -95,7 +95,7 @@ mod tests {
             .iter()
             .map(|(inst, _)| *inst)
             .collect();
-        let alice_anon_id = AnonDest::new();
+        let alice_anon_id = AnonRemote::new();
         let alice_osk = OnionSecret::generate();
         let alice_opk = alice_osk.public();
         let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn test_reply_block_store_insert() {
         let mut rb_store = ReplyBlockStore::new();
-        let anon_id = AnonDest::new();
+        let anon_id = AnonRemote::new();
         let rb = create_reply_block();
 
         // Testing insert in empty store
@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn test_reply_block_store_pop() {
         let mut rb_store = ReplyBlockStore::new();
-        let anon_id = AnonDest::new();
+        let anon_id = AnonRemote::new();
         let rb = create_reply_block();
 
         // Testing get when item exists

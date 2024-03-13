@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use earendil_crypt::{AnonDest, ClientId, RelayFingerprint, SourceId};
+use earendil_crypt::{AnonRemote, ClientId, RelayFingerprint, RemoteId};
 use rand::Rng;
 use rand_distr::num_traits::ToBytes;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ impl ReplyBlock {
         first_peeler: RelayFingerprint,
         dest_opk: &OnionPublic,
         my_client_id: ClientId,
-        my_anon_id: AnonDest,
+        my_anon_id: AnonRemote,
     ) -> Result<(Self, (u64, ReplyDegarbler)), PacketConstructError> {
         let rb_id: u64 = rand::random();
         let mut metadata = [0; 32];
@@ -41,7 +41,7 @@ impl ReplyBlock {
                 body: Bytes::new(),
             }),
             &metadata,
-            SourceId::Anon(my_anon_id),
+            RemoteId::Anon(my_anon_id),
         )?;
         let header = raw_packet.header;
         let stream_key = rand::thread_rng().gen();
@@ -65,7 +65,7 @@ impl ReplyBlock {
 #[derive(Clone)]
 pub struct ReplyDegarbler {
     shared_secs: Vec<[u8; 32]>,
-    my_anon_id: AnonDest,
+    my_anon_id: AnonRemote,
     stream_key: [u8; 32],
 }
 
@@ -82,12 +82,12 @@ impl ReplyDegarbler {
         let (inner, src) = InnerPacket::decode(raw)?;
 
         match src {
-            SourceId::Relay(fp) => Ok((inner, fp)),
-            SourceId::Anon(_) => anyhow::bail!("clients can't receive packets from clients"),
+            RemoteId::Relay(fp) => Ok((inner, fp)),
+            RemoteId::Anon(_) => anyhow::bail!("clients can't receive packets from clients"),
         }
     }
 
-    pub fn my_anon_id(&self) -> AnonDest {
+    pub fn my_anon_id(&self) -> AnonRemote {
         self.my_anon_id
     }
 }

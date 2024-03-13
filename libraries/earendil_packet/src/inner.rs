@@ -1,7 +1,7 @@
 use arrayref::array_ref;
 use bincode::Options;
 use bytes::Bytes;
-use earendil_crypt::{AnonDest, RelayFingerprint, RelayIdentityPublic, SourceId};
+use earendil_crypt::{AnonRemote, RelayFingerprint, RelayIdentityPublic, RemoteId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -57,15 +57,15 @@ pub enum EncodeError {
 
 impl InnerPacket {
     /// From a raw payload, deduce the inner packet as well as the source id.
-    pub fn decode(raw: &[u8; 8192]) -> Result<(Self, SourceId), DecodeError> {
+    pub fn decode(raw: &[u8; 8192]) -> Result<(Self, RemoteId), DecodeError> {
         let src_node_id = match array_ref![raw, 0, 1] {
             &[0u8] => {
                 let src_fp = RelayFingerprint::from_bytes(array_ref![raw, 1, 32]);
-                SourceId::Relay(src_fp)
+                RemoteId::Relay(src_fp)
             }
             &[1u8] => {
-                let anon_dest = AnonDest(array_ref![raw, 1, 16].clone());
-                SourceId::Anon(anon_dest)
+                let anon_dest = AnonRemote(array_ref![raw, 1, 16].clone());
+                RemoteId::Anon(anon_dest)
             }
             _ => return Err(DecodeError::BadMetadata),
         };
@@ -77,15 +77,15 @@ impl InnerPacket {
     }
 
     /// Encodes into a raw payload, given our node id
-    pub fn encode(&self, my_id: &SourceId) -> Result<[u8; 8192], EncodeError> {
+    pub fn encode(&self, my_id: &RemoteId) -> Result<[u8; 8192], EncodeError> {
         let mut toret = [0u8; 8192];
 
         match my_id {
-            SourceId::Relay(fingerprint) => {
+            RemoteId::Relay(fingerprint) => {
                 toret[0] = 0;
                 toret[1..33].copy_from_slice(fingerprint.as_bytes());
             }
-            SourceId::Anon(anon_dest) => {
+            RemoteId::Anon(anon_dest) => {
                 toret[0] = 1;
                 toret[1..17].copy_from_slice(&anon_dest.0);
             }
@@ -127,7 +127,7 @@ mod tests {
 
         // Step 3: Encode the InnerPacket
         let encrypted_packet = inner_packet
-            .encode(&SourceId::Relay(identity_secret.public().fingerprint()))
+            .encode(&RemoteId::Relay(identity_secret.public().fingerprint()))
             .expect("Can't encrypt packet");
 
         // Step 4: Decrypt the InnerPacket

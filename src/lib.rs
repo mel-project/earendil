@@ -5,6 +5,7 @@ pub mod control_protocol;
 pub mod daemon;
 mod global_rpc;
 mod haven_util;
+mod n2r;
 pub mod socket;
 pub mod stream;
 

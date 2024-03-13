@@ -4,7 +4,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use earendil_crypt::{AnonDest, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
+use earendil_crypt::{AnonRemote, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -223,12 +223,12 @@ impl FromStr for HavenEndpoint {
 
 #[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct AnonEndpoint {
-    pub anon_dest: AnonDest,
+    pub anon_dest: AnonRemote,
     pub dock: Dock,
 }
 
 impl AnonEndpoint {
-    pub fn new(anon_dest: AnonDest, dock: Dock) -> Self {
+    pub fn new(anon_dest: AnonRemote, dock: Dock) -> Self {
         Self { anon_dest, dock }
     }
 }
@@ -248,7 +248,7 @@ impl FromStr for AnonEndpoint {
             return Err(anyhow::anyhow!("invalid anon endpoint format"));
         }
         let fp_bytes: [u8; 16] = parts[0].as_bytes().try_into()?;
-        let fingerprint = AnonDest(fp_bytes);
+        let fingerprint = AnonRemote(fp_bytes);
         let dock = Dock::from_str(parts[1])?;
         Ok(AnonEndpoint::new(fingerprint, dock))
     }

@@ -11,7 +11,7 @@ pub use reply_block::*;
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
-    use earendil_crypt::{AnonDest, RelayFingerprint, RelayIdentitySecret, SourceId};
+    use earendil_crypt::{AnonRemote, RelayFingerprint, RelayIdentitySecret, RemoteId};
 
     use crate::crypt::OnionSecret;
 
@@ -57,7 +57,7 @@ mod tests {
             is_client,
             InnerPacket::Message(msg.clone()),
             &[0; 32],
-            SourceId::Relay(my_isk.public().fingerprint()),
+            RemoteId::Relay(my_isk.public().fingerprint()),
         )?;
 
         let mut peeled_packet = packet;
@@ -129,7 +129,7 @@ mod tests {
         use crate::RawPacket;
 
         // Generate  identity secrets
-        let alice_anon_id = AnonDest::new();
+        let alice_anon_id = AnonRemote::new();
         let alice_osk = OnionSecret::generate();
         let alice_opk = alice_osk.public();
         // Generate 5-hop route
@@ -155,7 +155,7 @@ mod tests {
         let packet = RawPacket::new_reply(
             &reply_block,
             InnerPacket::Message(message.clone()),
-            &SourceId::Relay(RelayFingerprint::from_bytes(&rand::random())),
+            &RemoteId::Relay(RelayFingerprint::from_bytes(&rand::random())),
         )
         .expect("Failed to create reply packet");
 
