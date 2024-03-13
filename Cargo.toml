@@ -17,7 +17,7 @@ serde = { version = "1.0.188", features = ["derive"] }
 serde_with = { version = "3.3.0", features = ["hex", "base64"] }
 earendil_packet = { version="0.1", path = "libraries/earendil_packet" }
 earendil_crypt = { version="0.1",path = "libraries/earendil_crypt" }
-earendil_topology = { version="0.1",path = "libraries/earendil_topology" }
+earendil_topology = { version="0.1.1",path = "libraries/earendil_topology" }
 nursery_macro = { version="0.1",path = "libraries/nursery_macro" }
 serde_yaml = "0.9.25"
 clap = { version = "4.4.6", features = ["derive"] }
