@@ -1,0 +1,10 @@
+# Earendil client config file
+
+db_path: /tmp/earendil # where to store persistent information
+# relays to connect to
+out_routes:
+  example-relay: # arbitrary name for this relay
+    fingerprint: ejqgx2g5jwe2mvjnzqbb6w1htmj9d2mz # relay's long-term identity fingerprint
+    protocol: obfsudp # transport protocol to use for connecting to relay
+    connect: 172.233.162.12:19999 # IP and port where the relay is listening
+    cookie: fa31361fe5597e14e22592cb98ef0f2eab5c62b3f38472331a2b6c9073991e07 # cookie for making an obfsudp connection

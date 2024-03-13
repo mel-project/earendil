@@ -130,22 +130,22 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     });
 
     let am_i_relay = !ctx.init().in_routes.is_empty();
-    if am_i_relay {
-        let _identity_refresh_loop = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || clone!([ctx], async move {
-                // first insert ourselves
+    let _identity_refresh_loop = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([ctx], move || clone!([ctx], async move {
+            // first insert ourselves
+            if am_i_relay {
                 ctx.get(RELAY_GRAPH)
                     .write()
                     .insert_identity(IdentityDescriptor::new(
                         ctx.get(GLOBAL_IDENTITY),
                         ctx.get(GLOBAL_ONION_SK),
                     ))?;
-                smol::Timer::after(Duration::from_secs(60)).await;
-                anyhow::Ok(())
-            })),
-        );
-    }
+            }
+            smol::Timer::after(Duration::from_secs(60)).await;
+            anyhow::Ok(())
+        })),
+    );
 
     let _control_protocol = Immortal::respawn(
         RespawnStrategy::Immediate,
