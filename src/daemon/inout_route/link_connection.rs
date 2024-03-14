@@ -30,23 +30,31 @@ use smol_timeout::TimeoutExt;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use sosistab2::Multiplex;
 
-use crate::context::{
-    DaemonContext, DEBTS, DEGARBLERS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS,
-};
 use crate::daemon::{
     inout_route::chat::{incoming_client_chat, incoming_relay_chat},
     rrb_balance::decrement_rrb_balance,
 };
 use crate::settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse};
+use crate::{
+    context::{
+        DaemonContext, DEBTS, DEGARBLERS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH,
+        SETTLEMENTS,
+    },
+    onion::incoming_raw,
+};
 
 use super::link_protocol::{InfoResponse, LinkProtocol, LinkService};
 
+pub struct RelayNeighbor(Receiver<(RawPacket, RelayFingerprint)>, RelayFingerprint);
+
+pub struct ClientNeighbor(Receiver<(RawBody, u64)>, ClientId);
+
 pub struct LinkContext {
     pub ctx: DaemonContext,
-    pub link_neighbor: NeighborId,
     pub service: Arc<LinkService<LinkProtocolImpl>>,
     pub mplex: Arc<Multiplex>,
-    pub recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
+    pub conn: sosistab2::Stream,
+    pub neighbor: either::Either<RelayNeighbor, ClientNeighbor>,
 }
 
 pub async fn link_listen(lctx: LinkContext) -> anyhow::Result<()> {
@@ -54,7 +62,10 @@ pub async fn link_listen(lctx: LinkContext) -> anyhow::Result<()> {
 }
 
 pub async fn link_dial(lctx: LinkContext) -> anyhow::Result<()> {
-    todo!()
+    loop {
+        let stream = lctx.mplex.open_conn("onion_packets").await?;
+        client_relay_handle_onion(service.clone(), stream, recv_outgoing.clone()).await?;
+    }
 }
 
 #[repr(C)]
@@ -215,190 +226,56 @@ pub async fn relay_client_connection_loop(
     })
 }
 
-#[tracing::instrument(skip(service, mplex, recv_outgoing))]
-async fn client_relay_onion_keepalive(
-    service: Arc<LinkService<LinkProtocolImpl>>,
-    mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
-) -> anyhow::Result<()> {
-    loop {
-        let stream = mplex.open_conn("onion_packets").await?;
-        client_relay_handle_onion(service.clone(), stream, recv_outgoing.clone()).await?;
-    }
-}
-
-#[tracing::instrument(skip(service, mplex, recv_outgoing))]
-async fn relay_onion_keepalive(
-    service: Arc<LinkService<LinkProtocolImpl>>,
-    mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
-) -> anyhow::Result<()> {
-    loop {
-        let stream = mplex.open_conn("onion_packets").await?;
-        relay_handle_onion(service.clone(), stream, recv_outgoing.clone()).await?;
-    }
-}
-
-#[tracing::instrument(skip(service, mplex, recv_outgoing))]
-async fn relay_client_onion_keepalive(
-    service: Arc<LinkService<LinkProtocolImpl>>,
-    mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<(RawBody, u64)>,
-) -> anyhow::Result<()> {
-    loop {
-        let stream = mplex.open_conn("onion_packets").await?;
-        relay_client_handle_onion(service.clone(), stream, recv_outgoing.clone()).await?;
-    }
-}
-
-#[tracing::instrument(skip(service, conn, recv_outgoing))]
-async fn client_relay_handle_onion(
-    service: Arc<LinkService<LinkProtocolImpl>>,
-    conn: sosistab2::Stream,
-    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
-) -> anyhow::Result<()> {
+#[tracing::instrument(skip(lctx))]
+async fn handle_onion(lctx: LinkContext) -> anyhow::Result<()> {
+    let conn = lctx.conn;
     let up = async {
         loop {
-            let (pkt, peeler) = recv_outgoing.recv().await?;
-            let pkt_with_peeler = PacketWithPeeler { pkt, peeler };
-            conn.send_urel(bytemuck::bytes_of(&pkt_with_peeler).to_vec().into())
-                .await?;
-        }
-    };
-    let dn = async {
-        loop {
-            let pkt = conn.recv_urel().await?;
-            let RawBodyWithRbId { mut body, rb_id } = *bytemuck::try_from_bytes(&pkt)
-                .ok()
-                .context("incoming urel packet of the wrong size to be an onion packet")?;
-
-            let reply_degarbler = service
-                .0
-                .ctx
-                .get(DEGARBLERS)
-                .remove(&rb_id)
-                .context(format!("no degarbler for pkt with id {rb_id}"))?
-                .1;
-            let (inner, src_fp) = reply_degarbler.degarble(&mut body)?;
-
-            tracing::debug!("packet has been degarbled!");
-
-            decrement_rrb_balance(&service.0.ctx, reply_degarbler.my_anon_id(), src_fp);
-            replenish_rrb(&service.0.ctx, reply_degarbler.my_anon_id(), src_fp)?;
-
-            client_process_inner_pkt(&service.0.ctx, inner, src_fp, reply_degarbler.my_anon_id())?;
-        }
-    };
-    up.race(dn).await
-}
-
-#[tracing::instrument(skip(service, conn, recv_outgoing))]
-async fn relay_handle_onion(
-    service: Arc<LinkService<LinkProtocolImpl>>,
-    conn: sosistab2::Stream,
-    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
-) -> anyhow::Result<()> {
-    let up = async {
-        loop {
-            let (pkt, peeler) = recv_outgoing.recv().await?;
-            let pkt_with_peeler = PacketWithPeeler { pkt, peeler };
-            conn.send_urel(bytemuck::bytes_of(&pkt_with_peeler).to_vec().into())
-                .await?;
-        }
-    };
-    let dn = async {
-        loop {
-            let pkt = conn.recv_urel().await?;
-            let PacketWithPeeler { pkt, peeler } = *bytemuck::try_from_bytes(&pkt)
-                .ok()
-                .context("incoming urel packet of the wrong size to be an onion packet")?;
-            let my_fp = service
-                .0
-                .ctx
-                .get(GLOBAL_IDENTITY)
-                .expect("only relays have global identities")
-                .public()
-                .fingerprint();
-
-            if peeler == my_fp {
-                if let Some(pk) = service.0.remote_relay_pk {
-                    peel_forward(
-                        &service.0.ctx,
-                        NeighborId::Relay(pk.fingerprint()),
-                        peeler,
-                        pkt,
-                    )
-                    .await;
-                } else {
-                    anyhow::bail!("no fingerprint found for link")
-                }
-            } else if let Some(next_hop) = relay_one_hop_closer(&service.0.ctx, peeler) {
-                let conn = service
-                    .0
-                    .ctx
-                    .get(NEIGH_TABLE_NEW)
-                    .get(&next_hop)
-                    .context(format!("could not find this next hop {next_hop}"))?;
-
-                let _ = conn.try_send((pkt, peeler));
-                service.0.ctx.get(DEBTS).incr_relay_outgoing(next_hop);
-            } else {
-                tracing::warn!("no route found to next peeler {peeler}");
+            match lctx.neighbor.as_ref() {
+                either::Either::Left(RelayNeighbor(recv_outgoing, _)) => loop {
+                    let (pkt, peeler) = recv_outgoing.recv().await?;
+                    let pkt_with_peeler = PacketWithPeeler { pkt, peeler };
+                    conn.send_urel(bytemuck::bytes_of(&pkt_with_peeler).to_vec().into())
+                        .await?;
+                },
+                either::Either::Right(ClientNeighbor(recv_outgoing, _)) => loop {
+                    let (body, rb_id) = recv_outgoing.recv().await?;
+                    let raw_body_with_rb_id = RawBodyWithRbId { body, rb_id };
+                    conn.send_urel(bytemuck::bytes_of(&raw_body_with_rb_id).to_vec().into())
+                        .await?;
+                },
             }
         }
     };
-    up.race(dn).await
-}
 
-#[tracing::instrument(skip(service, conn, recv_outgoing))]
-async fn relay_client_handle_onion(
-    service: Arc<LinkService<LinkProtocolImpl>>,
-    conn: sosistab2::Stream,
-    recv_outgoing: Receiver<(RawBody, u64)>,
-) -> anyhow::Result<()> {
-    let up = async {
-        loop {
-            let (body, rb_id) = recv_outgoing.recv().await?;
-            let raw_body_with_rb_id = RawBodyWithRbId { body, rb_id };
-            conn.send_urel(bytemuck::bytes_of(&raw_body_with_rb_id).to_vec().into())
-                .await?;
-        }
-    };
+    let service = lctx.service;
     let dn = async {
         loop {
-            let pkt = conn.recv_urel().await?;
-            let PacketWithPeeler { pkt, peeler } = *bytemuck::try_from_bytes(&pkt)
-                .ok()
-                .context("incoming urel packet of the wrong size to be an onion packet")?;
-            let my_fp = service
-                .0
-                .ctx
-                .get(GLOBAL_IDENTITY)
-                .expect("only relays have global identities")
-                .public()
-                .fingerprint();
+            if lctx.ctx.init().is_client() {
+                //neighbor has to be a relay
+            }
+            // we are a relay
+            else {
+                let pkt = conn.recv_urel().await?;
+                let PacketWithPeeler { pkt, peeler } = *bytemuck::try_from_bytes(&pkt)
+                    .ok()
+                    .context("incoming urel packet of the wrong size to be an onion packet")?;
 
-            if peeler == my_fp {
-                if let Some(id) = service.0.remote_client_id {
-                    peel_forward(&service.0.ctx, NeighborId::Client(id), peeler, pkt).await;
-                } else {
-                    anyhow::bail!("no client id found for link")
-                }
-            } else if let Some(next_hop) = relay_one_hop_closer(&service.0.ctx, peeler) {
-                let conn = service
-                    .0
-                    .ctx
-                    .get(NEIGH_TABLE_NEW)
-                    .get(&next_hop)
-                    .context(format!("could not find this next hop {next_hop}"))?;
-
-                let _ = conn.try_send((pkt, peeler));
-                service.0.ctx.get(DEBTS).incr_relay_outgoing(next_hop);
-            } else {
-                tracing::warn!("no route found to next peeler {peeler}");
+                // if the neighbor is a relay
+                incoming_raw(
+                    &lctx.ctx,
+                    match lctx.neighbor.as_ref() {
+                        either::Either::Left(RelayNeighbor(_, id)) => NeighborId::Relay(*id),
+                        either::Either::Right(ClientNeighbor(_, id)) => NeighborId::Client(*id),
+                    },
+                    peeler,
+                    pkt,
+                )
+                .await?;
             }
         }
     };
+
     up.race(dn).await
 }
 
