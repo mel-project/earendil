@@ -58,7 +58,7 @@ pub struct LinkContext {
     pub neighbor: either::Either<RelayNeighbor, ClientNeighbor>,
 }
 
-pub async fn link_maintain(lctx: LinkContext, is_listen: bool) -> anyhow::Result<()> {
+pub async fn link_maintain(lctx: &LinkContext, is_listen: bool) -> anyhow::Result<()> {
     linkrpc_listen(&lctx, is_listen)
         .race(async {
             if !is_listen {
@@ -337,8 +337,7 @@ impl LinkProtocol for LinkProtocolImpl {
     async fn request_seed(&self) -> Seed {
         let seed = rand::thread_rng().gen();
         let seed_cache = &self.ctx.get(SETTLEMENTS).seed_cache;
-        let remote_fp = self
-            .remote
+        let remote_fp = <itertools::Either<IdentityDescriptor, u64> as Clone>::clone(&self.remote)
             .left()
             .expect("REPLACE WITH PROPER ERROR HANDLING")
             .identity_pk
@@ -361,7 +360,7 @@ impl LinkProtocol for LinkProtocolImpl {
 }
 
 #[tracing::instrument(skip(lctx))]
-pub async fn gossip_loop(lctx: LinkContext) -> anyhow::Result<()> {
+pub async fn gossip_loop(lctx: &LinkContext) -> anyhow::Result<()> {
     let link_rpc = LinkRpcTransport::new(lctx.mplex.clone());
     let link_client = LinkClient::from(link_rpc);
     let neigh_label = match lctx.neighbor {

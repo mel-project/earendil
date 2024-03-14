@@ -1,15 +1,12 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use anyhow::Context;
-use earendil_crypt::{ClientId, RelayFingerprint, RelayIdentityPublic};
-use earendil_packet::{RawBody, RawPacket};
+use earendil_crypt::{ClientId, RelayFingerprint};
 use earendil_topology::IdentityDescriptor;
 use futures::{AsyncRead, AsyncWrite};
 use futures_util::TryFutureExt;
 use nursery_macro::nursery;
 use serde::{Deserialize, Serialize};
 use smol::{
-    channel::Receiver,
     future::FutureExt,
     io::{AsyncReadExt, AsyncWriteExt},
 };
@@ -18,29 +15,19 @@ use smol_timeout::TimeoutExt;
 use sosistab2::{Multiplex, MuxSecret};
 use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
 pub mod chat;
-mod gossip;
 mod link_connection;
 mod link_protocol;
-use crate::{
-    config::{AutoSettle, LinkPrice},
-    daemon::inout_route::{
-        chat::{add_client_link, add_relay_link, remove_client_link, remove_relay_link},
-        gossip::{
-            client_gossip_with_relay_loop, gossip_with_client_loop, relay_gossip_with_relay_loop,
-        },
-    },
-    settlement::{difficulty_to_micromel, onchain_multiplier, SettlementProof, SettlementRequest},
-};
+use crate::config::LinkPrice;
 use crate::{
     context::{
-        DaemonContext, CLIENT_TABLE, DEBTS, GLOBAL_IDENTITY, GLOBAL_ONION_SK, MY_CLIENT_ID,
-        NEIGH_TABLE_NEW, SETTLEMENTS,
+        DaemonContext, CLIENT_TABLE, GLOBAL_IDENTITY, GLOBAL_ONION_SK, MY_CLIENT_ID,
+        NEIGH_TABLE_NEW,
     },
     daemon::inout_route::link_connection::{ClientNeighbor, RelayNeighbor},
 };
 
 use self::{
-    link_connection::{link_maintain, LinkContext, LinkProtocolImpl, LinkRpcTransport},
+    link_connection::{gossip_loop, link_maintain, LinkContext, LinkProtocolImpl},
     link_protocol::{LinkClient, LinkService},
 };
 
@@ -147,21 +134,19 @@ async fn route_loop(
             ctx.get(CLIENT_TABLE).insert(*right, send_outgoing);
             ClientNeighbor(recv_outgoing, *right)
         });
-    let link_maintenance = link_maintain(
-        LinkContext {
+    let link_context = LinkContext {
+        ctx: ctx.clone(),
+        service: Arc::new(LinkService(LinkProtocolImpl {
             ctx: ctx.clone(),
-            service: Arc::new(LinkService(LinkProtocolImpl {
-                ctx: ctx.clone(),
-                mplex: mplex.clone(),
-                remote: neighbor,
-                max_outgoing_price: link_price.max_outgoing_price,
-            })),
-            mplex,
-            neighbor: link_channel_and_neigh,
-        },
-        is_listen,
-    );
-    let gossip = todo!();
+            mplex: mplex.clone(),
+            remote: neighbor,
+            max_outgoing_price: link_price.max_outgoing_price,
+        })),
+        mplex,
+        neighbor: link_channel_and_neigh,
+    };
+    let link_maintenance = link_maintain(&link_context, is_listen);
+    let gossip = gossip_loop(&link_context);
 
     link_maintenance.race(gossip).await
 }
