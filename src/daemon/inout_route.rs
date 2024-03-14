@@ -99,12 +99,17 @@ async fn route_loop(
             mplex.open_conn("!init_auth").await?
         };
         // send our own id
-        let my_descriptor = stdcode::serialize(&IdentityDescriptor::new(
-            &ctx.get(GLOBAL_IDENTITY)
-                .expect("only relays have global identities"),
-            ctx.get(GLOBAL_ONION_SK),
-        ))?;
-        send_message(&my_descriptor, &mut stream).await?;
+        if ctx.init().is_client() {
+            let my_id = stdcode::serialize(&ctx.get(MY_CLIENT_ID))?;
+            send_message(&my_id, &mut stream).await?;
+        } else {
+            let my_descriptor = stdcode::serialize(&IdentityDescriptor::new(
+                &ctx.get(GLOBAL_IDENTITY)
+                    .expect("only relays have global identities"),
+                ctx.get(GLOBAL_ONION_SK),
+            ))?;
+            send_message(&my_descriptor, &mut stream).await?;
+        }
         let node_type: NodeType = stdcode::deserialize(&receive_message(&mut stream).await?)?;
         match node_type {
             NodeType::Client => {
@@ -156,9 +161,9 @@ async fn route_loop(
         },
         is_listen,
     );
+    let gossip = todo!();
 
-    // then, we also start the gossipping etc loop
-    todo!("FILL THIS PART IN")
+    link_maintenance.race(gossip).await
 }
 
 #[derive(Clone)]

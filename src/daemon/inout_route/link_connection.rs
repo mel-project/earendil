@@ -1,24 +1,26 @@
 use std::{
     collections::HashSet,
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::Context;
 use async_trait::async_trait;
 
 use bytemuck::{Pod, Zeroable};
-use clone_macro::clone;
+use bytes::Bytes;
 use concurrent_queue::ConcurrentQueue;
-use earendil_crypt::{ClientId, NeighborId, RelayFingerprint, RelayIdentityPublic};
+use earendil_crypt::{ClientId, NeighborId, RelayFingerprint};
 use earendil_packet::{RawBody, RawPacket};
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
+use either::Either;
 use futures_util::AsyncWriteExt;
 use itertools::Itertools;
+use moka::sync::{Cache, CacheBuilder};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nursery_macro::nursery;
 
-use rand::Rng;
+use rand::{seq::SliceRandom, thread_rng, Rng};
 use smol::{
     channel::Receiver,
     future::FutureExt,
@@ -27,16 +29,13 @@ use smol::{
 };
 
 use smol_timeout::TimeoutExt;
-use smolscale::immortal::{Immortal, RespawnStrategy};
 use sosistab2::Multiplex;
+use tap::TapOptional;
 
-use crate::daemon::{
-    inout_route::chat::{incoming_client_chat, incoming_relay_chat},
-    rrb_balance::decrement_rrb_balance,
-};
 use crate::settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse};
+use crate::{context::CtxField, daemon::inout_route::link_protocol::LinkClient};
 use crate::{
-    context::{DaemonContext, DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
+    context::{DaemonContext, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
     onion::incoming_raw,
 };
 
@@ -359,4 +358,161 @@ impl LinkProtocol for LinkProtocolImpl {
             }
         }
     }
+}
+
+#[tracing::instrument(skip(lctx))]
+pub async fn gossip_loop(lctx: LinkContext) -> anyhow::Result<()> {
+    let link_rpc = LinkRpcTransport::new(lctx.mplex.clone());
+    let link_client = LinkClient::from(link_rpc);
+    let neigh_label = match lctx.neighbor {
+        Either::Left(RelayNeighbor(_, fp)) => fp.to_string(),
+        Either::Right(ClientNeighbor(_, id)) => id.to_string(),
+    };
+    scopeguard::defer!(tracing::info!(neigh_label, "gossip loop stopped",));
+
+    loop {
+        let once = async {
+            if let Err(err) = gossip_once(&lctx, &link_client).await {
+                tracing::warn!(neigh_label, err = debug(err), "gossip failed",);
+            }
+        };
+        if once.timeout(Duration::from_secs(10)).await.is_none() {
+            tracing::warn!("gossip once timed out");
+        };
+        smol::Timer::after(Duration::from_secs(1)).await;
+    }
+}
+
+async fn gossip_once(lctx: &LinkContext, link_client: &LinkClient) -> anyhow::Result<()> {
+    if lctx.ctx.init().is_client() {
+        match &lctx.neighbor {
+            Either::Left(_) => {
+                fetch_identity(lctx, link_client).await?;
+                gossip_graph(lctx, link_client).await?;
+            }
+            Either::Right(_) => {
+                gossip_graph(lctx, link_client).await?;
+            }
+        };
+    } else {
+        fetch_identity(lctx, link_client).await?;
+        sign_adjacency(lctx, link_client).await?;
+        gossip_graph(lctx, link_client).await?;
+    }
+
+    Ok(())
+}
+
+// Step 1: Fetch the identity of the neighbor.
+#[tracing::instrument(skip(lctx, link_client))]
+async fn fetch_identity(lctx: &LinkContext, link_client: &LinkClient) -> anyhow::Result<()> {
+    tracing::debug!("fetching identity...");
+    let remote_fp = match lctx.neighbor {
+        Either::Left(RelayNeighbor(_, fp)) => fp,
+        Either::Right(_) => anyhow::bail!("cannot fetch client identity"),
+    };
+    let their_id = link_client
+        .identity(remote_fp)
+        .await?
+        .context("they refused to give us their id descriptor")?;
+    lctx.ctx
+        .get(RELAY_GRAPH)
+        .write()
+        .insert_identity(their_id)?;
+    Ok(())
+}
+
+// Step 2: Sign an adjacency descriptor with the neighbor if the local node is "left" of the neighbor.
+#[tracing::instrument(skip(lctx, link_client))]
+async fn sign_adjacency(lctx: &LinkContext, link_client: &LinkClient) -> anyhow::Result<()> {
+    tracing::debug!("signing adjacency...");
+    let neighbor_fp = match &lctx.neighbor {
+        Either::Left(RelayNeighbor(_, fp)) => fp,
+        Either::Right(_) => anyhow::bail!("cannot sign adjacency with client"),
+    };
+    let my_sk = lctx
+        .ctx
+        .get(GLOBAL_IDENTITY)
+        .expect("only relays have global identities");
+    let my_fingerprint = my_sk.public().fingerprint();
+    if my_fingerprint < *neighbor_fp {
+        // tracing::debug!("signing adjacency with {remote_fingerprint}");
+        let mut left_incomplete = AdjacencyDescriptor {
+            left: my_fingerprint,
+            right: *neighbor_fp,
+            left_sig: Bytes::new(),
+            right_sig: Bytes::new(),
+            unix_timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+        };
+        left_incomplete.left_sig = my_sk.sign(left_incomplete.to_sign().as_bytes());
+        let complete = link_client
+            .sign_adjacency(left_incomplete)
+            .await?
+            .context("remote refused to sign off")?;
+        lctx.ctx
+            .get(RELAY_GRAPH)
+            .write()
+            .insert_adjacency(complete.clone())?;
+        // tracing::trace!("inserted the new adjacency {:?} into the graph", complete);
+    }
+    Ok(())
+}
+
+// Step 3: Gossip the relay graph, by asking info about random nodes.
+#[tracing::instrument(skip(lctx, link_client))]
+async fn gossip_graph(lctx: &LinkContext, link_client: &LinkClient) -> anyhow::Result<()> {
+    tracing::debug!("gossipping relay graph...");
+    let all_known_nodes = lctx.ctx.get(RELAY_GRAPH).read().all_nodes().collect_vec();
+    let random_sample = all_known_nodes
+        .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
+        .copied()
+        .collect_vec();
+    let adjacencies = link_client.adjacencies(random_sample).await?;
+    for adjacency in adjacencies {
+        let left_fp = adjacency.left;
+        let right_fp = adjacency.right;
+
+        static IDENTITY_CACHE: CtxField<Cache<RelayFingerprint, IdentityDescriptor>> = |_| {
+            CacheBuilder::default()
+                .time_to_live(Duration::from_secs(60))
+                .build()
+        };
+
+        let left_id = if let Some(val) = lctx.ctx.get(IDENTITY_CACHE).get(&left_fp) {
+            Some(val)
+        } else {
+            link_client
+                .identity(left_fp)
+                .await?
+                .tap_some(|id| lctx.ctx.get(IDENTITY_CACHE).insert(left_fp, id.clone()))
+        };
+
+        let right_id = if let Some(val) = lctx.ctx.get(IDENTITY_CACHE).get(&right_fp) {
+            Some(val)
+        } else {
+            link_client
+                .identity(right_fp)
+                .await?
+                .tap_some(|id| lctx.ctx.get(IDENTITY_CACHE).insert(right_fp, id.clone()))
+        };
+
+        // fetch and insert the identities. we unconditionally do this since identity descriptors may change over time
+        if let Some(left_id) = left_id {
+            lctx.ctx.get(RELAY_GRAPH).write().insert_identity(left_id)?
+        }
+
+        if let Some(right_id) = right_id {
+            lctx.ctx
+                .get(RELAY_GRAPH)
+                .write()
+                .insert_identity(right_id)?
+        }
+
+        // insert the adjacency
+        lctx.ctx
+            .get(RELAY_GRAPH)
+            .write()
+            .insert_adjacency(adjacency)?
+    }
+    Ok(())
 }

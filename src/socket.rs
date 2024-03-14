@@ -98,7 +98,7 @@ impl Socket {
         }
     }
 
-    pub async fn recv_from(&self) -> Result<(Bytes, Endpoint), SocketRecvError> {
+    pub async fn recv_from(&self) -> anyhow::Result<(Bytes, Endpoint)> {
         match &self.inner {
             InnerSocket::N2rRelay(s) => {
                 let (b, ep) = s.recv_from().await?;
