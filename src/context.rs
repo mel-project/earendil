@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use blake3::Hash;
+use bytes::Bytes;
 use dashmap::{DashMap, DashSet};
 use earendil_crypt::{AnonRemote, ClientId, RelayFingerprint, RelayIdentitySecret, RemoteId};
-use earendil_packet::{crypt::OnionSecret, Message, RawBody, RawPacket, ReplyDegarbler};
+use earendil_packet::{crypt::OnionSecret, Dock, Message, RawBody, RawPacket, ReplyDegarbler};
 use earendil_topology::RelayGraph;
 
 use moka::sync::{Cache, CacheBuilder};
@@ -94,9 +95,11 @@ pub static ANON_IDENTITIES: CtxField<Cache<RelayFingerprint, AnonRemote>> = |_| 
         .build()
 };
 
-pub static CLIENT_SOCKET_RECV_QUEUES: CtxField<DashMap<AnonEndpoint, Sender<(Message, RemoteId)>>> =
-    |_| Default::default();
-pub static RELAY_SOCKET_RECV_QUEUES: CtxField<DashMap<RelayEndpoint, Sender<(Message, RemoteId)>>> =
+pub static CLIENT_SOCKET_RECV_QUEUES: CtxField<
+    DashMap<AnonEndpoint, Sender<(Bytes, RelayEndpoint)>>,
+> = |_| Default::default();
+
+pub static RELAY_SOCKET_RECV_QUEUES: CtxField<DashMap<Dock, Sender<(Bytes, AnonEndpoint)>>> =
     |_| Default::default();
 
 pub static DEGARBLERS: CtxField<DashMap<u64, ReplyDegarbler>> = |_| Default::default();

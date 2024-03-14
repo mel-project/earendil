@@ -11,7 +11,7 @@ use crate::context::CtxField;
 
 pub static DELAY_QUEUE: CtxField<DelayQueue<(RawPacket, RelayFingerprint)>> = |_| DelayQueue::new();
 
-struct DelayQueue<T: Hash + Eq> {
+pub struct DelayQueue<T: Hash + Eq> {
     priority_queue: Mutex<PriorityQueue<T, Reverse<Instant>>>,
     event: Event,
 }

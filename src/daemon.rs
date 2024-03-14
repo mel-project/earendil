@@ -5,7 +5,6 @@ pub(crate) mod dht;
 mod delay_queue;
 mod inout_route;
 
-mod reply_block_store;
 mod rrb_balance;
 mod socks5;
 mod tcp_forward;
@@ -25,6 +24,7 @@ use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 
 use nursery_macro::nursery;
+use smol::future::FutureExt;
 use smol::Task;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
@@ -34,12 +34,13 @@ use tracing::instrument;
 use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
-use crate::context::GLOBAL_IDENTITY;
+use crate::context::{CLIENT_SOCKET_RECV_QUEUES, GLOBAL_IDENTITY, RELAY_SOCKET_RECV_QUEUES};
 
 use crate::control_protocol::ControlClient;
 use crate::daemon::socks5::socks5_loop;
 use crate::daemon::tcp_forward::tcp_forward_loop;
 use crate::db::db_write;
+use crate::n2r;
 use crate::socket::n2r_socket::N2rRelaySocket;
 use crate::socket::{AnonEndpoint, HavenEndpoint};
 use crate::{
@@ -301,6 +302,29 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[instrument(skip(ctx))]
+async fn n2r_socket_shuttle(ctx: DaemonContext) -> anyhow::Result<()> {
+    if ctx.init().is_client() {
+        loop {
+            let (msg_body, src_relay_ep, anon_ep) = n2r::read_backward(&ctx).await?;
+            let sender = ctx
+                .get(CLIENT_SOCKET_RECV_QUEUES)
+                .get(&anon_ep)
+                .context(format!("no socket for {anon_ep}"))?;
+            sender.send((msg_body, src_relay_ep)).await?;
+        }
+    } else {
+        loop {
+            let (msg_body, src_anon_ep, dst_dock) = n2r::read_forward(&ctx).await?;
+            let sender = ctx
+                .get(RELAY_SOCKET_RECV_QUEUES)
+                .get(&dst_dock)
+                .context(format!("no socket for {dst_dock}"))?;
+            sender.send((msg_body, src_anon_ep)).await?;
+        }
+    }
 }
 
 #[instrument(skip(ctx))]

@@ -32,11 +32,14 @@ use smol_timeout::TimeoutExt;
 use sosistab2::Multiplex;
 use tap::TapOptional;
 
-use crate::settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse};
 use crate::{context::CtxField, daemon::inout_route::link_protocol::LinkClient};
 use crate::{
     context::{DaemonContext, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
     onion::incoming_raw,
+};
+use crate::{
+    n2r::incoming_backward,
+    settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse},
 };
 
 use super::link_protocol::{InfoResponse, LinkProtocol, LinkService};
@@ -59,14 +62,14 @@ pub struct LinkContext {
 }
 
 pub async fn link_maintain(lctx: &LinkContext, is_listen: bool) -> anyhow::Result<()> {
-    linkrpc_listen(&lctx, is_listen)
+    linkrpc_listen(lctx, is_listen)
         .race(async {
             if !is_listen {
                 smol::future::pending().await
             } else {
                 loop {
                     let stream = lctx.mplex.open_conn(LABEL_ONION).await?;
-                    handle_onion(&lctx, stream).await?;
+                    handle_onion(lctx, stream).await?;
                 }
             }
         })
@@ -118,21 +121,19 @@ pub struct RawBodyWithRbId {
 #[tracing::instrument(skip_all)]
 async fn handle_onion(lctx: &LinkContext, conn: sosistab2::Stream) -> anyhow::Result<()> {
     let up = async {
-        loop {
-            match lctx.neighbor.as_ref() {
-                either::Either::Left(RelayNeighbor(recv_outgoing, _)) => loop {
-                    let (pkt, peeler) = recv_outgoing.recv().await?;
-                    let pkt_with_peeler = PacketWithPeeler { pkt, peeler };
-                    conn.send_urel(bytemuck::bytes_of(&pkt_with_peeler).to_vec().into())
-                        .await?;
-                },
-                either::Either::Right(ClientNeighbor(recv_outgoing, _)) => loop {
-                    let (body, rb_id) = recv_outgoing.recv().await?;
-                    let raw_body_with_rb_id = RawBodyWithRbId { body, rb_id };
-                    conn.send_urel(bytemuck::bytes_of(&raw_body_with_rb_id).to_vec().into())
-                        .await?;
-                },
-            }
+        match lctx.neighbor.as_ref() {
+            either::Either::Left(RelayNeighbor(recv_outgoing, _)) => loop {
+                let (pkt, peeler) = recv_outgoing.recv().await?;
+                let pkt_with_peeler = PacketWithPeeler { pkt, peeler };
+                conn.send_urel(bytemuck::bytes_of(&pkt_with_peeler).to_vec().into())
+                    .await?;
+            },
+            either::Either::Right(ClientNeighbor(recv_outgoing, _)) => loop {
+                let (body, rb_id) = recv_outgoing.recv().await?;
+                let raw_body_with_rb_id = RawBodyWithRbId { body, rb_id };
+                conn.send_urel(bytemuck::bytes_of(&raw_body_with_rb_id).to_vec().into())
+                    .await?;
+            },
         }
     };
 
@@ -144,10 +145,11 @@ async fn handle_onion(lctx: &LinkContext, conn: sosistab2::Stream) -> anyhow::Re
         loop {
             if lctx.ctx.init().is_client() {
                 let pkt = conn.recv_urel().await?;
-                let PacketWithPeeler { pkt, peeler } = *bytemuck::try_from_bytes(&pkt)
+                let RawBodyWithRbId { body, rb_id } = *bytemuck::try_from_bytes(&pkt)
                     .ok()
                     .context("incoming urel packet of the wrong size to be an onion packet")?;
-                incoming_raw(&lctx.ctx, neigh_id, peeler, pkt).await?;
+
+                incoming_backward(&lctx.ctx, body, rb_id).await?;
             }
             // we are a relay
             else {

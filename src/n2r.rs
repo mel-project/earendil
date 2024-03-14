@@ -11,8 +11,9 @@ use earendil_packet::{Dock, ForwardInstruction, InnerPacket, Message, RawBody, R
 use smol::channel::{Receiver, Sender};
 
 use crate::{
-    context::{CtxField, DaemonContext, DEGARBLERS, RELAY_GRAPH},
+    context::{CtxField, DaemonContext, DEGARBLERS, GLOBAL_IDENTITY, RELAY_GRAPH},
     n2r::{anon_dest::ANON_DESTS, delay_queue::DELAY_QUEUE, remote_rb::replenish_rrb},
+    onion::send_raw,
     socket::{AnonEndpoint, RelayEndpoint},
 };
 
@@ -41,12 +42,9 @@ pub async fn incoming_forward(
 pub async fn incoming_backward(
     ctx: &DaemonContext,
     pkt: RawBody,
-    degarbler_id: u64,
+    rb_id: u64,
 ) -> anyhow::Result<()> {
-    ctx.get(INCOMING_BACKWARDS)
-        .0
-        .send((pkt, degarbler_id))
-        .await?;
+    ctx.get(INCOMING_BACKWARDS).0.send((pkt, rb_id)).await?;
     Ok(())
 }
 
@@ -132,9 +130,7 @@ pub async fn send_forward(
 
     replenish_rrb(ctx, src, dst_fp)?;
 
-    let emit_time = Instant::now();
-    ctx.get(DELAY_QUEUE)
-        .insert((wrapped_onion, first_peeler), emit_time);
+    send_raw(ctx, wrapped_onion, first_peeler).await?;
 
     Ok(())
 }
@@ -146,7 +142,30 @@ pub async fn send_backward(
     dst_dock: Dock,
     content: Bytes,
 ) -> anyhow::Result<()> {
-    todo!();
+    let reply_block = ctx
+        .get(ANON_DESTS)
+        .lock()
+        .pop(&dst)
+        .context(format!("no reply block for destination: {dst}"))?;
+    let message = Message {
+        source_dock: src_dock,
+        dest_dock: dst_dock,
+        body: content,
+    };
+
+    let packet = RawPacket::new_reply(
+        &reply_block,
+        InnerPacket::Message(message.clone()),
+        &RemoteId::Relay(
+            ctx.get(GLOBAL_IDENTITY)
+                .expect("only relays have global identities")
+                .public()
+                .fingerprint(),
+        ),
+    )?;
+
+    send_raw(ctx, packet, reply_block.first_peeler).await?;
+    Ok(())
 }
 
 fn forward_route(ctx: &DaemonContext) -> anyhow::Result<Vec<RelayFingerprint>> {

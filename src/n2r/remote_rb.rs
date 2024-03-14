@@ -9,6 +9,7 @@ use crate::{
     context::{CtxField, DaemonContext, DEGARBLERS, MY_CLIENT_ID, NEIGH_TABLE_NEW, RELAY_GRAPH},
     control_protocol::SendMessageError,
     n2r::{delay_queue::DELAY_QUEUE, forward_route, route_to_instructs},
+    onion::send_raw,
 };
 
 static LAWK: Mutex<()> = Mutex::new(());
@@ -80,7 +81,7 @@ async fn send_reply_blocks(
     for _ in 0..count {
         let (rb, (id, degarbler)) = ReplyBlock::new(
             &reverse_instructs,
-            first_peeler,
+            reverse_route[0],
             &dest_opk,
             *ctx.get(MY_CLIENT_ID),
             my_anon_id,
@@ -96,9 +97,7 @@ async fn send_reply_blocks(
         RemoteId::Anon(my_anon_id),
     )?;
 
-    let emit_time = Instant::now();
-    ctx.get(DELAY_QUEUE)
-        .insert((wrapped_rb_onion, first_peeler), emit_time);
+    send_raw(ctx, wrapped_rb_onion, first_peeler).await?;
 
     tracing::debug!("****** OHHHH SENTTTT REPPPPLY BLOOOCKS *****");
 
