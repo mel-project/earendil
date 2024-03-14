@@ -36,36 +36,70 @@ use crate::daemon::{
 };
 use crate::settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse};
 use crate::{
-    context::{
-        DaemonContext, DEBTS, DEGARBLERS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH,
-        SETTLEMENTS,
-    },
+    context::{DaemonContext, DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
     onion::incoming_raw,
 };
 
 use super::link_protocol::{InfoResponse, LinkProtocol, LinkService};
 
-pub struct RelayNeighbor(Receiver<(RawPacket, RelayFingerprint)>, RelayFingerprint);
+const LABEL_LINK_RPC: &str = "link-rpc";
+const LABEL_ONION: &str = "onion";
 
-pub struct ClientNeighbor(Receiver<(RawBody, u64)>, ClientId);
+pub struct RelayNeighbor(
+    pub Receiver<(RawPacket, RelayFingerprint)>,
+    pub RelayFingerprint,
+);
+
+pub struct ClientNeighbor(pub Receiver<(RawBody, u64)>, pub ClientId);
 
 pub struct LinkContext {
     pub ctx: DaemonContext,
     pub service: Arc<LinkService<LinkProtocolImpl>>,
     pub mplex: Arc<Multiplex>,
-    pub conn: sosistab2::Stream,
     pub neighbor: either::Either<RelayNeighbor, ClientNeighbor>,
 }
 
-pub async fn link_listen(lctx: LinkContext) -> anyhow::Result<()> {
-    todo!()
+pub async fn link_maintain(lctx: LinkContext, is_listen: bool) -> anyhow::Result<()> {
+    linkrpc_listen(&lctx, is_listen)
+        .race(async {
+            if !is_listen {
+                smol::future::pending().await
+            } else {
+                loop {
+                    let stream = lctx.mplex.open_conn(LABEL_ONION).await?;
+                    handle_onion(&lctx, stream).await?;
+                }
+            }
+        })
+        .await
 }
 
-pub async fn link_dial(lctx: LinkContext) -> anyhow::Result<()> {
-    loop {
-        let stream = lctx.mplex.open_conn("onion_packets").await?;
-        client_relay_handle_onion(service.clone(), stream, recv_outgoing.clone()).await?;
-    }
+async fn linkrpc_listen(lctx: &LinkContext, onion_listen: bool) -> anyhow::Result<()> {
+    nursery!({
+        loop {
+            let mut stream = lctx.mplex.accept_conn().await?;
+            match stream.label() {
+                LABEL_LINK_RPC => spawn!(async move {
+                    let mut stream_lines = BufReader::new(stream.clone()).lines();
+                    while let Some(line) = stream_lines.next().await {
+                        let line = line?;
+                        let req: JrpcRequest = serde_json::from_str(&line)?;
+                        // tracing::debug!(method = req.method, "LinkRPC request received");
+                        let resp = lctx.service.respond_raw(req).await;
+                        stream
+                            .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
+                            .await?;
+                    }
+                    anyhow::Ok(())
+                })
+                .detach(),
+                LABEL_ONION if onion_listen => {
+                    spawn!(handle_onion(lctx, stream)).detach();
+                }
+                other => tracing::warn!(label = other, "invalid link stream label"),
+            }
+        }
+    })
 }
 
 #[repr(C)]
@@ -82,153 +116,8 @@ pub struct RawBodyWithRbId {
     rb_id: u64,
 }
 
-/// Manages connections for clients.
-#[tracing::instrument(skip(service, mplex, recv_outgoing))]
-pub async fn client_relay_connection_loop(
-    service: Arc<LinkService<LinkProtocolImpl>>,
-    mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
-) -> anyhow::Result<()> {
-    let _onion_keepalive = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([mplex, recv_outgoing, service], move || {
-            client_relay_onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
-        }),
-    );
-
-    nursery!({
-        loop {
-            let service = service.clone();
-            let mut stream = mplex.accept_conn().await?;
-
-            match stream.label() {
-                "n2n_control" => spawn!(async move {
-                    let mut stream_lines = BufReader::new(stream.clone()).lines();
-                    while let Some(line) = stream_lines.next().await {
-                        let line = line?;
-                        let req: JrpcRequest = serde_json::from_str(&line)?;
-                        // tracing::debug!(method = req.method, "LinkRPC request received");
-                        let resp = service.respond_raw(req).await;
-                        stream
-                            .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
-                            .await?;
-                    }
-                    anyhow::Ok(())
-                })
-                .detach(),
-                "onion_packets" => spawn!(relay_handle_onion(
-                    service.clone(),
-                    stream,
-                    recv_outgoing.clone(),
-                ))
-                .detach(),
-                other => {
-                    tracing::error!("could not handle {other}");
-                }
-            }
-        }
-    })
-}
-
-/// Manages connections for relay connected to other relays.
-#[tracing::instrument(skip(service, mplex, recv_outgoing))]
-pub async fn relay_connection_loop(
-    service: Arc<LinkService<LinkProtocolImpl>>,
-    mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<(RawPacket, RelayFingerprint)>,
-) -> anyhow::Result<()> {
-    let _onion_keepalive = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([mplex, recv_outgoing, service], move || {
-            relay_onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
-        }),
-    );
-
-    nursery!({
-        loop {
-            let service = service.clone();
-            let mut stream = mplex.accept_conn().await?;
-
-            match stream.label() {
-                "n2n_control" => spawn!(async move {
-                    let mut stream_lines = BufReader::new(stream.clone()).lines();
-                    while let Some(line) = stream_lines.next().await {
-                        let line = line?;
-                        let req: JrpcRequest = serde_json::from_str(&line)?;
-                        // tracing::debug!(method = req.method, "LinkRPC request received");
-                        let resp = service.respond_raw(req).await;
-                        stream
-                            .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
-                            .await?;
-                    }
-                    anyhow::Ok(())
-                })
-                .detach(),
-                "onion_packets" => spawn!(relay_handle_onion(
-                    service.clone(),
-                    stream,
-                    recv_outgoing.clone(),
-                ))
-                .detach(),
-                other => {
-                    tracing::error!("could not handle {other}");
-                }
-            }
-        }
-    })
-}
-
-/// Manages connections for clients.
-#[tracing::instrument(skip(service, mplex, recv_outgoing))]
-pub async fn relay_client_connection_loop(
-    service: Arc<LinkService<LinkProtocolImpl>>,
-    mplex: Arc<Multiplex>,
-    recv_outgoing: Receiver<(RawBody, u64)>,
-) -> anyhow::Result<()> {
-    let _onion_keepalive = Immortal::respawn(
-        RespawnStrategy::Immediate,
-        clone!([mplex, recv_outgoing, service], move || {
-            relay_client_onion_keepalive(service.clone(), mplex.clone(), recv_outgoing.clone())
-        }),
-    );
-
-    nursery!({
-        loop {
-            let service = service.clone();
-            let mut stream = mplex.accept_conn().await?;
-
-            match stream.label() {
-                "n2n_control" => spawn!(async move {
-                    let mut stream_lines = BufReader::new(stream.clone()).lines();
-                    while let Some(line) = stream_lines.next().await {
-                        let line = line?;
-                        let req: JrpcRequest = serde_json::from_str(&line)?;
-                        // tracing::debug!(method = req.method, "LinkRPC request received");
-                        let resp = service.respond_raw(req).await;
-                        stream
-                            .write_all((serde_json::to_string(&resp)? + "\n").as_bytes())
-                            .await?;
-                    }
-                    anyhow::Ok(())
-                })
-                .detach(),
-                "onion_packets" => spawn!(relay_client_handle_onion(
-                    service.clone(),
-                    stream,
-                    recv_outgoing.clone(),
-                ))
-                .detach(),
-                other => {
-                    tracing::error!("could not handle {other}");
-                }
-            }
-        }
-    })
-}
-
-#[tracing::instrument(skip(lctx))]
-async fn handle_onion(lctx: LinkContext) -> anyhow::Result<()> {
-    let conn = lctx.conn;
+#[tracing::instrument(skip_all)]
+async fn handle_onion(lctx: &LinkContext, conn: sosistab2::Stream) -> anyhow::Result<()> {
     let up = async {
         loop {
             match lctx.neighbor.as_ref() {
@@ -248,11 +137,18 @@ async fn handle_onion(lctx: LinkContext) -> anyhow::Result<()> {
         }
     };
 
-    let service = lctx.service;
     let dn = async {
+        let neigh_id = match lctx.neighbor.as_ref() {
+            either::Either::Left(RelayNeighbor(_, id)) => NeighborId::Relay(*id),
+            either::Either::Right(ClientNeighbor(_, id)) => NeighborId::Client(*id),
+        };
         loop {
             if lctx.ctx.init().is_client() {
-                //neighbor has to be a relay
+                let pkt = conn.recv_urel().await?;
+                let PacketWithPeeler { pkt, peeler } = *bytemuck::try_from_bytes(&pkt)
+                    .ok()
+                    .context("incoming urel packet of the wrong size to be an onion packet")?;
+                incoming_raw(&lctx.ctx, neigh_id, peeler, pkt).await?;
             }
             // we are a relay
             else {
@@ -262,16 +158,7 @@ async fn handle_onion(lctx: LinkContext) -> anyhow::Result<()> {
                     .context("incoming urel packet of the wrong size to be an onion packet")?;
 
                 // if the neighbor is a relay
-                incoming_raw(
-                    &lctx.ctx,
-                    match lctx.neighbor.as_ref() {
-                        either::Either::Left(RelayNeighbor(_, id)) => NeighborId::Relay(*id),
-                        either::Either::Right(ClientNeighbor(_, id)) => NeighborId::Client(*id),
-                    },
-                    peeler,
-                    pkt,
-                )
-                .await?;
+                incoming_raw(&lctx.ctx, neigh_id, peeler, pkt).await?;
             }
         }
     };
@@ -304,7 +191,7 @@ impl LinkRpcTransport {
                 return Ok(stream);
             }
         }
-        let stream = self.mplex.open_conn("n2n_control").await?;
+        let stream = self.mplex.open_conn(LABEL_LINK_RPC).await?;
         Ok((BufReader::with_capacity(65536, stream.clone()), stream))
     }
 }
@@ -331,8 +218,7 @@ impl RpcTransport for LinkRpcTransport {
 pub struct LinkProtocolImpl {
     pub ctx: DaemonContext,
     pub mplex: Arc<Multiplex>,
-    pub remote_client_id: Option<ClientId>,
-    pub remote_relay_pk: Option<RelayIdentityPublic>,
+    pub remote: either::Either<IdentityDescriptor, ClientId>,
     pub max_outgoing_price: u64,
 }
 
@@ -397,28 +283,12 @@ impl LinkProtocol for LinkProtocolImpl {
 
     #[tracing::instrument(skip(self))]
     async fn client_push_price(&self, price: u64, debt_limit: u64) {
-        tracing::trace!("received push price");
-        let remote_client_id = self.remote_client_id.unwrap();
-        if price > self.max_outgoing_price {
-            tracing::warn!("neigh {} price too high! YOU SHOULD MANUALLY REMOVE THIS NEIGHBOR UNTIL YOU RESOLVE THE ISSUE", remote_client_id);
-            self.ctx
-                .get(DEBTS)
-                .insert_client_outgoing_price(remote_client_id, price, debt_limit);
-            tracing::trace!("Successfully registered {} price!", remote_client_id);
-        }
+        todo!()
     }
 
     #[tracing::instrument(skip(self))]
     async fn relay_push_price(&self, price: u64, debt_limit: u64) {
-        tracing::trace!("received push price");
-        let remote_fp = self.remote_relay_pk.unwrap().fingerprint();
-        if price > self.max_outgoing_price {
-            tracing::warn!("neigh {} price too high! YOU SHOULD MANUALLY REMOVE THIS NEIGHBOR UNTIL YOU RESOLVE THE ISSUE", remote_fp);
-            self.ctx
-                .get(DEBTS)
-                .insert_relay_outgoing_price(remote_fp, price, debt_limit);
-            tracing::trace!("Successfully registered {} price!", remote_fp);
-        }
+        todo!()
     }
 
     #[tracing::instrument(skip(self))]
@@ -456,14 +326,12 @@ impl LinkProtocol for LinkProtocolImpl {
 
     #[tracing::instrument(skip(self))]
     async fn push_chat_client(&self, msg: String) {
-        log::debug!("pushing chat: {}", msg.clone());
-        incoming_client_chat(&self.ctx, self.remote_client_id.unwrap(), msg);
+        todo!()
     }
 
     #[tracing::instrument(skip(self))]
     async fn push_chat_relay(&self, msg: String) {
-        log::debug!("pushing chat: {}", msg.clone());
-        incoming_relay_chat(&self.ctx, self.remote_relay_pk.unwrap().fingerprint(), msg);
+        todo!()
     }
 
     #[tracing::instrument(skip(self))]
@@ -471,8 +339,10 @@ impl LinkProtocol for LinkProtocolImpl {
         let seed = rand::thread_rng().gen();
         let seed_cache = &self.ctx.get(SETTLEMENTS).seed_cache;
         let remote_fp = self
-            .remote_relay_pk
-            .expect("you cannot ask a client for a seed")
+            .remote
+            .left()
+            .expect("REPLACE WITH PROPER ERROR HANDLING")
+            .identity_pk
             .fingerprint();
 
         match seed_cache.get(&remote_fp) {
