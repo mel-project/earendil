@@ -2,26 +2,23 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use earendil_crypt::{ClientId, RelayFingerprint};
 use earendil_topology::IdentityDescriptor;
-use futures::{AsyncRead, AsyncWrite};
+use futures::{AsyncRead, AsyncReadExt, AsyncWrite};
 use futures_util::TryFutureExt;
 use nursery_macro::nursery;
 use serde::{Deserialize, Serialize};
-use smol::{
-    future::FutureExt,
-    io::{AsyncReadExt, AsyncWriteExt},
-};
+use smol::{future::FutureExt, io::AsyncWriteExt};
 use smol_timeout::TimeoutExt;
 
 use sosistab2::{Multiplex, MuxSecret};
 use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
+use stdcode::StdcodeSerializeExt;
 pub mod chat;
 mod link_connection;
 mod link_protocol;
 use crate::config::LinkPrice;
 use crate::{
     context::{
-        DaemonContext, CLIENT_TABLE, GLOBAL_IDENTITY, GLOBAL_ONION_SK, MY_CLIENT_ID,
-        NEIGH_TABLE_NEW,
+        DaemonContext, CLIENT_TABLE, GLOBAL_IDENTITY, GLOBAL_ONION_SK, MY_CLIENT_ID, RELAY_NEIGHS,
     },
     daemon::inout_route::link_connection::{ClientNeighbor, RelayNeighbor},
 };
@@ -34,9 +31,9 @@ use self::{
 const CONNECTION_LIFETIME: Duration = Duration::from_secs(10);
 
 #[derive(Serialize, Deserialize)]
-enum NodeType {
-    Client,
-    Relay,
+enum LinkHello {
+    Client(ClientId),
+    Relay(IdentityDescriptor),
 }
 
 #[derive(Clone)]
@@ -65,7 +62,7 @@ pub async fn in_route_obfsudp(
         mplex.add_pipe(pipe);
         let context = context.clone();
         spawn!(
-            route_loop(context.daemon_ctx.clone(), mplex, link_price, false)
+            route_loop(context.daemon_ctx.clone(), mplex, link_price, true)
                 .timeout(CONNECTION_LIFETIME)
         )
         .detach();
@@ -78,59 +75,66 @@ async fn route_loop(
     link_price: LinkPrice,
     is_listen: bool,
 ) -> anyhow::Result<()> {
-    tracing::debug!("route loop started");
-    scopeguard::defer!(tracing::info!("route loop stopped"));
+    tracing::debug!(is_listen, "route loop started");
+    scopeguard::defer!(tracing::info!(is_listen, "route loop stopped"));
     // first, we authenticate the other side.
     let neighbor: either::Either<IdentityDescriptor, ClientId> = {
-        let mut stream = if is_listen {
-            mplex.accept_conn().await?
+        let stream = if is_listen {
+            let s = mplex.accept_conn().await?;
+            tracing::debug!("accepted the authentication stream");
+            s
         } else {
-            mplex.open_conn("!init_auth").await?
+            let s = mplex.open_conn("!init_auth").await?;
+            tracing::debug!("made the authentication stream");
+            s
         };
 
-        // send our own id
-        if ctx.init().is_client() {
-            let my_id = stdcode::serialize(&ctx.get(MY_CLIENT_ID))?;
-            send_message(&stdcode::serialize(&NodeType::Client)?, &mut stream).await?;
-            send_message(&my_id, &mut stream).await?;
-        } else {
-            let my_descriptor = stdcode::serialize(&IdentityDescriptor::new(
-                &ctx.get(GLOBAL_IDENTITY)
-                    .expect("only relays have global identities"),
-                ctx.get(GLOBAL_ONION_SK),
-            ))?;
-            send_message(&stdcode::serialize(&NodeType::Relay)?, &mut stream).await?;
-            send_message(&my_descriptor, &mut stream).await?;
-        }
-        let node_type: NodeType = stdcode::deserialize(&receive_message(&mut stream).await?)?;
-        match node_type {
-            NodeType::Client => {
-                either::Either::Right(stdcode::deserialize(&receive_message(&mut stream).await?)?)
+        let (mut read, mut write) = stream.split();
+        let send_hello_fut = async {
+            if ctx.init().is_client() {
+                write_msg(
+                    &LinkHello::Client(*ctx.get(MY_CLIENT_ID)).stdcode(),
+                    &mut write,
+                )
+                .await?;
+            } else {
+                write_msg(
+                    &LinkHello::Relay(IdentityDescriptor::new(
+                        &ctx.get(GLOBAL_IDENTITY)
+                            .expect("only relays have global identities"),
+                        ctx.get(GLOBAL_ONION_SK),
+                    ))
+                    .stdcode(),
+                    &mut write,
+                )
+                .await?;
             }
-            NodeType::Relay => {
-                let relay_descriptor: IdentityDescriptor =
-                    stdcode::deserialize(&receive_message(&mut stream).await?)?;
-                if relay_descriptor
-                    .identity_pk
-                    .verify(relay_descriptor.to_sign().as_bytes(), &relay_descriptor.sig)
-                    .is_err()
-                {
-                    anyhow::bail!(
-                        "out route authentication for {} failed",
-                        relay_descriptor.identity_pk.fingerprint()
-                    );
-                }
-                either::Either::Left(relay_descriptor)
-            }
+            anyhow::Ok(())
+        };
+        let read_hello_fut = async {
+            let hello: LinkHello = stdcode::deserialize(&read_msg(&mut read).await?)?;
+            anyhow::Ok(hello)
+        };
+        let (a, their_hello) = futures::join!(send_hello_fut, read_hello_fut);
+        a?;
+        match their_hello? {
+            LinkHello::Client(c) => either::Right(c),
+            LinkHello::Relay(r) => either::Left(r),
         }
     };
+
+    tracing::debug!(
+        is_listen,
+        neighbor = debug(&neighbor),
+        "authentication done"
+    );
 
     // then, we start the link maintenance
     let link_channel_and_neigh = neighbor
         .as_ref()
         .map_left(|left| {
             let (send_outgoing, recv_outgoing) = smol::channel::unbounded();
-            ctx.get(NEIGH_TABLE_NEW)
+            ctx.get(RELAY_NEIGHS)
                 .insert(left.identity_pk.fingerprint(), send_outgoing);
             RelayNeighbor(recv_outgoing, left.identity_pk.fingerprint())
         })
@@ -183,7 +187,7 @@ pub async fn out_route_obfsudp(
             let mplex = Arc::new(Multiplex::new(MuxSecret::generate(), None));
             mplex.add_pipe(pipe);
 
-            let out_route_loop = route_loop(ctx.clone(), mplex, link_price, true);
+            let out_route_loop = route_loop(ctx.clone(), mplex, link_price, false);
 
             out_route_loop
                 .map_err(|e| {
@@ -216,7 +220,7 @@ pub async fn out_route_obfsudp(
     }
 }
 
-pub async fn send_message<W: AsyncWrite + Unpin>(message: &[u8], mut out: W) -> anyhow::Result<()> {
+pub async fn write_msg<W: AsyncWrite + Unpin>(message: &[u8], mut out: W) -> anyhow::Result<()> {
     let len = (message.len() as u32).to_be_bytes();
 
     out.write_all(&len).await?;
@@ -226,7 +230,7 @@ pub async fn send_message<W: AsyncWrite + Unpin>(message: &[u8], mut out: W) -> 
     Ok(())
 }
 
-pub async fn receive_message<R: AsyncRead + Unpin>(mut input: R) -> anyhow::Result<Vec<u8>> {
+pub async fn read_msg<R: AsyncRead + Unpin>(mut input: R) -> anyhow::Result<Vec<u8>> {
     let mut len = [0; 4];
     input.read_exact(&mut len).await?;
     let len = u32::from_be_bytes(len);

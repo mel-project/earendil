@@ -75,13 +75,12 @@ pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
     })
 };
 
-pub static NEIGH_TABLE_NEW: CtxField<
-    Cache<RelayFingerprint, Sender<(RawPacket, RelayFingerprint)>>,
-> = |_| {
-    CacheBuilder::default()
-        .time_to_live(Duration::from_secs(120))
-        .build()
-}; // TODO a better solution for deletion
+pub static RELAY_NEIGHS: CtxField<Cache<RelayFingerprint, Sender<(RawPacket, RelayFingerprint)>>> =
+    |_| {
+        CacheBuilder::default()
+            .time_to_live(Duration::from_secs(120))
+            .build()
+    }; // TODO a better solution for deletion
 
 pub static CLIENT_TABLE: CtxField<Cache<ClientId, Sender<(RawBody, u64)>>> = |_| {
     CacheBuilder::default()

@@ -13,7 +13,7 @@ use std::{
 };
 
 use crate::context::{
-    CtxField, CLIENT_TABLE, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS,
+    CtxField, CLIENT_TABLE, GLOBAL_IDENTITY, RELAY_GRAPH, RELAY_NEIGHS, SETTLEMENTS,
 };
 
 static CHATS: CtxField<Chats> = |ctx| {
@@ -57,10 +57,7 @@ pub fn list_clients(ctx: &DaemonContext) -> Vec<ClientId> {
 }
 
 pub fn list_relays(ctx: &DaemonContext) -> Vec<RelayFingerprint> {
-    ctx.get(NEIGH_TABLE_NEW)
-        .iter()
-        .map(|neigh| *neigh.0)
-        .collect()
+    ctx.get(RELAY_NEIGHS).iter().map(|neigh| *neigh.0).collect()
 }
 
 pub fn list_chats(ctx: &DaemonContext) -> String {

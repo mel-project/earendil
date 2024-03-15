@@ -1752,6 +1752,7 @@ dependencies = [
  "anyctx",
  "anyhow",
  "async-event",
+ "async-recursion",
  "async-trait",
  "base64",
  "bip39",

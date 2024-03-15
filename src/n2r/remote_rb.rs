@@ -6,7 +6,7 @@ use rand::prelude::*;
 use std::time::{Duration, Instant};
 
 use crate::{
-    context::{CtxField, DaemonContext, DEGARBLERS, MY_CLIENT_ID, NEIGH_TABLE_NEW, RELAY_GRAPH},
+    context::{CtxField, DaemonContext, DEGARBLERS, MY_CLIENT_ID, RELAY_GRAPH, RELAY_NEIGHS},
     control_protocol::SendMessageError,
     n2r::{delay_queue::DELAY_QUEUE, forward_route, route_to_instructs},
     onion::send_raw,
@@ -107,7 +107,7 @@ async fn send_reply_blocks(
 fn reply_route(ctx: &DaemonContext) -> anyhow::Result<Vec<RelayFingerprint>> {
     let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
     let my_neighs: Vec<RelayFingerprint> =
-        ctx.get(NEIGH_TABLE_NEW).iter().map(|(fp, _)| *fp).collect();
+        ctx.get(RELAY_NEIGHS).iter().map(|(fp, _)| *fp).collect();
     let rand_neigh = my_neighs.choose(&mut rand::thread_rng()).copied();
 
     match rand_neigh {

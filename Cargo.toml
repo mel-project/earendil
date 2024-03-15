@@ -67,6 +67,7 @@ smolscale = "0.4.3"
 priority-queue = "1.4.0"
 async-event = "0.1.0"
 either = "1.10.0"
+async-recursion = "1.0.5"
 
 [profile.dev]
 panic = 'abort'

@@ -1,14 +1,16 @@
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
+use async_recursion::async_recursion;
 use dashmap::DashSet;
 use earendil_crypt::{NeighborId, RelayFingerprint};
 use earendil_packet::{PeeledPacket, RawPacket};
+use smol::future::FutureExt;
 
 use crate::{
     context::{
-        CtxField, DaemonContext, CLIENT_TABLE, GLOBAL_IDENTITY, GLOBAL_ONION_SK, NEIGH_TABLE_NEW,
-        RELAY_GRAPH,
+        CtxField, DaemonContext, CLIENT_TABLE, GLOBAL_IDENTITY, GLOBAL_ONION_SK, RELAY_GRAPH,
+        RELAY_NEIGHS,
     },
     n2r,
 };
@@ -22,13 +24,13 @@ pub async fn send_raw(
     if ctx.init().is_client() {
         let next_hop = one_hop_closer(&ctx, next_peeler).context("failed to get next hop")?;
         let conn = ctx
-            .get(NEIGH_TABLE_NEW)
+            .get(RELAY_NEIGHS)
             .get(&next_hop)
             .context(format!("could not find this next hop {next_hop}"))
             .context("unable to find next_hop from neighbor table")?;
         conn.send((packet, next_hop))
             .await
-            .context("failed to send packet to next hop")?;
+            .context(format!("failed to send packet to next hop {next_hop}"))?;
     } else {
         let my_fp = ctx
             .get(GLOBAL_IDENTITY)
@@ -38,11 +40,11 @@ pub async fn send_raw(
 
         if next_peeler == my_fp {
             // todo: don't allow ourselves to be the first hop when choosing forward routes
-            let _ = incoming_raw(&ctx, NeighborId::Relay(my_fp), next_peeler, packet).await;
+            incoming_raw(&ctx, NeighborId::Relay(my_fp), next_peeler, packet).await?;
         } else {
             let next_hop = one_hop_closer(&ctx, next_peeler)?;
             let conn = ctx
-                .get(NEIGH_TABLE_NEW)
+                .get(RELAY_NEIGHS)
                 .get(&next_hop)
                 .context(format!("could not find this next hop {next_hop}"))?;
 
@@ -53,12 +55,14 @@ pub async fn send_raw(
 }
 
 #[tracing::instrument(skip(ctx, pkt))]
+#[async_recursion]
 pub async fn incoming_raw(
     ctx: &DaemonContext,
     last_hop: NeighborId,
     next_peeler: RelayFingerprint,
     pkt: RawPacket,
 ) -> anyhow::Result<()> {
+    tracing::debug!("incoming raw packet!");
     static PKTS_SEEN: CtxField<DashSet<blake3::Hash>> = |_| DashSet::new();
 
     let my_fp = ctx
@@ -98,7 +102,8 @@ pub async fn incoming_raw(
                 delay_ms,
             } => {
                 let emit_time = Instant::now() + Duration::from_millis(delay_ms as u64);
-                todo!("put a delay queue here")
+                // TODO delay queue here rather than this inefficient approach
+                send_raw(&ctx, pkt, next_peeler).await?;
             }
             PeeledPacket::Received { from, pkt } => {
                 n2r::incoming_forward(ctx, pkt, from).await?;
@@ -130,7 +135,7 @@ pub async fn incoming_raw(
         // we are not peeler, forward the packet a step closer to peeler
         let next_hop = one_hop_closer(ctx, next_peeler)?;
         let conn = ctx
-            .get(NEIGH_TABLE_NEW)
+            .get(RELAY_NEIGHS)
             .get(&next_hop)
             .context(format!("could not find this next hop {next_hop}"))?;
         conn.send((pkt, next_peeler)).await?;
@@ -139,11 +144,8 @@ pub async fn incoming_raw(
 }
 
 fn one_hop_closer(ctx: &DaemonContext, dest: RelayFingerprint) -> anyhow::Result<RelayFingerprint> {
-    let my_neighs: Vec<RelayFingerprint> = ctx
-        .get(NEIGH_TABLE_NEW)
-        .iter()
-        .map(|neigh| *neigh.0)
-        .collect();
+    let my_neighs: Vec<RelayFingerprint> =
+        ctx.get(RELAY_NEIGHS).iter().map(|neigh| *neigh.0).collect();
 
     let mut shortest_route_len = usize::MAX;
     let mut next_hop = None;

@@ -34,7 +34,7 @@ use tap::TapOptional;
 
 use crate::{context::CtxField, daemon::inout_route::link_protocol::LinkClient};
 use crate::{
-    context::{DaemonContext, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS},
+    context::{DaemonContext, GLOBAL_IDENTITY, RELAY_GRAPH, RELAY_NEIGHS, SETTLEMENTS},
     onion::incoming_raw,
 };
 use crate::{
@@ -247,7 +247,7 @@ impl LinkProtocol for LinkProtocolImpl {
             && left_incomplete.right == my_fp
             && self
                 .ctx
-                .get(NEIGH_TABLE_NEW)
+                .get(RELAY_NEIGHS)
                 .get(&left_incomplete.left)
                 .is_some();
         if !valid {

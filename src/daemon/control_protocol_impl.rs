@@ -22,7 +22,7 @@ use sosistab2_obfsudp::ObfsUdpSecret;
 use thiserror::Error;
 
 use crate::context::{
-    CLIENT_TABLE, DEBTS, GLOBAL_IDENTITY, NEIGH_TABLE_NEW, RELAY_GRAPH, SETTLEMENTS,
+    CLIENT_TABLE, DEBTS, GLOBAL_IDENTITY, RELAY_GRAPH, RELAY_NEIGHS, SETTLEMENTS,
 };
 use crate::{
     config::InRouteConfig,
@@ -195,7 +195,7 @@ impl ControlProtocol for ControlProtocolImpl {
                     )
                 },
             );
-            let relays = self.ctx.get(NEIGH_TABLE_NEW).iter().map(|s| *s.0).fold(
+            let relays = self.ctx.get(RELAY_NEIGHS).iter().map(|s| *s.0).fold(
                 String::new(),
                 |acc, neigh| {
                     let fp = neigh;
@@ -250,7 +250,7 @@ impl ControlProtocol for ControlProtocolImpl {
                             node_str,
                             get_node_label(&node),
                             "oval".to_string()
-                                + (if self.ctx.get(NEIGH_TABLE_NEW).contains_key(&node) {
+                                + (if self.ctx.get(RELAY_NEIGHS).contains_key(&node) {
                                     ", color=lightpink,style=filled"
                                 } else {
                                     ""
