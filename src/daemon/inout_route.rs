@@ -78,6 +78,8 @@ async fn route_loop(
     link_price: LinkPrice,
     is_listen: bool,
 ) -> anyhow::Result<()> {
+    tracing::debug!("route loop started");
+    scopeguard::defer!(tracing::info!("route loop stopped"));
     // first, we authenticate the other side.
     let neighbor: either::Either<IdentityDescriptor, ClientId> = {
         let mut stream = if is_listen {
@@ -85,9 +87,11 @@ async fn route_loop(
         } else {
             mplex.open_conn("!init_auth").await?
         };
+
         // send our own id
         if ctx.init().is_client() {
             let my_id = stdcode::serialize(&ctx.get(MY_CLIENT_ID))?;
+            send_message(&stdcode::serialize(&NodeType::Client)?, &mut stream).await?;
             send_message(&my_id, &mut stream).await?;
         } else {
             let my_descriptor = stdcode::serialize(&IdentityDescriptor::new(
@@ -95,6 +99,7 @@ async fn route_loop(
                     .expect("only relays have global identities"),
                 ctx.get(GLOBAL_ONION_SK),
             ))?;
+            send_message(&stdcode::serialize(&NodeType::Relay)?, &mut stream).await?;
             send_message(&my_descriptor, &mut stream).await?;
         }
         let node_type: NodeType = stdcode::deserialize(&receive_message(&mut stream).await?)?;
@@ -177,8 +182,6 @@ pub async fn out_route_obfsudp(
 
             let mplex = Arc::new(Multiplex::new(MuxSecret::generate(), None));
             mplex.add_pipe(pipe);
-            // let rpc = LinkRpcTransport::new(mplex.clone());
-            // let _client = LinkClient::from(rpc);
 
             let out_route_loop = route_loop(ctx.clone(), mplex, link_price, true);
 

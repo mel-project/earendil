@@ -20,12 +20,15 @@ pub async fn send_raw(
     next_peeler: RelayFingerprint,
 ) -> anyhow::Result<()> {
     if ctx.init().is_client() {
-        let next_hop = one_hop_closer(&ctx, next_peeler)?;
+        let next_hop = one_hop_closer(&ctx, next_peeler).context("failed to get next hop")?;
         let conn = ctx
             .get(NEIGH_TABLE_NEW)
             .get(&next_hop)
-            .context(format!("could not find this next hop {next_hop}"))?;
-        conn.send((packet, next_hop)).await?;
+            .context(format!("could not find this next hop {next_hop}"))
+            .context("unable to find next_hop from neighbor table")?;
+        conn.send((packet, next_hop))
+            .await
+            .context("failed to send packet to next hop")?;
     } else {
         let my_fp = ctx
             .get(GLOBAL_IDENTITY)
@@ -35,7 +38,7 @@ pub async fn send_raw(
 
         if next_peeler == my_fp {
             // todo: don't allow ourselves to be the first hop when choosing forward routes
-            incoming_raw(&ctx, NeighborId::Relay(my_fp), next_peeler, packet).await;
+            let _ = incoming_raw(&ctx, NeighborId::Relay(my_fp), next_peeler, packet).await;
         } else {
             let next_hop = one_hop_closer(&ctx, next_peeler)?;
             let conn = ctx

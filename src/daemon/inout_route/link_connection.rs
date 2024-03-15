@@ -64,7 +64,7 @@ pub struct LinkContext {
 pub async fn link_maintain(lctx: &LinkContext, is_listen: bool) -> anyhow::Result<()> {
     linkrpc_listen(lctx, is_listen)
         .race(async {
-            if !is_listen {
+            if is_listen {
                 smol::future::pending().await
             } else {
                 loop {
@@ -74,6 +74,7 @@ pub async fn link_maintain(lctx: &LinkContext, is_listen: bool) -> anyhow::Resul
             }
         })
         .await
+        .inspect_err(|e| tracing::warn!("link_maintain died: {e}"))
 }
 
 async fn linkrpc_listen(lctx: &LinkContext, onion_listen: bool) -> anyhow::Result<()> {
@@ -98,7 +99,7 @@ async fn linkrpc_listen(lctx: &LinkContext, onion_listen: bool) -> anyhow::Resul
                 LABEL_ONION if onion_listen => {
                     spawn!(handle_onion(lctx, stream)).detach();
                 }
-                other => tracing::warn!(label = other, "invalid link stream label"),
+                other => tracing::warn!(label = other, onion_listen, "invalid link stream label"),
             }
         }
     })
@@ -369,7 +370,6 @@ pub async fn gossip_loop(lctx: &LinkContext) -> anyhow::Result<()> {
         Either::Left(RelayNeighbor(_, fp)) => fp.to_string(),
         Either::Right(ClientNeighbor(_, id)) => id.to_string(),
     };
-    scopeguard::defer!(tracing::info!(neigh_label, "gossip loop stopped",));
 
     loop {
         let once = async {
@@ -407,11 +407,11 @@ async fn gossip_once(lctx: &LinkContext, link_client: &LinkClient) -> anyhow::Re
 // Step 1: Fetch the identity of the neighbor.
 #[tracing::instrument(skip(lctx, link_client))]
 async fn fetch_identity(lctx: &LinkContext, link_client: &LinkClient) -> anyhow::Result<()> {
-    tracing::debug!("fetching identity...");
     let remote_fp = match lctx.neighbor {
         Either::Left(RelayNeighbor(_, fp)) => fp,
-        Either::Right(_) => anyhow::bail!("cannot fetch client identity"),
+        Either::Right(_) => return Ok(()),
     };
+    tracing::debug!("fetching identity...");
     let their_id = link_client
         .identity(remote_fp)
         .await?
@@ -426,11 +426,11 @@ async fn fetch_identity(lctx: &LinkContext, link_client: &LinkClient) -> anyhow:
 // Step 2: Sign an adjacency descriptor with the neighbor if the local node is "left" of the neighbor.
 #[tracing::instrument(skip(lctx, link_client))]
 async fn sign_adjacency(lctx: &LinkContext, link_client: &LinkClient) -> anyhow::Result<()> {
-    tracing::debug!("signing adjacency...");
     let neighbor_fp = match &lctx.neighbor {
         Either::Left(RelayNeighbor(_, fp)) => fp,
-        Either::Right(_) => anyhow::bail!("cannot sign adjacency with client"),
+        Either::Right(_) => return Ok(()),
     };
+    tracing::debug!("signing adjacency...");
     let my_sk = lctx
         .ctx
         .get(GLOBAL_IDENTITY)

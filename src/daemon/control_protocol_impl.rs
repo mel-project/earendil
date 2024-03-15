@@ -176,10 +176,8 @@ impl ControlProtocol for ControlProtocolImpl {
         let my_fp = self
             .ctx
             .get(GLOBAL_IDENTITY)
-            .expect("only relays have global identities")
-            .public()
-            .fingerprint()
-            .to_string();
+            .map(|id| id.public().fingerprint().to_string())
+            .unwrap_or("node is not a relay".to_string());
         let relay_or_client = if self.ctx.init().in_routes.is_empty() {
             "oval"
         } else {
@@ -281,11 +279,11 @@ impl ControlProtocol for ControlProtocolImpl {
             .call(&send_args.method, &send_args.args)
             .await
             .map_err(|e| {
-                tracing::warn!("send_global_rpc failed with {:?}", e);
+                tracing::warn!("send_global_rpc transport failed with {:?}", e);
                 GlobalRpcError::SendError
             })? {
             res.map_err(|e| {
-                tracing::warn!("send_global_rpc failed with {:?}", e);
+                tracing::warn!("send_global_rpc remote failed with {:?}", e);
                 GlobalRpcError::SendError
             })?
         } else {

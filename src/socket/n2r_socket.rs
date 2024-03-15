@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::Context;
 use bytes::Bytes;
 
 use earendil_crypt::{AnonRemote, RemoteId};
@@ -127,7 +128,8 @@ impl N2rClientSocket {
             endpoint.dock,
             body,
         )
-        .await?;
+        .await
+        .context("n2r send_forward failed")?;
         Ok(())
     }
 

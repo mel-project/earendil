@@ -107,10 +107,10 @@ pub async fn send_forward(
         tracing::trace!("send message took {:?}", send_msg_time);
     });
 
-    let route = forward_route(ctx)?;
+    let route = forward_route(ctx).context("failed to create forward route")?;
     let first_peeler = route[0];
 
-    let instructs = route_to_instructs(ctx, &route)?;
+    let instructs = route_to_instructs(ctx, &route).context("route_to_instructs failed")?;
     tracing::trace!(
         "*************************** translated this route to instructions: {:?}",
         route
@@ -128,9 +128,11 @@ pub async fn send_forward(
         RemoteId::Anon(src),
     )?;
 
-    replenish_rrb(ctx, src, dst_fp)?;
+    replenish_rrb(ctx, src, dst_fp).context("failed to replenish remote reply blocks")?;
 
-    send_raw(ctx, wrapped_onion, first_peeler).await?;
+    send_raw(ctx, wrapped_onion, first_peeler)
+        .await
+        .context("send_raw failed")?;
 
     Ok(())
 }
