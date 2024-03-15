@@ -24,7 +24,7 @@ pub async fn tcp_forward_loop(
         let client_addr = tcp_stream.peer_addr()?;
         tracing::debug!(client_addr = ?client_addr, "connecting to remote...");
         let earendil_socket =
-            Socket::bind_haven_internal(ctx.clone(), HavenIdentitySecret::generate(), None, None);
+            Socket::bind_haven_internal(ctx.clone(), HavenIdentitySecret::generate(), None, None)?;
         let earendil_stream =
             Stream::connect(earendil_socket, Endpoint::Haven(tcp_fwd_cfg.remote)).await?;
         tracing::debug!(client_addr = ?client_addr, "connected successfully");

@@ -14,7 +14,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{NeighborId, RelayFingerprint, RelayIdentitySecret};
+use earendil_crypt::{RelayFingerprint, RelayIdentitySecret};
 use earendil_packet::ForwardInstruction;
 
 use earendil_topology::{IdentityDescriptor, RelayGraph};
@@ -24,7 +24,6 @@ use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 
 use nursery_macro::nursery;
-use smol::future::FutureExt;
 use smol::Task;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
@@ -34,13 +33,13 @@ use tracing::instrument;
 use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
-use crate::context::{CLIENT_SOCKET_RECV_QUEUES, GLOBAL_IDENTITY, RELAY_SOCKET_RECV_QUEUES};
+use crate::{context::GLOBAL_IDENTITY, socket::n2r_socket_shuttle};
 
 use crate::control_protocol::ControlClient;
 use crate::daemon::socks5::socks5_loop;
 use crate::daemon::tcp_forward::tcp_forward_loop;
 use crate::db::db_write;
-use crate::n2r;
+
 use crate::socket::n2r_socket::N2rRelaySocket;
 use crate::socket::{AnonEndpoint, HavenEndpoint};
 use crate::{
@@ -189,6 +188,12 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             .map_err(log_error("control_protocol"))),
     );
 
+    let _n2r_shuttle_loop = Immortal::respawn(
+        RespawnStrategy::Immediate,
+        clone!([ctx], move || n2r_socket_shuttle(ctx.clone())
+            .map_err(log_error("n2r_socket_shuttle"))),
+    );
+
     let _haven_loops: Vec<Immortal> = ctx
         .init()
         .havens
@@ -305,29 +310,6 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 }
 
 #[instrument(skip(ctx))]
-async fn n2r_socket_shuttle(ctx: DaemonContext) -> anyhow::Result<()> {
-    if ctx.init().is_client() {
-        loop {
-            let (msg_body, src_relay_ep, anon_ep) = n2r::read_backward(&ctx).await?;
-            let sender = ctx
-                .get(CLIENT_SOCKET_RECV_QUEUES)
-                .get(&anon_ep)
-                .context(format!("no socket for {anon_ep}"))?;
-            sender.send((msg_body, src_relay_ep)).await?;
-        }
-    } else {
-        loop {
-            let (msg_body, src_anon_ep, dst_dock) = n2r::read_forward(&ctx).await?;
-            let sender = ctx
-                .get(RELAY_SOCKET_RECV_QUEUES)
-                .get(&dst_dock)
-                .context(format!("no socket for {dst_dock}"))?;
-            sender.send((msg_body, src_anon_ep)).await?;
-        }
-    }
-}
-
-#[instrument(skip(ctx))]
 /// Loop that handles the persistence of contex state
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
@@ -358,7 +340,7 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 #[instrument(skip(ctx))]
 /// Loop that listens to and handles incoming GlobalRpc requests
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let socket = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(GLOBAL_RPC_DOCK)));
+    let socket = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(GLOBAL_RPC_DOCK))?);
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
     nursery!(loop {
         let socket = socket.clone();
@@ -384,7 +366,7 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 #[instrument(skip(ctx))]
 /// Loop that listens to and handles incoming haven forwarding requests
 async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let socket = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(HAVEN_FORWARD_DOCK)));
+    let socket = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(HAVEN_FORWARD_DOCK))?);
     let cache: Cache<AnonEndpoint, HavenEndpoint> = Cache::builder()
         .max_capacity(100_000)
         .time_to_idle(Duration::from_secs(60 * 60))

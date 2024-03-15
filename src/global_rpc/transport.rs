@@ -30,7 +30,7 @@ impl RpcTransport for GlobalRpcTransport {
 
     async fn call_raw(&self, req: JrpcRequest) -> Result<JrpcResponse, Self::Error> {
         let endpoint = RelayEndpoint::new(self.dest_fp, GLOBAL_RPC_DOCK);
-        let socket = N2rClientSocket::bind(self.ctx.clone(), None);
+        let socket = N2rClientSocket::bind(self.ctx.clone(), None)?;
         let mut retries = 0;
         let mut timeout: Duration;
 

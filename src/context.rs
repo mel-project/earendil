@@ -89,19 +89,6 @@ pub static CLIENT_TABLE: CtxField<Cache<ClientId, Sender<(RawBody, u64)>>> = |_|
         .build()
 };
 
-pub static ANON_IDENTITIES: CtxField<Cache<RelayFingerprint, AnonRemote>> = |_| {
-    CacheBuilder::default()
-        .time_to_live(Duration::from_secs(120))
-        .build()
-};
-
-pub static CLIENT_SOCKET_RECV_QUEUES: CtxField<
-    DashMap<AnonEndpoint, Sender<(Bytes, RelayEndpoint)>>,
-> = |_| Default::default();
-
-pub static RELAY_SOCKET_RECV_QUEUES: CtxField<DashMap<Dock, Sender<(Bytes, AnonEndpoint)>>> =
-    |_| Default::default();
-
 pub static DEGARBLERS: CtxField<DashMap<u64, ReplyDegarbler>> = |_| Default::default();
 
 pub static DEBTS: CtxField<Debts> = |ctx| {

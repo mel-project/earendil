@@ -2,92 +2,62 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 
-use earendil_crypt::{AnonRemote, RelayFingerprint, RemoteId};
+use earendil_crypt::{AnonRemote, RemoteId};
 use earendil_packet::{Dock, Message};
-use futures_util::TryFutureExt;
 use rand::Rng;
 
 use smol::channel::Receiver;
 
 use crate::{
-    context::{
-        DaemonContext, CLIENT_SOCKET_RECV_QUEUES, GLOBAL_IDENTITY, RELAY_SOCKET_RECV_QUEUES,
-    },
+    context::{DaemonContext, GLOBAL_IDENTITY},
     n2r,
     socket::SocketRecvError,
 };
 
-use super::{AnonEndpoint, RelayEndpoint};
-
-struct RelayBoundDock {
-    fp: RelayFingerprint,
-    dock: Dock,
-    ctx: DaemonContext,
-}
-
-impl Drop for RelayBoundDock {
-    fn drop(&mut self) {
-        self.ctx
-            .get(RELAY_SOCKET_RECV_QUEUES)
-            .remove(&RelayEndpoint::new(self.fp, self.dock));
-    }
-}
+use super::{
+    queues::{new_client_queue, new_relay_queue, QueueReceiver},
+    AnonEndpoint, RelayEndpoint,
+};
 
 #[derive(Clone)]
 pub struct N2rRelaySocket {
-    bound_dock: Arc<RelayBoundDock>,
-    recv_incoming: Receiver<(Message, RemoteId)>, // relays can only ever receive communication from clients
+    ctx: DaemonContext,
+    dock: Dock,
+    recv_incoming: Arc<QueueReceiver<(Bytes, AnonEndpoint)>>, // relays can only ever receive communication from clients
 }
 
 impl N2rRelaySocket {
-    pub fn bind(ctx: DaemonContext, dock: Option<Dock>) -> Self {
+    pub fn bind(ctx: DaemonContext, dock: Option<Dock>) -> anyhow::Result<Self> {
+        if ctx.init().is_client() {
+            anyhow::bail!("cannot bind a relay socket on a client")
+        }
         let my_pk = ctx
             .get(GLOBAL_IDENTITY)
             .expect("only relays have global identities")
             .public();
         let my_fp = my_pk.fingerprint();
-        let dock = if let Some(dock) = dock {
-            dock
+        let (dock, recv_incoming) = if let Some(dock) = dock {
+            (dock, new_relay_queue(&ctx, dock)?)
         } else {
-            let mut rand_dock: Dock;
             loop {
-                rand_dock = rand::thread_rng().gen();
-                if !ctx
-                    .get(RELAY_SOCKET_RECV_QUEUES)
-                    .contains_key(&RelayEndpoint {
-                        fingerprint: my_fp,
-                        dock: rand_dock,
-                    })
-                {
-                    break;
+                let dock = rand::random();
+                if let Ok(val) = new_relay_queue(&ctx, dock) {
+                    break (dock, val);
                 }
             }
-            rand_dock
         };
-        let bound_dock = Arc::new(RelayBoundDock {
-            fp: my_fp,
-            dock,
-            ctx: ctx.clone(),
-        });
-        let (send_incoming, recv_incoming) = smol::channel::bounded(1000);
-        ctx.get(RELAY_SOCKET_RECV_QUEUES).insert(
-            RelayEndpoint {
-                fingerprint: my_fp,
-                dock,
-            },
-            send_incoming,
-        );
 
-        N2rRelaySocket {
-            bound_dock,
-            recv_incoming,
-        }
+        Ok(N2rRelaySocket {
+            ctx,
+            dock,
+            recv_incoming: Arc::new(recv_incoming),
+        })
     }
 
     pub async fn send_to(&self, body: Bytes, endpoint: AnonEndpoint) -> anyhow::Result<()> {
         n2r::send_backward(
-            &self.bound_dock.ctx,
-            self.bound_dock.dock,
+            &self.ctx,
+            self.dock,
             endpoint.anon_dest,
             endpoint.dock,
             body,
@@ -96,92 +66,63 @@ impl N2rRelaySocket {
         Ok(())
     }
 
-    pub async fn recv_from(&self) -> Result<(Bytes, AnonEndpoint), SocketRecvError> {
+    pub async fn recv_from(&self) -> anyhow::Result<(Bytes, AnonEndpoint)> {
         let (message, source) = self.recv_incoming.recv().await.map_err(|e| {
             tracing::debug!("N2rSocket RecvError: {e}");
             SocketRecvError::N2rRecvError
         })?;
 
-        match source {
-            RemoteId::Anon(anon_dest) => {
-                let endpoint = AnonEndpoint::new(anon_dest, message.source_dock);
-                Ok((message.body.clone(), endpoint))
-            }
-            _ => Err(SocketRecvError::N2rRecvError),
-        }
+        Ok((message, source))
     }
 
     pub fn local_endpoint(&self) -> RelayEndpoint {
-        RelayEndpoint::new(self.bound_dock.fp, self.bound_dock.dock)
-    }
-}
-
-struct ClientBoundDock {
-    anon_id: AnonRemote,
-    dock: Dock,
-    ctx: DaemonContext,
-}
-
-impl Drop for ClientBoundDock {
-    fn drop(&mut self) {
-        self.ctx
-            .get(CLIENT_SOCKET_RECV_QUEUES)
-            .remove(&AnonEndpoint::new(self.anon_id, self.dock));
+        RelayEndpoint::new(
+            self.ctx
+                .get(GLOBAL_IDENTITY)
+                .unwrap()
+                .public()
+                .fingerprint(),
+            self.dock,
+        )
     }
 }
 
 #[derive(Clone)]
 pub struct N2rClientSocket {
-    bound_dock: Arc<ClientBoundDock>,
-    recv_incoming: Receiver<(Message, RemoteId)>, // relays can only ever receive communication from clients
+    ctx: DaemonContext,
+    endpoint: AnonEndpoint,
+    recv_incoming: Arc<QueueReceiver<(Bytes, RelayEndpoint)>>, // relays can only ever receive communication from clients
 }
 
 impl N2rClientSocket {
-    pub fn bind(ctx: DaemonContext, dock: Option<Dock>) -> Self {
+    pub fn bind(ctx: DaemonContext, dock: Option<Dock>) -> anyhow::Result<Self> {
         let my_anon_id = AnonRemote::new();
-        let dock = if let Some(dock) = dock {
-            dock
+        let (dock, recv_incoming) = if let Some(dock) = dock {
+            (
+                dock,
+                new_client_queue(&ctx, AnonEndpoint::new(my_anon_id, dock))?,
+            )
         } else {
-            let mut rand_dock: Dock;
             loop {
-                rand_dock = rand::thread_rng().gen();
-                if !ctx
-                    .get(CLIENT_SOCKET_RECV_QUEUES)
-                    .contains_key(&AnonEndpoint {
-                        anon_dest: my_anon_id,
-                        dock: rand_dock,
-                    })
-                {
-                    break;
+                let dock = rand::random();
+                if let Ok(val) = new_client_queue(&ctx, AnonEndpoint::new(my_anon_id, dock)) {
+                    break (dock, val);
                 }
             }
-            rand_dock
         };
-        let bound_dock = Arc::new(ClientBoundDock {
-            anon_id: my_anon_id,
-            dock,
-            ctx: ctx.clone(),
-        });
-        let (send_incoming, recv_incoming) = smol::channel::bounded(1000);
-        ctx.get(CLIENT_SOCKET_RECV_QUEUES).insert(
-            AnonEndpoint {
-                anon_dest: my_anon_id,
-                dock,
-            },
-            send_incoming,
-        );
 
-        N2rClientSocket {
-            bound_dock,
-            recv_incoming,
-        }
+        Ok(N2rClientSocket {
+            ctx,
+            endpoint: AnonEndpoint::new(my_anon_id, dock),
+            recv_incoming: Arc::new(recv_incoming),
+        })
     }
 
     pub async fn send_to(&self, body: Bytes, endpoint: RelayEndpoint) -> anyhow::Result<()> {
         n2r::send_forward(
-            &self.bound_dock.ctx,
-            self.bound_dock.anon_id,
-            self.bound_dock.dock,
+            &self.ctx,
+            self.endpoint.anon_dest,
+            self.endpoint.dock,
             endpoint.fingerprint,
             endpoint.dock,
             body,
@@ -190,22 +131,16 @@ impl N2rClientSocket {
         Ok(())
     }
 
-    pub async fn recv_from(&self) -> Result<(Bytes, RelayEndpoint), SocketRecvError> {
+    pub async fn recv_from(&self) -> anyhow::Result<(Bytes, RelayEndpoint)> {
         let (message, source) = self.recv_incoming.recv().await.map_err(|e| {
             tracing::debug!("N2rSocket RecvError: {e}");
             SocketRecvError::N2rRecvError
         })?;
 
-        match source {
-            RemoteId::Relay(fp) => {
-                let endpoint = RelayEndpoint::new(fp, message.source_dock);
-                Ok((message.body, endpoint))
-            }
-            _ => Err(SocketRecvError::N2rRecvError),
-        }
+        Ok((message, source))
     }
 
     pub fn local_endpoint(&self) -> AnonEndpoint {
-        AnonEndpoint::new(self.bound_dock.anon_id, self.bound_dock.dock)
+        self.endpoint
     }
 }

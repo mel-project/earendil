@@ -43,22 +43,24 @@ pub async fn udp_forward_loop(
 
         // get the earendil socket for the src_udp_addr. If it doesn't exist, create one
         // and spawn a loop that forwards messages from the earendil socket back to the src_udp_addr
-        let src_earendil_skt = demux_table.get_with(src_udp_addr, || {
-            let earendil_skt = Arc::new(Socket::bind_haven_internal(
-                ctx.clone(),
-                HavenIdentitySecret::generate(),
-                None,
-                None,
-            ));
+        let src_earendil_skt = demux_table
+            .try_get_with(src_udp_addr, || {
+                let earendil_skt = Arc::new(Socket::bind_haven_internal(
+                    ctx.clone(),
+                    HavenIdentitySecret::generate(),
+                    None,
+                    None,
+                )?);
 
-            let down_loop = Immortal::respawn(
-                smolscale::immortal::RespawnStrategy::Immediate,
-                clone!([earendil_skt, udp_socket], move || {
-                    down_loop(earendil_skt.clone(), udp_socket.clone(), src_udp_addr)
-                }),
-            );
-            (earendil_skt, Arc::new(down_loop))
-        });
+                let down_loop = Immortal::respawn(
+                    smolscale::immortal::RespawnStrategy::Immediate,
+                    clone!([earendil_skt, udp_socket], move || {
+                        down_loop(earendil_skt.clone(), udp_socket.clone(), src_udp_addr)
+                    }),
+                );
+                anyhow::Ok((earendil_skt, Arc::new(down_loop)))
+            })
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         // forward the message to the remote earendil endpoint
         // using the earendil socket associated with the src_udp_addr

@@ -75,7 +75,8 @@ impl ControlProtocol for ControlProtocolImpl {
         rendezvous_point: Option<RelayFingerprint>,
     ) {
         let isk = HavenIdentitySecret::generate();
-        let socket = Socket::bind_haven_internal(self.ctx.clone(), isk, dock, rendezvous_point);
+        let socket =
+            Socket::bind_haven_internal(self.ctx.clone(), isk, dock, rendezvous_point).unwrap();
         self.sockets.insert(socket_id, socket);
     }
 

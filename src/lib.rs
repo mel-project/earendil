@@ -12,6 +12,7 @@ mod n2r;
 mod onion;
 mod settlement;
 pub mod socket;
+
 pub mod stream;
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_

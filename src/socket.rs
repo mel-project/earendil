@@ -8,8 +8,9 @@ use earendil_crypt::{AnonRemote, HavenFingerprint, HavenIdentitySecret, RelayFin
 use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::instrument;
 
-use crate::{context::DaemonContext, control_protocol::SendMessageError, daemon::Daemon};
+use crate::{context::DaemonContext, control_protocol::SendMessageError, daemon::Daemon, n2r};
 
 use self::{
     haven_socket::HavenSocket,
@@ -19,6 +20,7 @@ use self::{
 pub(crate) mod crypt_session;
 pub(crate) mod haven_socket;
 pub(crate) mod n2r_socket;
+mod queues;
 
 pub struct Socket {
     inner: InnerSocket,
@@ -30,25 +32,16 @@ impl Socket {
         isk: HavenIdentitySecret,
         dock: Option<Dock>,
         rendezvous_point: Option<RelayFingerprint>,
-    ) -> Socket {
-        let inner = HavenSocket::bind(daemon.ctx.clone(), isk, dock, rendezvous_point);
-        Self {
-            inner: InnerSocket::Haven(inner),
-        }
+    ) -> anyhow::Result<Socket> {
+        Self::bind_haven_internal(daemon.ctx.clone(), isk, dock, rendezvous_point)
     }
 
-    pub async fn bind_n2r_client(daemon: &Daemon, dock: Option<Dock>) -> Socket {
-        let inner = N2rClientSocket::bind(daemon.ctx.clone(), dock);
-        Self {
-            inner: InnerSocket::N2rClient(inner),
-        }
+    pub async fn bind_n2r_client(daemon: &Daemon, dock: Option<Dock>) -> anyhow::Result<Socket> {
+        Self::bind_n2r_client_internal(daemon.ctx.clone(), dock)
     }
 
-    pub fn bind_n2r_relay(daemon: &Daemon, dock: Option<Dock>) -> Socket {
-        let inner = N2rRelaySocket::bind(daemon.ctx.clone(), dock);
-        Self {
-            inner: InnerSocket::N2rRelay(inner),
-        }
+    pub fn bind_n2r_relay(daemon: &Daemon, dock: Option<Dock>) -> anyhow::Result<Socket> {
+        Self::bind_n2r_relay_internal(daemon.ctx.clone(), dock)
     }
 
     pub(crate) fn bind_haven_internal(
@@ -56,20 +49,27 @@ impl Socket {
         isk: HavenIdentitySecret,
         dock: Option<Dock>,
         rendezvous_point: Option<RelayFingerprint>,
-    ) -> Socket {
-        let inner = InnerSocket::Haven(HavenSocket::bind(ctx.clone(), isk, dock, rendezvous_point));
+    ) -> anyhow::Result<Socket> {
+        let inner =
+            InnerSocket::Haven(HavenSocket::bind(ctx.clone(), isk, dock, rendezvous_point)?);
 
-        Self { inner }
+        Ok(Self { inner })
     }
 
-    pub(crate) fn bind_n2r_client_internal(ctx: DaemonContext, dock: Option<Dock>) -> Socket {
-        let inner = InnerSocket::N2rClient(N2rClientSocket::bind(ctx.clone(), dock));
-        Self { inner }
+    pub(crate) fn bind_n2r_client_internal(
+        ctx: DaemonContext,
+        dock: Option<Dock>,
+    ) -> anyhow::Result<Socket> {
+        let inner = InnerSocket::N2rClient(N2rClientSocket::bind(ctx.clone(), dock)?);
+        Ok(Self { inner })
     }
 
-    pub(crate) fn bind_n2r_relay_internal(ctx: DaemonContext, dock: Option<Dock>) -> Socket {
-        let inner = InnerSocket::N2rRelay(N2rRelaySocket::bind(ctx.clone(), dock));
-        Self { inner }
+    pub(crate) fn bind_n2r_relay_internal(
+        ctx: DaemonContext,
+        dock: Option<Dock>,
+    ) -> anyhow::Result<Socket> {
+        let inner = InnerSocket::N2rRelay(N2rRelaySocket::bind(ctx.clone(), dock)?);
+        Ok(Self { inner })
     }
 
     pub async fn send_to(&self, body: Bytes, endpoint: Endpoint) -> anyhow::Result<()> {
@@ -258,6 +258,21 @@ impl Display for Endpoint {
             Endpoint::Relay(ep) => write!(f, "{}:{}", ep.fingerprint, ep.dock),
             Endpoint::Anon(ep) => write!(f, "{}:{}", ep.anon_dest, ep.dock),
             Endpoint::Haven(ep) => write!(f, "{}:{}", ep.fingerprint, ep.dock),
+        }
+    }
+}
+
+#[instrument(skip(ctx))]
+pub async fn n2r_socket_shuttle(ctx: DaemonContext) -> anyhow::Result<()> {
+    if ctx.init().is_client() {
+        loop {
+            let (msg_body, src_relay_ep, anon_ep) = n2r::read_backward(&ctx).await?;
+            queues::fwd_to_client_queue(&ctx, msg_body, src_relay_ep, anon_ep)?;
+        }
+    } else {
+        loop {
+            let (msg_body, src_anon_ep, dst_dock) = n2r::read_forward(&ctx).await?;
+            queues::fwd_to_relay_queue(&ctx, msg_body, src_anon_ep, dst_dock)?;
         }
     }
 }

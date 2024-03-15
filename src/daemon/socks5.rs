@@ -80,7 +80,7 @@ async fn socks5_once(
                 port.into(),
             );
             let earendil_skt =
-                Socket::bind_haven_internal(ctx.clone(), *ctx.get(SOCKS5_LOCAL_IDSK), None, None);
+                Socket::bind_haven_internal(ctx.clone(), *ctx.get(SOCKS5_LOCAL_IDSK), None, None)?;
             let earendil_stream = Stream::connect(earendil_skt, Endpoint::Haven(endpoint)).await?;
 
             io::copy(client_stream.clone(), &mut earendil_stream.clone())
@@ -107,7 +107,7 @@ async fn socks5_once(
                         *ctx.get(SOCKS5_LOCAL_IDSK),
                         None,
                         None,
-                    );
+                    )?;
                     let mut remote_stream =
                         Stream::connect(remote_skt, Endpoint::Haven(remote)).await?;
                     let prepend = (addr.len() as u16).to_be_bytes();

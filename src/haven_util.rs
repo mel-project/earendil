@@ -159,7 +159,7 @@ async fn udp_forward(
         haven_id,
         Some(listen_dock),
         Some(haven_cfg.rendezvous),
-    ));
+    )?);
     let dmux_table: Cache<RelayEndpoint, (Arc<UdpSocket>, Arc<Immortal>)> = CacheBuilder::default()
         .time_to_idle(Duration::from_secs(60 * 60))
         .build();
@@ -205,7 +205,7 @@ async fn tcp_forward(
         haven_id,
         Some(listen_dock),
         Some(haven_cfg.rendezvous),
-    );
+    )?;
 
     let mut listener = StreamListener::listen(earendil_skt);
 
@@ -240,7 +240,7 @@ async fn simple_proxy(
         haven_id,
         Some(listen_dock),
         Some(haven_cfg.rendezvous),
-    );
+    )?;
 
     let mut listener = StreamListener::listen(earendil_skt);
 

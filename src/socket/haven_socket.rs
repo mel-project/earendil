@@ -46,8 +46,8 @@ impl HavenSocket {
         isk: HavenIdentitySecret,
         dock: Option<Dock>,
         rendezvous_point: Option<RelayFingerprint>,
-    ) -> HavenSocket {
-        let n2r_skt = N2rClientSocket::bind(ctx.clone(), dock);
+    ) -> anyhow::Result<HavenSocket> {
+        let n2r_skt = N2rClientSocket::bind(ctx.clone(), dock)?;
         let encrypters: Cache<HavenEndpoint, CryptSession> = Cache::builder()
             .max_capacity(100_000)
             .time_to_live(Duration::from_secs(60 * 30))
@@ -112,7 +112,7 @@ impl HavenSocket {
                 }
             });
 
-            HavenSocket {
+            Ok(HavenSocket {
                 ctx,
                 n2r_socket: n2r_skt,
                 identity_sk: isk,
@@ -122,10 +122,10 @@ impl HavenSocket {
                 recv_incoming_decrypted,
                 send_incoming_decrypted,
                 _recv_task: recv_task,
-            }
+            })
         } else {
             // We're Alice
-            HavenSocket {
+            Ok(HavenSocket {
                 ctx,
                 n2r_socket: n2r_skt,
                 identity_sk: isk,
@@ -135,7 +135,7 @@ impl HavenSocket {
                 recv_incoming_decrypted,
                 send_incoming_decrypted,
                 _recv_task: recv_task,
-            }
+            })
         }
     }
 
