@@ -40,7 +40,7 @@ impl Socket {
         Self::bind_n2r_client_internal(daemon.ctx.clone(), dock)
     }
 
-    pub fn bind_n2r_relay(daemon: &Daemon, dock: Option<Dock>) -> anyhow::Result<Socket> {
+    pub async fn bind_n2r_relay(daemon: &Daemon, dock: Option<Dock>) -> anyhow::Result<Socket> {
         Self::bind_n2r_relay_internal(daemon.ctx.clone(), dock)
     }
 

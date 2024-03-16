@@ -3,9 +3,9 @@ use std::{env, time::Duration};
 use anyhow::Context;
 use bytes::Bytes;
 use earendil::{config::ConfigFile, daemon::Daemon, socket::Socket};
-use earendil_crypt::RelayIdentitySecret;
+use earendil_crypt::{HavenIdentitySecret, RelayIdentitySecret};
 use once_cell::sync::Lazy;
-use smol::{future::FutureExt, Timer};
+use smol::Timer;
 use smol_timeout::TimeoutExt;
 use tracing_test::traced_test;
 
@@ -43,13 +43,12 @@ fn n2r() {
 
     let seed = helpers::gen_seed("n2r");
     let (mut relays, _clients) = helpers::spawn_network(16, 0, Some(seed)).unwrap();
-
-    let alice = relays.pop().unwrap();
-    let alice_skt = Socket::bind_n2r(&alice, alice.identity(), None);
-    let bob = relays.pop().unwrap();
-    let bob_skt = Socket::bind_n2r(&bob, bob.identity(), None);
-
     smolscale::block_on(async move {
+        let alice = relays.pop().unwrap();
+        let alice_skt = Socket::bind_n2r_client(&alice, None).await.unwrap();
+        let bob = relays.pop().unwrap();
+        let bob_skt = Socket::bind_n2r_relay(&bob, None).await.unwrap();
+
         helpers::sleep(5).await;
 
         let alice_msg = Bytes::from_static("in Wonderland rn, wya??".as_bytes());
@@ -94,16 +93,16 @@ fn n2r_reply_blocks() {
     let seed = helpers::gen_seed("n2r_reply_blocks");
     let (mut relays, mut clients) = helpers::spawn_network(2, 4, Some(seed)).unwrap();
 
-    // choose alice and charlie daemons
-    let alice = clients.pop().unwrap();
-    let alice_isk = RelayIdentitySecret::generate();
-    let alice_skt = Socket::bind_n2r(&alice, alice_isk, None);
-    let charlie = relays.pop().unwrap();
-    let charlie_isk = charlie.identity();
-    let charlie_skt = Socket::bind_n2r(&charlie, charlie_isk, None);
-
     // alice sends charlie a msg
     smolscale::block_on(async move {
+        // choose alice and charlie daemons
+        let alice = clients.pop().unwrap();
+        let _alice_isk = RelayIdentitySecret::generate();
+        let alice_skt = Socket::bind_n2r_client(&alice, None).await.unwrap();
+        let charlie = relays.pop().unwrap();
+        let _charlie_isk = charlie.identity();
+        let charlie_skt = Socket::bind_n2r_relay(&charlie, None).await.unwrap();
+
         // sleep to give the nodes time to connect
         helpers::sleep(5).await;
 
@@ -149,19 +148,23 @@ fn haven() {
     env::set_var("SOSISTAB2_NO_SLEEP", "1");
     Lazy::force(&START_DAEMONS);
 
-    // spin up alice, bob, and charlie daemons
-    let alice_isk = RelayIdentitySecret::generate();
-    let alice_skt = Socket::bind_haven(&ALICE_DAEMON, alice_isk, None, None);
-
-    let derek_isk = RelayIdentitySecret::generate();
-    let derek_skt = Socket::bind_haven(
-        &DEREK_DAEMON,
-        derek_isk,
-        None,
-        Some(CHARLIE_DAEMON.identity().public().fingerprint()),
-    );
-
     smolscale::block_on(async move {
+        // spin up alice, bob, and charlie daemons
+        let alice_isk = HavenIdentitySecret::generate();
+        let alice_skt = Socket::bind_haven(&ALICE_DAEMON, alice_isk, None, None)
+            .await
+            .unwrap();
+
+        let derek_isk = HavenIdentitySecret::generate();
+        let derek_skt = Socket::bind_haven(
+            &DEREK_DAEMON,
+            derek_isk,
+            None,
+            Some(CHARLIE_DAEMON.identity().unwrap().public().fingerprint()),
+        )
+        .await
+        .unwrap();
+
         // sleep to give the nodes time to connect and register havens
         helpers::sleep(15).await;
         let alice_msg = Bytes::from_static("Hello, anonymous Derek!".as_bytes());
@@ -220,18 +223,30 @@ fn haven_ii() {
         helpers::sleep(5).await;
         let alice = clients.pop().unwrap();
 
-        let alice_anon_isk = RelayIdentitySecret::generate();
-        let alice_skt = Socket::bind_haven(&alice, alice_anon_isk, None, None);
+        let alice_anon_isk = HavenIdentitySecret::generate();
+        let alice_skt = Socket::bind_haven(&alice, alice_anon_isk, None, None)
+            .await
+            .unwrap();
         let alice_anon_fp = alice_skt.local_endpoint();
 
         let bob = relays.pop().unwrap();
-        let bob_haven_isk = RelayIdentitySecret::generate();
+        let bob_haven_isk = HavenIdentitySecret::generate();
         let bob_skt = Socket::bind_haven(
             &bob,
             bob_haven_isk,
             None,
-            Some(relays.last().unwrap().identity().public().fingerprint()),
-        );
+            Some(
+                relays
+                    .last()
+                    .unwrap()
+                    .identity()
+                    .unwrap()
+                    .public()
+                    .fingerprint(),
+            ),
+        )
+        .await
+        .unwrap();
         let bob_haven_fp = bob_skt.local_endpoint();
 
         let to_bob = b"hello bobert";

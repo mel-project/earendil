@@ -16,7 +16,6 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use smol::Timer;
 use sosistab2_obfsudp::ObfsUdpSecret;
 use std::net::TcpStream;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 type InRoutes = Vec<(String, InRouteConfig)>;
 type OutRoutes = Vec<(String, OutRouteConfig)>;
@@ -52,7 +51,7 @@ pub fn gen_cfg(
     in_routes: InRoutes,
     out_routes: OutRoutes,
 ) -> ConfigFile {
-    let db_path = None;
+    let state_cache = None;
     let in_routes = in_routes.into_iter().collect();
     let out_routes = out_routes.into_iter().collect();
     let udp_forwards = vec![];
@@ -62,7 +61,7 @@ pub fn gen_cfg(
 
     ConfigFile {
         identity: Some(identity),
-        db_path,
+        state_cache,
         control_listen,
         in_routes,
         out_routes,
@@ -137,7 +136,8 @@ fn routes(
                 .identity
                 .clone()
                 .unwrap()
-                .actualize()?
+                .actualize_relay()
+                .unwrap()
                 .public()
                 .fingerprint();
 
@@ -176,7 +176,7 @@ fn routes(
                     .identity
                     .clone()
                     .unwrap()
-                    .actualize()?
+                    .actualize_relay()?
                     .public()
                     .fingerprint(),
                 connect,
@@ -264,7 +264,7 @@ pub fn config_to_yaml_file(config: &ConfigFile, file_path: &str) -> std::io::Res
 
     let mut file = fs::File::create(file_path)?;
     let id = match &config.identity {
-        Some(id) => id.actualize().unwrap(),
+        Some(id) => id.actualize_relay().unwrap(),
         None => panic!("id generated in unexpected format"),
     };
     file.write_all(format!("# fingerprint: {}\n", id.public().fingerprint()).as_bytes())?;

@@ -1,5 +1,4 @@
 use earendil::{
-    daemon::Daemon,
     socket::Socket,
     stream::{Stream, StreamListener},
 };
@@ -29,12 +28,12 @@ fn stream() {
         helpers::sleep(5).await;
 
         let alice = clients.pop().unwrap();
-        let alice_skt = Socket::bind_n2r(&alice, alice.identity(), None);
+        let alice_skt = Socket::bind_n2r_client(&alice, None).await.unwrap();
         let alice_skt_ep = alice_skt.local_endpoint();
         let mut alice_listener = StreamListener::listen(alice_skt);
 
         let bob = relays.pop().unwrap(); // todo: test only works w/ neighbors?
-        let bob_skt = Socket::bind_n2r(&bob, bob.identity(), None);
+        let bob_skt = Socket::bind_n2r_relay(&bob, None).await.unwrap();
 
         let to_bob = b"hello bobert";
         let to_alice = b"hey there, allison";
