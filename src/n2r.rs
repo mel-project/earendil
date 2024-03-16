@@ -12,7 +12,7 @@ use smol::channel::{Receiver, Sender};
 
 use crate::{
     context::{CtxField, DaemonContext, DEGARBLERS, GLOBAL_IDENTITY, RELAY_GRAPH},
-    n2r::{anon_dest::ANON_DESTS, delay_queue::DELAY_QUEUE, remote_rb::replenish_rrb},
+    n2r::{anon_dest::ANON_DESTS, remote_rb::replenish_remote_rb},
     onion::send_raw,
     socket::{AnonEndpoint, RelayEndpoint},
 };
@@ -84,6 +84,8 @@ pub async fn read_backward(
         InnerPacket::Message(msg) => {
             let anon_endpoint = AnonEndpoint::new(degarbler.my_anon_id(), msg.dest_dock);
             let relay_endpoint = RelayEndpoint::new(relay_fp, msg.source_dock);
+            // consume a reply block
+            remote_rb::consume_remote_rb(ctx, anon_endpoint.anon_dest, relay_endpoint.fingerprint);
             Ok((msg.body, relay_endpoint, anon_endpoint))
         }
         InnerPacket::ReplyBlocks(_) => anyhow::bail!("we shouldn't be getting reply blocks here"),
@@ -128,7 +130,7 @@ pub async fn send_forward(
         RemoteId::Anon(src),
     )?;
 
-    replenish_rrb(ctx, src, dst_fp).context("failed to replenish remote reply blocks")?;
+    replenish_remote_rb(ctx, src, dst_fp).context("failed to replenish remote reply blocks")?;
 
     send_raw(ctx, wrapped_onion, first_peeler)
         .await

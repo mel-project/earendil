@@ -5,12 +5,10 @@ pub(crate) mod dht;
 mod delay_queue;
 mod inout_route;
 
-mod rrb_balance;
 mod socks5;
 mod tcp_forward;
 mod udp_forward;
 
-use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;

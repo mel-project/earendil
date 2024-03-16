@@ -8,13 +8,14 @@ use std::time::{Duration, Instant};
 use crate::{
     context::{CtxField, DaemonContext, DEGARBLERS, MY_CLIENT_ID, RELAY_GRAPH, RELAY_NEIGHS},
     control_protocol::SendMessageError,
-    n2r::{delay_queue::DELAY_QUEUE, forward_route, route_to_instructs},
+    n2r::{forward_route, route_to_instructs},
     onion::send_raw,
 };
 
 static LAWK: Mutex<()> = Mutex::new(());
 
-pub fn replenish_rrb(
+/// Call to replenish remote reply blocks as needed.
+pub fn replenish_remote_rb(
     ctx: &DaemonContext,
     my_anon_id: AnonRemote,
     dst_fp: RelayFingerprint,
@@ -38,6 +39,18 @@ pub fn replenish_rrb(
         .detach();
     }
     Ok(())
+}
+
+/// Decrements the estimate of how many reply blocks the other side has. If needed, replenishes too.
+pub fn consume_remote_rb(
+    ctx: &DaemonContext,
+    my_anon_id: AnonRemote,
+    reply_source: RelayFingerprint,
+) {
+    let new_balance = rb_balance(ctx, my_anon_id, reply_source);
+    ctx.get(BALANCE_TABLE)
+        .insert((my_anon_id, reply_source), new_balance - 1.0);
+    replenish_remote_rb(ctx, my_anon_id, reply_source);
 }
 
 fn rb_balance(ctx: &DaemonContext, my_anon_id: AnonRemote, reply_source: RelayFingerprint) -> f64 {
