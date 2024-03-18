@@ -115,7 +115,9 @@ pub async fn send_forward(
     });
 
     let route = forward_route(ctx).context("failed to create forward route")?;
-    let first_peeler = route[0];
+    let first_peeler = *route
+        .get(0)
+        .context("empty route, cannot obtain first peeler")?;
 
     let instructs = route_to_instructs(ctx, &route).context("route_to_instructs failed")?;
     tracing::trace!(
@@ -135,7 +137,9 @@ pub async fn send_forward(
         RemoteId::Anon(src),
     )?;
 
-    replenish_remote_rb(ctx, src, dst_fp).context("failed to replenish remote reply blocks")?;
+    replenish_remote_rb(ctx, src, dst_fp)
+        .await
+        .context("failed to replenish remote reply blocks")?;
 
     send_raw(ctx, wrapped_onion, first_peeler)
         .await

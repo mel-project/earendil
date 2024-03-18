@@ -39,7 +39,8 @@ pub async fn send_raw(
             incoming_raw(ctx, NeighborId::Relay(my_fp), next_peeler, packet).await?;
         } else {
             let next_hop = one_hop_closer(ctx, next_peeler)?;
-            ctx.get(RELAY_SPIDER).send(&next_hop, (packet, next_peeler));
+            ctx.get(RELAY_SPIDER)
+                .send(&next_hop, (packet, next_peeler))?;
         }
     }
     Ok(())

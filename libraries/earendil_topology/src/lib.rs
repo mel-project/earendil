@@ -48,6 +48,12 @@ impl RelayGraph {
 
     /// Looks up the identity descriptor of a fingerprint.
     pub fn identity(&self, fingerprint: &RelayFingerprint) -> Option<IdentityDescriptor> {
+        tracing::debug!(
+            needle = debug(fingerprint),
+            haystack = debug(self.fp_to_id.iter().collect::<Vec<_>>()),
+            haystack2 = debug(self.id_to_descriptor.iter().collect::<Vec<_>>()),
+            "looking up identity"
+        );
         let id = self.id(fingerprint)?;
         self.id_to_descriptor.get(&id).cloned()
     }

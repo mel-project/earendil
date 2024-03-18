@@ -1,3 +1,4 @@
+use anyhow::Context;
 use earendil_crypt::{AnonRemote, RelayFingerprint, RemoteId};
 use earendil_packet::{InnerPacket, RawPacket, ReplyBlock};
 use moka::sync::Cache;
@@ -15,28 +16,26 @@ use crate::{
 static LAWK: Mutex<()> = Mutex::new(());
 
 /// Call to replenish remote reply blocks as needed.
-pub fn replenish_remote_rb(
+pub async fn replenish_remote_rb(
     ctx: &DaemonContext,
     my_anon_id: AnonRemote,
     dst_fp: RelayFingerprint,
-) -> Result<(), SendMessageError> {
-    let _guard = LAWK.lock();
+) -> anyhow::Result<()> {
     const BATCH_SIZE: usize = 5;
-    while rb_balance(ctx, my_anon_id, dst_fp) < 100.0 {
-        // we conservatively assume half get there
-        ctx.get(BALANCE_TABLE).insert(
-            (my_anon_id, dst_fp),
-            rb_balance(ctx, my_anon_id, dst_fp) + (BATCH_SIZE / 2) as f64,
-        );
-        let ctx = ctx.clone();
-        smolscale::spawn(async move {
-            send_reply_blocks(&ctx, BATCH_SIZE, my_anon_id, dst_fp)
-                .await
-                .inspect_err(|e| {
-                    tracing::warn!(error = debug(e), "reply blocks FAILED TO SEND!!!!!")
-                })
-        })
-        .detach();
+    let mut count = 0;
+    {
+        let _guard = LAWK.lock();
+        while rb_balance(ctx, my_anon_id, dst_fp) < 100.0 {
+            // we conservatively assume half get there
+            ctx.get(BALANCE_TABLE).insert(
+                (my_anon_id, dst_fp),
+                rb_balance(ctx, my_anon_id, dst_fp) + (BATCH_SIZE / 2) as f64,
+            );
+            count += 1;
+        }
+    }
+    for _ in 0..count {
+        send_reply_blocks(&ctx, BATCH_SIZE, my_anon_id, dst_fp).await?;
     }
     Ok(())
 }
@@ -50,7 +49,7 @@ pub fn consume_remote_rb(
     let new_balance = rb_balance(ctx, my_anon_id, reply_source);
     ctx.get(BALANCE_TABLE)
         .insert((my_anon_id, reply_source), new_balance - 1.0);
-    replenish_remote_rb(ctx, my_anon_id, reply_source);
+    let _ = replenish_remote_rb(ctx, my_anon_id, reply_source);
 }
 
 fn rb_balance(ctx: &DaemonContext, my_anon_id: AnonRemote, reply_source: RelayFingerprint) -> f64 {
@@ -74,21 +73,22 @@ async fn send_reply_blocks(
 ) -> anyhow::Result<()> {
     tracing::trace!("sending a batch of {count} reply blocks to {dst_fp}");
 
-    let route = forward_route(ctx)?;
+    let route = forward_route(ctx).context("failed to form forward route")?;
     let first_peeler = route[0];
 
     let dest_opk = ctx
         .get(RELAY_GRAPH)
         .read()
         .identity(&dst_fp)
-        .ok_or(SendMessageError::NoOnionPublic(dst_fp))?
+        .context("failed to lookup destination FP")?
         .onion_pk;
 
-    let instructs = route_to_instructs(ctx, &route)?;
+    let instructs = route_to_instructs(ctx, &route).context("failed to translate forward route")?;
     // currently the path for every one of them is the same; will want to change this in the future
-    let reverse_route = reply_route(ctx)?;
+    let reverse_route = reply_route(ctx).context("failed to form reply route")?;
 
-    let reverse_instructs = route_to_instructs(ctx, &reverse_route)?;
+    let reverse_instructs =
+        route_to_instructs(ctx, &reverse_route).context("failed to translate reply route")?;
 
     let mut rbs: Vec<ReplyBlock> = vec![];
     for _ in 0..count {
@@ -99,7 +99,7 @@ async fn send_reply_blocks(
             *ctx.get(MY_CLIENT_ID),
             my_anon_id,
         )
-        .map_err(|e| SendMessageError::ReplyBlockFailed(e.to_string()))?;
+        .context("cannot build reply block")?;
         rbs.push(rb);
         ctx.get(DEGARBLERS).insert(id, degarbler);
     }
@@ -110,7 +110,9 @@ async fn send_reply_blocks(
         RemoteId::Anon(my_anon_id),
     )?;
 
-    send_raw(ctx, wrapped_rb_onion, first_peeler).await?;
+    send_raw(ctx, wrapped_rb_onion, first_peeler)
+        .await
+        .context("cannot send raw")?;
 
     tracing::debug!("****** OHHHH SENTTTT REPPPPLY BLOOOCKS *****");
 
