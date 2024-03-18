@@ -1,10 +1,8 @@
 mod control_protocol_impl;
 
 pub(crate) mod dht;
-
-mod delay_queue;
 mod inout_route;
-
+mod link;
 mod socks5;
 mod tcp_forward;
 mod udp_forward;
@@ -252,50 +250,12 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 
     // For every in_routes block, spawn a task to handle incoming stuff
     for (in_route_name, config) in ctx.init().in_routes.iter() {
-        let context = InRouteContext {
-            in_route_name: in_route_name.clone(),
-            daemon_ctx: ctx.clone(),
-        };
-
-        match config.clone() {
-            InRouteConfig::Obfsudp {
-                listen,
-                secret,
-                link_price,
-            } => {
-                route_tasks.push(smolscale::spawn(in_route_obfsudp(
-                    context.clone(),
-                    listen,
-                    secret,
-                    link_price,
-                )));
-            }
-        }
+        todo!()
     }
 
     // For every out_routes block, spawn a task to handle outgoing stuff
     for (out_route_name, config) in ctx.init().out_routes.iter() {
-        match config {
-            OutRouteConfig::Obfsudp {
-                fingerprint,
-                connect,
-                cookie,
-                link_price,
-            } => {
-                let context = OutRouteContext {
-                    out_route_name: out_route_name.clone(),
-                    remote_fingerprint: *fingerprint,
-                    daemon_ctx: ctx.clone(),
-                };
-
-                route_tasks.push(smolscale::spawn(out_route_obfsudp(
-                    context,
-                    *connect,
-                    *cookie,
-                    *link_price,
-                )));
-            }
-        }
+        todo!()
     }
 
     // Join all the tasks. If any of the tasks terminate with an error, that's fatal!

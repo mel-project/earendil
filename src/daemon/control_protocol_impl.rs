@@ -152,24 +152,11 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn my_routes(&self) -> serde_json::Value {
         let lala: BTreeMap<String, serde_json::Value> = self
-            .ctx.init()
+            .ctx
+            .init()
             .in_routes
             .iter()
-            .map(|(k, v)| match v {
-                InRouteConfig::Obfsudp { listen, secret, link_price } => {
-                    let secret =
-                        ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes());
-                    (
-                        k.clone(),
-                        json!( {
-                            "fingerprint": format!("{}", self.ctx.get(MY_RELAY_IDENTITY).expect("only relays have global identities").public().fingerprint()),
-                            "connect": format!("<YOUR_IP>:{}", listen.port()),
-                            "cookie": hex::encode(secret.to_public().as_bytes()),
-                            "link_price": link_price,
-                        }),
-                    )
-                }
-            })
+            .map(|(k, v)| todo!())
             .collect();
         serde_json::to_value(lala).unwrap()
     }

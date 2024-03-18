@@ -59,33 +59,24 @@ fn default_control_listen() -> SocketAddr {
     "127.0.0.1:18964".parse().unwrap()
 }
 
-#[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
-#[serde(tag = "protocol", rename_all = "snake_case")]
-pub enum InRouteConfig {
-    Obfsudp {
-        #[serde_as(as = "serde_with::DisplayFromStr")]
-        listen: SocketAddr,
-        secret: String,
-        #[serde(default)]
-        link_price: LinkPrice,
-    },
+pub struct InRouteConfig {
+    pub listen: SocketAddr,
+    pub obfs: ObfsConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum ObfsConfig {
+    None,
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
-#[serde(tag = "protocol", rename_all = "snake_case")]
-pub enum OutRouteConfig {
-    Obfsudp {
-        #[serde_as(as = "serde_with::DisplayFromStr")]
-        fingerprint: RelayFingerprint,
-        #[serde_as(as = "serde_with::DisplayFromStr")]
-        connect: SocketAddr,
-        #[serde_as(as = "serde_with::hex::Hex")]
-        cookie: [u8; 32],
-        #[serde(default)]
-        link_price: LinkPrice,
-    },
+pub struct OutRouteConfig {
+    pub connect: SocketAddr,
+    pub fingerprint: RelayFingerprint,
+    pub obfs: ObfsConfig,
 }
 
 #[serde_as]

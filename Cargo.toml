@@ -68,6 +68,8 @@ priority-queue = "1.4.0"
 async-event = "0.1.0"
 either = "1.10.0"
 async-recursion = "1.0.5"
+picomux = "0.1.1"
+async-dup = "1.2.4"
 
 [profile.dev]
 panic = 'abort'

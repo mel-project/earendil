@@ -1,238 +1,118 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
-
+use super::link::LinkMessage;
+use crate::{
+    config::InRouteConfig,
+    context::{DaemonContext, MY_RELAY_IDENTITY, MY_RELAY_ONION_SK},
+    daemon::link::Link,
+    network,
+    pascal::{read_pascal, write_pascal},
+};
+use crate::{
+    config::{ObfsConfig, OutRouteConfig},
+    context::MY_CLIENT_ID,
+};
+use bytes::Bytes;
 use earendil_crypt::{ClientId, RelayFingerprint};
 use earendil_topology::IdentityDescriptor;
-use futures::{AsyncRead, AsyncReadExt, AsyncWrite};
-use futures_util::TryFutureExt;
+use futures::AsyncReadExt as _;
 use nursery_macro::nursery;
-use serde::{Deserialize, Serialize};
-use smol::{future::FutureExt, io::AsyncWriteExt};
-use smol_timeout::TimeoutExt;
+use picomux::PicoMux;
+use smol::net::{TcpListener, TcpStream};
+use stdcode::StdcodeSerializeExt as _;
 
-use sosistab2::{Multiplex, MuxSecret};
-use sosistab2_obfsudp::{ObfsUdpListener, ObfsUdpPipe, ObfsUdpPublic, ObfsUdpSecret};
-use stdcode::StdcodeSerializeExt;
-pub mod chat;
-mod link_connection;
-mod link_protocol;
-use crate::{config::LinkPrice, network};
-use crate::{
-    context::{DaemonContext, MY_CLIENT_ID, MY_RELAY_IDENTITY, MY_RELAY_ONION_SK},
-    daemon::inout_route::link_connection::{ClientNeighbor, RelayNeighbor},
-};
+/*
+Links aren't inherently client-relay or relay-relay.
 
-use self::{
-    link_connection::{gossip_loop, link_maintain, LinkContext, LinkProtocolImpl},
-    link_protocol::{LinkClient, LinkService},
-};
+Instead, each link is logically either a client-relay link, or it is *also* a relay-relay link.
 
-const CONNECTION_LIFETIME: Duration = Duration::from_secs(10);
+Basically, the dialing side may or may not have a relay identity. The listening side always does.
 
-#[derive(Serialize, Deserialize)]
-enum LinkHello {
-    Client(ClientId),
-    Relay(IdentityDescriptor),
-}
+This means that the link-maintaining code *always* calls subscribe_outgoing_client. It *may* call subscribe_outgoing_relay if the other side is a relay.
 
-#[derive(Clone)]
-pub struct InRouteContext {
-    pub daemon_ctx: DaemonContext,
-    pub in_route_name: String,
-}
+Relay and client messages are then put on the same link.
+*/
 
-#[tracing::instrument(skip(context, secret))]
-pub async fn in_route_obfsudp(
-    context: InRouteContext,
-    listen: SocketAddr,
-    secret: String,
-    link_price: LinkPrice,
-) -> anyhow::Result<()> {
-    let secret = ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes());
-    tracing::debug!(
-        "obfsudp in_route {} listen start with cookie {}",
-        context.in_route_name,
-        hex::encode(secret.to_public().as_bytes())
-    );
-    let listener = ObfsUdpListener::bind(listen, secret).await?;
+#[tracing::instrument(skip_all, fields(listen=debug(cfg.listen)))]
+pub async fn listen_in_route(ctx: &DaemonContext, cfg: &InRouteConfig) -> anyhow::Result<()> {
+    let listener = TcpListener::bind(cfg.listen).await?;
     nursery!(loop {
-        let pipe = listener.accept().await?;
-        let mplex = Arc::new(Multiplex::new(MuxSecret::generate(), None));
-        mplex.add_pipe(pipe);
-        let context = context.clone();
-        spawn!(
-            route_loop(context.daemon_ctx.clone(), mplex, link_price, true)
-                .timeout(CONNECTION_LIFETIME)
-        )
+        let (tcp_conn, remote_addr) = listener.accept().await?;
+        tracing::debug!(
+            remote_addr = debug(remote_addr),
+            "accepted a TCP connection"
+        );
+
+        spawn!(async move {
+            let (mux, their_client_id, their_relay_descr) =
+                tcp_to_mux(ctx, tcp_conn, &cfg.obfs).await?;
+            let link = Link::new_listen(mux).await?;
+            manage_mux(ctx, link, their_client_id, their_relay_descr).await
+        })
         .detach();
     })
 }
 
-async fn route_loop(
-    ctx: DaemonContext,
-    mplex: Arc<Multiplex>,
-    link_price: LinkPrice,
-    is_listen: bool,
-) -> anyhow::Result<()> {
-    tracing::debug!(is_listen, "route loop started");
-    scopeguard::defer!(tracing::info!(is_listen, "route loop stopped"));
-    // first, we authenticate the other side.
-    let neighbor: either::Either<IdentityDescriptor, ClientId> = {
-        let stream = if is_listen {
-            let s = mplex.accept_conn().await?;
-            tracing::debug!("accepted the authentication stream");
-            s
-        } else {
-            let s = mplex.open_conn("!init_auth").await?;
-            tracing::debug!("made the authentication stream");
-            s
-        };
+pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow::Result<()> {
+    let tcp_conn = TcpStream::connect(cfg.connect).await?;
+    let (mux, their_client_id, their_relay_descr) = tcp_to_mux(ctx, tcp_conn, &cfg.obfs).await?;
+    let link = Link::new_dial(mux).await?;
+    manage_mux(ctx, link, their_client_id, their_relay_descr).await
+}
 
-        let (mut read, mut write) = stream.split();
-        let send_hello_fut = async {
-            if ctx.init().is_client() {
-                write_msg(
-                    &LinkHello::Client(*ctx.get(MY_CLIENT_ID)).stdcode(),
-                    &mut write,
-                )
-                .await?;
-            } else {
-                write_msg(
-                    &LinkHello::Relay(IdentityDescriptor::new(
-                        &ctx.get(MY_RELAY_IDENTITY)
-                            .expect("only relays have global identities"),
-                        ctx.get(MY_RELAY_ONION_SK),
-                    ))
-                    .stdcode(),
-                    &mut write,
-                )
-                .await?;
-            }
-            anyhow::Ok(())
-        };
-        let read_hello_fut = async {
-            let hello: LinkHello = stdcode::deserialize(&read_msg(&mut read).await?)?;
-            anyhow::Ok(hello)
-        };
-        let (a, their_hello) = futures::join!(send_hello_fut, read_hello_fut);
-        a?;
-        match their_hello? {
-            LinkHello::Client(c) => either::Right(c),
-            LinkHello::Relay(r) => either::Left(r),
+async fn tcp_to_mux(
+    ctx: &DaemonContext,
+    tcp_stream: TcpStream,
+    obfs_cfg: &ObfsConfig,
+) -> anyhow::Result<(PicoMux, ClientId, Option<IdentityDescriptor>)> {
+    let obfsed_conn = match &obfs_cfg {
+        ObfsConfig::None => tcp_stream,
+    };
+    let (mut read, mut write) = obfsed_conn.split();
+
+    let send_auth = async {
+        let my_client_id = *ctx.get(MY_CLIENT_ID);
+        let my_relay_descr = ctx
+            .get(MY_RELAY_IDENTITY)
+            .as_ref()
+            .map(|id| IdentityDescriptor::new(&id, ctx.get(MY_RELAY_ONION_SK)));
+        let auth_msg = (my_client_id, my_relay_descr).stdcode();
+        write_pascal(&auth_msg, &mut write).await?;
+        anyhow::Ok(())
+    };
+
+    let recv_auth = async {
+        let bts = read_pascal(&mut read).await?;
+        let (their_client_id, their_relay_descr): (ClientId, Option<IdentityDescriptor>) =
+            stdcode::deserialize(&bts)?;
+        anyhow::Ok((their_client_id, their_relay_descr))
+    };
+
+    let (a, b) = futures::join!(send_auth, recv_auth);
+    a?;
+    let (their_client_id, their_relay_descr) = b?;
+    let mux = PicoMux::new(read, write);
+    Ok((mux, their_client_id, their_relay_descr))
+}
+
+async fn manage_mux(
+    ctx: &DaemonContext,
+    link: Link,
+    their_client_id: ClientId,
+    their_relay_descr: Option<IdentityDescriptor>,
+) -> anyhow::Result<()> {
+    // subscribe to the right outgoing stuff and stuff them into the link
+    let recv_outgoing_client = network::subscribe_outgoing_client(ctx, their_client_id);
+    let send_outgoing_client = async {
+        loop {
+            let msg = recv_outgoing_client.recv().await?;
+            link.send_msg(LinkMessage::ToClient {
+                body: Bytes::copy_from_slice(&msg.0),
+                rb_id: msg.1,
+            })
+            .await?;
         }
     };
 
-    tracing::debug!(
-        is_listen,
-        neighbor = debug(&neighbor),
-        "authentication done"
-    );
-
-    // then, we start the link maintenance
-    let link_channel_and_neigh = neighbor
-        .as_ref()
-        .map_left(|left| {
-            RelayNeighbor(
-                network::subscribe_outgoing_relay(&ctx, left.identity_pk.fingerprint()),
-                left.identity_pk.fingerprint(),
-            )
-        })
-        .map_right(|right| {
-            ClientNeighbor(network::subscribe_outgoing_client(&ctx, *right), *right)
-        });
-    let link_context = LinkContext {
-        ctx: ctx.clone(),
-        service: Arc::new(LinkService(LinkProtocolImpl {
-            ctx: ctx.clone(),
-            mplex: mplex.clone(),
-            remote: neighbor,
-            max_outgoing_price: link_price.max_outgoing_price,
-        })),
-        mplex,
-        neighbor: link_channel_and_neigh,
-    };
-    let link_maintenance = link_maintain(&link_context, is_listen);
-    let gossip = gossip_loop(&link_context);
-
-    link_maintenance.race(gossip).await
-}
-
-#[derive(Clone)]
-pub struct OutRouteContext {
-    pub daemon_ctx: DaemonContext,
-    pub out_route_name: String,
-    pub remote_fingerprint: RelayFingerprint,
-}
-
-#[tracing::instrument(skip(context, cookie))]
-pub async fn out_route_obfsudp(
-    context: OutRouteContext,
-    connect: SocketAddr,
-    cookie: [u8; 32],
-    link_price: LinkPrice,
-) -> anyhow::Result<()> {
-    let mut timer1 = smol::Timer::interval(CONNECTION_LIFETIME);
-    let mut timer2 = smol::Timer::interval(CONNECTION_LIFETIME);
-    let ctx = context.daemon_ctx;
-
-    loop {
-        let fallible = async {
-            tracing::debug!("{} trying...", context.out_route_name);
-            let pipe = ObfsUdpPipe::connect(connect, ObfsUdpPublic::from_bytes(cookie), "").await?;
-            tracing::info!("{} pipe connected", context.out_route_name);
-
-            let mplex = Arc::new(Multiplex::new(MuxSecret::generate(), None));
-            mplex.add_pipe(pipe);
-
-            let out_route_loop = route_loop(ctx.clone(), mplex, link_price, false);
-
-            out_route_loop
-                .map_err(|e| {
-                    tracing::warn!(
-                        "out route loop for {:?} died: {:?}",
-                        context.remote_fingerprint,
-                        e
-                    );
-                    e
-                })
-                .await?;
-
-            anyhow::Ok(())
-        };
-
-        async {
-            if let Err(err) = fallible.await {
-                tracing::warn!(
-                    "obfs out_route {} failed: {:?}",
-                    context.out_route_name,
-                    err
-                );
-            }
-            (&mut timer1).await;
-        }
-        .or(async {
-            (&mut timer2).await;
-        })
-        .await;
-    }
-}
-
-pub async fn write_msg<W: AsyncWrite + Unpin>(message: &[u8], mut out: W) -> anyhow::Result<()> {
-    let len = (message.len() as u32).to_be_bytes();
-
-    out.write_all(&len).await?;
-    out.write_all(message).await?;
-    out.flush().await?;
-
-    Ok(())
-}
-
-pub async fn read_msg<R: AsyncRead + Unpin>(mut input: R) -> anyhow::Result<Vec<u8>> {
-    let mut len = [0; 4];
-    input.read_exact(&mut len).await?;
-    let len = u32::from_be_bytes(len);
-
-    let mut buffer = vec![0; len as usize];
-    input.read_exact(&mut buffer).await?;
-
-    Ok(buffer)
+    // serve linkrpc
+    // gossip with the other side by calling their linkrpc
+    todo!()
 }

@@ -368,6 +368,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-dup"
+version = "1.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c2886ab563af5038f79ec016dd7b87947ed138b794e8dd64992962c9cca0411"
+dependencies = [
+ "async-lock 3.3.0",
+ "futures-io",
+]
+
+[[package]]
 name = "async-event"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -602,6 +612,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "async_io_stream"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d7b9decdf35d8908a7e3ef02f64c5e9b1695e230154c0e8de3969142d9b94c"
+dependencies = [
+ "futures",
+ "rustc_version",
+]
+
+[[package]]
 name = "atoi"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -742,6 +762,19 @@ dependencies = [
  "bitcoin_hashes",
  "serde",
  "unicode-normalization",
+]
+
+[[package]]
+name = "bipe"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d82b477ec343d3f07970a4cccdf47b2d62f2e648254f1fdc424f8764f0f3945e"
+dependencies = [
+ "concurrent-queue 1.2.4",
+ "event-listener 2.5.3",
+ "futures-core",
+ "futures-lite 1.13.0",
+ "rtrb",
 ]
 
 [[package]]
@@ -1751,6 +1784,7 @@ version = "0.0.1"
 dependencies = [
  "anyctx",
  "anyhow",
+ "async-dup",
  "async-event",
  "async-recursion",
  "async-trait",
@@ -1785,6 +1819,7 @@ dependencies = [
  "once_cell",
  "oneshot",
  "parking_lot 0.12.1",
+ "picomux",
  "priority-queue",
  "rand 0.8.5",
  "replay_filter",
@@ -3760,6 +3795,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
+name = "picomux"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71933e91a151b62e2b55f9e04fbcf905d0ff8594bd2d321424e0372d34f2289f"
+dependencies = [
+ "ahash 0.8.8",
+ "anyhow",
+ "async-channel 2.2.0",
+ "async-dup",
+ "async-event",
+ "async-io 2.3.1",
+ "async-task",
+ "async_io_stream",
+ "bipe",
+ "bytemuck",
+ "bytes",
+ "dashmap",
+ "fastrand 2.0.1",
+ "futures-intrusive 0.5.0",
+ "futures-lite 2.2.0",
+ "futures-util",
+ "oneshot",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "recycle-box",
+ "scopeguard",
+ "serde",
+ "serde_json",
+ "sillad",
+ "smol-timeout",
+ "smolscale",
+ "tachyonix",
+ "tap",
+ "tracing",
+ "tracing-test",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4321,6 +4394,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtrb"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99e704dd104faf2326a320140f70f0b736d607c1caa1b1748a6c568a79819109"
+dependencies = [
+ "cache-padded",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4425,9 +4507,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.196"
+version = "1.0.197"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "870026e60fa08c69f064aa766c10f10b1d62db9ccd4d0abb206472bee0ce3b32"
+checksum = "3fb1c873e1b9b056a4dc4c0c198b24c3ffa059243875552b2bd0933b1aee4ce2"
 dependencies = [
  "serde_derive",
 ]
@@ -4462,9 +4544,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.196"
+version = "1.0.197"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33c85360c95e7d137454dc81d9a4ed2b8efd8fbe19cee57357b32b9771fccb67"
+checksum = "7eb0b34b42edc17f6b7cac84a52a1c5f0e1bb2227e997ca9011ea3dd34e8610b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4473,9 +4555,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.113"
+version = "1.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69801b70b1c3dac963ecb03a364ba0ceda9cf60c71cfe475e99864759c8b8a79"
+checksum = "c5f09b1bd632ef549eaa9f60a1f8de742bdbc698e6cee2095fc84dde5f549ae0"
 dependencies = [
  "itoa",
  "ryu",
@@ -4619,6 +4701,21 @@ checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "digest 0.10.7",
  "rand_core 0.6.4",
+]
+
+[[package]]
+name = "sillad"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9aae5dd535b35627375f3f55d459779e29b9d31a6862f1fdb28695171699ae"
+dependencies = [
+ "async-io 2.3.1",
+ "async-trait",
+ "futures-lite 2.2.0",
+ "futures-util",
+ "libc",
+ "pin-project",
+ "smol-timeout",
 ]
 
 [[package]]
@@ -5255,6 +5352,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a327282c4f64f6dc37e3bba4c2b6842cc3a992f204fa58d917696a89f691e5f6"
 dependencies = [
  "unicode-width",
+]
+
+[[package]]
+name = "tachyonix"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64e0bf82be3359dbefbfea621d6365db00e1d7846561daad2ea74cc4cb4c9604"
+dependencies = [
+ "async-event",
+ "crossbeam-utils",
+ "diatomic-waker",
+ "futures-core",
+ "loom",
 ]
 
 [[package]]

@@ -12,6 +12,7 @@ mod network;
 mod settlement;
 pub mod socket;
 
+mod pascal;
 pub mod stream;
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
