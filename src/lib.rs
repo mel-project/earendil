@@ -1,4 +1,3 @@
-pub mod bicache;
 pub mod commands;
 pub mod config;
 mod context;

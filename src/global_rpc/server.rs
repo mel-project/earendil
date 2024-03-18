@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use moka::sync::Cache;
 
 use crate::{
-    bicache::Bicache,
     context::{CtxField, DaemonContext},
     control_protocol::DhtError,
     daemon::dht::{dht_get, dht_insert},
@@ -12,7 +11,7 @@ use crate::{
 };
 use earendil_crypt::{AnonRemote, HavenFingerprint, VerifyError};
 
-use super::GlobalRpcProtocol;
+use super::{bicache::Bicache, GlobalRpcProtocol};
 
 pub struct GlobalRpcImpl {
     ctx: DaemonContext,
