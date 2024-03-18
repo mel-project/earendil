@@ -221,9 +221,9 @@ impl RpcTransport for LinkRpcTransport {
 
 pub struct LinkProtocolImpl {
     pub ctx: DaemonContext,
-    pub mplex: Arc<Multiplex>,
-    pub remote: either::Either<IdentityDescriptor, ClientId>,
-    pub max_outgoing_price: u64,
+
+    pub remote_client_id: ClientId,
+    pub remote_relay_fp: Option<RelayFingerprint>,
 }
 
 #[async_trait]

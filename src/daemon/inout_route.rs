@@ -1,3 +1,5 @@
+use self::link_protocol::LinkService;
+
 use super::link::LinkMessage;
 use crate::{
     config::InRouteConfig,
@@ -16,8 +18,15 @@ use earendil_topology::IdentityDescriptor;
 use futures::AsyncReadExt as _;
 use nursery_macro::nursery;
 use picomux::PicoMux;
-use smol::net::{TcpListener, TcpStream};
+use smol::{
+    future::FutureExt,
+    net::{TcpListener, TcpStream},
+};
 use stdcode::StdcodeSerializeExt as _;
+
+mod gossip;
+mod link_connection;
+mod link_protocol;
 
 /*
 Links aren't inherently client-relay or relay-relay.
@@ -112,7 +121,39 @@ async fn manage_mux(
         }
     };
 
+    let send_outgoing_relay = async {
+        if let Some(relay_descr) = their_relay_descr.as_ref() {
+            let recv_relay_msg =
+                network::subscribe_outgoing_relay(ctx, relay_descr.identity_pk.fingerprint());
+            loop {
+                let (pkt, next_peeler) = recv_relay_msg.recv().await?;
+                link.send_msg(LinkMessage::ToRelay {
+                    packet: Bytes::copy_from_slice(bytemuck::bytes_of(&pkt)),
+                    next_peeler,
+                })
+                .await?;
+            }
+        } else {
+            smol::future::pending().await
+        }
+    };
+
+    let service = LinkService(link_connection::LinkProtocolImpl {
+        ctx: ctx.clone(),
+        remote_client_id: their_client_id,
+        remote_relay_fp: their_relay_descr
+            .as_ref()
+            .map(|desc| desc.identity_pk.fingerprint()),
+    });
+    let rpc_serve = link.rpc_serve(service);
+
+    let gossip_loop = async {};
+
     // serve linkrpc
     // gossip with the other side by calling their linkrpc
-    todo!()
+    send_outgoing_client
+        .race(send_outgoing_relay)
+        .race(rpc_serve)
+        .race(gossip_loop)
+        .await
 }

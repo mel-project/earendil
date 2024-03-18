@@ -5,7 +5,7 @@ use bytes::Bytes;
 use earendil_crypt::RelayFingerprint;
 use futures::AsyncBufReadExt;
 use futures_util::io::AsyncReadExt;
-use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
+use nanorpc::{DynRpcTransport, JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nursery_macro::nursery;
 use picomux::{PicoMux, Stream};
 use serde::{Deserialize, Serialize};
@@ -53,10 +53,10 @@ impl Link {
         Ok(stdcode::deserialize(&bts)?)
     }
 
-    pub async fn rpc_transport(&self) -> impl RpcTransport {
-        MuxRpcTransport {
+    pub fn rpc_transport(&self) -> DynRpcTransport {
+        DynRpcTransport::new(MuxRpcTransport {
             mux: self.mux.clone(),
-        }
+        })
     }
 
     pub async fn rpc_serve(&self, service: impl RpcService) -> anyhow::Result<()> {
