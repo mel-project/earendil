@@ -175,7 +175,7 @@ mod tests {
         }
         // At the destination (alice), peel the packet
         let mut peeled_reply = if let PeeledPacket::GarbledReply {
-            id: _,
+            rb_id: _,
             pkt: peeled_reply,
             client_id: _,
         } = peeled_packet

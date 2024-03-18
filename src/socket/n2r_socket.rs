@@ -3,14 +3,11 @@ use std::sync::Arc;
 use anyhow::Context;
 use bytes::Bytes;
 
-use earendil_crypt::{AnonRemote, RemoteId};
-use earendil_packet::{Dock, Message};
-use rand::Rng;
-
-use smol::channel::Receiver;
+use earendil_crypt::AnonRemote;
+use earendil_packet::Dock;
 
 use crate::{
-    context::{DaemonContext, GLOBAL_IDENTITY},
+    context::{DaemonContext, MY_RELAY_IDENTITY},
     n2r,
     socket::SocketRecvError,
 };
@@ -33,10 +30,10 @@ impl N2rRelaySocket {
             anyhow::bail!("cannot bind a relay socket on a client")
         }
         let my_pk = ctx
-            .get(GLOBAL_IDENTITY)
+            .get(MY_RELAY_IDENTITY)
             .expect("only relays have global identities")
             .public();
-        let my_fp = my_pk.fingerprint();
+        let _my_fp = my_pk.fingerprint();
         let (dock, recv_incoming) = if let Some(dock) = dock {
             (dock, new_relay_queue(&ctx, dock)?)
         } else {
@@ -79,7 +76,7 @@ impl N2rRelaySocket {
     pub fn local_endpoint(&self) -> RelayEndpoint {
         RelayEndpoint::new(
             self.ctx
-                .get(GLOBAL_IDENTITY)
+                .get(MY_RELAY_IDENTITY)
                 .unwrap()
                 .public()
                 .fingerprint(),

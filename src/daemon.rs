@@ -31,7 +31,7 @@ use tracing::instrument;
 use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
-use crate::{context::GLOBAL_IDENTITY, socket::n2r_socket_shuttle};
+use crate::{context::MY_RELAY_IDENTITY, socket::n2r_socket_shuttle};
 
 use crate::control_protocol::ControlClient;
 use crate::daemon::socks5::socks5_loop;
@@ -42,7 +42,7 @@ use crate::socket::n2r_socket::N2rRelaySocket;
 use crate::socket::{AnonEndpoint, HavenEndpoint};
 use crate::{
     config::ConfigFile,
-    context::{GLOBAL_ONION_SK, RELAY_GRAPH},
+    context::{MY_RELAY_ONION_SK, RELAY_GRAPH},
     global_rpc::GLOBAL_RPC_DOCK,
 };
 use crate::{
@@ -82,7 +82,7 @@ impl Daemon {
     }
 
     pub fn identity(&self) -> Option<RelayIdentitySecret> {
-        *self.ctx.get(GLOBAL_IDENTITY)
+        *self.ctx.get(MY_RELAY_IDENTITY)
     }
 
     pub fn control_client(&self) -> ControlClient {
@@ -118,7 +118,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     let _relay_loops = if !is_client {
         tracing::info!(
             "daemon starting with fingerprint {:?}",
-            ctx.get(GLOBAL_IDENTITY)
+            ctx.get(MY_RELAY_IDENTITY)
                 .expect("only relays have global identities")
                 .public()
                 .fingerprint()
@@ -127,7 +127,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         scopeguard::defer!({
             tracing::info!(
                 "daemon with fingerprint {:?} is now DROPPED!",
-                ctx.get(GLOBAL_IDENTITY)
+                ctx.get(MY_RELAY_IDENTITY)
                     .expect("only relays have global identities")
                     .public()
                     .fingerprint()
@@ -142,9 +142,9 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                 ctx.get(RELAY_GRAPH)
                     .write()
                     .insert_identity(IdentityDescriptor::new(
-                        &ctx.get(GLOBAL_IDENTITY)
+                        &ctx.get(MY_RELAY_IDENTITY)
                             .expect("only relays have global identities"),
-                        ctx.get(GLOBAL_ONION_SK),
+                        ctx.get(MY_RELAY_ONION_SK),
                     ))?;
                 smol::Timer::after(Duration::from_secs(60)).await;
                 anyhow::Ok(())
@@ -312,7 +312,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         tracing::debug!("DBDBDBDB syncing DB...");
-        let global_id = ctx.get(GLOBAL_IDENTITY).stdcode();
+        let global_id = ctx.get(MY_RELAY_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
         // let debts = ctx.get(DEBTS).as_bytes()?;
         let chats = inout_route::chat::serialize_chats(&ctx)?;

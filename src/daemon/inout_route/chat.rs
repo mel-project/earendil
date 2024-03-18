@@ -12,9 +12,7 @@ use std::{
     time::SystemTime,
 };
 
-use crate::context::{
-    CtxField, CLIENT_TABLE, GLOBAL_IDENTITY, RELAY_GRAPH, RELAY_NEIGHS, SETTLEMENTS,
-};
+use crate::context::{CtxField, MY_RELAY_IDENTITY, RELAY_GRAPH, SETTLEMENTS};
 
 static CHATS: CtxField<Chats> = |ctx| {
     let max_chat_len = usize::MAX;
@@ -52,12 +50,12 @@ pub fn incoming_relay_chat(ctx: &DaemonContext, neighbor: RelayFingerprint, msg:
     chats.insert_relay(neighbor, entry);
 }
 
-pub fn list_clients(ctx: &DaemonContext) -> Vec<ClientId> {
-    ctx.get(CLIENT_TABLE).iter().map(|neigh| *neigh.0).collect()
+pub fn list_clients(_ctx: &DaemonContext) -> Vec<ClientId> {
+    todo!()
 }
 
-pub fn list_relays(ctx: &DaemonContext) -> Vec<RelayFingerprint> {
-    ctx.get(RELAY_NEIGHS).iter().map(|neigh| *neigh.0).collect()
+pub fn list_relays(_ctx: &DaemonContext) -> Vec<RelayFingerprint> {
+    todo!()
 }
 
 pub fn list_chats(ctx: &DaemonContext) -> String {
@@ -241,7 +239,7 @@ pub async fn send_relay_chat_msg(
 ) -> anyhow::Result<()> {
     let chats = ctx.get(CHATS);
     let my_sk = ctx
-        .get(GLOBAL_IDENTITY)
+        .get(MY_RELAY_IDENTITY)
         .expect("only relays have global identities");
     let settlements = ctx.get(SETTLEMENTS);
 
@@ -263,11 +261,7 @@ pub async fn send_relay_chat_msg(
             if let Some(relay_link) = chats.relay_links.get(&dest) {
                 let proof = SettlementProof::Manual;
                 let req_msg_str = format!("sent you a settlement request for {amount}. Accept with '!accept' or reject with '!reject'.");
-                let req_msg = format!(
-                    "<{}> {}",
-                    my_sk.public().fingerprint().to_string(),
-                    req_msg_str
-                );
+                let req_msg = format!("<{}> {}", my_sk.public().fingerprint(), req_msg_str);
 
                 match relay_link.push_chat_relay(req_msg.clone()).await {
                     Ok(_) => chats.insert_relay(dest, ChatEntry::new_outgoing(msg)),
@@ -301,7 +295,7 @@ pub async fn send_relay_chat_msg(
         }
     } else if msg == "!accept" {
         if let Some(request) = settlements.get_request(&dest) {
-            match settlements.accept_response(&ctx, dest, request).await {
+            match settlements.accept_response(ctx, dest, request).await {
                 Ok(_) => chats.insert_relay(dest, ChatEntry::new_outgoing(msg)),
                 Err(e) => log::warn!("error pushing chat: {e}"),
             }

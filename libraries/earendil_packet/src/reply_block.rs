@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use earendil_crypt::{AnonRemote, ClientId, RelayFingerprint, RemoteId};
 use rand::Rng;
-use rand_distr::num_traits::ToBytes;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{

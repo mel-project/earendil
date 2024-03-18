@@ -21,9 +21,6 @@ use smol_timeout::TimeoutExt;
 use sosistab2_obfsudp::ObfsUdpSecret;
 use thiserror::Error;
 
-use crate::context::{
-    CLIENT_TABLE, DEBTS, GLOBAL_IDENTITY, RELAY_GRAPH, RELAY_NEIGHS, SETTLEMENTS,
-};
 use crate::{
     config::InRouteConfig,
     control_protocol::{
@@ -32,7 +29,12 @@ use crate::{
     daemon::DaemonContext,
     global_rpc::transport::GlobalRpcTransport,
     haven_util::HavenLocator,
+    network::{all_relay_neighs, is_relay_neigh},
     socket::{RelayEndpoint, Socket, SocketRecvError, SocketSendError},
+};
+use crate::{
+    context::{DEBTS, MY_RELAY_IDENTITY, RELAY_GRAPH, SETTLEMENTS},
+    network::all_client_neighs,
 };
 
 use super::{
@@ -58,7 +60,7 @@ impl ControlProtocolImpl {
 
 #[async_trait]
 impl ControlProtocol for ControlProtocolImpl {
-    async fn bind_n2r(&self, socket_id: String, anon_id: Option<String>, dock: Option<Dock>) {
+    async fn bind_n2r(&self, _socket_id: String, _anon_id: Option<String>, _dock: Option<Dock>) {
         todo!();
         // let anon_id = anon_id
         //     .map(|id| self.anon_identities.lock().get(&id))
@@ -70,7 +72,7 @@ impl ControlProtocol for ControlProtocolImpl {
     async fn bind_haven(
         &self,
         socket_id: String,
-        anon_id: Option<String>,
+        _anon_id: Option<String>,
         dock: Option<Dock>,
         rendezvous_point: Option<RelayFingerprint>,
     ) {
@@ -80,7 +82,7 @@ impl ControlProtocol for ControlProtocolImpl {
         self.sockets.insert(socket_id, socket);
     }
 
-    async fn skt_info(&self, skt_id: String) -> Result<RelayEndpoint, ControlProtErr> {
+    async fn skt_info(&self, _skt_id: String) -> Result<RelayEndpoint, ControlProtErr> {
         todo!();
         // if let Some(skt) = self.sockets.get(&skt_id) {
         //     Ok(skt.local_endpoint())
@@ -125,7 +127,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .collect()
     }
 
-    async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtErr> {
+    async fn send_message(&self, _args: SendMessageArgs) -> Result<(), ControlProtErr> {
         todo!();
         // if let Some(socket) = self.sockets.get(&args.socket_id) {
         //     socket.send_to(args.content, args.destination).await?;
@@ -137,7 +139,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn recv_message(
         &self,
-        socket_id: String,
+        _socket_id: String,
     ) -> Result<(Bytes, RelayEndpoint), ControlProtErr> {
         todo!();
         // if let Some(socket) = self.sockets.get(&socket_id) {
@@ -160,7 +162,7 @@ impl ControlProtocol for ControlProtocolImpl {
                     (
                         k.clone(),
                         json!( {
-                            "fingerprint": format!("{}", self.ctx.get(GLOBAL_IDENTITY).expect("only relays have global identities").public().fingerprint()),
+                            "fingerprint": format!("{}", self.ctx.get(MY_RELAY_IDENTITY).expect("only relays have global identities").public().fingerprint()),
                             "connect": format!("<YOUR_IP>:{}", listen.port()),
                             "cookie": hex::encode(secret.to_public().as_bytes()),
                             "link_price": link_price,
@@ -175,7 +177,7 @@ impl ControlProtocol for ControlProtocolImpl {
     async fn graph_dump(&self, human: bool) -> String {
         let my_fp = self
             .ctx
-            .get(GLOBAL_IDENTITY)
+            .get(MY_RELAY_IDENTITY)
             .map(|id| id.public().fingerprint().to_string())
             .unwrap_or("node is not a relay".to_string());
         let relay_or_client = if self.ctx.init().in_routes.is_empty() {
@@ -184,28 +186,26 @@ impl ControlProtocol for ControlProtocolImpl {
             "rect"
         };
         if human {
-            let clients = self.ctx.get(CLIENT_TABLE).iter().map(|s| *s.0).fold(
-                String::new(),
-                |acc, neigh| {
+            let clients = all_client_neighs(&self.ctx)
+                .iter()
+                .fold(String::new(), |acc, neigh| {
                     let fp = neigh;
                     acc + &format!(
                         "\n{:?}\nnet debt: {:?}\n",
                         fp.to_string(),
-                        self.ctx.get(DEBTS).client_net_debt_est(&fp)
+                        self.ctx.get(DEBTS).client_net_debt_est(fp)
                     )
-                },
-            );
-            let relays = self.ctx.get(RELAY_NEIGHS).iter().map(|s| *s.0).fold(
-                String::new(),
-                |acc, neigh| {
+                });
+            let relays = all_relay_neighs(&self.ctx)
+                .iter()
+                .fold(String::new(), |acc, neigh| {
                     let fp = neigh;
                     acc + &format!(
                         "\n{:?}\nnet debt: {:?}\n",
                         fp.to_string(),
-                        self.ctx.get(DEBTS).relay_net_debt_est(&fp)
+                        self.ctx.get(DEBTS).relay_net_debt_est(fp)
                     )
-                },
-            );
+                });
             let all_adjs = self
                 .ctx
                 .get(RELAY_GRAPH)
@@ -244,13 +244,13 @@ impl ControlProtocol for ControlProtocolImpl {
                     .all_nodes()
                     .fold(String::new(), |acc, node| {
                         let node_str = node.to_string();
-                        let desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
+                        let _desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
                         acc + &format!(
                             "{:?} [label={:?}, shape={}]\n",
                             node_str,
                             get_node_label(&node),
                             "oval".to_string()
-                                + (if self.ctx.get(RELAY_NEIGHS).contains_key(&node) {
+                                + (if is_relay_neigh(&self.ctx, node) {
                                     ", color=lightpink,style=filled"
                                 } else {
                                     ""

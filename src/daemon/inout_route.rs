@@ -15,11 +15,9 @@ use stdcode::StdcodeSerializeExt;
 pub mod chat;
 mod link_connection;
 mod link_protocol;
-use crate::config::LinkPrice;
+use crate::{config::LinkPrice, network};
 use crate::{
-    context::{
-        DaemonContext, CLIENT_TABLE, GLOBAL_IDENTITY, GLOBAL_ONION_SK, MY_CLIENT_ID, RELAY_NEIGHS,
-    },
+    context::{DaemonContext, MY_CLIENT_ID, MY_RELAY_IDENTITY, MY_RELAY_ONION_SK},
     daemon::inout_route::link_connection::{ClientNeighbor, RelayNeighbor},
 };
 
@@ -100,9 +98,9 @@ async fn route_loop(
             } else {
                 write_msg(
                     &LinkHello::Relay(IdentityDescriptor::new(
-                        &ctx.get(GLOBAL_IDENTITY)
+                        &ctx.get(MY_RELAY_IDENTITY)
                             .expect("only relays have global identities"),
-                        ctx.get(GLOBAL_ONION_SK),
+                        ctx.get(MY_RELAY_ONION_SK),
                     ))
                     .stdcode(),
                     &mut write,
@@ -133,15 +131,13 @@ async fn route_loop(
     let link_channel_and_neigh = neighbor
         .as_ref()
         .map_left(|left| {
-            let (send_outgoing, recv_outgoing) = smol::channel::unbounded();
-            ctx.get(RELAY_NEIGHS)
-                .insert(left.identity_pk.fingerprint(), send_outgoing);
-            RelayNeighbor(recv_outgoing, left.identity_pk.fingerprint())
+            RelayNeighbor(
+                network::subscribe_outgoing_relay(&ctx, left.identity_pk.fingerprint()),
+                left.identity_pk.fingerprint(),
+            )
         })
         .map_right(|right| {
-            let (send_outgoing, recv_outgoing) = smol::channel::unbounded();
-            ctx.get(CLIENT_TABLE).insert(*right, send_outgoing);
-            ClientNeighbor(recv_outgoing, *right)
+            ClientNeighbor(network::subscribe_outgoing_client(&ctx, *right), *right)
         });
     let link_context = LinkContext {
         ctx: ctx.clone(),

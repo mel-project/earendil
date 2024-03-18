@@ -6,16 +6,21 @@ use std::time::Instant;
 
 use anyhow::Context;
 use bytes::Bytes;
+use dashmap::DashMap;
 use earendil_crypt::{AnonRemote, RelayFingerprint, RemoteId};
-use earendil_packet::{Dock, ForwardInstruction, InnerPacket, Message, RawBody, RawPacket};
+use earendil_packet::{
+    Dock, ForwardInstruction, InnerPacket, Message, RawBody, RawPacket, ReplyDegarbler,
+};
 use smol::channel::{Receiver, Sender};
 
 use crate::{
-    context::{CtxField, DaemonContext, DEGARBLERS, GLOBAL_IDENTITY, RELAY_GRAPH},
+    context::{CtxField, DaemonContext, MY_RELAY_IDENTITY, RELAY_GRAPH},
     n2r::{anon_dest::ANON_DESTS, remote_rb::replenish_remote_rb},
-    onion::send_raw,
+    network::send_raw,
     socket::{AnonEndpoint, RelayEndpoint},
 };
+
+static DEGARBLERS: CtxField<DashMap<u64, ReplyDegarbler>> = |_| Default::default();
 
 static INCOMING_BACKWARDS: CtxField<(Sender<(RawBody, u64)>, Receiver<(RawBody, u64)>)> =
     |_| smol::channel::unbounded();
@@ -161,7 +166,7 @@ pub async fn send_backward(
         &reply_block,
         InnerPacket::Message(message.clone()),
         &RemoteId::Relay(
-            ctx.get(GLOBAL_IDENTITY)
+            ctx.get(MY_RELAY_IDENTITY)
                 .expect("only relays have global identities")
                 .public()
                 .fingerprint(),

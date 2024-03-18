@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use bytes::Bytes;
-use clone_macro::clone;
+
 
 use earendil_packet::Dock;
 use parking_lot::RwLock;

@@ -5,7 +5,6 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use anyhow::Context;
 use blake3::Hash;
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -18,7 +17,7 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::config::AutoSettle;
 
-use crate::context::{DaemonContext, DEBTS, GLOBAL_IDENTITY};
+use crate::context::DaemonContext;
 
 pub struct Hasher;
 
@@ -198,8 +197,8 @@ impl Settlements {
     // handles automatic settlements
     pub fn verify_auto_settle(
         &self,
-        ctx: &DaemonContext,
-        request: SettlementRequest,
+        _ctx: &DaemonContext,
+        _request: SettlementRequest,
     ) -> anyhow::Result<Option<SettlementResponse>> {
         todo!();
         // let initiator_pk = request.clone().initiator_pk;
@@ -243,9 +242,9 @@ impl Settlements {
 
     pub async fn accept_response(
         &self,
-        ctx: &DaemonContext,
-        neighbor: RelayFingerprint,
-        request: SettlementRequest,
+        _ctx: &DaemonContext,
+        _neighbor: RelayFingerprint,
+        _request: SettlementRequest,
     ) -> anyhow::Result<()> {
         todo!();
         // let debts = ctx.get(DEBTS);

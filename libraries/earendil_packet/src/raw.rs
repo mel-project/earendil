@@ -247,7 +247,7 @@ impl RawPacket {
             let rb_id = u64::from_be_bytes(*id_bts);
             PeeledPacket::GarbledReply {
                 client_id,
-                id: rb_id,
+                rb_id,
                 pkt: peeled_body,
             }
         } else if metadata[0] == FORWARD_TO_RELAY_FLAG {
@@ -311,7 +311,7 @@ pub enum PeeledPacket {
     },
     GarbledReply {
         client_id: ClientId,
-        id: u64,
+        rb_id: u64,
         pkt: [u8; RAW_BODY_SIZE],
     },
 }

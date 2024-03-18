@@ -271,8 +271,8 @@ pub async fn main_control(
             ChatCommand::SendClient { dest, msg } => link.send_client_chat_msg(dest, msg).await??,
             ChatCommand::SendRelay { dest, msg } => link.send_relay_chat_msg(dest, msg).await??,
         },
-        ControlCommand::BindN2rRelay { skt_id, dock } => todo!(),
-        ControlCommand::BindN2rClient { skt_id, dock } => todo!(),
+        ControlCommand::BindN2rRelay { skt_id: _, dock: _ } => todo!(),
+        ControlCommand::BindN2rClient { skt_id: _, dock: _ } => todo!(),
     }
     Ok(())
 }
@@ -298,11 +298,11 @@ fn right_arrow() -> ColoredString {
 fn client_by_prefix(clients: Vec<ClientId>, prefix: &str) -> anyhow::Result<Option<ClientId>> {
     let valid: Vec<ClientId> = clients
         .into_iter()
-        .filter(|fp| fp.to_string().starts_with(&prefix))
+        .filter(|fp| fp.to_string().starts_with(prefix))
         .collect();
     if valid.len() == 1 {
         Ok(Some(valid[0]))
-    } else if valid.len() == 0 {
+    } else if valid.is_empty() {
         Ok(None)
     } else {
         anyhow::bail!("Multiple clients have this prefix! Try a longer prefix.")
@@ -315,11 +315,11 @@ fn relay_by_prefix(
 ) -> anyhow::Result<Option<RelayFingerprint>> {
     let valid: Vec<RelayFingerprint> = relays
         .into_iter()
-        .filter(|fp| fp.to_string().starts_with(&prefix))
+        .filter(|fp| fp.to_string().starts_with(prefix))
         .collect();
     if valid.len() == 1 {
         Ok(Some(valid[0]))
-    } else if valid.len() == 0 {
+    } else if valid.is_empty() {
         Ok(None)
     } else {
         anyhow::bail!("Multiple relays have this prefix! Try a longer prefix.")

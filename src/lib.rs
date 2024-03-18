@@ -9,7 +9,7 @@ mod debts;
 mod global_rpc;
 mod haven_util;
 mod n2r;
-mod onion;
+mod network;
 mod settlement;
 pub mod socket;
 

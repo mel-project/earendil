@@ -8,8 +8,16 @@ But we don't have a great organization for the procedures, so we have a bunch of
 
 It seems like fundamentally, humans need to think in terms of big, abstract "nouns" in addition to procedural "verbs", not just verbs operating on primitive pieces of data.
 
-I think the best approach to this is to **treat modules as "nouns**. Each **module** should present a coherent mental model of some part of the system, and only expose what's needed.
+I think the best approach to this is to **treat modules as "nouns"**. Each **module** should present a coherent mental model of some part of the system, and only expose what's needed.
 
-Concretely:
+## Refactoring the network layer
 
--
+The most complex and spaghetti area of the current code is the network layer --- the code that takes outgoing raw packets and sends them off, while feeding the rest of the code incoming raw packets. It's currently a mess of a bunch of tables with channels, connected to tasks on the other end, with lots of subtle race conditions related to tasks restarting, etc.
+
+Here we outline a better design:
+
+- `network`
+  - `send_raw()`
+  - `incoming_raw()`
+  - `subscribe_outgoing_relay()`, returning a receiver that represents all the packets outgoing to a particular neighboring relay. If this is called multiple times, packets are sent to arbitrary channels, and none of them should be closed. The receiver should only close when there are no more subscribers at all.
+  - `subscribe_outgoing_client()`

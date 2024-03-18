@@ -32,10 +32,12 @@ use smol_timeout::TimeoutExt;
 use sosistab2::Multiplex;
 use tap::TapOptional;
 
-use crate::{context::CtxField, daemon::inout_route::link_protocol::LinkClient};
 use crate::{
-    context::{DaemonContext, GLOBAL_IDENTITY, RELAY_GRAPH, RELAY_NEIGHS, SETTLEMENTS},
-    onion::incoming_raw,
+    context::CtxField, daemon::inout_route::link_protocol::LinkClient, network::is_relay_neigh,
+};
+use crate::{
+    context::{DaemonContext, MY_RELAY_IDENTITY, RELAY_GRAPH, SETTLEMENTS},
+    network::incoming_raw,
 };
 use crate::{
     n2r::incoming_backward,
@@ -239,17 +241,13 @@ impl LinkProtocol for LinkProtocolImpl {
     ) -> Option<AdjacencyDescriptor> {
         let my_sk = self
             .ctx
-            .get(GLOBAL_IDENTITY)
+            .get(MY_RELAY_IDENTITY)
             .expect("only relays have global identities");
         let my_fp = my_sk.public().fingerprint();
         // This must be a neighbor that is "left" of us
         let valid = left_incomplete.left < left_incomplete.right
             && left_incomplete.right == my_fp
-            && self
-                .ctx
-                .get(RELAY_NEIGHS)
-                .get(&left_incomplete.left)
-                .is_some();
+            && is_relay_neigh(&self.ctx, left_incomplete.left);
         if !valid {
             tracing::debug!("neighbor not right of us! Refusing to sign adjacency x_x");
             return None;
@@ -284,12 +282,12 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn client_push_price(&self, price: u64, debt_limit: u64) {
+    async fn client_push_price(&self, _price: u64, _debt_limit: u64) {
         todo!()
     }
 
     #[tracing::instrument(skip(self))]
-    async fn relay_push_price(&self, price: u64, debt_limit: u64) {
+    async fn relay_push_price(&self, _price: u64, _debt_limit: u64) {
         todo!()
     }
 
@@ -327,12 +325,12 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn push_chat_client(&self, msg: String) {
+    async fn push_chat_client(&self, _msg: String) {
         todo!()
     }
 
     #[tracing::instrument(skip(self))]
-    async fn push_chat_relay(&self, msg: String) {
+    async fn push_chat_relay(&self, _msg: String) {
         todo!()
     }
 
@@ -373,7 +371,7 @@ pub async fn gossip_loop(lctx: &LinkContext) -> anyhow::Result<()> {
 
     loop {
         let once = async {
-            if let Err(err) = gossip_once(&lctx, &link_client).await {
+            if let Err(err) = gossip_once(lctx, &link_client).await {
                 tracing::warn!(neigh_label, err = debug(err), "gossip failed",);
             }
         };
@@ -433,7 +431,7 @@ async fn sign_adjacency(lctx: &LinkContext, link_client: &LinkClient) -> anyhow:
     tracing::debug!("signing adjacency...");
     let my_sk = lctx
         .ctx
-        .get(GLOBAL_IDENTITY)
+        .get(MY_RELAY_IDENTITY)
         .expect("only relays have global identities");
     let my_fingerprint = my_sk.public().fingerprint();
     if my_fingerprint < *neighbor_fp {

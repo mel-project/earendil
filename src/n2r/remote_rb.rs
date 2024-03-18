@@ -3,13 +3,13 @@ use earendil_packet::{InnerPacket, RawPacket, ReplyBlock};
 use moka::sync::Cache;
 use parking_lot::Mutex;
 use rand::prelude::*;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::{
-    context::{CtxField, DaemonContext, DEGARBLERS, MY_CLIENT_ID, RELAY_GRAPH, RELAY_NEIGHS},
+    context::{CtxField, DaemonContext, MY_CLIENT_ID, RELAY_GRAPH},
     control_protocol::SendMessageError,
-    n2r::{forward_route, route_to_instructs},
-    onion::send_raw,
+    n2r::{forward_route, route_to_instructs, DEGARBLERS},
+    network::{all_relay_neighs, send_raw},
 };
 
 static LAWK: Mutex<()> = Mutex::new(());
@@ -119,8 +119,7 @@ async fn send_reply_blocks(
 
 fn reply_route(ctx: &DaemonContext) -> anyhow::Result<Vec<RelayFingerprint>> {
     let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
-    let my_neighs: Vec<RelayFingerprint> =
-        ctx.get(RELAY_NEIGHS).iter().map(|(fp, _)| *fp).collect();
+    let my_neighs: Vec<RelayFingerprint> = all_relay_neighs(ctx);
     let rand_neigh = my_neighs.choose(&mut rand::thread_rng()).copied();
 
     match rand_neigh {

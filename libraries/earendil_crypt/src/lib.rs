@@ -277,14 +277,14 @@ impl RelayIdentitySecret {
 pub struct RelayFingerprint([u8; 32]);
 impl Display for RelayFingerprint {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let hex_str = hex::encode(&self.0).to_lowercase(); // Convert bytes to hex string
+        let hex_str = hex::encode(self.0).to_lowercase(); // Convert bytes to hex string
         write!(f, "{}", hex_str)
     }
 }
 
 impl Debug for RelayFingerprint {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let hex_str = hex::encode(&self.0).to_lowercase(); // Convert bytes to hex string
+        let hex_str = hex::encode(self.0).to_lowercase(); // Convert bytes to hex string
         write!(f, "{}", hex_str)
     }
 }

@@ -59,12 +59,12 @@ impl InnerPacket {
     /// From a raw payload, deduce the inner packet as well as the source id.
     pub fn decode(raw: &[u8; 8192]) -> Result<(Self, RemoteId), DecodeError> {
         let src_node_id = match array_ref![raw, 0, 1] {
-            &[0u8] => {
+            [0u8] => {
                 let src_fp = RelayFingerprint::from_bytes(array_ref![raw, 1, 32]);
                 RemoteId::Relay(src_fp)
             }
-            &[1u8] => {
-                let anon_dest = AnonRemote(array_ref![raw, 1, 16].clone());
+            [1u8] => {
+                let anon_dest = AnonRemote(*array_ref![raw, 1, 16]);
                 RemoteId::Anon(anon_dest)
             }
             _ => return Err(DecodeError::BadMetadata),

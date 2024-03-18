@@ -50,7 +50,7 @@ impl<T: Hash + Eq> DelayQueue<T> {
             .wait_until(|| {
                 self.priority_queue.lock().peek().and_then(|(_, until)| {
                     if until.0 < earliest_pop {
-                        Some(until.0.clone())
+                        Some(until.0)
                     } else {
                         None
                     }

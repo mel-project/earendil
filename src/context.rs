@@ -1,61 +1,24 @@
-use std::time::Duration;
-
-use blake3::Hash;
-use bytes::Bytes;
-use dashmap::{DashMap, DashSet};
-use earendil_crypt::{AnonRemote, ClientId, RelayFingerprint, RelayIdentitySecret, RemoteId};
-use earendil_packet::{crypt::OnionSecret, Dock, Message, RawBody, RawPacket, ReplyDegarbler};
+use dashmap::DashMap;
+use earendil_crypt::{ClientId, RelayIdentitySecret};
+use earendil_packet::{crypt::OnionSecret, ReplyDegarbler};
 use earendil_topology::RelayGraph;
 
-use moka::sync::{Cache, CacheBuilder};
 use parking_lot::RwLock;
-use smol::channel::Sender;
 
-use crate::{
-    config::ConfigFile,
-    db::db_read,
-    debts::Debts,
-    settlement::Settlements,
-    socket::{AnonEndpoint, RelayEndpoint},
-};
+use crate::{config::ConfigFile, db::db_read, debts::Debts, settlement::Settlements};
 
 pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
 pub type CtxField<T> = fn(&DaemonContext) -> T;
 
-pub static GLOBAL_IDENTITY: CtxField<Option<RelayIdentitySecret>> = |ctx| {
+pub static MY_RELAY_IDENTITY: CtxField<Option<RelayIdentitySecret>> = |ctx| {
     tracing::debug!("INITIALIZING GLOBAL IDENTITY");
-    if ctx.init().in_routes.is_empty() {
-        None
-    } else {
-        Some(
-            ctx.init()
-                .identity
-                .as_ref()
-                .map(|id| {
-                    id.actualize_relay()
-                        .expect("failed to initialize global identity")
-                })
-                .unwrap_or_else(|| {
-                    let ctx = ctx.clone();
-                    smol::future::block_on(async move {
-                        match db_read(&ctx, "global_identity").await {
-                            Ok(Some(id)) => {
-                                if let Ok(id_bytes) = &id.try_into() {
-                                    RelayIdentitySecret::from_bytes(id_bytes)
-                                } else {
-                                    RelayIdentitySecret::generate()
-                                }
-                            }
-                            _ => RelayIdentitySecret::generate(),
-                            Err(_) => todo!(),
-                        }
-                    })
-                }),
-        )
-    }
+    ctx.init().identity.as_ref().map(|id| {
+        id.actualize_relay()
+            .expect("failed to initialize global identity")
+    })
 };
 
-pub static GLOBAL_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
+pub static MY_RELAY_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
 pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
     let ctx = ctx.clone();
     smol::future::block_on(async move {
@@ -74,21 +37,6 @@ pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
         }
     })
 };
-
-pub static RELAY_NEIGHS: CtxField<Cache<RelayFingerprint, Sender<(RawPacket, RelayFingerprint)>>> =
-    |_| {
-        CacheBuilder::default()
-            .time_to_live(Duration::from_secs(120))
-            .build()
-    }; // TODO a better solution for deletion
-
-pub static CLIENT_TABLE: CtxField<Cache<ClientId, Sender<(RawBody, u64)>>> = |_| {
-    CacheBuilder::default()
-        .time_to_live(Duration::from_secs(120))
-        .build()
-};
-
-pub static DEGARBLERS: CtxField<DashMap<u64, ReplyDegarbler>> = |_| Default::default();
 
 pub static DEBTS: CtxField<Debts> = |ctx| {
     let ctx = ctx.clone();
