@@ -51,7 +51,7 @@ impl RelayGraph {
         tracing::debug!(
             needle = debug(fingerprint),
             haystack = debug(self.fp_to_id.iter().collect::<Vec<_>>()),
-            haystack2 = debug(self.id_to_descriptor.iter().collect::<Vec<_>>()),
+            haystack2 = debug(self.id_to_descriptor.keys().collect::<Vec<_>>()),
             "looking up identity"
         );
         let id = self.id(fingerprint)?;
