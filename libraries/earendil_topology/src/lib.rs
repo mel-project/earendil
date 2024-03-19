@@ -48,7 +48,7 @@ impl RelayGraph {
 
     /// Looks up the identity descriptor of a fingerprint.
     pub fn identity(&self, fingerprint: &RelayFingerprint) -> Option<IdentityDescriptor> {
-        tracing::debug!(
+        tracing::trace!(
             needle = debug(fingerprint),
             haystack = debug(self.fp_to_id.iter().collect::<Vec<_>>()),
             haystack2 = debug(self.id_to_descriptor.keys().collect::<Vec<_>>()),
@@ -60,7 +60,7 @@ impl RelayGraph {
 
     /// Inserts an identity descriptor. Verifies its self-consistency.
     pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> Result<(), VerifyError> {
-        tracing::debug!(
+        tracing::trace!(
             identity = debug(identity.identity_pk.fingerprint()),
             "inserting an identity into relay graph"
         );

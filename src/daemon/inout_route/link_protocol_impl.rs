@@ -1,7 +1,6 @@
 use std::{
     collections::HashSet,
-    sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration},
 };
 
 use anyhow::Context;
@@ -17,12 +16,6 @@ use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 
 use rand::Rng;
-use smol::{
-    channel::Receiver,
-    future::FutureExt,
-    io::{AsyncBufReadExt, BufReader},
-    stream::StreamExt,
-};
 
 use smol_timeout::TimeoutExt;
 

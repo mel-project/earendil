@@ -36,7 +36,7 @@ pub async fn send_raw(
 
         if next_peeler == my_fp {
             // todo: don't allow ourselves to be the first hop when choosing forward routes
-            incoming_raw(ctx, NeighborId::Relay(my_fp), next_peeler, packet).await?;
+            incoming_raw(ctx, next_peeler, packet).await?;
         } else {
             let next_hop = one_hop_closer(ctx, next_peeler)?;
             ctx.get(RELAY_SPIDER)
@@ -50,7 +50,6 @@ pub async fn send_raw(
 #[async_recursion]
 pub async fn incoming_raw(
     ctx: &DaemonContext,
-    last_hop: NeighborId,
     next_peeler: RelayFingerprint,
     pkt: RawPacket,
 ) -> anyhow::Result<()> {

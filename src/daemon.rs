@@ -132,7 +132,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         let identity_refresh_loop = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx], move || clone!([ctx], async move {
-                tracing::debug!("WE ARE INSERTING OURSELVES");
+                tracing::trace!("WE ARE INSERTING OURSELVES");
                 // first insert ourselves
                 ctx.get(RELAY_GRAPH)
                     .write()

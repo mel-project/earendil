@@ -4,18 +4,16 @@ use self::{gossip::gossip_once, link_protocol::LinkService};
 
 use super::link::LinkMessage;
 use crate::{
-    config::InRouteConfig,
-    context::{DaemonContext, MY_RELAY_IDENTITY, MY_RELAY_ONION_SK},
-    daemon::link::Link,
-    network,
-    pascal::{read_pascal, write_pascal},
+    config::InRouteConfig, context::{DaemonContext, MY_RELAY_IDENTITY, MY_RELAY_ONION_SK}, daemon::link::Link, n2r, network, pascal::{read_pascal, write_pascal}
 };
 use crate::{
     config::{ObfsConfig, OutRouteConfig},
     context::MY_CLIENT_ID,
 };
+use anyhow::Context;
 use bytes::Bytes;
-use earendil_crypt::{ClientId, RelayFingerprint};
+use earendil_crypt::{ClientId};
+use earendil_packet::{RawBody, RawPacket};
 use earendil_topology::IdentityDescriptor;
 use futures::AsyncReadExt as _;
 use nursery_macro::nursery;
@@ -27,7 +25,7 @@ use smol::{
 use stdcode::StdcodeSerializeExt as _;
 
 mod gossip;
-mod link_connection;
+mod link_protocol_impl;
 mod link_protocol;
 
 /*
@@ -132,7 +130,7 @@ async fn manage_mux(
                 link.send_msg(LinkMessage::ToRelay {
                     packet: Bytes::copy_from_slice(bytemuck::bytes_of(&pkt)),
                     next_peeler,
-                })
+                }) 
                 .await?;
             }
         } else {
@@ -140,19 +138,38 @@ async fn manage_mux(
         }
     };
 
+    let recv_incoming = async {
+        loop {
+            let in_msg = link.recv_msg().await?;
+            match in_msg {
+                LinkMessage::ToClient { body, rb_id } =>{
+                    let body: RawBody = *bytemuck::try_from_bytes(&body).ok().context("failed to deserialize incoming RawBody")?;
+                    n2r::incoming_backward(ctx, body, rb_id).await?;
+                },
+                LinkMessage::ToRelay { packet, next_peeler } => {
+                    let pkt: RawPacket = *bytemuck::try_from_bytes(&packet).ok().context("failed to deserialize incoming RawPacket")?;
+                    network::incoming_raw(ctx, next_peeler, pkt).await?;
+                }
+            }
+        }
+    };
+
+
+    // rpc
     let remote_relay_fp = their_relay_descr
         .as_ref()
         .map(|desc| desc.identity_pk.fingerprint());
-    let service = LinkService(link_connection::LinkProtocolImpl {
+    let service = LinkService(link_protocol_impl::LinkProtocolImpl {
         ctx: ctx.clone(),
         remote_client_id: their_client_id,
         remote_relay_fp,
     });
     let rpc_serve = link.rpc_serve(service);
 
+    // gossip
     let gossip_loop = async {
         loop {
-            gossip_once(ctx, &link, remote_relay_fp).await;
+            let _ = gossip_once(ctx, &link, remote_relay_fp).await;
             smol::Timer::after(Duration::from_secs(1)).await;
         }
     };
@@ -161,5 +178,6 @@ async fn manage_mux(
         .race(send_outgoing_relay)
         .race(rpc_serve)
         .race(gossip_loop)
+        .race(recv_incoming)
         .await
 }

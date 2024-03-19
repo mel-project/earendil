@@ -114,7 +114,7 @@ async fn send_reply_blocks(
         .await
         .context("cannot send raw")?;
 
-    tracing::debug!("****** OHHHH SENTTTT REPPPPLY BLOOOCKS *****");
+    tracing::trace!("****** OHHHH SENTTTT REPPPPLY BLOOOCKS *****");
 
     Ok(())
 }
@@ -129,6 +129,6 @@ fn reply_route(ctx: &DaemonContext) -> anyhow::Result<Vec<RelayFingerprint>> {
         None => anyhow::bail!("we don't have any neighbors, so we cannot plot a reply route"),
     }
 
-    tracing::debug!("reply route formed: {:?}", route);
+    tracing::trace!("reply route formed: {:?}", route);
     Ok(route)
 }

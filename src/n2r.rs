@@ -65,7 +65,7 @@ pub async fn read_forward(ctx: &DaemonContext) -> anyhow::Result<(Bytes, AnonEnd
                 return Ok((msg.body, anon_endpoint, msg.dest_dock));
             }
             InnerPacket::ReplyBlocks(reply_blocks) => {
-                tracing::debug!("received a batch of ReplyBlocks");
+                tracing::trace!("received a batch of ReplyBlocks");
                 for reply_block in reply_blocks {
                     ctx.get(ANON_DESTS).lock().insert(anon_remote, reply_block);
                 }
@@ -183,7 +183,7 @@ pub async fn send_backward(
 
 fn forward_route(ctx: &DaemonContext) -> anyhow::Result<Vec<RelayFingerprint>> {
     let route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
-    tracing::debug!("forward route formed: {:?}", route);
+    tracing::trace!("forward route formed: {:?}", route);
     Ok(route)
 }
 
