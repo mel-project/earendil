@@ -9,13 +9,9 @@ control_listen: 127.0.0.1:22222
 
 in_routes:
   main_udp:
-    protocol: obfsudp
+    obfs: none 
     listen: 0.0.0.0:12345
-    secret: correct horse battery staple
-    link_price:
-      max_outgoing_price: 100
-      incoming_price: 1
-      incoming_debt_limit: 1000000000
+
 # out_routes:
 #   rob:
 #     fingerprint: 04c48b49e5ba915e2f47655011a3aed75b3ac7e3b468bbc84b23884546312046

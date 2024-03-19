@@ -52,28 +52,29 @@ async fn sign_adjacency(
     link: &Link,
     remote_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
-    tracing::debug!("signing adjacency...");
-    let my_sk = ctx
-        .get(MY_RELAY_IDENTITY)
-        .expect("only relays have global identities");
-    let my_fp = my_sk.public().fingerprint();
-    if my_fp < remote_fp {
-        tracing::debug!("signing adjacency with {remote_fp}");
-        let mut left_incomplete = AdjacencyDescriptor {
-            left: my_fp,
-            right: remote_fp,
-            left_sig: Bytes::new(),
-            right_sig: Bytes::new(),
-            unix_timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
-        };
-        left_incomplete.left_sig = my_sk.sign(left_incomplete.to_sign().as_bytes());
-        let complete = LinkClient(link.rpc_transport())
-            .sign_adjacency(left_incomplete)
-            .await?
-            .context("remote refused to sign off")?;
-        ctx.get(RELAY_GRAPH)
-            .write()
-            .insert_adjacency(complete.clone())?;
+    if let Some(my_sk) = ctx.get(MY_RELAY_IDENTITY).as_ref() {
+        tracing::debug!("signing adjacency...");
+        let my_fp = my_sk.public().fingerprint();
+        if my_fp < remote_fp {
+            tracing::debug!("signing adjacency with {remote_fp}");
+            let mut left_incomplete = AdjacencyDescriptor {
+                left: my_fp,
+                right: remote_fp,
+                left_sig: Bytes::new(),
+                right_sig: Bytes::new(),
+                unix_timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+            };
+            left_incomplete.left_sig = my_sk.sign(left_incomplete.to_sign().as_bytes());
+            let complete = LinkClient(link.rpc_transport())
+                .sign_adjacency(left_incomplete)
+                .await?
+                .context("remote refused to sign off")?;
+            ctx.get(RELAY_GRAPH)
+                .write()
+                .insert_adjacency(complete.clone())?;
+        }
+    } else {
+        tracing::debug!("skipping signing adjacency...");
     }
     Ok(())
 }

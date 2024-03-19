@@ -146,7 +146,7 @@ impl SettlementResponse {
 
 pub struct Settlements {
     pending: DashMap<RelayFingerprint, PendingSettlement>,
-    pub seed_cache: Cache<RelayFingerprint, HashSet<Seed>>,
+    pub seed_cache: Cache<u64, HashSet<Seed>>,
     pub auto_settle: Option<AutoSettle>,
 }
 

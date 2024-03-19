@@ -16,13 +16,14 @@ use moka::sync::Cache;
 use nanorpc::RpcTransport;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use smol_timeout::TimeoutExt;
-use sosistab2_obfsudp::ObfsUdpSecret;
 use thiserror::Error;
 
 use crate::{
-    config::InRouteConfig,
+    context::{DEBTS, MY_RELAY_IDENTITY, RELAY_GRAPH, SETTLEMENTS},
+    network::all_client_neighs,
+};
+use crate::{
     control_protocol::{
         ChatError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs,
     },
@@ -32,15 +33,8 @@ use crate::{
     network::{all_relay_neighs, is_relay_neigh},
     socket::{RelayEndpoint, Socket, SocketRecvError, SocketSendError},
 };
-use crate::{
-    context::{DEBTS, MY_RELAY_IDENTITY, RELAY_GRAPH, SETTLEMENTS},
-    network::all_client_neighs,
-};
 
-use super::{
-    dht::{dht_get, dht_insert},
-    inout_route::chat,
-};
+use super::dht::{dht_get, dht_insert};
 
 pub struct ControlProtocolImpl {
     anon_identities: Arc<Mutex<AnonIdentities>>,
@@ -300,29 +294,35 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn list_clients(&self) -> Vec<ClientId> {
-        chat::list_clients(&self.ctx)
+        todo!();
+        // chat::list_clients(&self.ctx)
     }
 
     async fn list_relays(&self) -> Vec<RelayFingerprint> {
-        chat::list_relays(&self.ctx)
+        todo!();
+        // chat::list_relays(&self.ctx)
     }
 
     async fn list_chats(&self) -> String {
-        chat::list_chats(&self.ctx)
+        todo!();
+        // chat::list_chats(&self.ctx)
     }
 
     async fn get_client_chat(&self, neigh: ClientId) -> Vec<(bool, String, SystemTime)> {
-        chat::get_client_chat(&self.ctx, neigh)
+        todo!();
+        // chat::get_client_chat(&self.ctx, neigh)
     }
 
     async fn get_relay_chat(&self, neigh: RelayFingerprint) -> Vec<(bool, String, SystemTime)> {
-        chat::get_relay_chat(&self.ctx, neigh)
+        todo!();
+        // chat::get_relay_chat(&self.ctx, neigh)
     }
 
     async fn send_client_chat_msg(&self, dest: ClientId, msg: String) -> Result<(), ChatError> {
-        chat::send_client_chat_msg(&self.ctx, dest, msg)
-            .await
-            .map_err(|e| ChatError::Send(e.to_string()))
+        todo!();
+        // chat::send_client_chat_msg(&self.ctx, dest, msg)
+        //     .await
+        //     .map_err(|e| ChatError::Send(e.to_string()))
     }
 
     async fn send_relay_chat_msg(
@@ -330,9 +330,10 @@ impl ControlProtocol for ControlProtocolImpl {
         dest: RelayFingerprint,
         msg: String,
     ) -> Result<(), ChatError> {
-        chat::send_relay_chat_msg(&self.ctx, dest, msg)
-            .await
-            .map_err(|e| ChatError::Send(e.to_string()))
+        todo!();
+        // chat::send_relay_chat_msg(&self.ctx, dest, msg)
+        //     .await
+        //     .map_err(|e| ChatError::Send(e.to_string()))
     }
 
     async fn list_debts(&self) -> Vec<String> {

@@ -1,4 +1,6 @@
-use self::link_protocol::LinkService;
+use std::time::Duration;
+
+use self::{gossip::gossip_once, link_protocol::LinkService};
 
 use super::link::LinkMessage;
 use crate::{
@@ -52,9 +54,9 @@ pub async fn listen_in_route(ctx: &DaemonContext, cfg: &InRouteConfig) -> anyhow
 
         spawn!(async move {
             let (mux, their_client_id, their_relay_descr) =
-                tcp_to_mux(ctx, tcp_conn, &cfg.obfs).await?;
+                tcp_to_mux(&ctx, tcp_conn, &cfg.obfs).await?;
             let link = Link::new_listen(mux).await?;
-            manage_mux(ctx, link, their_client_id, their_relay_descr).await
+            manage_mux(&ctx, link, their_client_id, their_relay_descr).await
         })
         .detach();
     })
@@ -62,9 +64,9 @@ pub async fn listen_in_route(ctx: &DaemonContext, cfg: &InRouteConfig) -> anyhow
 
 pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow::Result<()> {
     let tcp_conn = TcpStream::connect(cfg.connect).await?;
-    let (mux, their_client_id, their_relay_descr) = tcp_to_mux(ctx, tcp_conn, &cfg.obfs).await?;
+    let (mux, their_client_id, their_relay_descr) = tcp_to_mux(&ctx, tcp_conn, &cfg.obfs).await?;
     let link = Link::new_dial(mux).await?;
-    manage_mux(ctx, link, their_client_id, their_relay_descr).await
+    manage_mux(&ctx, link, their_client_id, their_relay_descr).await
 }
 
 async fn tcp_to_mux(
@@ -138,19 +140,23 @@ async fn manage_mux(
         }
     };
 
+    let remote_relay_fp = their_relay_descr
+        .as_ref()
+        .map(|desc| desc.identity_pk.fingerprint());
     let service = LinkService(link_connection::LinkProtocolImpl {
         ctx: ctx.clone(),
         remote_client_id: their_client_id,
-        remote_relay_fp: their_relay_descr
-            .as_ref()
-            .map(|desc| desc.identity_pk.fingerprint()),
+        remote_relay_fp,
     });
     let rpc_serve = link.rpc_serve(service);
 
-    let gossip_loop = async {};
+    let gossip_loop = async {
+        loop {
+            gossip_once(ctx, &link, remote_relay_fp).await;
+            smol::Timer::after(Duration::from_secs(1)).await;
+        }
+    };
 
-    // serve linkrpc
-    // gossip with the other side by calling their linkrpc
     send_outgoing_client
         .race(send_outgoing_relay)
         .race(rpc_serve)

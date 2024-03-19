@@ -45,7 +45,7 @@ pub trait LinkProtocol {
     async fn push_chat_relay(&self, msg: String);
 
     /// Request a MelPoW seed (used to create an automatic payment proof).
-    async fn request_seed(&self) -> Seed;
+    async fn request_seed(&self) -> Option<Seed>;
 }
 
 /// Response to an authentication challenge.

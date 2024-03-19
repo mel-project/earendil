@@ -75,6 +75,7 @@ pub enum ObfsConfig {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct OutRouteConfig {
     pub connect: SocketAddr,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub fingerprint: RelayFingerprint,
     pub obfs: ObfsConfig,
 }

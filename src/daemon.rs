@@ -29,6 +29,7 @@ use tracing::instrument;
 use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
+use crate::daemon::inout_route::{dial_out_route, listen_in_route};
 use crate::{context::MY_RELAY_IDENTITY, socket::n2r_socket_shuttle};
 
 use crate::control_protocol::ControlClient;
@@ -36,17 +37,13 @@ use crate::daemon::socks5::socks5_loop;
 use crate::daemon::tcp_forward::tcp_forward_loop;
 use crate::db::db_write;
 
+use crate::control_protocol::ControlService;
 use crate::socket::n2r_socket::N2rRelaySocket;
 use crate::socket::{AnonEndpoint, HavenEndpoint};
 use crate::{
     config::ConfigFile,
     context::{MY_RELAY_ONION_SK, RELAY_GRAPH},
     global_rpc::GLOBAL_RPC_DOCK,
-};
-use crate::{
-    config::{InRouteConfig, OutRouteConfig},
-    control_protocol::ControlService,
-    daemon::inout_route::{in_route_obfsudp, out_route_obfsudp, InRouteContext, OutRouteContext},
 };
 use crate::{context::DaemonContext, global_rpc::server::GlobalRpcImpl};
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
@@ -246,25 +243,26 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         )
     });
 
-    let mut route_tasks = FuturesUnordered::new();
+    nursery!({
+        let mut route_tasks = FuturesUnordered::new();
 
-    // For every in_routes block, spawn a task to handle incoming stuff
-    for (in_route_name, config) in ctx.init().in_routes.iter() {
-        todo!()
-    }
+        // For every in_routes block, spawn a task to handle incoming stuff
+        for (in_route_name, config) in ctx.init().in_routes.iter() {
+            route_tasks.push(spawn!(listen_in_route(&ctx, config)));
+        }
 
-    // For every out_routes block, spawn a task to handle outgoing stuff
-    for (out_route_name, config) in ctx.init().out_routes.iter() {
-        todo!()
-    }
+        // For every out_routes block, spawn a task to handle outgoing stuff
+        for (out_route_name, config) in ctx.init().out_routes.iter() {
+            route_tasks.push(spawn!(dial_out_route(&ctx, config)));
+        }
 
-    // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
-    while let Some(next) = route_tasks.next().await {
-        tracing::debug!("ROUTE TASK DIED !!!!");
-        next?;
-    }
-
-    Ok(())
+        // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
+        while let Some(next) = route_tasks.next().await {
+            tracing::debug!("ROUTE TASK DIED !!!!");
+            next?;
+        }
+        anyhow::Ok(())
+    })
 }
 
 #[instrument(skip(ctx))]
@@ -275,7 +273,7 @@ async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         let global_id = ctx.get(MY_RELAY_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
         // let debts = ctx.get(DEBTS).as_bytes()?;
-        let chats = inout_route::chat::serialize_chats(&ctx)?;
+        let chats = todo!();
 
         db_write(&ctx, "global_identity", global_id).await?;
         db_write(&ctx, "relay_graph", graph).await?;
