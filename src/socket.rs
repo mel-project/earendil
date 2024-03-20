@@ -1,12 +1,12 @@
-use std::{
-    fmt::{self, Display, Formatter},
-    str::FromStr,
-};
-
 use bytes::Bytes;
 use earendil_crypt::{AnonRemote, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
+use smol::future::FutureExt;
+use std::{
+    fmt::{self, Display, Formatter},
+    str::FromStr,
+};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -264,15 +264,27 @@ impl Display for Endpoint {
 
 #[instrument(skip(ctx))]
 pub async fn n2r_socket_shuttle(ctx: DaemonContext) -> anyhow::Result<()> {
-    if ctx.init().is_client() {
+    async {
         loop {
-            let (msg_body, src_relay_ep, anon_ep) = n2r::read_backward(&ctx).await?;
-            queues::fwd_to_client_queue(&ctx, msg_body, src_relay_ep, anon_ep)?;
-        }
-    } else {
-        loop {
-            let (msg_body, src_anon_ep, dst_dock) = n2r::read_forward(&ctx).await?;
-            queues::fwd_to_relay_queue(&ctx, msg_body, src_anon_ep, dst_dock)?;
+            let (msg_body, src_relay_ep, dst_anon_ep) = n2r::read_backward(&ctx).await?;
+            tracing::debug!(
+                src_relay_ep = debug(src_relay_ep),
+                dst_anon_ep = debug(dst_anon_ep),
+                "shuttling a backward msg"
+            );
+            queues::fwd_to_client_queue(&ctx, msg_body, src_relay_ep, dst_anon_ep)?;
         }
     }
+    .race(async {
+        loop {
+            let (msg_body, src_anon_ep, dst_dock) = n2r::read_forward(&ctx).await?;
+            tracing::debug!(
+                src_anon_ep = debug(src_anon_ep),
+                dst_dock = debug(dst_dock),
+                "shuttling a forward msg"
+            );
+            queues::fwd_to_relay_queue(&ctx, msg_body, src_anon_ep, dst_dock)?;
+        }
+    })
+    .await
 }

@@ -4,7 +4,11 @@ use self::{gossip::gossip_once, link_protocol::LinkService};
 
 use super::link::LinkMessage;
 use crate::{
-    config::InRouteConfig, context::{DaemonContext, MY_RELAY_IDENTITY, MY_RELAY_ONION_SK}, daemon::link::Link, n2r, network, pascal::{read_pascal, write_pascal}
+    config::InRouteConfig,
+    context::{DaemonContext, MY_RELAY_IDENTITY, MY_RELAY_ONION_SK},
+    daemon::link::Link,
+    n2r, network,
+    pascal::{read_pascal, write_pascal},
 };
 use crate::{
     config::{ObfsConfig, OutRouteConfig},
@@ -12,7 +16,7 @@ use crate::{
 };
 use anyhow::Context;
 use bytes::Bytes;
-use earendil_crypt::{ClientId};
+use earendil_crypt::ClientId;
 use earendil_packet::{RawBody, RawPacket};
 use earendil_topology::IdentityDescriptor;
 use futures::AsyncReadExt as _;
@@ -25,8 +29,8 @@ use smol::{
 use stdcode::StdcodeSerializeExt as _;
 
 mod gossip;
-mod link_protocol_impl;
 mod link_protocol;
+mod link_protocol_impl;
 
 /*
 Links aren't inherently client-relay or relay-relay.
@@ -61,10 +65,24 @@ pub async fn listen_in_route(ctx: &DaemonContext, cfg: &InRouteConfig) -> anyhow
 }
 
 pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow::Result<()> {
-    let tcp_conn = TcpStream::connect(cfg.connect).await?;
-    let (mux, their_client_id, their_relay_descr) = tcp_to_mux(&ctx, tcp_conn, &cfg.obfs).await?;
-    let link = Link::new_dial(mux).await?;
-    manage_mux(&ctx, link, their_client_id, their_relay_descr).await
+    loop {
+        let fallible = async {
+            let tcp_conn = TcpStream::connect(cfg.connect).await?;
+            let (mux, their_client_id, their_relay_descr) =
+                tcp_to_mux(&ctx, tcp_conn, &cfg.obfs).await?;
+            let link = Link::new_dial(mux).await?;
+            manage_mux(&ctx, link, their_client_id, their_relay_descr).await?;
+            anyhow::Ok(())
+        };
+        if let Err(err) = fallible.await {
+            tracing::warn!(
+                err = debug(err),
+                connect = debug(cfg.connect),
+                "restarting out route"
+            );
+        }
+        smol::Timer::after(Duration::from_secs(1)).await;
+    }
 }
 
 async fn tcp_to_mux(
@@ -130,7 +148,7 @@ async fn manage_mux(
                 link.send_msg(LinkMessage::ToRelay {
                     packet: Bytes::copy_from_slice(bytemuck::bytes_of(&pkt)),
                     next_peeler,
-                }) 
+                })
                 .await?;
             }
         } else {
@@ -142,18 +160,26 @@ async fn manage_mux(
         loop {
             let in_msg = link.recv_msg().await?;
             match in_msg {
-                LinkMessage::ToClient { body, rb_id } =>{
-                    let body: RawBody = *bytemuck::try_from_bytes(&body).ok().context("failed to deserialize incoming RawBody")?;
+                LinkMessage::ToClient { body, rb_id } => {
+                    tracing::debug!(rb_id, "incoming ToClient");
+                    let body: RawBody = *bytemuck::try_from_bytes(&body)
+                        .ok()
+                        .context("failed to deserialize incoming RawBody")?;
                     n2r::incoming_backward(ctx, body, rb_id).await?;
-                },
-                LinkMessage::ToRelay { packet, next_peeler } => {
-                    let pkt: RawPacket = *bytemuck::try_from_bytes(&packet).ok().context("failed to deserialize incoming RawPacket")?;
+                }
+                LinkMessage::ToRelay {
+                    packet,
+                    next_peeler,
+                } => {
+                    tracing::debug!(next_peeler = debug(next_peeler), "incoming ToRelay");
+                    let pkt: RawPacket = *bytemuck::try_from_bytes(&packet)
+                        .ok()
+                        .context("failed to deserialize incoming RawPacket")?;
                     network::incoming_raw(ctx, next_peeler, pkt).await?;
                 }
             }
         }
     };
-
 
     // rpc
     let remote_relay_fp = their_relay_descr

@@ -9,12 +9,11 @@ use std::{
 };
 
 use earendil::{
-    config::{ConfigFile, Identity, InRouteConfig, LinkPrice, OutRouteConfig},
+    config::{ConfigFile, Identity, InRouteConfig, LinkPrice, ObfsConfig, OutRouteConfig},
     daemon::Daemon,
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use smol::Timer;
-use sosistab2_obfsudp::ObfsUdpSecret;
 use std::net::TcpStream;
 
 type InRoutes = Vec<(String, InRouteConfig)>;
@@ -45,7 +44,7 @@ pub async fn sleep(secs: u64) {
 }
 
 // generates a barebones config
-pub fn gen_cfg(
+pub fn new_cfg(
     identity: Identity,
     control_listen: SocketAddr,
     in_routes: InRoutes,
@@ -114,10 +113,9 @@ fn routes(
     if is_relay {
         in_routes.push((
             "obfsudp".to_string(),
-            InRouteConfig::Obfsudp {
+            InRouteConfig {
                 listen: format!("0.0.0.0:{}", free_port(rng)).parse()?,
-                secret,
-                link_price,
+                obfs: ObfsConfig::None,
             },
         ))
     }
@@ -148,20 +146,10 @@ fn routes(
                 break;
             }
         }
-        let (connect, cookie, link_price) = match relay_cfg.in_routes.get("obfsudp").unwrap() {
-            InRouteConfig::Obfsudp {
-                mut listen,
-                secret,
-                link_price,
-            } => {
+        let (connect, obfs) = match relay_cfg.in_routes.get("obfsudp").unwrap() {
+            InRouteConfig { mut listen, obfs } => {
                 listen.set_ip(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-                (
-                    listen,
-                    *ObfsUdpSecret::from_bytes(*blake3::hash(secret.as_bytes()).as_bytes())
-                        .to_public()
-                        .as_bytes(),
-                    *link_price,
-                )
+                (listen, obfs)
             }
         };
         let relay_id = match &relay_cfg.identity {
@@ -171,7 +159,7 @@ fn routes(
 
         out_routes.push((
             relay_id,
-            OutRouteConfig::Obfsudp {
+            OutRouteConfig {
                 fingerprint: relay_cfg
                     .identity
                     .clone()
@@ -180,8 +168,7 @@ fn routes(
                     .public()
                     .fingerprint(),
                 connect,
-                cookie,
-                link_price,
+                obfs: obfs.clone(),
             },
         ));
     }
@@ -208,7 +195,7 @@ pub fn gen_network(
         // range start is 0 for i = 0 and 1 otherwise; end grows slowly according to √i
         let num_outroutes_range = (i > 0) as u8..=(i > 0) as u8 * (i as f64).sqrt() as u8;
         let (in_routes, out_routes) = routes(&mut rng, &relay_configs, true, num_outroutes_range)?;
-        let relay_cfg = gen_cfg(
+        let relay_cfg = new_cfg(
             relay_id,
             control_listen,
             in_routes,
@@ -225,7 +212,7 @@ pub fn gen_network(
         let control_listen = format!("127.0.0.1:{}", free_port(&mut rng)).parse()?;
         let num_outroutes_range = 1..=(num_relays as f64).sqrt() as u8;
         let (in_routes, out_routes) = routes(&mut rng, &relay_configs, false, num_outroutes_range)?;
-        let client_cfg = gen_cfg(client_id, control_listen, in_routes, out_routes);
+        let client_cfg = new_cfg(client_id, control_listen, in_routes, out_routes);
 
         client_configs.push(client_cfg);
     }

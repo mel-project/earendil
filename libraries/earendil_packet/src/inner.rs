@@ -55,6 +55,8 @@ pub enum EncodeError {
     MessageTooBig,
 }
 
+const SOURCE_LENGTH: usize = 33;
+
 impl InnerPacket {
     /// From a raw payload, deduce the inner packet as well as the source id.
     pub fn decode(raw: &[u8; 8192]) -> Result<(Self, RemoteId), DecodeError> {
@@ -71,7 +73,7 @@ impl InnerPacket {
         };
         let coder = bincode::DefaultOptions::new().allow_trailing_bytes();
         let msg: Self = coder
-            .deserialize(&raw[20..])
+            .deserialize(&raw[SOURCE_LENGTH..])
             .map_err(DecodeError::BadPackaging)?;
         Ok((msg, src_node_id))
     }
@@ -83,7 +85,7 @@ impl InnerPacket {
         match my_id {
             RemoteId::Relay(fingerprint) => {
                 toret[0] = 0;
-                toret[1..33].copy_from_slice(fingerprint.as_bytes());
+                toret[1..SOURCE_LENGTH].copy_from_slice(fingerprint.as_bytes());
             }
             RemoteId::Anon(anon_dest) => {
                 toret[0] = 1;
@@ -92,7 +94,7 @@ impl InnerPacket {
         }
         let coder = bincode::DefaultOptions::new().allow_trailing_bytes();
         coder
-            .serialize_into(&mut toret[20..], &self)
+            .serialize_into(&mut toret[SOURCE_LENGTH..], &self)
             .map_err(EncodeError::BadPackaging)?;
         Ok(toret)
     }

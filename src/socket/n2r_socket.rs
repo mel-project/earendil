@@ -29,11 +29,7 @@ impl N2rRelaySocket {
         if ctx.init().is_client() {
             anyhow::bail!("cannot bind a relay socket on a client")
         }
-        let my_pk = ctx
-            .get(MY_RELAY_IDENTITY)
-            .expect("only relays have global identities")
-            .public();
-        let _my_fp = my_pk.fingerprint();
+
         let (dock, recv_incoming) = if let Some(dock) = dock {
             (dock, new_relay_queue(&ctx, dock)?)
         } else {
