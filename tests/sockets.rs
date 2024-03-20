@@ -16,7 +16,7 @@ fn n2r() {
     helpers::env_vars();
 
     let seed = helpers::gen_seed("n2r");
-    let (mut relays, _clients) = helpers::spawn_network(16, 0, Some(seed)).unwrap();
+    let (mut relays, _clients) = helpers::spawn_network(5, 0, Some(seed)).unwrap();
     smolscale::block_on(async move {
         let alice = relays.pop().unwrap();
         let alice_skt = Socket::bind_n2r_client(&alice, None).await.unwrap();

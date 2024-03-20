@@ -9,7 +9,7 @@ use std::time::Duration;
 use crate::{
     context::{CtxField, DaemonContext, MY_CLIENT_ID, RELAY_GRAPH},
     control_protocol::SendMessageError,
-    n2r::{forward_route, route_to_instructs, DEGARBLERS},
+    n2r::{forward_route_to, route_to_instructs, DEGARBLERS},
     network::{all_relay_neighs, send_raw},
 };
 
@@ -73,19 +73,25 @@ async fn send_reply_blocks(
 ) -> anyhow::Result<()> {
     tracing::trace!("sending a batch of {count} reply blocks to {dst_fp}");
 
-    let route = forward_route(ctx).context("failed to form forward route")?;
+    let route = forward_route_to(ctx, dst_fp).context("failed to form forward route")?;
     let first_peeler = route[0];
 
     let dest_opk = ctx
         .get(RELAY_GRAPH)
         .read()
         .identity(&dst_fp)
-        .context("failed to lookup destination FP")?
+        .context("failed to lookup destination identity")?
         .onion_pk;
 
     let instructs = route_to_instructs(ctx, &route).context("failed to translate forward route")?;
     // currently the path for every one of them is the same; will want to change this in the future
     let reverse_route = reply_route(ctx).context("failed to form reply route")?;
+    let rb_dest_opk = ctx
+        .get(RELAY_GRAPH)
+        .read()
+        .identity(reverse_route.last().context("reverse route no last")?)
+        .context("cannot lookup identity of neighbor")?
+        .onion_pk;
 
     let reverse_instructs =
         route_to_instructs(ctx, &reverse_route).context("failed to translate reply route")?;
@@ -95,7 +101,7 @@ async fn send_reply_blocks(
         let (rb, (id, degarbler)) = ReplyBlock::new(
             &reverse_instructs,
             reverse_route[0],
-            &dest_opk,
+            &rb_dest_opk,
             *ctx.get(MY_CLIENT_ID),
             my_anon_id,
         )
@@ -120,7 +126,7 @@ async fn send_reply_blocks(
 }
 
 fn reply_route(ctx: &DaemonContext) -> anyhow::Result<Vec<RelayFingerprint>> {
-    let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
+    let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(2);
     let my_neighs: Vec<RelayFingerprint> = all_relay_neighs(ctx);
     let rand_neigh = my_neighs.choose(&mut rand::thread_rng()).copied();
 

@@ -114,15 +114,16 @@ pub async fn send_forward(
         tracing::trace!("send message took {:?}", send_msg_time);
     });
 
-    let route = forward_route(ctx).context("failed to create forward route")?;
+    let route = forward_route_to(ctx, dst_fp).context("failed to create forward route")?;
     let first_peeler = *route
-        .get(0)
+        .first()
         .context("empty route, cannot obtain first peeler")?;
 
     let instructs = route_to_instructs(ctx, &route).context("route_to_instructs failed")?;
-    tracing::trace!(
-        "*************************** translated this route to instructions: {:?}",
-        route
+    tracing::debug!(
+        "*************************** translated this route to instructions: {:?} => {:?}",
+        route,
+        instructs
     );
     let dest_opk = ctx
         .get(RELAY_GRAPH)
@@ -181,9 +182,13 @@ pub async fn send_backward(
     Ok(())
 }
 
-fn forward_route(ctx: &DaemonContext) -> anyhow::Result<Vec<RelayFingerprint>> {
-    let route = ctx.get(RELAY_GRAPH).read().rand_relays(3);
-    tracing::trace!("forward route formed: {:?}", route);
+fn forward_route_to(
+    ctx: &DaemonContext,
+    dest_fp: RelayFingerprint,
+) -> anyhow::Result<Vec<RelayFingerprint>> {
+    let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(2);
+    route.push(dest_fp);
+    tracing::debug!("forward route formed: {:?}", route);
     Ok(route)
 }
 

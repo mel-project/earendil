@@ -56,9 +56,9 @@ pub async fn listen_in_route(ctx: &DaemonContext, cfg: &InRouteConfig) -> anyhow
 
         spawn!(async move {
             let (mux, their_client_id, their_relay_descr) =
-                tcp_to_mux(&ctx, tcp_conn, &cfg.obfs).await?;
+                tcp_to_mux(ctx, tcp_conn, &cfg.obfs).await?;
             let link = Link::new_listen(mux).await?;
-            manage_mux(&ctx, link, their_client_id, their_relay_descr).await
+            manage_mux(ctx, link, their_client_id, their_relay_descr).await
         })
         .detach();
     })
@@ -69,9 +69,9 @@ pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow
         let fallible = async {
             let tcp_conn = TcpStream::connect(cfg.connect).await?;
             let (mux, their_client_id, their_relay_descr) =
-                tcp_to_mux(&ctx, tcp_conn, &cfg.obfs).await?;
+                tcp_to_mux(ctx, tcp_conn, &cfg.obfs).await?;
             let link = Link::new_dial(mux).await?;
-            manage_mux(&ctx, link, their_client_id, their_relay_descr).await?;
+            manage_mux(ctx, link, their_client_id, their_relay_descr).await?;
             anyhow::Ok(())
         };
         if let Err(err) = fallible.await {

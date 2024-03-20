@@ -46,7 +46,7 @@ pub async fn send_raw(
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx, pkt))]
+#[tracing::instrument(skip(ctx, pkt), fields(packet_hash=debug(blake3::hash(bytemuck::bytes_of(&pkt)))))]
 #[async_recursion]
 pub async fn incoming_raw(
     ctx: &DaemonContext,
@@ -64,17 +64,11 @@ pub async fn incoming_raw(
 
     let pkts_seen = ctx.get(PKTS_SEEN);
     let packet_hash = blake3::hash(bytemuck::bytes_of(&pkt));
-
     if !pkts_seen.insert(packet_hash) {
         anyhow::bail!("received replayed pkt {packet_hash}");
     }
 
-    tracing::debug!(
-        packet_hash = packet_hash.to_string(),
-        my_fp = my_fp.to_string(),
-        peeler = next_peeler.to_string(),
-        "peel_forward on raw packet"
-    );
+    tracing::debug!(my_fp = my_fp.to_string(), "peel_forward on raw packet");
 
     if next_peeler == my_fp {
         // I am the designated peeler, peel and forward towards next peeler
@@ -113,13 +107,13 @@ pub async fn incoming_raw(
             }
         }
     } else {
-        tracing::debug!(
-            packet_hash = packet_hash.to_string(),
-            peeler = next_peeler.to_string(),
-            "we are not the peeler"
-        );
+        tracing::debug!("we are not the peeler");
         // we are not peeler, forward the packet a step closer to peeler
         let next_hop = one_hop_closer(ctx, next_peeler)?;
+        tracing::debug!(
+            next_hop = debug(next_hop),
+            "forwarding the packet one hop closer"
+        );
         ctx.get(RELAY_SPIDER)
             .send(&next_hop, (pkt, next_peeler))
             .context(format!("could not find this next hop {next_hop}"))?;
