@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::Context;
 use async_recursion::async_recursion;
 use dashmap::DashSet;
-use earendil_crypt::{ClientId, NeighborId, RelayFingerprint};
+use earendil_crypt::{ClientId, RelayFingerprint};
 use earendil_packet::{PeeledPacket, RawBody, RawPacket};
 use smol::channel::Receiver;
 
@@ -124,10 +124,14 @@ pub async fn incoming_raw(
 fn one_hop_closer(ctx: &DaemonContext, dest: RelayFingerprint) -> anyhow::Result<RelayFingerprint> {
     let my_neighs: Vec<RelayFingerprint> = ctx.get(RELAY_SPIDER).keys();
 
+    if my_neighs.is_empty() {
+        anyhow::bail!("cannot route one hop closer since we don't have ANY neighbors!")
+    }
+
     let mut shortest_route_len = usize::MAX;
     let mut next_hop = None;
 
-    for neigh in my_neighs {
+    for neigh in my_neighs.iter() {
         if let Some(route) = ctx
             .get(RELAY_GRAPH)
             .read()
@@ -135,12 +139,13 @@ fn one_hop_closer(ctx: &DaemonContext, dest: RelayFingerprint) -> anyhow::Result
         {
             if route.len() < shortest_route_len {
                 shortest_route_len = route.len();
-                next_hop = Some(neigh);
+                next_hop = Some(*neigh);
             }
         }
     }
 
-    next_hop.context("cannot route one hop closer since there's no neighbors")
+    next_hop
+        .context(format!("cannot route one hop closer to {:?} since none of our neighbors ({:?}) could find a route there", dest, my_neighs))
 }
 
 pub fn is_relay_neigh(ctx: &DaemonContext, neigh: RelayFingerprint) -> bool {

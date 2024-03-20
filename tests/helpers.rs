@@ -45,7 +45,7 @@ pub async fn sleep(secs: u64) {
 
 // generates a barebones config
 pub fn new_cfg(
-    identity: Identity,
+    identity: Option<Identity>,
     control_listen: SocketAddr,
     in_routes: InRoutes,
     out_routes: OutRoutes,
@@ -59,7 +59,7 @@ pub fn new_cfg(
     let havens = vec![];
 
     ConfigFile {
-        identity: Some(identity),
+        identity,
         state_cache,
         control_listen,
         in_routes,
@@ -190,7 +190,7 @@ pub fn gen_network(
     let mut relay_configs = vec![];
 
     for i in 0..num_relays {
-        let relay_id = Identity::IdentitySeed(format!("relay{i}"));
+        let relay_id = Some(Identity::IdentitySeed(format!("relay{i}")));
         let control_listen = format!("127.0.0.1:{}", free_port(&mut rng)).parse()?;
         // range start is 0 for i = 0 and 1 otherwise; end grows slowly according to √i
         let num_outroutes_range = (i > 0) as u8..=(i > 0) as u8 * (i as f64).sqrt() as u8;
@@ -207,12 +207,11 @@ pub fn gen_network(
 
     let mut client_configs = vec![];
 
-    for i in 0..num_clients {
-        let client_id = Identity::IdentitySeed(format!("client{i}"));
+    for _ in 0..num_clients {
         let control_listen = format!("127.0.0.1:{}", free_port(&mut rng)).parse()?;
         let num_outroutes_range = 1..=(num_relays as f64).sqrt() as u8;
         let (in_routes, out_routes) = routes(&mut rng, &relay_configs, false, num_outroutes_range)?;
-        let client_cfg = new_cfg(client_id, control_listen, in_routes, out_routes);
+        let client_cfg = new_cfg(None, control_listen, in_routes, out_routes);
 
         client_configs.push(client_cfg);
     }

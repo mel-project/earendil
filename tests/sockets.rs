@@ -71,7 +71,7 @@ fn haven() {
     let (mut relays, mut clients) = helpers::spawn_network(2, 4, Some(seed)).unwrap();
 
     smolscale::block_on(async move {
-        helpers::sleep(5).await;
+        helpers::sleep(15).await;
         let alice = clients.pop().unwrap();
 
         let alice_anon_isk = HavenIdentitySecret::generate();
@@ -103,7 +103,7 @@ fn haven() {
         let to_bob = b"hello bobert";
         let to_alice = b"hey there, allison";
 
-        helpers::sleep(5).await;
+        helpers::sleep(10).await;
 
         alice_skt
             .send_to(Bytes::copy_from_slice(to_bob), bob_haven_fp)

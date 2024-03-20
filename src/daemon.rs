@@ -29,7 +29,10 @@ use tracing::instrument;
 use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
-use crate::daemon::inout_route::{dial_out_route, listen_in_route};
+use crate::{
+    context::MY_CLIENT_ID,
+    daemon::inout_route::{dial_out_route, listen_in_route},
+};
 use crate::{context::MY_RELAY_IDENTITY, socket::n2r_socket_shuttle};
 
 use crate::control_protocol::ControlClient;
@@ -104,6 +107,7 @@ impl RpcTransport for DummyControlProtocolTransport {
     }
 }
 
+#[tracing::instrument(skip_all, fields(client_id=ctx.get(MY_CLIENT_ID), relay_fp=debug(ctx.get(MY_RELAY_IDENTITY).map(|id| id.public().fingerprint().to_string()[..6].to_string()))))]
 pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     let is_client = ctx.init().in_routes.is_empty();
 

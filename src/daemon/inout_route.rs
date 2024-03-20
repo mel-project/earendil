@@ -5,7 +5,7 @@ use self::{gossip::gossip_once, link_protocol::LinkService};
 use super::link::LinkMessage;
 use crate::{
     config::InRouteConfig,
-    context::{DaemonContext, MY_RELAY_IDENTITY, MY_RELAY_ONION_SK},
+    context::{DaemonContext, MY_RELAY_IDENTITY, MY_RELAY_ONION_SK, RELAY_GRAPH},
     daemon::link::Link,
     n2r, network,
     pascal::{read_pascal, write_pascal},
@@ -126,6 +126,11 @@ async fn manage_mux(
     their_client_id: ClientId,
     their_relay_descr: Option<IdentityDescriptor>,
 ) -> anyhow::Result<()> {
+    if let Some(descr) = their_relay_descr.as_ref() {
+        ctx.get(RELAY_GRAPH)
+            .write()
+            .insert_identity(descr.clone())?;
+    }
     // subscribe to the right outgoing stuff and stuff them into the link
     let recv_outgoing_client = network::subscribe_outgoing_client(ctx, their_client_id);
     let send_outgoing_client = async {
