@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use async_trait::async_trait;
-use earendil_crypt::RelayFingerprint;
+use earendil_crypt::{AnonEndpoint, RelayFingerprint};
 use futures_util::{future, FutureExt};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
 use smol::Timer;
@@ -17,11 +17,20 @@ use super::GLOBAL_RPC_DOCK;
 pub struct GlobalRpcTransport {
     ctx: DaemonContext,
     dest_fp: RelayFingerprint,
+    n2r_client_skt: N2rClientSocket,
 }
 
 impl GlobalRpcTransport {
-    pub fn new(ctx: DaemonContext, dest_fp: RelayFingerprint) -> GlobalRpcTransport {
-        GlobalRpcTransport { ctx, dest_fp }
+    pub fn new(
+        ctx: DaemonContext,
+        dest_fp: RelayFingerprint,
+        n2r_client_skt: N2rClientSocket,
+    ) -> GlobalRpcTransport {
+        GlobalRpcTransport {
+            ctx,
+            dest_fp,
+            n2r_client_skt,
+        }
     }
 }
 
@@ -31,10 +40,10 @@ impl RpcTransport for GlobalRpcTransport {
 
     async fn call_raw(&self, req: JrpcRequest) -> Result<JrpcResponse, Self::Error> {
         let endpoint = RelayEndpoint::new(self.dest_fp, GLOBAL_RPC_DOCK);
-        let socket = N2rClientSocket::bind(self.ctx.clone()).context("n2r socket bind failed")?;
         let mut retries = 0;
         let mut timeout: Duration;
 
+        let socket = self.n2r_client_skt.clone();
         loop {
             socket
                 .send_to(serde_json::to_string(&req)?.into(), endpoint)

@@ -41,7 +41,7 @@ use crate::daemon::tcp_forward::tcp_forward_loop;
 use crate::db::db_write;
 
 use crate::control_protocol::ControlService;
-use crate::socket::n2r_socket::N2rRelaySocket;
+use crate::socket::n2r_socket::{N2rClientSocket, N2rRelaySocket};
 use crate::socket::HavenEndpoint;
 use crate::{
     config::ConfigFile,
@@ -300,10 +300,13 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 #[instrument(skip(ctx))]
 /// Loop that listens to and handles incoming GlobalRpc requests
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let socket = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(GLOBAL_RPC_DOCK))?);
-    let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx)));
+    let relay_skt = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(GLOBAL_RPC_DOCK))?);
+
+    let my_anon_ep = AnonEndpoint::new();
+    let n2r_skt = N2rClientSocket::bind(ctx.clone(), my_anon_ep)?;
+    let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx, n2r_skt)));
     nursery!(loop {
-        let socket = socket.clone();
+        let socket = relay_skt.clone();
         if let Ok((req, endpoint)) = socket.recv_from().await {
             let service = service.clone();
             spawn!(async move {

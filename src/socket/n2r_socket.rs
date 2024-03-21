@@ -82,8 +82,7 @@ pub struct N2rClientSocket {
 }
 
 impl N2rClientSocket {
-    pub fn bind(ctx: DaemonContext) -> anyhow::Result<Self> {
-        let my_anon_id = AnonEndpoint::new();
+    pub fn bind(ctx: DaemonContext, my_anon_id: AnonEndpoint) -> anyhow::Result<Self> {
         let recv_incoming = new_client_queue(&ctx, my_anon_id)?;
 
         Ok(N2rClientSocket {

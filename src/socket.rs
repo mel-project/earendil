@@ -57,7 +57,8 @@ impl Socket {
     }
 
     pub(crate) fn bind_n2r_client_internal(ctx: DaemonContext) -> anyhow::Result<Socket> {
-        let inner = InnerSocket::N2rClient(N2rClientSocket::bind(ctx.clone())?);
+        let my_anon_id = AnonEndpoint::new();
+        let inner = InnerSocket::N2rClient(N2rClientSocket::bind(ctx.clone(), my_anon_id)?);
         Ok(Self { inner })
     }
 

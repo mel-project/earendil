@@ -8,7 +8,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{
-    ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret,
+    AnonEndpoint, ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint,
+    RelayIdentitySecret,
 };
 use earendil_packet::Dock;
 use itertools::Itertools;
@@ -22,6 +23,7 @@ use thiserror::Error;
 use crate::{
     context::{DEBTS, MY_RELAY_IDENTITY, RELAY_GRAPH, SETTLEMENTS},
     network::all_client_neighs,
+    socket::n2r_socket::N2rClientSocket,
 };
 use crate::{
     control_protocol::{
@@ -122,7 +124,6 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn send_message(&self, _args: SendMessageArgs) -> Result<(), ControlProtErr> {
-
         todo!();
         // if let Some(socket) = self.sockets.get(&args.socket_id) {
         //     socket.send_to(args.content, args.destination).await?;
@@ -256,7 +257,9 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         send_args: GlobalRpcArgs,
     ) -> Result<serde_json::Value, GlobalRpcError> {
-        let client = GlobalRpcTransport::new(self.ctx.clone(), send_args.destination);
+        let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::new())
+            .expect("failed to bind n2r socket");
+        let client = GlobalRpcTransport::new(self.ctx.clone(), send_args.destination, n2r_skt);
         let res = if let Some(res) = client
             .call(&send_args.method, &send_args.args)
             .await
@@ -275,7 +278,9 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError> {
-        dht_insert(&self.ctx, locator).await;
+        let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::new())
+            .expect("failed to bind n2r client socket");
+        dht_insert(&self.ctx, locator, n2r_skt).await;
         Ok(())
     }
 
@@ -283,7 +288,9 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         fingerprint: HavenFingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        dht_get(&self.ctx, fingerprint)
+        let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::new())
+            .expect("failed to bind n2r client socket");
+        dht_get(&self.ctx, fingerprint, n2r_skt)
             .timeout(Duration::from_secs(30))
             .await
             .map_or(

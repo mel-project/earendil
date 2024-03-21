@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{HavenIdentitySecret, RelayFingerprint};
+use earendil_crypt::{AnonEndpoint, HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::{crypt::OnionSecret, Dock};
 use moka::sync::Cache;
 use smol::{
@@ -47,7 +47,9 @@ impl HavenSocket {
         dock: Option<Dock>,
         rendezvous_point: Option<RelayFingerprint>,
     ) -> anyhow::Result<HavenSocket> {
-        let n2r_skt = N2rClientSocket::bind(ctx.clone())?;
+        let my_anon_ep = AnonEndpoint::new();
+        let n2r_skt = N2rClientSocket::bind(ctx.clone(), my_anon_ep)?;
+
         let encrypters: Cache<HavenEndpoint, CryptSession> = Cache::builder()
             .max_capacity(100_000)
             .time_to_live(Duration::from_secs(60 * 30))
@@ -70,28 +72,37 @@ impl HavenSocket {
             ),
         );
 
-        if let Some(rob) = rendezvous_point {
+        if let Some(rendezvous) = rendezvous_point {
             // We're Bob:
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
-            tracing::debug!("binding haven with rendezvous_point {}", rob);
+            tracing::debug!("binding haven with rendezvous_point {}", rendezvous);
             let context = ctx.clone();
             let registration_isk = isk;
-            let my_anon_dest = n2r_skt.local_endpoint();
+            let n2r_socket = n2r_skt.clone();
             let task = smolscale::spawn(async move {
                 // generate a new onion keypair
                 let onion_sk = OnionSecret::generate();
                 let onion_pk = onion_sk.public();
                 // register forwarding with the rendezvous relay node
-                let gclient = GlobalRpcClient(GlobalRpcTransport::new(context.clone(), rob));
-                let forward_req = RegisterHavenReq::new(my_anon_dest, registration_isk);
+                let gclient = GlobalRpcClient(GlobalRpcTransport::new(
+                    context.clone(),
+                    rendezvous,
+                    n2r_socket.clone(),
+                ));
+                let forward_req = RegisterHavenReq::new(my_anon_ep, registration_isk);
+
                 loop {
+                    let n2r_skt = n2r_socket.clone();
                     match gclient
                         .alloc_forward(forward_req.clone())
                         .timeout(Duration::from_secs(10))
                         .await
                     {
                         Some(Err(e)) => {
-                            tracing::debug!("registering haven rendezvous {rob} failed: {:?}", e);
+                            tracing::debug!(
+                                "registering haven rendezvous {rendezvous} failed: {:?}",
+                                e
+                            );
                             Timer::after(Duration::from_secs(3)).await;
                             continue;
                         }
@@ -102,7 +113,8 @@ impl HavenSocket {
                         _ => {
                             dht_insert(
                                 &context,
-                                HavenLocator::new(registration_isk, onion_pk, rob),
+                                HavenLocator::new(registration_isk, onion_pk, rendezvous),
+                                n2r_skt,
                             )
                             .timeout(Duration::from_secs(30))
                             .await;
@@ -114,7 +126,7 @@ impl HavenSocket {
 
             Ok(HavenSocket {
                 ctx,
-                n2r_socket: n2r_skt,
+                n2r_socket: n2r_skt.clone(),
                 identity_sk: isk,
                 rendezvous_point,
                 _register_haven_task: Some(task),
@@ -127,7 +139,7 @@ impl HavenSocket {
             // We're Alice
             Ok(HavenSocket {
                 ctx,
-                n2r_socket: n2r_skt,
+                n2r_socket: n2r_skt.clone(),
                 identity_sk: isk,
                 rendezvous_point,
                 _register_haven_task: None,

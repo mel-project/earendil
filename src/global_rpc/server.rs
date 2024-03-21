@@ -8,6 +8,7 @@ use crate::{
     control_protocol::DhtError,
     daemon::dht::{dht_get, dht_insert},
     haven_util::{HavenLocator, RegisterHavenReq},
+    socket::n2r_socket::N2rClientSocket,
 };
 use earendil_crypt::{AnonEndpoint, HavenFingerprint, VerifyError};
 
@@ -15,11 +16,12 @@ use super::{bicache::Bicache, GlobalRpcProtocol};
 
 pub struct GlobalRpcImpl {
     ctx: DaemonContext,
+    n2r_skt: N2rClientSocket,
 }
 
 impl GlobalRpcImpl {
-    pub fn new(ctx: DaemonContext) -> GlobalRpcImpl {
-        GlobalRpcImpl { ctx }
+    pub fn new(ctx: DaemonContext, n2r_skt: N2rClientSocket) -> GlobalRpcImpl {
+        GlobalRpcImpl { ctx, n2r_skt }
     }
 }
 
@@ -42,7 +44,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         let key = locator.identity_pk.fingerprint();
 
         if recurse {
-            dht_insert(&self.ctx, locator).await
+            dht_insert(&self.ctx, locator, self.n2r_skt.clone()).await
         } else {
             locator
                 .identity_pk
@@ -62,7 +64,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             return Ok(Some(val));
         } else if recurse {
             tracing::debug!("searching DHT for {key}");
-            return dht_get(&self.ctx, key).await;
+            return dht_get(&self.ctx, key, self.n2r_skt.clone()).await;
         }
         Ok(None)
     }

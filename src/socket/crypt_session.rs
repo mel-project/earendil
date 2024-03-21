@@ -129,7 +129,7 @@ async fn enc_task(
             }
             None => {
                 // We're the client: look up Rob's addr in rendezvous dht
-                let bob_locator = dht_get(&ctx, remote.fingerprint)
+                let bob_locator = dht_get(&ctx, remote.fingerprint, n2r_skt.clone())
                     .timeout(Duration::from_secs(30))
                     .await
                     .map_or(

@@ -10,6 +10,7 @@ use crate::{
     control_protocol::DhtError,
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
     haven_util::HavenLocator,
+    socket::n2r_socket::N2rClientSocket,
 };
 
 use crate::context::{CtxField, DaemonContext, RELAY_GRAPH};
@@ -22,18 +23,19 @@ static DHT_CACHE: CtxField<Cache<HavenFingerprint, HavenLocator>> = |_| {
         .build()
 };
 
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, n2r_skt))]
 /// Insert a locator into the DHT.
-pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator) {
+pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator, n2r_skt: N2rClientSocket) {
     let key = locator.identity_pk.fingerprint();
     let replicas = dht_key_to_fps(ctx, &key.to_string());
     let mut gatherer = FuturesUnordered::new();
 
     for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
+        let n2r_skt = n2r_skt.clone();
         let locator = locator.clone();
         gatherer.push(async move {
             tracing::trace!("key {key} inserting into remote replica {replica}");
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(ctx.clone(), replica));
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(ctx.clone(), replica, n2r_skt));
             anyhow::Ok(
                 gclient
                     .dht_insert(locator.clone(), false)
@@ -54,6 +56,7 @@ pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator) {
 pub async fn dht_get(
     ctx: &DaemonContext,
     fingerprint: HavenFingerprint,
+    n2r_skt: N2rClientSocket,
 ) -> Result<Option<HavenLocator>, DhtError> {
     if let Some(locator) = ctx.get(DHT_CACHE).get(&fingerprint) {
         return Ok(Some(locator));
@@ -61,8 +64,9 @@ pub async fn dht_get(
     let replicas = dht_key_to_fps(ctx, &fingerprint.to_string());
     let mut gatherer = FuturesUnordered::new();
     for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
+        let n2r_skt = n2r_skt.clone();
         gatherer.push(async move {
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(ctx.clone(), replica));
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(ctx.clone(), replica, n2r_skt));
             anyhow::Ok(gclient.dht_get(fingerprint, false).await?)
         })
     }
