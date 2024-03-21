@@ -75,15 +75,15 @@ impl HavenSocket {
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
             tracing::debug!("binding haven with rendezvous_point {}", rob);
             let context = ctx.clone();
-            let registration_anon_id = AnonRemote::new();
             let registration_isk = isk;
+            let my_anon_dest = n2r_skt.local_endpoint().anon_dest.clone();
             let task = smolscale::spawn(async move {
                 // generate a new onion keypair
                 let onion_sk = OnionSecret::generate();
                 let onion_pk = onion_sk.public();
                 // register forwarding with the rendezvous relay node
                 let gclient = GlobalRpcClient(GlobalRpcTransport::new(context.clone(), rob));
-                let forward_req = RegisterHavenReq::new(registration_anon_id, registration_isk);
+                let forward_req = RegisterHavenReq::new(my_anon_dest, registration_isk);
                 loop {
                     match gclient
                         .alloc_forward(forward_req.clone())

@@ -83,7 +83,7 @@ pub fn fwd_to_client_queue(
     let queues = ctx.get(CLIENT_SOCKET_RECV_QUEUES).read();
     let send_to = queues
         .get(&to)
-        .context(format!("cannot find socket bound to {to}"))?;
+        .context(format!("cannot find socket bound to {to} among {:?}", queues.keys().collect::<Vec<_>>()))?;
     let _ = send_to.try_send((msg, from));
     Ok(())
 }
