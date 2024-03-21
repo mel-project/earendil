@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use earendil_crypt::{AnonRemote, RelayFingerprint, RemoteId};
+use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{
     crypt::OnionSecret, ForwardInstruction, InnerPacket, Message, RawPacket, ReplyBlock,
 };
@@ -39,11 +39,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let destination_sk = OnionSecret::generate();
         let destination = destination_sk.public();
         let payload = InnerPacket::Message(Message {
-            source_dock: 0u32,
-            dest_dock: 0u32,
+            relay_dock: 0u32,
             body: Bytes::from_static(b"hello world"),
         });
-        let my_anon_id = AnonRemote::new();
+        let my_anon_id = AnonEndpoint::new();
         let my_osk = OnionSecret::generate();
         let my_opk = my_osk.public();
 

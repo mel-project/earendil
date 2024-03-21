@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use earendil_crypt::{AnonRemote, ClientId, RelayFingerprint, RemoteId};
+use earendil_crypt::{AnonEndpoint, ClientId, RelayFingerprint, RemoteId};
 use rand::Rng;
 
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ impl ReplyBlock {
         first_peeler: RelayFingerprint,
         dest_opk: &OnionPublic,
         my_client_id: ClientId,
-        my_anon_id: AnonRemote,
+        my_anon_id: AnonEndpoint,
     ) -> Result<(Self, (u64, ReplyDegarbler)), PacketConstructError> {
         let rb_id: u64 = rand::random();
         let mut metadata = [0; 32];
@@ -36,8 +36,7 @@ impl ReplyBlock {
             dest_opk,
             true,
             InnerPacket::Message(Message {
-                source_dock: 0u32,
-                dest_dock: 0u32,
+                relay_dock: 0u32,
                 body: Bytes::new(),
             }),
             &metadata,
@@ -65,7 +64,7 @@ impl ReplyBlock {
 #[derive(Clone)]
 pub struct ReplyDegarbler {
     shared_secs: Vec<[u8; 32]>,
-    my_anon_id: AnonRemote,
+    my_anon_id: AnonEndpoint,
     stream_key: [u8; 32],
 }
 
@@ -87,7 +86,7 @@ impl ReplyDegarbler {
         }
     }
 
-    pub fn my_anon_id(&self) -> AnonRemote {
+    pub fn my_anon_id(&self) -> AnonEndpoint {
         self.my_anon_id
     }
 }

@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use earendil_crypt::{AnonRemote, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
+use earendil_crypt::{AnonEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use smol::future::FutureExt;
@@ -36,8 +36,8 @@ impl Socket {
         Self::bind_haven_internal(daemon.ctx.clone(), isk, dock, rendezvous_point)
     }
 
-    pub async fn bind_n2r_client(daemon: &Daemon, dock: Option<Dock>) -> anyhow::Result<Socket> {
-        Self::bind_n2r_client_internal(daemon.ctx.clone(), dock)
+    pub async fn bind_n2r_client(daemon: &Daemon) -> anyhow::Result<Socket> {
+        Self::bind_n2r_client_internal(daemon.ctx.clone())
     }
 
     pub async fn bind_n2r_relay(daemon: &Daemon, dock: Option<Dock>) -> anyhow::Result<Socket> {
@@ -56,11 +56,8 @@ impl Socket {
         Ok(Self { inner })
     }
 
-    pub(crate) fn bind_n2r_client_internal(
-        ctx: DaemonContext,
-        dock: Option<Dock>,
-    ) -> anyhow::Result<Socket> {
-        let inner = InnerSocket::N2rClient(N2rClientSocket::bind(ctx.clone(), dock)?);
+    pub(crate) fn bind_n2r_client_internal(ctx: DaemonContext) -> anyhow::Result<Socket> {
+        let inner = InnerSocket::N2rClient(N2rClientSocket::bind(ctx.clone())?);
         Ok(Self { inner })
     }
 
@@ -212,39 +209,6 @@ impl FromStr for HavenEndpoint {
     }
 }
 
-#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
-pub struct AnonEndpoint {
-    pub anon_dest: AnonRemote,
-    pub dock: Dock,
-}
-
-impl AnonEndpoint {
-    pub fn new(anon_dest: AnonRemote, dock: Dock) -> Self {
-        Self { anon_dest, dock }
-    }
-}
-
-impl Display for AnonEndpoint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.anon_dest, self.dock)
-    }
-}
-
-impl FromStr for AnonEndpoint {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = s.split(':').collect();
-        if parts.len() != 2 {
-            return Err(anyhow::anyhow!("invalid anon endpoint format"));
-        }
-        let fp_bytes: [u8; 16] = parts[0].as_bytes().try_into()?;
-        let fingerprint = AnonRemote(fp_bytes);
-        let dock = Dock::from_str(parts[1])?;
-        Ok(AnonEndpoint::new(fingerprint, dock))
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Endpoint {
     Relay(RelayEndpoint),
@@ -256,7 +220,7 @@ impl Display for Endpoint {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Endpoint::Relay(ep) => write!(f, "{}:{}", ep.fingerprint, ep.dock),
-            Endpoint::Anon(ep) => write!(f, "{}:{}", ep.anon_dest, ep.dock),
+            Endpoint::Anon(ep) => write!(f, "{}", ep),
             Endpoint::Haven(ep) => write!(f, "{}:{}", ep.fingerprint, ep.dock),
         }
     }

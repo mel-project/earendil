@@ -11,7 +11,7 @@ pub use reply_block::*;
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
-    use earendil_crypt::{AnonRemote, RelayFingerprint, RelayIdentitySecret, RemoteId};
+    use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret, RemoteId};
 
     use crate::crypt::OnionSecret;
 
@@ -42,8 +42,7 @@ mod tests {
         let destination_sk = OnionSecret::generate();
         let destination = destination_sk.public();
         let msg = Message {
-            source_dock: 0u32,
-            dest_dock: 0u32,
+            relay_dock: 0u32,
             body: Bytes::copy_from_slice(&[0u8; 100]),
         };
 
@@ -129,7 +128,7 @@ mod tests {
         use crate::RawPacket;
 
         // Generate  identity secrets
-        let alice_anon_id = AnonRemote::new();
+        let alice_anon_id = AnonEndpoint::new();
         let alice_osk = OnionSecret::generate();
         let alice_opk = alice_osk.public();
         // Generate 5-hop route
@@ -148,8 +147,7 @@ mod tests {
         // Prepare message using header from reply block
         let body = "hello world from reply block!";
         let message = Message {
-            source_dock: 0u32,
-            dest_dock: 0u32,
+            relay_dock: 0u32,
             body: Bytes::copy_from_slice(body.as_bytes()),
         };
         let packet = RawPacket::new_reply(

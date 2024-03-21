@@ -1,7 +1,7 @@
 use arrayref::array_ref;
 use bincode::Options;
 use bytes::Bytes;
-use earendil_crypt::{AnonRemote, RelayFingerprint, RelayIdentityPublic, RemoteId};
+use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentityPublic, RemoteId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -19,8 +19,7 @@ pub enum InnerPacket {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 /// An inner packet message with corresponding UDP port-like source and destinaton docks
 pub struct Message {
-    pub source_dock: Dock,
-    pub dest_dock: Dock,
+    pub relay_dock: Dock,
     pub body: Bytes,
 }
 
@@ -66,7 +65,7 @@ impl InnerPacket {
                 RemoteId::Relay(src_fp)
             }
             [1u8] => {
-                let anon_dest = AnonRemote(*array_ref![raw, 1, 16]);
+                let anon_dest = AnonEndpoint(*array_ref![raw, 1, 16]);
                 RemoteId::Anon(anon_dest)
             }
             _ => return Err(DecodeError::BadMetadata),
@@ -101,12 +100,8 @@ impl InnerPacket {
 }
 
 impl Message {
-    pub fn new(source_dock: Dock, dest_dock: Dock, body: Bytes) -> Self {
-        Message {
-            source_dock,
-            dest_dock,
-            body,
-        }
+    pub fn new(relay_dock: Dock, body: Bytes) -> Self {
+        Message { relay_dock, body }
     }
 }
 
@@ -124,8 +119,7 @@ mod tests {
         let identity_secret = RelayIdentitySecret::generate();
 
         // Step 2: Create an InnerPacket
-        let inner_packet =
-            InnerPacket::Message(Message::new(42u32, 200u32, Bytes::from("Hello, World!")));
+        let inner_packet = InnerPacket::Message(Message::new(200u32, Bytes::from("Hello, World!")));
 
         // Step 3: Encode the InnerPacket
         let encrypted_packet = inner_packet

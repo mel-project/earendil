@@ -320,16 +320,16 @@ impl RelayFingerprint {
 #[derive(
     Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize, Pod, Zeroable,
 )]
-pub struct AnonRemote(pub [u8; 16]);
+pub struct AnonEndpoint(pub [u8; 16]);
 
-impl AnonRemote {
+impl AnonEndpoint {
     pub fn new() -> Self {
         let new_anon_id: [u8; 16] = rand::thread_rng().gen();
-        AnonRemote(new_anon_id)
+        AnonEndpoint(new_anon_id)
     }
 }
 
-impl Display for AnonRemote {
+impl Display for AnonEndpoint {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let hex_string = self
             .0
@@ -340,7 +340,7 @@ impl Display for AnonRemote {
     }
 }
 
-impl Debug for AnonRemote {
+impl Debug for AnonEndpoint {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let hex_string = self
             .0
@@ -362,5 +362,5 @@ pub enum NeighborId {
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
 pub enum RemoteId {
     Relay(RelayFingerprint),
-    Anon(AnonRemote),
+    Anon(AnonEndpoint),
 }

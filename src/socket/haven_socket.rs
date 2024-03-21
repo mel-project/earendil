@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{AnonRemote, HavenIdentitySecret, RelayFingerprint};
+use earendil_crypt::{HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::{crypt::OnionSecret, Dock};
 use moka::sync::Cache;
 use smol::{
@@ -47,7 +47,7 @@ impl HavenSocket {
         dock: Option<Dock>,
         rendezvous_point: Option<RelayFingerprint>,
     ) -> anyhow::Result<HavenSocket> {
-        let n2r_skt = N2rClientSocket::bind(ctx.clone(), dock)?;
+        let n2r_skt = N2rClientSocket::bind(ctx.clone())?;
         let encrypters: Cache<HavenEndpoint, CryptSession> = Cache::builder()
             .max_capacity(100_000)
             .time_to_live(Duration::from_secs(60 * 30))
@@ -76,7 +76,7 @@ impl HavenSocket {
             tracing::debug!("binding haven with rendezvous_point {}", rob);
             let context = ctx.clone();
             let registration_isk = isk;
-            let my_anon_dest = n2r_skt.local_endpoint().anon_dest.clone();
+            let my_anon_dest = n2r_skt.local_endpoint();
             let task = smolscale::spawn(async move {
                 // generate a new onion keypair
                 let onion_sk = OnionSecret::generate();
@@ -174,7 +174,7 @@ impl HavenSocket {
 
     pub fn local_endpoint(&self) -> HavenEndpoint {
         let n2r_endpoint = self.n2r_socket.local_endpoint();
-        HavenEndpoint::new(self.identity_sk.public().fingerprint(), n2r_endpoint.dock)
+        HavenEndpoint::new(self.identity_sk.public().fingerprint(), todo!())
     }
 }
 

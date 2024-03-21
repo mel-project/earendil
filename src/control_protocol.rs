@@ -7,7 +7,7 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use colored::{ColoredString, Colorize};
 use earendil_crypt::{
-    AnonRemote, ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint,
+    AnonEndpoint, ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint,
 };
 use earendil_packet::{
     crypt::{OnionPublic, OnionSecret},
@@ -418,7 +418,7 @@ pub enum SendMessageError {
     #[error("client id not found")]
     NoClientId,
     #[error("no reply blocks available for {0}")]
-    NoReplyBlocks(AnonRemote),
+    NoReplyBlocks(AnonEndpoint),
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]

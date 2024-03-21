@@ -1,5 +1,5 @@
 use anyhow::Context;
-use earendil_crypt::{AnonRemote, RelayFingerprint, RemoteId};
+use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{InnerPacket, RawPacket, ReplyBlock};
 use moka::sync::Cache;
 use parking_lot::Mutex;
@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use crate::{
     context::{CtxField, DaemonContext, MY_CLIENT_ID, RELAY_GRAPH},
-    control_protocol::SendMessageError,
     n2r::{forward_route_to, route_to_instructs, DEGARBLERS},
     network::{all_relay_neighs, send_raw},
 };
@@ -18,7 +17,7 @@ static LAWK: Mutex<()> = Mutex::new(());
 /// Call to replenish remote reply blocks as needed.
 pub async fn replenish_remote_rb(
     ctx: &DaemonContext,
-    my_anon_id: AnonRemote,
+    my_anon_id: AnonEndpoint,
     dst_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
     const BATCH_SIZE: usize = 5;
@@ -43,7 +42,7 @@ pub async fn replenish_remote_rb(
 /// Decrements the estimate of how many reply blocks the other side has. If needed, replenishes too.
 pub fn consume_remote_rb(
     ctx: &DaemonContext,
-    my_anon_id: AnonRemote,
+    my_anon_id: AnonEndpoint,
     reply_source: RelayFingerprint,
 ) {
     let new_balance = rb_balance(ctx, my_anon_id, reply_source);
@@ -52,12 +51,16 @@ pub fn consume_remote_rb(
     let _ = replenish_remote_rb(ctx, my_anon_id, reply_source);
 }
 
-fn rb_balance(ctx: &DaemonContext, my_anon_id: AnonRemote, reply_source: RelayFingerprint) -> f64 {
+fn rb_balance(
+    ctx: &DaemonContext,
+    my_anon_id: AnonEndpoint,
+    reply_source: RelayFingerprint,
+) -> f64 {
     ctx.get(BALANCE_TABLE)
         .get_with((my_anon_id, reply_source), || 0.0)
 }
 
-static BALANCE_TABLE: CtxField<Cache<(AnonRemote, RelayFingerprint), f64>> = |_| {
+static BALANCE_TABLE: CtxField<Cache<(AnonEndpoint, RelayFingerprint), f64>> = |_| {
     Cache::builder()
         .time_to_live(Duration::from_secs(60)) // we don't keep track beyond so if rb calculation is wrong, we don't get stuck for too long
         .build()
@@ -68,7 +71,7 @@ static BALANCE_TABLE: CtxField<Cache<(AnonRemote, RelayFingerprint), f64>> = |_|
 async fn send_reply_blocks(
     ctx: &DaemonContext,
     count: usize,
-    my_anon_id: AnonRemote,
+    my_anon_id: AnonEndpoint,
     dst_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
     tracing::debug!("sending a batch of {count} reply blocks for {my_anon_id} to {dst_fp}");

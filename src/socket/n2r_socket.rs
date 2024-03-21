@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use bytes::Bytes;
 
-use earendil_crypt::AnonRemote;
+use earendil_crypt::AnonEndpoint;
 use earendil_packet::Dock;
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     queues::{new_client_queue, new_relay_queue, QueueReceiver},
-    AnonEndpoint, RelayEndpoint,
+    RelayEndpoint,
 };
 
 #[derive(Clone)]
@@ -49,14 +49,7 @@ impl N2rRelaySocket {
     }
 
     pub async fn send_to(&self, body: Bytes, endpoint: AnonEndpoint) -> anyhow::Result<()> {
-        n2r::send_backward(
-            &self.ctx,
-            self.dock,
-            endpoint.anon_dest,
-            endpoint.dock,
-            body,
-        )
-        .await?;
+        n2r::send_backward(&self.ctx, self.dock, endpoint, body).await?;
         Ok(())
     }
 
@@ -89,25 +82,13 @@ pub struct N2rClientSocket {
 }
 
 impl N2rClientSocket {
-    pub fn bind(ctx: DaemonContext, dock: Option<Dock>) -> anyhow::Result<Self> {
-        let my_anon_id = AnonRemote::new();
-        let (dock, recv_incoming) = if let Some(dock) = dock {
-            (
-                dock,
-                new_client_queue(&ctx, AnonEndpoint::new(my_anon_id, dock))?,
-            )
-        } else {
-            loop {
-                let dock = rand::random();
-                if let Ok(val) = new_client_queue(&ctx, AnonEndpoint::new(my_anon_id, dock)) {
-                    break (dock, val);
-                }
-            }
-        };
+    pub fn bind(ctx: DaemonContext) -> anyhow::Result<Self> {
+        let my_anon_id = AnonEndpoint::new();
+        let recv_incoming = new_client_queue(&ctx, my_anon_id)?;
 
         Ok(N2rClientSocket {
             ctx,
-            endpoint: AnonEndpoint::new(my_anon_id, dock),
+            endpoint: my_anon_id,
             recv_incoming: Arc::new(recv_incoming),
         })
     }
@@ -115,8 +96,7 @@ impl N2rClientSocket {
     pub async fn send_to(&self, body: Bytes, endpoint: RelayEndpoint) -> anyhow::Result<()> {
         n2r::send_forward(
             &self.ctx,
-            self.endpoint.anon_dest,
-            self.endpoint.dock,
+            self.endpoint,
             endpoint.fingerprint,
             endpoint.dock,
             body,

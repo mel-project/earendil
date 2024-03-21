@@ -10,7 +10,7 @@ mod udp_forward;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{RelayFingerprint, RelayIdentitySecret};
+use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
 use earendil_packet::ForwardInstruction;
 
 use earendil_topology::{IdentityDescriptor, RelayGraph};
@@ -42,7 +42,7 @@ use crate::db::db_write;
 
 use crate::control_protocol::ControlService;
 use crate::socket::n2r_socket::N2rRelaySocket;
-use crate::socket::{AnonEndpoint, HavenEndpoint};
+use crate::socket::HavenEndpoint;
 use crate::{
     config::ConfigFile,
     context::{MY_RELAY_ONION_SK, RELAY_GRAPH},
@@ -251,12 +251,12 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         let mut route_tasks = FuturesUnordered::new();
 
         // For every in_routes block, spawn a task to handle incoming stuff
-        for (in_route_name, config) in ctx.init().in_routes.iter() {
+        for (_in_route_name, config) in ctx.init().in_routes.iter() {
             route_tasks.push(spawn!(listen_in_route(&ctx, config)));
         }
 
         // For every out_routes block, spawn a task to handle outgoing stuff
-        for (out_route_name, config) in ctx.init().out_routes.iter() {
+        for (_out_route_name, config) in ctx.init().out_routes.iter() {
             route_tasks.push(spawn!(dial_out_route(&ctx, config)));
         }
 
@@ -335,10 +335,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
         if let Ok((msg, src_ep)) = socket.recv_from().await {
             let ctx = ctx.clone();
-            let src_is_client = ctx
-                .get(REGISTERED_HAVENS)
-                .get_by_key(&src_ep.anon_dest)
-                .is_none();
+            let src_is_client = ctx.get(REGISTERED_HAVENS).get_by_key(&src_ep).is_none();
 
             if src_is_client {
                 let (inner, dest_ep): (Bytes, HavenEndpoint) = stdcode::deserialize(&msg)?;
@@ -356,9 +353,7 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     let body: Bytes = (inner, src_ep).stdcode().into();
 
                     cache.insert(src_ep, dest_ep);
-                    socket
-                        .send_to(body, AnonEndpoint::new(haven_anon_id, dest_ep.dock))
-                        .await?;
+                    socket.send_to(body, haven_anon_id).await?;
                 } else {
                     tracing::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
                 }

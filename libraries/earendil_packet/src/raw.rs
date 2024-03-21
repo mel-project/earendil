@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
-use earendil_crypt::{AnonRemote, ClientId, RelayFingerprint, RemoteId};
+use earendil_crypt::{AnonEndpoint, ClientId, RelayFingerprint, RemoteId};
 use rand::{Rng, RngCore};
 use rand_distr::Exp;
 use serde::{Deserialize, Serialize};
@@ -306,7 +306,7 @@ pub enum PeeledPacket {
         delay_ms: u16,
     },
     Received {
-        from: AnonRemote,
+        from: AnonEndpoint,
         pkt: InnerPacket,
     },
     GarbledReply {

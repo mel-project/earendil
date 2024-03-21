@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use anyhow::Context;
 use bytes::Bytes;
 
-
 use earendil_packet::Dock;
 use parking_lot::RwLock;
 use smol::channel::{Receiver, Sender};
@@ -81,9 +80,10 @@ pub fn fwd_to_client_queue(
     to: AnonEndpoint,
 ) -> anyhow::Result<()> {
     let queues = ctx.get(CLIENT_SOCKET_RECV_QUEUES).read();
-    let send_to = queues
-        .get(&to)
-        .context(format!("cannot find socket bound to {to} among {:?}", queues.keys().collect::<Vec<_>>()))?;
+    let send_to = queues.get(&to).context(format!(
+        "cannot find socket bound to {to} among {:?}",
+        queues.keys().collect::<Vec<_>>()
+    ))?;
     let _ = send_to.try_send((msg, from));
     Ok(())
 }
