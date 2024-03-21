@@ -81,7 +81,7 @@ fn haven() {
         //     tracing::debug!("{graph}");
         // }
 
-//  
+        //
 
         let alice = clients.pop().unwrap();
 
@@ -116,7 +116,6 @@ fn haven() {
 
         helpers::sleep(10).await;
 
-
         alice_skt
             .send_to(Bytes::copy_from_slice(to_bob), bob_haven_fp)
             .await
@@ -126,7 +125,7 @@ fn haven() {
             .recv_from()
             .timeout(Duration::from_secs(10))
             .await
-            .unwrap()   
+            .unwrap()
             .unwrap();
         Timer::after(Duration::from_millis(100)).await;
         assert_eq!(from_alice.as_ref(), to_bob);

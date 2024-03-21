@@ -342,12 +342,17 @@ async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 
             if src_is_client {
                 let (inner, dest_ep): (Bytes, HavenEndpoint) = stdcode::deserialize(&msg)?;
-                tracing::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
 
                 if let Some(haven_anon_id) = ctx
                     .get(REGISTERED_HAVENS)
                     .get_by_value(&dest_ep.fingerprint)
                 {
+                    tracing::debug!(
+                        "received forward msg, from {}, to {}",
+                        src_ep,
+                        haven_anon_id
+                    );
+
                     let body: Bytes = (inner, src_ep).stdcode().into();
 
                     cache.insert(src_ep, dest_ep);
