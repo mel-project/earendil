@@ -73,7 +73,7 @@ async fn socks5_once(
 
     if let Some(top) = top_level {
         if top == "haven" {
-            let endpoint = HavenEndpoint::new(
+            let endpoint = HavenFingerprint::new(
                 HavenFingerprint::from_str(
                     split_domain.next().context("invalid Earendil address")?,
                 )?,

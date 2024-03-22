@@ -1,6 +1,5 @@
-use dashmap::DashMap;
 use earendil_crypt::{ClientId, RelayIdentitySecret};
-use earendil_packet::{crypt::OnionSecret, ReplyDegarbler};
+use earendil_packet::crypt::OnionSecret;
 use earendil_topology::RelayGraph;
 
 use parking_lot::RwLock;

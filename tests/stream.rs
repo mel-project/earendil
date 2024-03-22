@@ -28,7 +28,7 @@ fn stream() {
         helpers::sleep(5).await;
 
         let alice = clients.pop().unwrap();
-        let alice_skt = Socket::bind_n2r_client(&alice, None).await.unwrap();
+        let alice_skt = Socket::bind_n2r_client(&alice).await.unwrap();
         let alice_skt_ep = alice_skt.local_endpoint();
         let mut alice_listener = StreamListener::listen(alice_skt);
 

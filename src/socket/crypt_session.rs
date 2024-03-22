@@ -22,7 +22,6 @@ use crate::{context::DaemonContext, haven_util::HAVEN_FORWARD_DOCK};
 use crate::{control_protocol::DhtError, daemon::dht::dht_get};
 
 use super::n2r_socket::N2rClientSocket;
-use super::HavenEndpoint;
 use super::RelayEndpoint;
 
 #[derive(Clone)]
@@ -49,10 +48,10 @@ pub struct Handshake {
 impl CryptSession {
     pub fn new(
         my_isk: HavenIdentitySecret,
-        remote: HavenEndpoint,
+        remote: HavenFingerprint,
         rendezvous_fp: Option<RelayFingerprint>,
         n2r_skt: N2rClientSocket,
-        send_incoming_decrypted: Sender<(Bytes, HavenEndpoint)>,
+        send_incoming_decrypted: Sender<(Bytes, HavenFingerprint)>,
         ctx: DaemonContext,
         client_info: Option<(Handshake, HavenFingerprint)>,
     ) -> anyhow::Result<Self> {
@@ -112,11 +111,11 @@ impl CryptSession {
 async fn enc_task(
     my_isk: HavenIdentitySecret,
     n2r_skt: N2rClientSocket,
-    remote: HavenEndpoint,
+    remote: HavenFingerprint,
     rendezvous_fp: Option<RelayFingerprint>,
     recv_incoming: Receiver<HavenMsg>,
     recv_outgoing: Receiver<Bytes>,
-    send_incoming_decrypted: Sender<(Bytes, HavenEndpoint)>,
+    send_incoming_decrypted: Sender<(Bytes, HavenFingerprint)>,
     client_hs: Option<Handshake>,
     ctx: DaemonContext,
 ) -> anyhow::Result<Infallible> {

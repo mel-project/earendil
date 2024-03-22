@@ -336,7 +336,7 @@ impl Display for AnonEndpoint {
             .iter()
             .map(|byte| format!("{:02x}", byte))
             .collect::<String>();
-        write!(f, "{}", hex_string)
+        write!(f, "ANON-{}", hex_string)
     }
 }
 
@@ -347,7 +347,7 @@ impl Debug for AnonEndpoint {
             .iter()
             .map(|byte| format!("{:02x}", byte))
             .collect::<String>();
-        write!(f, "{}", hex_string)
+        write!(f, "ANON-{}", hex_string)
     }
 }
 

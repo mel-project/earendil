@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use earendil_crypt::{AnonEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
+use earendil_crypt::{AnonEndpoint, HavenFingerprint, RelayFingerprint};
 use earendil_packet::Dock;
 use serde::{Deserialize, Serialize};
 use smol::future::FutureExt;
@@ -13,7 +13,7 @@ use tracing::instrument;
 use crate::{context::DaemonContext, control_protocol::SendMessageError, daemon::Daemon, n2r};
 
 use self::{
-    haven_socket::HavenSocket,
+    haven_socket::{HavenSocket, Port},
     n2r_socket::{N2rClientSocket, N2rRelaySocket},
 };
 
@@ -29,11 +29,9 @@ pub struct Socket {
 impl Socket {
     pub async fn bind_haven(
         daemon: &Daemon,
-        isk: HavenIdentitySecret,
-        dock: Option<Dock>,
-        rendezvous_point: Option<RelayFingerprint>,
+        haven_info: Option<HavenInfo>,
     ) -> anyhow::Result<Socket> {
-        Self::bind_haven_internal(daemon.ctx.clone(), isk, dock, rendezvous_point)
+        Self::bind_haven_internal(daemon.ctx.clone(), haven_info)
     }
 
     pub async fn bind_n2r_client(daemon: &Daemon) -> anyhow::Result<Socket> {
@@ -46,12 +44,9 @@ impl Socket {
 
     pub(crate) fn bind_haven_internal(
         ctx: DaemonContext,
-        isk: HavenIdentitySecret,
-        dock: Option<Dock>,
-        rendezvous_point: Option<RelayFingerprint>,
+        haven_info: Option<HavenInfo>,
     ) -> anyhow::Result<Socket> {
-        let inner =
-            InnerSocket::Haven(HavenSocket::bind(ctx.clone(), isk, dock, rendezvous_point)?);
+        let inner = InnerSocket::Haven(HavenSocket::bind(ctx.clone(), haven_info)?);
 
         Ok(Self { inner })
     }
@@ -181,18 +176,18 @@ impl FromStr for RelayEndpoint {
 #[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct HavenEndpoint {
     pub fingerprint: HavenFingerprint,
-    pub dock: Dock,
+    pub port: Port,
 }
 
 impl HavenEndpoint {
-    pub fn new(fingerprint: HavenFingerprint, dock: Dock) -> Self {
-        Self { fingerprint, dock }
+    pub fn new(fingerprint: HavenFingerprint, port: Port) -> Self {
+        Self { fingerprint, port }
     }
 }
 
 impl Display for HavenEndpoint {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.fingerprint, self.dock)
+        write!(f, "{}:{}", self.fingerprint, self.port)
     }
 }
 
@@ -205,8 +200,8 @@ impl FromStr for HavenEndpoint {
             return Err(anyhow::anyhow!("invalid haven endpoint format"));
         }
         let fingerprint = HavenFingerprint::from_str(parts[0])?;
-        let dock = Dock::from_str(parts[1])?;
-        Ok(HavenEndpoint::new(fingerprint, dock))
+        let port = Port::from_str(parts[1])?;
+        Ok(HavenEndpoint::new(fingerprint, port))
     }
 }
 
@@ -222,7 +217,7 @@ impl Display for Endpoint {
         match self {
             Endpoint::Relay(ep) => write!(f, "{}:{}", ep.fingerprint, ep.dock),
             Endpoint::Anon(ep) => write!(f, "{}", ep),
-            Endpoint::Haven(ep) => write!(f, "{}:{}", ep.fingerprint, ep.dock),
+            Endpoint::Haven(ep) => write!(f, "{}:{}", ep.fingerprint, ep.port),
         }
     }
 }

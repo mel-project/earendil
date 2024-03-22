@@ -20,6 +20,8 @@ pub struct Stream {
 }
 
 impl Stream {
+    pub fn new(underlying: HavenConnection) -> Self {}
+
     #[tracing::instrument(skip(socket))]
     pub async fn connect(socket: Socket, server_endpoint: Endpoint) -> anyhow::Result<Self> {
         // handshake

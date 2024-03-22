@@ -6,6 +6,7 @@ pub mod daemon;
 mod db;
 mod debts;
 mod global_rpc;
+mod haven;
 mod haven_util;
 mod n2r;
 mod network;

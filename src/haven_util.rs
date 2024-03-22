@@ -23,7 +23,7 @@ use stdcode::StdcodeSerializeExt;
 use crate::{
     config::{ForwardHandler, HavenForwardConfig},
     context::DaemonContext,
-    socket::{Endpoint, RelayEndpoint, Socket},
+    socket::{haven_socket::Port, Endpoint, RelayEndpoint, Socket},
     stream::StreamListener,
 };
 
@@ -77,15 +77,17 @@ impl HavenLocator {
 pub struct RegisterHavenReq {
     pub anon_id: AnonEndpoint,
     pub identity_pk: HavenIdentityPublic,
+    pub port: Port,
     pub sig: Bytes,
     pub unix_timestamp: u64,
 }
 
 impl RegisterHavenReq {
-    pub fn new(my_anon_id: AnonEndpoint, identity_sk: HavenIdentitySecret) -> Self {
+    pub fn new(my_anon_id: AnonEndpoint, identity_sk: HavenIdentitySecret, port: Port) -> Self {
         let mut reg = Self {
             anon_id: my_anon_id,
             identity_pk: identity_sk.public(),
+            port,
             sig: Bytes::new(),
             unix_timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
