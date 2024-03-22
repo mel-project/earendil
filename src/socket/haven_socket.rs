@@ -73,7 +73,7 @@ impl HavenSocket {
         );
 
         if let Some(rendezvous) = rendezvous_point {
-            // We're Bob:
+            // We're the rendezvous
             // spawn a task that keeps telling our rendezvous relay node to remember us once in a while
             tracing::debug!("binding haven with rendezvous_point {}", rendezvous);
             let context = ctx.clone();

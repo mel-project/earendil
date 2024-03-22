@@ -123,13 +123,13 @@ async fn enc_task(
     let send_to_rendezvous = |msg: Bytes| async {
         let fwd_body = (msg, remote).stdcode();
         let rendezvous_ep = match rendezvous_fp {
-            Some(rob) => {
+            Some(rendezvous) => {
                 // We're the server
-                RelayEndpoint::new(rob, HAVEN_FORWARD_DOCK)
+                RelayEndpoint::new(rendezvous, HAVEN_FORWARD_DOCK)
             }
             None => {
                 // We're the client: look up Rob's addr in rendezvous dht
-                let bob_locator = dht_get(&ctx, remote.fingerprint, n2r_skt.clone())
+                let rendezvous_locator = dht_get(&ctx, remote.fingerprint, n2r_skt.clone())
                     .timeout(Duration::from_secs(30))
                     .await
                     .map_or(
@@ -140,7 +140,7 @@ async fn enc_task(
                     )
                     .context(format!("DHT failed for {}", remote.fingerprint))?
                     .context(format!("DHT returned None for {}", remote.fingerprint))?;
-                RelayEndpoint::new(bob_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
+                RelayEndpoint::new(rendezvous_locator.rendezvous_point, HAVEN_FORWARD_DOCK)
             }
         };
         n2r_skt.send_to(fwd_body.into(), rendezvous_ep).await?;
