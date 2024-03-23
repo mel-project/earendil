@@ -7,7 +7,7 @@ use std::{
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{AnonEndpoint, HavenIdentityPublic, HavenIdentitySecret, RelayFingerprint};
-use earendil_packet::{crypt::OnionPublic, Dock};
+use earendil_packet::{crypt::DhPublic, Dock};
 use futures_util::io;
 use moka::sync::{Cache, CacheBuilder};
 use nursery_macro::nursery;
@@ -32,7 +32,7 @@ pub const HAVEN_FORWARD_DOCK: Dock = 100002;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HavenLocator {
     pub identity_pk: HavenIdentityPublic,
-    pub onion_pk: OnionPublic,
+    pub onion_pk: DhPublic,
     pub rendezvous_point: RelayFingerprint,
     pub signature: Bytes,
 }
@@ -40,7 +40,7 @@ pub struct HavenLocator {
 impl HavenLocator {
     pub fn new(
         identity_sk: HavenIdentitySecret,
-        onion_pk: OnionPublic,
+        onion_pk: DhPublic,
         rendezvous_fingerprint: RelayFingerprint,
     ) -> HavenLocator {
         let identity_pk = identity_sk.public();

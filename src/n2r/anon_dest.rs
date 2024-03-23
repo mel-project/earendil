@@ -72,13 +72,13 @@ impl ReplyBlockStore {
 mod tests {
     use super::*;
     use earendil_crypt::{RelayFingerprint, RelayIdentitySecret};
-    use earendil_packet::crypt::OnionSecret;
+    use earendil_packet::crypt::DhSecret;
     use earendil_packet::ForwardInstruction;
 
-    fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, OnionSecret)> {
+    fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, DhSecret)> {
         (0..n)
             .map(|_| {
-                let our_sk = OnionSecret::generate();
+                let our_sk = DhSecret::generate();
                 let this_pubkey = our_sk.public();
                 let next_hop_sk = RelayIdentitySecret::generate();
                 let next_hop = next_hop_sk.public().fingerprint();
@@ -101,7 +101,7 @@ mod tests {
             .map(|(inst, _)| *inst)
             .collect();
         let alice_anon_id = AnonEndpoint::new();
-        let alice_osk = OnionSecret::generate();
+        let alice_osk = DhSecret::generate();
         let alice_opk = alice_osk.public();
         let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
 

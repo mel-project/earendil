@@ -1,5 +1,5 @@
 use earendil_crypt::{ClientId, RelayIdentitySecret};
-use earendil_packet::crypt::OnionSecret;
+use earendil_packet::crypt::DhSecret;
 use earendil_topology::RelayGraph;
 
 use parking_lot::RwLock;
@@ -17,7 +17,7 @@ pub static MY_RELAY_IDENTITY: CtxField<Option<RelayIdentitySecret>> = |ctx| {
     })
 };
 
-pub static MY_RELAY_ONION_SK: CtxField<OnionSecret> = |_| OnionSecret::generate();
+pub static MY_RELAY_ONION_SK: CtxField<DhSecret> = |_| DhSecret::generate();
 pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
     let ctx = ctx.clone();
     smol::future::block_on(async move {

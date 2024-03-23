@@ -5,6 +5,7 @@ pub mod control_protocol;
 pub mod daemon;
 mod db;
 mod debts;
+mod dht;
 mod global_rpc;
 mod haven;
 mod haven_util;

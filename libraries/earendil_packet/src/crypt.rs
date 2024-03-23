@@ -10,11 +10,11 @@ use chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// An onion-routing public key, based on x25519.
+/// A diffie-hellman public key, based on x25519.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct OnionPublic(x25519_dalek::PublicKey);
+pub struct DhPublic(x25519_dalek::PublicKey);
 
-impl<'de> Deserialize<'de> for OnionPublic {
+impl<'de> Deserialize<'de> for DhPublic {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -24,7 +24,7 @@ impl<'de> Deserialize<'de> for OnionPublic {
     }
 }
 
-impl Serialize for OnionPublic {
+impl Serialize for DhPublic {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -33,7 +33,7 @@ impl Serialize for OnionPublic {
     }
 }
 
-impl OnionPublic {
+impl DhPublic {
     /// Return the bytes representation.
     pub fn as_bytes(&self) -> &[u8; 32] {
         self.0.as_bytes()
@@ -45,7 +45,7 @@ impl OnionPublic {
     }
 }
 
-impl FromStr for OnionPublic {
+impl FromStr for DhPublic {
     type Err = base64::DecodeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -53,20 +53,20 @@ impl FromStr for OnionPublic {
         if decoded.len() == 32 {
             let mut array = [0u8; 32];
             array.copy_from_slice(&decoded);
-            Ok(OnionPublic::from_bytes(&array))
+            Ok(DhPublic::from_bytes(&array))
         } else {
             Err(base64::DecodeError::InvalidLength)
         }
     }
 }
 
-/// An onion-routing secret key, based on x25519.
+/// A diffie-hellman secret key, based on x25519.
 ///
 /// This is *intentionally* not serializable, and we *intentionally* never expose the underlying bytes representation. This is to ensure we only use them as in-memory ephemeral or mid-term keys.
 #[derive(Clone)]
-pub struct OnionSecret(x25519_dalek::ReusableSecret);
+pub struct DhSecret(x25519_dalek::ReusableSecret);
 
-impl OnionSecret {
+impl DhSecret {
     /// Generates a secret key.
     pub fn generate() -> Self {
         Self(x25519_dalek::ReusableSecret::random_from_rng(
@@ -75,12 +75,12 @@ impl OnionSecret {
     }
 
     /// Returns the public key of this secret key.
-    pub fn public(&self) -> OnionPublic {
-        OnionPublic((&self.0).into())
+    pub fn public(&self) -> DhPublic {
+        DhPublic((&self.0).into())
     }
 
     /// Derive the shared secret, given somebody else's public key.
-    pub fn shared_secret(&self, theirs: &OnionPublic) -> [u8; 32] {
+    pub fn shared_secret(&self, theirs: &DhPublic) -> [u8; 32] {
         self.0.diffie_hellman(&theirs.0).to_bytes()
     }
 }
@@ -124,8 +124,8 @@ pub const BOX_OVERHEAD: usize = 48;
 /// Encrypts a message, with integrity protection, so that only the owner of a particular X25519 secret key can read it. Does not identify the sender.
 ///
 /// **Always** generates a fresh ephemeral keypair, returning it alongside the ciphertext.
-pub fn box_encrypt(message: &[u8], recipient_pk: &OnionPublic) -> (Vec<u8>, OnionSecret) {
-    let sender_sk = OnionSecret::generate();
+pub fn box_encrypt(message: &[u8], recipient_pk: &DhPublic) -> (Vec<u8>, DhSecret) {
+    let sender_sk = DhSecret::generate();
     let sender_pk = sender_sk.public();
     let shared_secret = sender_sk.shared_secret(recipient_pk);
     let aead_key = AeadKey::from_bytes(blake3::hash(&shared_secret).as_bytes());
@@ -142,13 +142,13 @@ pub fn box_encrypt(message: &[u8], recipient_pk: &OnionPublic) -> (Vec<u8>, Onio
 /// Returns the ciphertext as well as the sending ephemeral PK.
 pub fn box_decrypt(
     encrypted_message: &[u8],
-    recipient_sk: &OnionSecret,
-) -> Result<(Vec<u8>, OnionPublic), AeadError> {
+    recipient_sk: &DhSecret,
+) -> Result<(Vec<u8>, DhPublic), AeadError> {
     if encrypted_message.len() < 32 {
         return Err(AeadError::DecryptionFailed);
     }
 
-    let sender_public_key = OnionPublic::from_bytes(array_ref![encrypted_message, 0, 32]);
+    let sender_public_key = DhPublic::from_bytes(array_ref![encrypted_message, 0, 32]);
     let shared_secret = recipient_sk.shared_secret(&sender_public_key);
     let aead_key = AeadKey::from_bytes(blake3::hash(&shared_secret).as_bytes());
     let nonce = [0u8; 12]; // all-zero nonce
@@ -172,20 +172,20 @@ mod tests {
 
     #[test]
     fn onion_public_serialize_deserialize() {
-        let secret_key = OnionSecret::generate();
+        let secret_key = DhSecret::generate();
         let public_key = secret_key.public();
 
         let serialized = bincode::serialize(&public_key).unwrap();
-        let deserialized: OnionPublic = bincode::deserialize(&serialized).unwrap();
+        let deserialized: DhPublic = bincode::deserialize(&serialized).unwrap();
 
         assert_eq!(public_key.as_bytes(), deserialized.as_bytes());
     }
 
     #[test]
     fn shared_secret() {
-        let alice_secret_key = OnionSecret::generate();
+        let alice_secret_key = DhSecret::generate();
         let alice_public_key = alice_secret_key.public();
-        let bob_secret_key = OnionSecret::generate();
+        let bob_secret_key = DhSecret::generate();
         let bob_public_key = bob_secret_key.public();
 
         let shared_secret_alice = alice_secret_key.shared_secret(&bob_public_key);
@@ -211,7 +211,7 @@ mod tests {
     fn box_encrypt_decrypt() {
         let message = b"Super secret message";
 
-        let recipient_sk = OnionSecret::generate();
+        let recipient_sk = DhSecret::generate();
         let recipient_pk = recipient_sk.public();
 
         let (encrypted_message, _) = box_encrypt(&message[..], &recipient_pk);

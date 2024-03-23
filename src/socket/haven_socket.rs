@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use clone_macro::clone;
 use earendil_crypt::{AnonEndpoint, HavenIdentitySecret, RelayFingerprint};
-use earendil_packet::crypt::OnionSecret;
+use earendil_packet::crypt::DhSecret;
 use moka::sync::Cache;
 use smol::{
     channel::{Receiver, Sender},
@@ -94,7 +94,7 @@ impl HavenSocket {
         let n2r_socket = n2r_skt.clone();
         let task = smolscale::spawn(async move {
             // generate a new onion keypair
-            let onion_sk = OnionSecret::generate();
+            let onion_sk = DhSecret::generate();
             let onion_pk = onion_sk.public();
             // register forwarding with the rendezvous relay node
             let gclient = GlobalRpcClient(GlobalRpcTransport::new(

@@ -1,11 +1,11 @@
 use std::time::Instant;
 
-use earendil_packet::crypt::{box_decrypt, box_encrypt, OnionSecret};
+use earendil_packet::crypt::{box_decrypt, box_encrypt, DhSecret};
 
 fn main() {
     let message = vec![0; 16384];
 
-    let recipient_sk = OnionSecret::generate();
+    let recipient_sk = DhSecret::generate();
     let recipient_pk = recipient_sk.public();
 
     let iterations = 100_000;

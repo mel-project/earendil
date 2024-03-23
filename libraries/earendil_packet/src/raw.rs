@@ -10,7 +10,7 @@ use serde_big_array::BigArray;
 use thiserror::Error;
 
 use crate::{
-    crypt::{box_decrypt, box_encrypt, stream_dencrypt, OnionPublic, OnionSecret, BOX_OVERHEAD},
+    crypt::{box_decrypt, box_encrypt, stream_dencrypt, DhPublic, DhSecret, BOX_OVERHEAD},
     InnerPacket, ReplyBlock,
 };
 
@@ -40,7 +40,7 @@ pub struct RawPacket {
 #[derive(Clone, Copy, Debug)]
 pub struct ForwardInstruction {
     /// The DH public key of this hop
-    pub this_pubkey: OnionPublic,
+    pub this_pubkey: DhPublic,
     /// The unique id of the next hop
     pub next_hop: RelayFingerprint,
 }
@@ -72,7 +72,7 @@ fn sample_delay(avg: u16) -> u16 {
 impl RawPacket {
     pub fn new_normal(
         route: &[ForwardInstruction],
-        dest_opk: &OnionPublic,
+        dest_opk: &DhPublic,
         payload: InnerPacket,
         my_id: RemoteId,
     ) -> Result<Self, PacketConstructError> {
@@ -101,7 +101,7 @@ impl RawPacket {
     /// Creates a new RawPacket along with a vector of the shared secrets used to encrypt each layer of the onion body, given a payload and the series of relays that the packet is supposed to be peeled by.
     pub(crate) fn new(
         route: &[ForwardInstruction],
-        dest_opk: &OnionPublic,
+        dest_opk: &DhPublic,
         dest_is_client: bool,
         payload: InnerPacket,
         metadata: &[u8; 32],
@@ -215,7 +215,7 @@ impl RawPacket {
     }
 
     /// "Peels off" one layer of the onion, by decryption using the specified secret key.
-    pub fn peel(&self, our_sk: &OnionSecret) -> Result<PeeledPacket, PacketPeelError> {
+    pub fn peel(&self, our_sk: &DhSecret) -> Result<PeeledPacket, PacketPeelError> {
         // First, decode the header
         let (metadata, their_pk) = box_decrypt(&self.header.outer, our_sk)
             .map_err(|_| PacketPeelError::DecryptionError)?;

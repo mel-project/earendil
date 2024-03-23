@@ -13,14 +13,14 @@ mod tests {
     use bytes::Bytes;
     use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret, RemoteId};
 
-    use crate::crypt::OnionSecret;
+    use crate::crypt::DhSecret;
 
     use super::*;
 
-    fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, OnionSecret)> {
+    fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, DhSecret)> {
         (0..n)
             .map(|_| {
-                let our_sk = OnionSecret::generate();
+                let our_sk = DhSecret::generate();
                 let this_pubkey = our_sk.public();
 
                 let next_hop = RelayFingerprint::from_bytes(&[10; 32]);
@@ -36,10 +36,10 @@ mod tests {
     }
 
     fn test_packet_route(
-        route: &[(ForwardInstruction, OnionSecret)],
+        route: &[(ForwardInstruction, DhSecret)],
     ) -> Result<(), PacketConstructError> {
         let my_isk = RelayIdentitySecret::generate();
-        let destination_sk = OnionSecret::generate();
+        let destination_sk = DhSecret::generate();
         let destination = destination_sk.public();
         let msg = Message {
             relay_dock: 0u32,
@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn one_hop() {
-        let route: Vec<(ForwardInstruction, OnionSecret)> = Vec::new();
+        let route: Vec<(ForwardInstruction, DhSecret)> = Vec::new();
         test_packet_route(&route).expect("One-hop test failed");
     }
 
@@ -129,7 +129,7 @@ mod tests {
 
         // Generate  identity secrets
         let alice_anon_id = AnonEndpoint::new();
-        let alice_osk = OnionSecret::generate();
+        let alice_osk = DhSecret::generate();
         let alice_opk = alice_osk.public();
         // Generate 5-hop route
         let route_with_onion_secrets = generate_forward_instructions(5);

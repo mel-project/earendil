@@ -1,6 +1,5 @@
 mod control_protocol_impl;
 
-pub(crate) mod dht;
 mod inout_route;
 mod link;
 mod socks5;

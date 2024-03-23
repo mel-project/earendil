@@ -5,7 +5,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    crypt::{stream_dencrypt, OnionPublic},
+    crypt::{stream_dencrypt, DhPublic},
     ForwardInstruction, InnerPacket, Message, PacketConstructError, RawHeader, RawPacket,
 };
 
@@ -21,7 +21,7 @@ impl ReplyBlock {
     pub fn new(
         route: &[ForwardInstruction],
         first_peeler: RelayFingerprint,
-        dest_opk: &OnionPublic,
+        dest_opk: &DhPublic,
         my_client_id: ClientId,
         my_anon_id: AnonEndpoint,
     ) -> Result<(Self, (u64, ReplyDegarbler)), PacketConstructError> {

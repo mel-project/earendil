@@ -6,7 +6,7 @@ use bytes::Bytes;
 use earendil_crypt::{
     HavenFingerprint, HavenIdentityPublic, HavenIdentitySecret, RelayFingerprint,
 };
-use earendil_packet::crypt::{AeadKey, OnionPublic, OnionSecret};
+use earendil_packet::crypt::{AeadKey, DhPublic, DhSecret};
 use futures_util::{future::Shared, FutureExt};
 use replay_filter::ReplayFilter;
 use serde::{Deserialize, Serialize};
@@ -41,7 +41,7 @@ pub enum HavenMsg {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Handshake {
     id_pk: HavenIdentityPublic,
-    eph_pk: OnionPublic,
+    eph_pk: DhPublic,
     sig: Bytes,
 }
 
@@ -147,7 +147,7 @@ async fn enc_task(
     };
 
     // complete handshake to get the shared secret
-    let my_osk = OnionSecret::generate();
+    let my_osk = DhSecret::generate();
     let my_hs = Handshake::new(&my_isk, &my_osk);
     let shared_sec = match client_hs {
         Some(hs) => {
@@ -216,7 +216,7 @@ async fn enc_task(
 
 impl Handshake {
     /// Creates a Handshake from an IdentitySecret
-    pub fn new(id_sk: &HavenIdentitySecret, onion_sk: &OnionSecret) -> Self {
+    pub fn new(id_sk: &HavenIdentitySecret, onion_sk: &DhSecret) -> Self {
         let id_pk = id_sk.public();
         let eph_pk = onion_sk.public();
         let mut hdsk = Handshake {

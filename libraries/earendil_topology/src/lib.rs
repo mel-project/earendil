@@ -5,7 +5,7 @@ use std::{
 
 use bytes::Bytes;
 use earendil_crypt::{RelayFingerprint, RelayIdentityPublic, RelayIdentitySecret, VerifyError};
-use earendil_packet::crypt::{OnionPublic, OnionSecret};
+use earendil_packet::crypt::{DhPublic, DhSecret};
 use indexmap::IndexMap;
 use rand::{seq::IteratorRandom, Rng};
 use serde::{Deserialize, Serialize};
@@ -342,7 +342,7 @@ impl AdjacencyDescriptor {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IdentityDescriptor {
     pub identity_pk: RelayIdentityPublic,
-    pub onion_pk: OnionPublic,
+    pub onion_pk: DhPublic,
 
     pub sig: Bytes,
 
@@ -351,7 +351,7 @@ pub struct IdentityDescriptor {
 
 impl IdentityDescriptor {
     /// Creates an IdentityDescriptor from our own IdentitySecret
-    pub fn new(my_identity: &RelayIdentitySecret, my_onion: &OnionSecret) -> Self {
+    pub fn new(my_identity: &RelayIdentitySecret, my_onion: &DhSecret) -> Self {
         let identity_pk = my_identity.public();
         let onion_pk = my_onion.public();
         let mut descr = IdentityDescriptor {

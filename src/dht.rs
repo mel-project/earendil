@@ -56,7 +56,7 @@ pub async fn dht_insert(ctx: &DaemonContext, locator: HavenLocator, n2r_skt: N2r
 pub async fn dht_get(
     ctx: &DaemonContext,
     fingerprint: HavenFingerprint,
-    n2r_skt: N2rClientSocket,
+    n2r_skt: &N2rClientSocket,
 ) -> Result<Option<HavenLocator>, DhtError> {
     if let Some(locator) = ctx.get(DHT_CACHE).get(&fingerprint) {
         return Ok(Some(locator));

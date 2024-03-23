@@ -10,7 +10,7 @@ use earendil_crypt::{
     AnonEndpoint, ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint,
 };
 use earendil_packet::{
-    crypt::{OnionPublic, OnionSecret},
+    crypt::{DhPublic, DhSecret},
     Dock, PacketConstructError,
 };
 use nanorpc::nanorpc_derive;
@@ -95,7 +95,7 @@ pub async fn main_control(
         } => {
             let locator = HavenLocator::new(
                 HavenIdentitySecret::from_str(&identity_sk)?,
-                OnionPublic::from_str(&onion_pk)?,
+                DhPublic::from_str(&onion_pk)?,
                 rendezvous_fingerprint,
             );
             link.insert_rendezvous(locator).await??;
@@ -114,7 +114,7 @@ pub async fn main_control(
             let fingerprint = RelayFingerprint::from_bytes(&fingerprint_bytes);
             let id_sk = HavenIdentitySecret::generate();
             let id_pk = id_sk.public();
-            let locator = HavenLocator::new(id_sk, OnionSecret::generate().public(), fingerprint);
+            let locator = HavenLocator::new(id_sk, DhSecret::generate().public(), fingerprint);
             eprintln!("created haven locator: {:?}", &locator);
 
             link.insert_rendezvous(locator.clone()).await??;

@@ -2,13 +2,13 @@ use bytes::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{
-    crypt::OnionSecret, ForwardInstruction, InnerPacket, Message, RawPacket, ReplyBlock,
+    crypt::DhSecret, ForwardInstruction, InnerPacket, Message, RawPacket, ReplyBlock,
 };
 
-fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, OnionSecret)> {
+fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, DhSecret)> {
     (0..n)
         .map(|_| {
-            let our_sk = OnionSecret::generate();
+            let our_sk = DhSecret::generate();
             let this_pubkey = our_sk.public();
 
             let next_hop = RelayFingerprint::from_bytes(&[10; 32]);
@@ -26,7 +26,7 @@ fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, OnionSecr
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("generate an OnionSecret", |b| {
         b.iter(|| {
-            black_box(OnionSecret::generate());
+            black_box(DhSecret::generate());
         })
     });
 
@@ -36,14 +36,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             .into_iter()
             .map(|s| s.0)
             .collect::<Vec<_>>();
-        let destination_sk = OnionSecret::generate();
+        let destination_sk = DhSecret::generate();
         let destination = destination_sk.public();
         let payload = InnerPacket::Message(Message {
             relay_dock: 0u32,
             body: Bytes::from_static(b"hello world"),
         });
         let my_anon_id = AnonEndpoint::new();
-        let my_osk = OnionSecret::generate();
+        let my_osk = DhSecret::generate();
         let my_opk = my_osk.public();
 
         c.bench_function(&format!("{route_length}-hop RawPacket construction"), |b| {
