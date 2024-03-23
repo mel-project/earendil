@@ -1,5 +1,6 @@
 use crate::context::DaemonContext;
 use crate::haven_util::RegisterHavenReq;
+use crate::socket::n2r_socket::N2rClientSocket;
 use crate::socket::HavenEndpoint;
 use crate::socket::RelayEndpoint;
 use bytes::Bytes;
@@ -10,6 +11,9 @@ use earendil_packet::crypt::OnionPublic;
 use serde::Deserialize;
 use serde::Serialize;
 use smol::Task;
+
+const LABEL_HAVEN_UP: &[u8] = b"haven-up";
+const LABEL_HAVEN_DN: &[u8] = b"haven-dn";
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum HavenMsg {
@@ -66,22 +70,32 @@ pub struct HavenConnection {
     // these channels are provided by whoever constructs this connection:
     // - for connect(), they should connect to tasks that shuffle packets to/from the rendezvous
     // - for the haven side, it's a bit more complex. the haven listener should spawn some task that manages a table of channels, similar to how we currently manage a table of encrypters. this task should go through all incoming packets, finishing encryption handshakes, and constructing HavenConnections by filling in its fields with the correct encryption state as well as the right packet-sending and packet-receiving functionality.
+    n2r_skt: N2rClientSocket,
 }
 
 impl HavenConnection {
-    pub async fn connect(haven: HavenEndpoint) -> anyhow::Result<Self> {
+    pub async fn connect(ctx: &DaemonContext, haven: HavenEndpoint) -> anyhow::Result<Self> {
+        let my_anon_id = rand::rand();
+        let n2r_skt = N2rClientSocket::bind(ctx, my_anon_id)?;
         // lookup the haven info using the dht
-        let rendezvous_locator = dht_get(&ctx, haven_endpoint.fingerprint, self.n2r_skt.clone())
+        let rendezvous_locator = dht_get(ctx, haven_endpoint.fingerprint, n2r_skt)
             .timeout(Duration::from_secs(30))
             .await
-            .context(format!("DHT failed for {}", remote.fingerprint))?
-            .context(format!("DHT returned None for {}", remote.fingerprint))?;
+            .context(format!(
+                "dht_get({}) timed out",
+                haven_endpoint.fingerprint()
+            ))?
+            .context(format!("DHT failed for {}", haven_endpoint.fingerprint()))?
+            .context(format!(
+                "DHT returned None for {}",
+                haven_endpoint.fingerprint()
+            ))?;
         let rendezvous_ep =
             RelayEndpoint::new(rendezvous_locator.rendezvous_point, HAVEN_FORWARD_DOCK);
         // do the handshake to the other side over N2R
         let my_osk = OnionSecret::generate();
         let handshake = ClientHandshake(my_osk.public());
-        self.n2r_skt.send(stdcode::serialize(&handshake)).await?;
+        n2r_skt.send(stdcode::serialize(&handshake)).await?;
 
         let server_hs: ServerHandshake = stdcode::deserialize(&n2r_skt.recv().await?)?;
         server_hs
@@ -91,10 +105,19 @@ impl HavenConnection {
             anyhow::bail!("spoofed source fingerprint for server handshake!")
         }
 
+        let shared_sec = my_osk.shared_secret(&hs.eph_pk);
+        let up_key = AeadKey::from_bytes(
+            blake3::keyed_hash(blake3::hash(LABEL_HAVEN_UP).as_bytes(), &shared_sec).as_bytes(),
+        );
+        let down_key = AeadKey::from_bytes(
+            blake3::keyed_hash(blake3::hash(LABEL_HAVEN_DN).as_bytes(), &shared_sec).as_bytes(),
+        );
+
         // construct the connection
         Ok(HavenConnection {
-            enc_key: todo!(),
-            dec_key: todo!(),
+            enc_key: up_key,
+            dec_key: down_key,
+            n2r_skt,
         })
     }
 
