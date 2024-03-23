@@ -16,8 +16,8 @@ use smol::channel::{Receiver, Sender};
 use crate::{
     context::{CtxField, DaemonContext, MY_RELAY_IDENTITY, RELAY_GRAPH},
     n2r::{anon_dest::ANON_DESTS, remote_rb::replenish_remote_rb},
+    n2r_socket::RelayEndpoint,
     network::send_raw,
-    socket::RelayEndpoint,
 };
 
 static DEGARBLERS: CtxField<DashMap<u64, ReplyDegarbler>> = |_| Default::default();

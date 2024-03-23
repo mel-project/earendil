@@ -2,14 +2,14 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use async_trait::async_trait;
-use earendil_crypt::{AnonEndpoint, RelayFingerprint};
+use earendil_crypt::RelayFingerprint;
 use futures_util::{future, FutureExt};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
 use smol::Timer;
 
 use crate::{
     context::DaemonContext,
-    socket::{n2r_socket::N2rClientSocket, RelayEndpoint},
+    n2r_socket::{N2rClientSocket, RelayEndpoint},
 };
 
 use super::GLOBAL_RPC_DOCK;

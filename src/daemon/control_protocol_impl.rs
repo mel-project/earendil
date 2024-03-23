@@ -5,11 +5,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use bytes::Bytes;
-use dashmap::DashMap;
+
 use earendil_crypt::{
-    AnonEndpoint, ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint,
-    RelayIdentitySecret,
+    AnonEndpoint, ClientId, HavenFingerprint, RelayFingerprint, RelayIdentitySecret,
 };
 use earendil_packet::Dock;
 use itertools::Itertools;
@@ -22,25 +20,21 @@ use thiserror::Error;
 
 use crate::{
     context::{DEBTS, MY_RELAY_IDENTITY, RELAY_GRAPH, SETTLEMENTS},
+    dht::{dht_get, dht_insert},
+    haven::HavenLocator,
+    n2r_socket::N2rClientSocket,
     network::all_client_neighs,
-    socket::n2r_socket::N2rClientSocket,
 };
 use crate::{
-    control_protocol::{
-        ChatError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError, SendMessageArgs,
-    },
+    control_protocol::{ChatError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError},
     daemon::DaemonContext,
     global_rpc::transport::GlobalRpcTransport,
-    haven_util::HavenLocator,
     network::{all_relay_neighs, is_relay_neigh},
-    socket::{RelayEndpoint, Socket, SocketRecvError, SocketSendError},
 };
-
-use super::dht::{dht_get, dht_insert};
 
 pub struct ControlProtocolImpl {
     anon_identities: Arc<Mutex<AnonIdentities>>,
-    sockets: DashMap<String, Socket>,
+
     ctx: DaemonContext,
 }
 
@@ -48,7 +42,7 @@ impl ControlProtocolImpl {
     pub fn new(ctx: DaemonContext) -> Self {
         Self {
             ctx,
-            sockets: DashMap::new(),
+
             anon_identities: Arc::new(Mutex::new(AnonIdentities::new())),
         }
     }
@@ -72,19 +66,7 @@ impl ControlProtocol for ControlProtocolImpl {
         dock: Option<Dock>,
         rendezvous_point: Option<RelayFingerprint>,
     ) {
-        let isk = HavenIdentitySecret::generate();
-        let socket =
-            Socket::bind_haven_internal(self.ctx.clone(), isk, dock, rendezvous_point).unwrap();
-        self.sockets.insert(socket_id, socket);
-    }
-
-    async fn skt_info(&self, _skt_id: String) -> Result<RelayEndpoint, ControlProtErr> {
-        todo!();
-        // if let Some(skt) = self.sockets.get(&skt_id) {
-        //     Ok(skt.local_endpoint())
-        // } else {
-        //     Err(ControlProtErr::NoSocket)
-        // }
+        todo!()
     }
 
     async fn havens_info(&self) -> Vec<(String, String)> {
@@ -121,29 +103,6 @@ impl ControlProtocol for ControlProtocolImpl {
                 }
             })
             .collect()
-    }
-
-    async fn send_message(&self, _args: SendMessageArgs) -> Result<(), ControlProtErr> {
-        todo!();
-        // if let Some(socket) = self.sockets.get(&args.socket_id) {
-        //     socket.send_to(args.content, args.destination).await?;
-        //     Ok(())
-        // } else {
-        //     Err(ControlProtErr::NoSocket)
-        // }
-    }
-
-    async fn recv_message(
-        &self,
-        _socket_id: String,
-    ) -> Result<(Bytes, RelayEndpoint), ControlProtErr> {
-        todo!();
-        // if let Some(socket) = self.sockets.get(&socket_id) {
-        //     let recvd = socket.recv_from_haven().await?;
-        //     Ok(recvd)
-        // } else {
-        //     Err(ControlProtErr::NoSocket)
-        // }
     }
 
     async fn my_routes(&self) -> serde_json::Value {
@@ -290,7 +249,7 @@ impl ControlProtocol for ControlProtocolImpl {
     ) -> Result<Option<HavenLocator>, DhtError> {
         let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::new())
             .expect("failed to bind n2r client socket");
-        dht_get(&self.ctx, fingerprint, n2r_skt)
+        dht_get(&self.ctx, fingerprint, &n2r_skt)
             .timeout(Duration::from_secs(30))
             .await
             .map_or(
@@ -377,16 +336,4 @@ impl AnonIdentities {
             RelayIdentitySecret::from_bytes(pseudo_secret.as_bytes())
         })
     }
-}
-
-#[derive(Error, Serialize, Deserialize, Debug)]
-pub enum ControlProtErr {
-    #[error(transparent)]
-    SocketSendError(#[from] SocketSendError),
-    #[error(transparent)]
-    SocketRecvError(#[from] SocketRecvError),
-    #[error(
-        "No socket exists for this socket_id! Bind a socket to this id before trying to use it ^_^"
-    )]
-    NoSocket,
 }

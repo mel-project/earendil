@@ -1,21 +1,29 @@
-pub mod commands;
-pub mod config;
+mod commands;
+mod config;
 mod context;
-pub mod control_protocol;
-pub mod daemon;
+mod control_protocol;
+mod daemon;
 mod db;
 mod debts;
 mod dht;
 mod global_rpc;
 mod haven;
-mod haven_util;
 mod n2r;
+mod n2r_socket;
 mod network;
 mod settlement;
-pub mod socket;
 
 mod pascal;
-pub mod stream;
+mod stream;
+
+// Create the public API here.
+
+pub use commands::ControlCommand;
+pub use config::*;
+pub use control_protocol::main_control;
+pub use daemon::Daemon;
+pub use haven::{HavenConnection, HavenEndpoint, HavenListener};
+pub use n2r_socket::*;
 
 fn log_error<E>(label: &str) -> impl FnOnce(E) + '_
 where

@@ -1,6 +1,7 @@
-use crate::commands::{ChatCommand, ControlCommand};
-use crate::socket::RelayEndpoint;
-use crate::{daemon::ControlProtErr, haven_util::HavenLocator};
+use crate::{
+    commands::{ChatCommand, ControlCommand},
+    haven::HavenLocator,
+};
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -32,43 +33,6 @@ pub async fn main_control(
 ) -> anyhow::Result<()> {
     let link = ControlClient::from(HttpRpcTransport::new(connect));
     match control_command {
-        ControlCommand::BindN2r {
-            skt_id,
-            anon_id,
-            dock,
-        } => {
-            link.bind_n2r(skt_id, anon_id, dock).await?;
-        }
-        ControlCommand::BindHaven {
-            skt_id,
-            anon_id,
-            dock,
-            rendezvous,
-        } => {
-            link.bind_haven(skt_id, anon_id, dock, rendezvous).await?;
-        }
-        ControlCommand::SktInfo { skt_id } => {
-            let skt_info = link.skt_info(skt_id).await??;
-            println!("{skt_info}")
-        }
-        ControlCommand::SendMsg {
-            skt_id: socket_id,
-            dest: destination,
-            msg: message,
-        } => {
-            link.send_message(SendMessageArgs {
-                socket_id,
-                destination,
-                content: Bytes::copy_from_slice(message.as_bytes()),
-            })
-            .await??;
-        }
-        ControlCommand::RecvMsg { skt_id: socket_id } => {
-            match link.recv_message(socket_id.clone()).await? {
-                Ok((msg, src)) => println!("{:?} from {}", msg, src),
-                Err(e) => println!("error receiving message: {e}"),
-            }
-        }
         ControlCommand::GlobalRpc {
             id,
             dest: destination,
@@ -271,8 +235,6 @@ pub async fn main_control(
             ChatCommand::SendClient { dest, msg } => link.send_client_chat_msg(dest, msg).await??,
             ChatCommand::SendRelay { dest, msg } => link.send_relay_chat_msg(dest, msg).await??,
         },
-        ControlCommand::BindN2rRelay { skt_id: _, dock: _ } => todo!(),
-        ControlCommand::BindN2rClient { skt_id: _, dock: _ } => todo!(),
     }
     Ok(())
 }
@@ -351,16 +313,7 @@ pub trait ControlProtocol {
         rendezvous_point: Option<RelayFingerprint>,
     );
 
-    async fn skt_info(&self, skt_id: String) -> Result<RelayEndpoint, ControlProtErr>;
-
     async fn havens_info(&self) -> Vec<(String, String)>;
-
-    async fn send_message(&self, args: SendMessageArgs) -> Result<(), ControlProtErr>;
-
-    async fn recv_message(
-        &self,
-        socket_id: String,
-    ) -> Result<(Bytes, RelayEndpoint), ControlProtErr>;
 
     async fn send_global_rpc(
         &self,
@@ -427,16 +380,6 @@ pub enum DhtError {
     VerifyFailed,
     #[error("network failed: {0}")]
     NetworkFailure(String),
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize)]
-pub struct SendMessageArgs {
-    pub socket_id: String,
-    #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub destination: RelayEndpoint,
-    #[serde_as(as = "serde_with::base64::Base64")]
-    pub content: Bytes,
 }
 
 #[serde_as]

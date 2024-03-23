@@ -9,8 +9,8 @@ use stdcode::StdcodeSerializeExt;
 use crate::{
     control_protocol::DhtError,
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
-    haven_util::HavenLocator,
-    socket::n2r_socket::N2rClientSocket,
+    haven::HavenLocator,
+    n2r_socket::N2rClientSocket,
 };
 
 use crate::context::{CtxField, DaemonContext, RELAY_GRAPH};

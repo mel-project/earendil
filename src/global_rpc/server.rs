@@ -6,9 +6,9 @@ use moka::sync::Cache;
 use crate::{
     context::{CtxField, DaemonContext},
     control_protocol::DhtError,
-    daemon::dht::{dht_get, dht_insert},
-    haven_util::{HavenLocator, RegisterHavenReq},
-    socket::n2r_socket::N2rClientSocket,
+    dht::{dht_get, dht_insert},
+    haven::{HavenLocator, RegisterHavenReq},
+    n2r_socket::N2rClientSocket,
 };
 use earendil_crypt::{AnonEndpoint, HavenFingerprint, VerifyError};
 
@@ -64,7 +64,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             return Ok(Some(val));
         } else if recurse {
             tracing::debug!("searching DHT for {key}");
-            return dht_get(&self.ctx, key, self.n2r_skt.clone()).await;
+            return dht_get(&self.ctx, key, &self.n2r_skt).await;
         }
         Ok(None)
     }

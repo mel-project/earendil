@@ -2,10 +2,6 @@ mod control_protocol_impl;
 
 mod inout_route;
 mod link;
-mod socks5;
-mod tcp_forward;
-mod udp_forward;
-
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
@@ -14,7 +10,6 @@ use earendil_packet::ForwardInstruction;
 
 use earendil_topology::{IdentityDescriptor, RelayGraph};
 use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
-use moka::sync::Cache;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 
@@ -31,17 +26,17 @@ use std::{sync::Arc, time::Duration};
 use crate::{
     context::MY_CLIENT_ID,
     daemon::inout_route::{dial_out_route, listen_in_route},
+    haven::rendezvous_forward_loop,
+    n2r_socket::{n2r_socket_shuttle, N2rClientSocket},
 };
-use crate::{context::MY_RELAY_IDENTITY, socket::n2r_socket_shuttle};
+use crate::{context::MY_RELAY_IDENTITY, n2r_socket::N2rRelaySocket};
 
 use crate::control_protocol::ControlClient;
-use crate::daemon::socks5::socks5_loop;
-use crate::daemon::tcp_forward::tcp_forward_loop;
 use crate::db::db_write;
 
 use crate::control_protocol::ControlService;
-use crate::socket::n2r_socket::{N2rClientSocket, N2rRelaySocket};
-use crate::socket::HavenEndpoint;
+use crate::log_error;
+
 use crate::{
     config::ConfigFile,
     context::{MY_RELAY_ONION_SK, RELAY_GRAPH},
@@ -49,13 +44,6 @@ use crate::{
 };
 use crate::{context::DaemonContext, global_rpc::server::GlobalRpcImpl};
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
-use crate::{daemon::udp_forward::udp_forward_loop, log_error};
-use crate::{
-    global_rpc::server::REGISTERED_HAVENS,
-    haven_util::{haven_loop, HAVEN_FORWARD_DOCK},
-};
-
-pub use self::control_protocol_impl::ControlProtErr;
 
 use self::control_protocol_impl::ControlProtocolImpl;
 
@@ -90,6 +78,10 @@ impl Daemon {
 
     pub async fn wait_until_dead(self) -> anyhow::Error {
         self._task.await.unwrap_err()
+    }
+
+    pub fn ctx(&self) -> DaemonContext {
+        self.ctx.clone()
     }
 }
 
@@ -190,62 +182,6 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             .map_err(log_error("n2r_socket_shuttle"))),
     );
 
-    let _haven_loops: Vec<Immortal> = ctx
-        .init()
-        .havens
-        .clone()
-        .into_iter()
-        .map(|cfg| {
-            Immortal::respawn(
-                RespawnStrategy::Immediate,
-                clone!([ctx], move || haven_loop(ctx.clone(), cfg.clone())
-                    .map_err(log_error("haven_forward_loop"))),
-            )
-        })
-        .collect();
-
-    // app-level traffic tasks/processes
-    let _udp_forward_loops: Vec<Immortal> = ctx
-        .init()
-        .udp_forwards
-        .clone()
-        .into_iter()
-        .map(|udp_fwd_cfg| {
-            Immortal::respawn(
-                RespawnStrategy::Immediate,
-                clone!([ctx], move || udp_forward_loop(
-                    ctx.clone(),
-                    udp_fwd_cfg.clone()
-                )
-                .map_err(log_error("udp_forward_loop"))),
-            )
-        })
-        .collect();
-
-    let _tcp_forward_loops: Vec<Immortal> = ctx
-        .init()
-        .tcp_forwards
-        .clone()
-        .into_iter()
-        .map(|tcp_fwd_cfg| {
-            Immortal::respawn(
-                RespawnStrategy::Immediate,
-                clone!([ctx], move || tcp_forward_loop(
-                    ctx.clone(),
-                    tcp_fwd_cfg.clone()
-                )
-                .map_err(log_error("tcp_forward_loop"))),
-            )
-        })
-        .collect();
-
-    let _socks5_loop = ctx.init().socks5.map(|config| {
-        Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || socks5_loop(ctx.clone(), config)),
-        )
-    });
-
     nursery!({
         let mut route_tasks = FuturesUnordered::new();
 
@@ -323,53 +259,6 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             .detach();
         }
     })
-}
-
-#[instrument(skip(ctx))]
-/// Loop that listens to and handles incoming haven forwarding requests
-async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let socket = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(HAVEN_FORWARD_DOCK))?);
-    let cache: Cache<AnonEndpoint, HavenEndpoint> = Cache::builder()
-        .max_capacity(100_000)
-        .time_to_idle(Duration::from_secs(60 * 60))
-        .build();
-
-    loop {
-        if let Ok((msg, src_ep)) = socket.recv_from().await {
-            let ctx = ctx.clone();
-            let src_is_client = ctx.get(REGISTERED_HAVENS).get_by_key(&src_ep).is_none();
-
-            if src_is_client {
-                let (inner, dest_ep): (Bytes, HavenEndpoint) = stdcode::deserialize(&msg)?;
-
-                if let Some(haven_anon_id) = ctx
-                    .get(REGISTERED_HAVENS)
-                    .get_by_value(&dest_ep.fingerprint)
-                {
-                    tracing::debug!(
-                        "received forward msg, from {}, to {}",
-                        src_ep,
-                        haven_anon_id
-                    );
-
-                    let body: Bytes = (inner, src_ep).stdcode().into();
-
-                    cache.insert(src_ep, dest_ep);
-                    socket.send_to(body, haven_anon_id).await?;
-                } else {
-                    tracing::warn!("haven {} is not registered with me!", dest_ep.fingerprint);
-                }
-            } else {
-                let (inner, dest_ep): (Bytes, AnonEndpoint) = stdcode::deserialize(&msg)?;
-                tracing::trace!("received forward msg, from {}, to {}", src_ep, dest_ep);
-
-                if let Some(haven) = cache.get(&dest_ep) {
-                    let body: Bytes = (inner, haven).stdcode().into();
-                    socket.send_to(body, dest_ep).await?;
-                }
-            }
-        };
-    }
 }
 
 fn route_to_instructs(

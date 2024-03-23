@@ -2,8 +2,10 @@ use std::time::Duration;
 
 use anyhow::Context;
 use bytes::Bytes;
-use earendil::socket::Socket;
-use earendil_crypt::HavenIdentitySecret;
+
+use earendil::{HavenConnection, HavenEndpoint, HavenListener, N2rClientSocket, N2rRelaySocket};
+use earendil_crypt::{AnonEndpoint, HavenIdentitySecret};
+
 use smol::Timer;
 use smol_timeout::TimeoutExt;
 use tracing_test::traced_test;
@@ -19,9 +21,9 @@ fn n2r() {
     let (mut relays, _clients) = helpers::spawn_network(5, 0, Some(seed)).unwrap();
     smolscale::block_on(async move {
         let alice = relays.pop().unwrap();
-        let alice_skt = Socket::bind_n2r_client(&alice).await.unwrap();
+        let alice_skt = N2rClientSocket::bind(alice.ctx(), AnonEndpoint::new()).unwrap();
         let bob = relays.pop().unwrap();
-        let bob_skt = Socket::bind_n2r_relay(&bob, None).await.unwrap();
+        let bob_skt = N2rRelaySocket::bind(bob.ctx(), None).unwrap();
 
         helpers::sleep(10).await;
 
@@ -81,69 +83,42 @@ fn haven() {
         //     tracing::debug!("{graph}");
         // }
 
-        //
-
-        let alice = clients.pop().unwrap();
-
-        let alice_anon_isk = HavenIdentitySecret::generate();
-        let alice_skt = Socket::bind_haven(&alice, alice_anon_isk, None, None)
-            .await
-            .unwrap();
-        let alice_anon_fp = alice_skt.local_endpoint();
-
+        // bob
         let bob = relays.pop().unwrap();
-        let bob_haven_isk = HavenIdentitySecret::generate();
-        let bob_skt = Socket::bind_haven(
-            &bob,
-            bob_haven_isk,
-            None,
-            Some(
-                relays
-                    .last()
-                    .unwrap()
-                    .identity()
-                    .unwrap()
-                    .public()
-                    .fingerprint(),
-            ),
+        let bob_haven_id = HavenIdentitySecret::generate();
+        let bob_haven_port = 1234;
+        let rendezvous = relays
+            .last()
+            .unwrap()
+            .identity()
+            .unwrap()
+            .public()
+            .fingerprint();
+        let bob_listener =
+            HavenListener::bind(&bob.ctx(), bob_haven_id, bob_haven_port, rendezvous)
+                .await
+                .unwrap();
+        let bob_conn = bob_listener.accept().await.unwrap();
+        // alice
+        let alice = clients.pop().unwrap();
+        let alice_conn = HavenConnection::connect(
+            &alice.ctx(),
+            HavenEndpoint::new(bob_haven_id.public().fingerprint(), bob_haven_port),
         )
         .await
         .unwrap();
-        let bob_haven_fp = bob_skt.local_endpoint();
 
+        // talk
         let to_bob = b"hello bobert";
         let to_alice = b"hey there, allison";
 
-        helpers::sleep(10).await;
-
-        alice_skt
-            .send_to(Bytes::copy_from_slice(to_bob), bob_haven_fp)
-            .await
-            .unwrap();
-
-        let (from_alice, _) = bob_skt
-            .recv_from()
-            .timeout(Duration::from_secs(10))
-            .await
-            .unwrap()
-            .unwrap();
+        alice_conn.send(to_bob).await.unwrap();
         Timer::after(Duration::from_millis(100)).await;
-        assert_eq!(from_alice.as_ref(), to_bob);
+        let from_alice = bob_conn.recv().await.unwrap();
+        assert_eq!(to_bob, from_alice.as_ref());
 
-        bob_skt
-            .send_to(Bytes::copy_from_slice(to_alice), alice_anon_fp)
-            .timeout(Duration::from_secs(10))
-            .await
-            .unwrap()
-            .unwrap();
-
-        let (from_bob, _) = alice_skt
-            .recv_from()
-            .timeout(Duration::from_secs(20))
-            .await
-            .unwrap()
-            .unwrap();
-
+        bob_conn.send(to_alice).await.unwrap();
+        let from_bob = alice_conn.recv().await.unwrap();
         assert_eq!(from_bob.as_ref(), to_alice);
     });
 }

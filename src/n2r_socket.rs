@@ -1,21 +1,55 @@
-use std::sync::Arc;
-
+use std::{
+    fmt::{self, Display, Formatter},
+    str::FromStr,
+    sync::Arc,
+};
+mod queues;
 use anyhow::Context;
 use bytes::Bytes;
 
-use earendil_crypt::AnonEndpoint;
+use earendil_crypt::{AnonEndpoint, RelayFingerprint};
 use earendil_packet::Dock;
+use serde::{Deserialize, Serialize};
+use smol::future::FutureExt as _;
 
 use crate::{
     context::{DaemonContext, MY_RELAY_IDENTITY},
     n2r,
-    socket::SocketRecvError,
 };
 
-use super::{
-    queues::{new_client_queue, new_relay_queue, QueueReceiver},
-    RelayEndpoint,
-};
+use self::queues::{new_client_queue, new_relay_queue, QueueReceiver};
+
+#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct RelayEndpoint {
+    pub fingerprint: RelayFingerprint,
+    pub dock: Dock,
+}
+
+impl RelayEndpoint {
+    pub fn new(fingerprint: RelayFingerprint, dock: Dock) -> Self {
+        Self { fingerprint, dock }
+    }
+}
+
+impl Display for RelayEndpoint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.fingerprint, self.dock)
+    }
+}
+
+impl FromStr for RelayEndpoint {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() != 2 {
+            return Err(anyhow::anyhow!("invalid relay endpoint format"));
+        }
+        let fingerprint = RelayFingerprint::from_str(parts[0])?;
+        let dock = Dock::from_str(parts[1])?;
+        Ok(RelayEndpoint::new(fingerprint, dock))
+    }
+}
 
 #[derive(Clone)]
 pub struct N2rRelaySocket {
@@ -54,10 +88,7 @@ impl N2rRelaySocket {
     }
 
     pub async fn recv_from(&self) -> anyhow::Result<(Bytes, AnonEndpoint)> {
-        let (message, source) = self.recv_incoming.recv().await.map_err(|e| {
-            tracing::debug!("N2rSocket RecvError: {e}");
-            SocketRecvError::N2rRecvError
-        })?;
+        let (message, source) = self.recv_incoming.recv().await?;
 
         Ok((message, source))
     }
@@ -106,10 +137,7 @@ impl N2rClientSocket {
     }
 
     pub async fn recv_from(&self) -> anyhow::Result<(Bytes, RelayEndpoint)> {
-        let (message, source) = self.recv_incoming.recv().await.map_err(|e| {
-            tracing::debug!("N2rSocket RecvError: {e}");
-            SocketRecvError::N2rRecvError
-        })?;
+        let (message, source) = self.recv_incoming.recv().await?;
 
         Ok((message, source))
     }
@@ -117,4 +145,31 @@ impl N2rClientSocket {
     pub fn local_endpoint(&self) -> AnonEndpoint {
         self.endpoint
     }
+}
+
+#[tracing::instrument(skip(ctx))]
+pub async fn n2r_socket_shuttle(ctx: DaemonContext) -> anyhow::Result<()> {
+    async {
+        loop {
+            let (msg_body, src_relay_ep, dst_anon_ep) = n2r::read_backward(&ctx).await?;
+            tracing::debug!(
+                src_relay_ep = debug(src_relay_ep),
+                dst_anon_ep = debug(dst_anon_ep),
+                "shuttling a backward msg"
+            );
+            queues::fwd_to_client_queue(&ctx, msg_body, src_relay_ep, dst_anon_ep)?;
+        }
+    }
+    .race(async {
+        loop {
+            let (msg_body, src_anon_ep, dst_dock) = n2r::read_forward(&ctx).await?;
+            tracing::debug!(
+                src_anon_ep = debug(src_anon_ep),
+                dst_dock = debug(dst_dock),
+                "shuttling a forward msg"
+            );
+            queues::fwd_to_relay_queue(&ctx, msg_body, src_anon_ep, dst_dock)?;
+        }
+    })
+    .await
 }

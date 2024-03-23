@@ -1,10 +1,10 @@
 use anyhow::Context;
 use bip39::Mnemonic;
 use clap::{Parser, Subcommand};
-use earendil::commands::ControlCommand;
-use earendil::config::ConfigFile;
-use earendil::control_protocol::main_control;
-use earendil::daemon::Daemon;
+use earendil::main_control;
+use earendil::ConfigFile;
+use earendil::ControlCommand;
+use earendil::Daemon;
 use std::{net::SocketAddr, path::PathBuf};
 
 use tracing_subscriber::prelude::*;

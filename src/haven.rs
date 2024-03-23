@@ -2,34 +2,151 @@ mod listen;
 mod visitor;
 mod vrh;
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    fmt::{self, Display, Formatter},
+    str::FromStr,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use crate::socket::n2r_socket::N2rClientSocket;
-use crate::socket::HavenEndpoint;
-use crate::socket::RelayEndpoint;
 use crate::{context::DaemonContext, dht::dht_get};
+use crate::{global_rpc::server::REGISTERED_HAVENS, n2r_socket::N2rClientSocket};
+use crate::{haven::vrh::H2rMessage, n2r_socket::RelayEndpoint};
+use crate::{haven::vrh::R2hMessage, n2r_socket::N2rRelaySocket};
 use anyhow::Context as _;
 use bytes::Bytes;
-use earendil_crypt::AnonEndpoint;
+use earendil_crypt::{AnonEndpoint, HavenFingerprint, HavenIdentityPublic};
 use earendil_crypt::{HavenIdentitySecret, RelayFingerprint};
-use earendil_packet::crypt::AeadKey;
 use earendil_packet::crypt::DhSecret;
-use serde::Deserialize;
-use serde::Serialize;
+use earendil_packet::crypt::{AeadKey, DhPublic};
+
+use serde::{Deserialize, Serialize};
 use smol::{
     channel::{Receiver, Sender},
     Task,
 };
 use stdcode::StdcodeSerializeExt;
 use tap::Tap;
+use tracing::instrument;
 
 use self::{
     listen::listen_loop,
     visitor::visitor_loop,
-    vrh::{HavenHandshake, HavenMsg, V2rMessage, VisitorHandshake},
+    vrh::{HavenMsg, V2rMessage, VisitorHandshake},
 };
 
+#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct HavenEndpoint {
+    pub fingerprint: HavenFingerprint,
+    pub port: u16,
+}
+
+impl HavenEndpoint {
+    pub fn new(fingerprint: HavenFingerprint, port: u16) -> Self {
+        Self { fingerprint, port }
+    }
+}
+
+impl Display for HavenEndpoint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.fingerprint, self.port)
+    }
+}
+
+impl FromStr for HavenEndpoint {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() != 2 {
+            return Err(anyhow::anyhow!("invalid haven endpoint format"));
+        }
+        let fingerprint = HavenFingerprint::from_str(parts[0])?;
+        let port = u16::from_str(parts[1])?;
+        Ok(HavenEndpoint::new(fingerprint, port))
+    }
+}
+
 const HAVEN_FORWARD_DOCK: u32 = 100002;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct HavenLocator {
+    pub identity_pk: HavenIdentityPublic,
+    pub onion_pk: DhPublic,
+    pub rendezvous_point: RelayFingerprint,
+    pub signature: Bytes,
+}
+
+impl HavenLocator {
+    pub fn new(
+        identity_sk: HavenIdentitySecret,
+        onion_pk: DhPublic,
+        rendezvous_fingerprint: RelayFingerprint,
+    ) -> HavenLocator {
+        let identity_pk = identity_sk.public();
+        let locator = HavenLocator {
+            identity_pk,
+            onion_pk,
+            rendezvous_point: rendezvous_fingerprint,
+            signature: Bytes::new(),
+        };
+        let signature = identity_sk.sign(&locator.to_sign());
+
+        HavenLocator {
+            identity_pk,
+            onion_pk,
+            rendezvous_point: rendezvous_fingerprint,
+            signature,
+        }
+    }
+
+    pub fn to_sign(&self) -> [u8; 32] {
+        let locator = HavenLocator {
+            identity_pk: self.identity_pk,
+            onion_pk: self.onion_pk,
+            rendezvous_point: self.rendezvous_point,
+            signature: Bytes::new(),
+        };
+        let hash = blake3::keyed_hash(b"haven_locator___________________", &locator.stdcode());
+
+        *hash.as_bytes()
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RegisterHavenReq {
+    pub anon_id: AnonEndpoint,
+    pub identity_pk: HavenIdentityPublic,
+    pub port: u16,
+    pub sig: Bytes,
+    pub unix_timestamp: u64,
+}
+
+impl RegisterHavenReq {
+    pub fn new(my_anon_id: AnonEndpoint, identity_sk: HavenIdentitySecret, port: u16) -> Self {
+        let mut reg = Self {
+            anon_id: my_anon_id,
+            identity_pk: identity_sk.public(),
+            port,
+            sig: Bytes::new(),
+            unix_timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+        reg.sig = identity_sk.sign(reg.to_sign().as_bytes());
+        reg
+    }
+
+    pub fn to_sign(&self) -> blake3::Hash {
+        let mut this = self.clone();
+        this.sig = Bytes::new();
+        blake3::keyed_hash(b"haven_registration______________", &this.stdcode())
+    }
+}
 
 const HAVEN_UP: &[u8] = b"haven-up";
 const HAVEN_DN: &[u8] = b"haven-dn";
@@ -71,7 +188,7 @@ pub struct HavenConnection {
     enc_key: AeadKey,
     enc_nonce: AtomicU64,
     dec_key: AeadKey,
-    dec_nonce: AtomicU64,
+
     // some way of sending packets to the other side (e.g. the sending end of a channel, or a boxed closure)
     // some way of receiving packets from the other side (e.g. the receiving end of a channel, or a boxed closure)
     // these channels are provided by whoever constructs this connection:
@@ -96,23 +213,27 @@ impl HavenConnection {
 
         // do the handshake to the other side over N2R
         let my_esk = DhSecret::generate();
-        let handshake = V2rMessage {
+        let my_hs = V2rMessage {
             dest_haven,
             payload: HavenMsg::VisitorHs(VisitorHandshake(my_esk.public())),
         };
         n2r_skt
-            .send_to(handshake.stdcode().into(), rendezvous_ep)
+            .send_to(my_hs.stdcode().into(), rendezvous_ep)
             .await?;
         // they sign their ephemeral public key
-        let server_hs: HavenHandshake = stdcode::deserialize(&n2r_skt.recv_from().await?.0)?;
-        server_hs
+        let their_hs: HavenMsg = stdcode::deserialize(&n2r_skt.recv_from().await?.0)?;
+        let their_hs = match their_hs {
+            HavenMsg::HavenHs(server_hs) => server_hs,
+            _ => anyhow::bail!("haven sent us something other than a haven handshake"),
+        };
+        their_hs
             .id_pk
-            .verify(server_hs.eph_pk.as_bytes(), &server_hs.sig)?;
-        if server_hs.id_pk.fingerprint() != dest_haven.fingerprint {
+            .verify(their_hs.eph_pk.as_bytes(), &their_hs.sig)?;
+        if their_hs.id_pk.fingerprint() != dest_haven.fingerprint {
             anyhow::bail!("haven public key verification failed")
         }
 
-        let shared_sec = my_esk.shared_secret(&server_hs.eph_pk);
+        let shared_sec = my_esk.shared_secret(&their_hs.eph_pk);
         let up_key = AeadKey::from_bytes(
             blake3::keyed_hash(blake3::hash(HAVEN_UP).as_bytes(), &shared_sec).as_bytes(),
         );
@@ -128,35 +249,88 @@ impl HavenConnection {
             enc_key: up_key,
             enc_nonce: AtomicU64::new(0),
             dec_key: down_key,
-            dec_nonce: AtomicU64::new(0),
+
             send_upstream,
             recv_downstream,
 
             _task: smolscale::spawn(visitor_loop(
-                ctx.clone(),
                 send_downstream,
                 recv_upstream,
                 locator.rendezvous_point,
                 dest_haven,
+                n2r_skt,
             )),
         })
     }
 
     pub async fn send(&self, bts: &[u8]) -> anyhow::Result<()> {
-        let nonce = [0; 12].tap_mut(|b| {
-            b[..8].copy_from_slice(&self.enc_nonce.fetch_add(1, Ordering::SeqCst).to_le_bytes())
-        });
-        let ctext = self.enc_key.seal(&nonce, bts);
-        self.send_upstream.send(ctext.into()).await?;
+        let nonce = self.enc_nonce.fetch_add(1, Ordering::SeqCst);
+        let nonce_bts = [0; 12].tap_mut(|b| b[..8].copy_from_slice(&nonce.to_le_bytes()));
+        let ctext = self.enc_key.seal(&nonce_bts, bts);
+        self.send_upstream
+            .send((nonce, ctext).stdcode().into())
+            .await?;
         Ok(())
     }
 
     pub async fn recv(&self) -> anyhow::Result<Bytes> {
         let ctext = self.recv_downstream.recv().await?;
-        let nonce = [0; 12].tap_mut(|b| {
-            b[..8].copy_from_slice(&self.dec_nonce.fetch_add(1, Ordering::SeqCst).to_le_bytes())
-        });
-        let ptext = self.dec_key.open(&nonce, &ctext)?;
+        let (nonce, ctext): (u64, Vec<u8>) = stdcode::deserialize(&ctext)?;
+        // TODO TODO replay protection by preventing the nonce from repeating
+        let nonce_bts = [0; 12].tap_mut(|b| b[..8].copy_from_slice(&nonce.to_le_bytes()));
+        let ptext = self.dec_key.open(&nonce_bts, &ctext)?;
         Ok(ptext.into())
+    }
+}
+
+#[instrument(skip(ctx))]
+/// Loop that listens to and handles incoming haven forwarding requests
+pub async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
+    let socket = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(HAVEN_FORWARD_DOCK))?);
+
+    loop {
+        if let Ok((msg, src_ep)) = socket.recv_from().await {
+            let ctx = ctx.clone();
+            let src_is_visitor = ctx.get(REGISTERED_HAVENS).get_by_key(&src_ep).is_none();
+            if src_is_visitor {
+                let inner: V2rMessage = stdcode::deserialize(&msg)?;
+
+                if let Some(haven_anon_ep) = ctx
+                    .get(REGISTERED_HAVENS)
+                    .get_by_value(&inner.dest_haven.fingerprint)
+                {
+                    tracing::debug!(
+                        "received forward msg, from {}, to {}",
+                        src_ep,
+                        haven_anon_ep
+                    );
+
+                    let body: Bytes = R2hMessage {
+                        src_visitor: src_ep,
+
+                        payload: inner.payload,
+                    }
+                    .stdcode()
+                    .into();
+
+                    socket.send_to(body, haven_anon_ep).await?;
+                } else {
+                    tracing::warn!(
+                        "haven {} is not registered with me!",
+                        inner.dest_haven.fingerprint
+                    );
+                }
+            } else {
+                // src is haven
+                let inner: H2rMessage = stdcode::deserialize(&msg)?;
+                tracing::trace!(
+                    "received forward msg, from {}, to {}",
+                    src_ep,
+                    inner.dest_visitor
+                );
+                let body: Bytes = inner.payload.stdcode().into();
+                socket.send_to(body, inner.dest_visitor).await?;
+            }
+        };
     }
 }

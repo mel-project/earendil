@@ -3,7 +3,7 @@ use earendil_crypt::{AnonEndpoint, HavenIdentityPublic};
 use earendil_packet::crypt::DhPublic;
 use serde::{Deserialize, Serialize};
 
-use crate::socket::HavenEndpoint;
+use super::HavenEndpoint;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct V2rMessage {

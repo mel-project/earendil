@@ -15,19 +15,18 @@ use crate::{
     context::DaemonContext,
     dht::dht_insert,
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
-    haven_util::{HavenLocator, RegisterHavenReq},
-    socket::{haven_socket::Port, n2r_socket::N2rClientSocket, RelayEndpoint},
+    n2r_socket::{N2rClientSocket, RelayEndpoint},
 };
 
 use super::{
     vrh::{H2rMessage, HavenMsg, R2hMessage},
-    HavenConnection, HAVEN_DN, HAVEN_FORWARD_DOCK, HAVEN_UP,
+    HavenConnection, HavenLocator, RegisterHavenReq, HAVEN_DN, HAVEN_FORWARD_DOCK, HAVEN_UP,
 };
 
 pub async fn listen_loop(
     ctx: DaemonContext,
     identity: HavenIdentitySecret,
-    port: Port,
+    port: u16,
     rendezvous: RelayFingerprint,
     send_accepted: Sender<HavenConnection>,
 ) -> anyhow::Result<()> {
@@ -43,13 +42,13 @@ pub async fn listen_loop(
 async fn register_haven(
     ctx: &DaemonContext,
     identity: HavenIdentitySecret,
-    port: Port,
+    port: u16,
     rendezvous: RelayFingerprint,
     n2r_socket: N2rClientSocket,
 ) -> anyhow::Result<()> {
     let esk = DhSecret::generate();
     let epk = esk.public();
-    let forward_req = RegisterHavenReq::new(n2r_socket.local_endpoint().clone(), identity, port);
+    let forward_req = RegisterHavenReq::new(n2r_socket.local_endpoint(), identity, port);
     let gclient = GlobalRpcClient(GlobalRpcTransport::new(
         ctx.clone(),
         rendezvous,
@@ -139,7 +138,7 @@ async fn haven_demultiplex(
                     enc_key: down_key,
                     enc_nonce: AtomicU64::new(0),
                     dec_key: up_key,
-                    dec_nonce: AtomicU64::new(0),
+
                     send_upstream,
                     recv_downstream,
                     _task: smolscale::spawn(per_conn_loop(

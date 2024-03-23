@@ -9,8 +9,7 @@ use std::{
 };
 
 use earendil::{
-    config::{ConfigFile, Identity, InRouteConfig, LinkPrice, ObfsConfig, OutRouteConfig},
-    daemon::Daemon,
+    Daemon, {ConfigFile, Identity, InRouteConfig, LinkPrice, ObfsConfig, OutRouteConfig},
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use smol::Timer;

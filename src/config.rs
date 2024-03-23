@@ -8,7 +8,7 @@ use serde_with::serde_as;
 use std::fs::OpenOptions;
 use tracing::instrument;
 
-use crate::socket::HavenEndpoint;
+use crate::haven::HavenEndpoint;
 
 /// A YAML-serializable configuration file
 #[derive(Serialize, Deserialize, Clone)]
