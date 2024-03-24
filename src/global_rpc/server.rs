@@ -44,7 +44,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         let key = locator.identity_pk.fingerprint();
 
         if recurse {
-            dht_insert(&self.ctx, locator, self.n2r_skt.clone()).await
+            dht_insert(&self.ctx, locator, &self.n2r_skt).await
         } else {
             locator
                 .identity_pk

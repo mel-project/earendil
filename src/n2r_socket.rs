@@ -136,6 +136,11 @@ impl N2rClientSocket {
         Ok(())
     }
 
+    pub async fn supply_reply_blocks(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
+        n2r::replenish_remote_rb(&self.ctx, self.endpoint, fingerprint).await?;
+        Ok(())
+    }
+
     pub async fn recv_from(&self) -> anyhow::Result<(Bytes, RelayEndpoint)> {
         let (message, source) = self.recv_incoming.recv().await?;
 

@@ -6,7 +6,7 @@ use bytes::Bytes;
 use earendil::{HavenConnection, HavenEndpoint, HavenListener, N2rClientSocket, N2rRelaySocket};
 use earendil_crypt::{AnonEndpoint, HavenIdentitySecret};
 
-use smol::Timer;
+use smol::{future::FutureExt as _, Timer};
 use smol_timeout::TimeoutExt;
 use tracing_test::traced_test;
 
@@ -98,29 +98,30 @@ fn haven() {
                 .await
                 .unwrap();
         eprintln!("BOB BOUND");
-        helpers::sleep(15).await;
 
-        let bob_conn = bob_listener.accept().await.unwrap();
-        // alice
-        let alice = clients.pop().unwrap();
-        let alice_conn = HavenConnection::connect(
-            &alice.ctx(),
-            HavenEndpoint::new(bob_haven_id.public().fingerprint(), bob_haven_port),
-        )
-        .await
-        .unwrap();
-
-        // talk
-        let to_bob = b"hello bobert";
         let to_alice = b"hey there, allison";
+        let to_bob = b"hello bobert";
 
-        alice_conn.send(to_bob).await.unwrap();
-        Timer::after(Duration::from_millis(100)).await;
-        let from_alice = bob_conn.recv().await.unwrap();
-        assert_eq!(to_bob, from_alice.as_ref());
+        let bob_process = async {
+            let bob_conn = bob_listener.accept().await.unwrap();
+            bob_conn.send(to_alice).await.unwrap();
+            let from_alice = bob_conn.recv().await.unwrap();
+            assert_eq!(to_bob, from_alice.as_ref());
+        };
+        let alice_process = async {
+            smol::Timer::after(Duration::from_secs(5)).await;
+            let alice = clients.pop().unwrap();
+            let alice_conn = HavenConnection::connect(
+                &alice.ctx(),
+                HavenEndpoint::new(bob_haven_id.public().fingerprint(), bob_haven_port),
+            )
+            .await
+            .unwrap();
+            alice_conn.send(to_bob).await.unwrap();
+            let from_bob = alice_conn.recv().await.unwrap();
+            assert_eq!(from_bob.as_ref(), to_alice);
+        };
 
-        bob_conn.send(to_alice).await.unwrap();
-        let from_bob = alice_conn.recv().await.unwrap();
-        assert_eq!(from_bob.as_ref(), to_alice);
+        bob_process.race(alice_process).await
     });
 }

@@ -2,6 +2,8 @@ mod anon_dest;
 mod delay_queue;
 mod remote_rb;
 
+pub use remote_rb::replenish_remote_rb;
+
 use std::time::Instant;
 
 use anyhow::Context;
@@ -15,7 +17,7 @@ use smol::channel::{Receiver, Sender};
 
 use crate::{
     context::{CtxField, DaemonContext, MY_RELAY_IDENTITY, RELAY_GRAPH},
-    n2r::{anon_dest::ANON_DESTS, remote_rb::replenish_remote_rb},
+    n2r::anon_dest::ANON_DESTS,
     n2r_socket::RelayEndpoint,
     network::send_raw,
 };

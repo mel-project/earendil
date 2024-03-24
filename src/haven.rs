@@ -203,12 +203,17 @@ pub struct HavenConnection {
 impl HavenConnection {
     /// Establish a connection to the given haven endpoint.
     pub async fn connect(ctx: &DaemonContext, dest_haven: HavenEndpoint) -> anyhow::Result<Self> {
-        let n2r_skt = N2rClientSocket::bind(ctx.clone(), AnonEndpoint::new())?;
         // lookup the haven info using the dht
-        let locator = dht_get(ctx, dest_haven.fingerprint, &n2r_skt)
-            .await
-            .context("dht_get failed")?
-            .context("haven not found in DHT")?;
+        let locator = dht_get(
+            ctx,
+            dest_haven.fingerprint,
+            &N2rClientSocket::bind(ctx.clone(), AnonEndpoint::new())?,
+        )
+        .await
+        .context("dht_get failed")?
+        .context("haven not found in DHT")?;
+
+        let n2r_skt = N2rClientSocket::bind(ctx.clone(), AnonEndpoint::new())?;
         let rendezvous_ep = RelayEndpoint::new(locator.rendezvous_point, HAVEN_FORWARD_DOCK);
 
         // do the handshake to the other side over N2R
@@ -221,10 +226,21 @@ impl HavenConnection {
             .send_to(my_hs.stdcode().into(), rendezvous_ep)
             .await?;
         // they sign their ephemeral public key
-        let their_hs: HavenMsg = stdcode::deserialize(&n2r_skt.recv_from().await?.0)?;
+        let (their_hs, addr) = n2r_skt.recv_from().await?;
+        tracing::debug!(
+            their_hs_len = their_hs.len(),
+            addr = debug(addr),
+            my_endpoint = debug(n2r_skt.local_endpoint()),
+            "received their_hs"
+        );
+        let their_hs: HavenMsg =
+            stdcode::deserialize(&their_hs).context("deserialization of haven handshake failed")?;
         let their_hs = match their_hs {
             HavenMsg::HavenHs(server_hs) => server_hs,
-            _ => anyhow::bail!("haven sent us something other than a haven handshake"),
+            x => anyhow::bail!(
+                "haven sent us something other than a haven handshake: {:?}",
+                x
+            ),
         };
         their_hs
             .id_pk
@@ -299,7 +315,11 @@ pub async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     .get(REGISTERED_HAVENS)
                     .get_by_value(&inner.dest_haven.fingerprint)
                 {
-                    tracing::debug!("received V2R msg, from {}, to {}", src_ep, haven_anon_ep);
+                    tracing::debug!(
+                        src_ep = debug(src_ep),
+                        haven_anon_ep = debug(haven_anon_ep),
+                        "received V2R msg"
+                    );
 
                     let body: Bytes = R2hMessage {
                         src_visitor: src_ep,
@@ -309,6 +329,7 @@ pub async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     .stdcode()
                     .into();
 
+                    tracing::debug!(haven_anon_ep = debug(haven_anon_ep), "sending R2H");
                     socket.send_to(body, haven_anon_ep).await?;
                 } else {
                     tracing::warn!(
@@ -320,11 +341,12 @@ pub async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 // src is haven
                 let inner: H2rMessage = stdcode::deserialize(&msg)?;
                 tracing::debug!(
-                    "received H2R msg, from {}, to {}",
-                    src_ep,
-                    inner.dest_visitor
+                    src_ep = debug(src_ep),
+                    dest_visitor = debug(inner.dest_visitor),
+                    "received H2R msg",
                 );
                 let body: Bytes = inner.payload.stdcode().into();
+                tracing::debug!(dest_visitor = debug(inner.dest_visitor), "sending bare");
                 socket.send_to(body, inner.dest_visitor).await?;
             }
         };

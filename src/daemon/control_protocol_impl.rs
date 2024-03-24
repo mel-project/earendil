@@ -239,7 +239,7 @@ impl ControlProtocol for ControlProtocolImpl {
     async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError> {
         let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::new())
             .expect("failed to bind n2r client socket");
-        dht_insert(&self.ctx, locator, n2r_skt).await;
+        dht_insert(&self.ctx, locator, &n2r_skt).await;
         Ok(())
     }
 

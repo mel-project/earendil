@@ -15,6 +15,7 @@ use crate::{
     context::DaemonContext,
     dht::dht_insert,
     global_rpc::{transport::GlobalRpcTransport, GlobalRpcClient},
+    haven::vrh::HavenHandshake,
     n2r_socket::{N2rClientSocket, RelayEndpoint},
 };
 
@@ -33,9 +34,15 @@ pub async fn listen_loop(
     let anon_ep = AnonEndpoint::new();
     let n2r_socket = N2rClientSocket::bind(ctx.clone(), anon_ep)?;
     // register ourselves with rendezvous & upload info to DHT in a loop
-    let register_loop = register_haven(&ctx, identity, port, rendezvous, n2r_socket.clone());
+    let register_loop = register_haven(
+        &ctx,
+        identity,
+        port,
+        rendezvous,
+        n2r_socket.local_endpoint(),
+    );
     // start loop that demultiplexes incoming messages
-    let demultiplex_loop = haven_demultiplex(n2r_socket, rendezvous, send_accepted);
+    let demultiplex_loop = haven_demultiplex(identity, n2r_socket, rendezvous, send_accepted);
     register_loop.race(demultiplex_loop).await
 }
 
@@ -44,18 +51,18 @@ async fn register_haven(
     identity: HavenIdentitySecret,
     port: u16,
     rendezvous: RelayFingerprint,
-    n2r_socket: N2rClientSocket,
+    anon_endpoint: AnonEndpoint,
 ) -> anyhow::Result<()> {
     let esk = DhSecret::generate();
     let epk = esk.public();
-    let forward_req = RegisterHavenReq::new(n2r_socket.local_endpoint(), identity, port);
+    let forward_req = RegisterHavenReq::new(anon_endpoint, identity, port);
     let gclient = GlobalRpcClient(GlobalRpcTransport::new(
         ctx.clone(),
         rendezvous,
-        n2r_socket.clone(),
+        N2rClientSocket::bind(ctx.clone(), AnonEndpoint::new())?,
     ));
+    let dht_socket = N2rClientSocket::bind(ctx.clone(), AnonEndpoint::new())?;
     loop {
-        let n2r_socket = n2r_socket.clone();
         match gclient
             .alloc_forward(forward_req.clone())
             .timeout(Duration::from_secs(10))
@@ -78,7 +85,7 @@ async fn register_haven(
                 dht_insert(
                     &ctx,
                     HavenLocator::new(identity, epk, rendezvous),
-                    n2r_socket,
+                    &dht_socket,
                 )
                 .timeout(Duration::from_secs(30))
                 .await;
@@ -90,10 +97,14 @@ async fn register_haven(
 
 #[tracing::instrument(skip(n2r_socket, send_accepted))]
 async fn haven_demultiplex(
+    identity: HavenIdentitySecret,
     n2r_socket: N2rClientSocket,
     rendezvous: RelayFingerprint,
     send_accepted: Sender<HavenConnection>,
 ) -> anyhow::Result<()> {
+    tracing::debug!("resupply reply blocks for the rendezvous first");
+    n2r_socket.supply_reply_blocks(rendezvous).await?;
+
     let mut conn_queues: HashMap<AnonEndpoint, Sender<Bytes>> = HashMap::new();
     loop {
         // *occasionally* cleanup the conn_queue. the probability given here makes this asymptotically constant time.
@@ -149,6 +160,23 @@ async fn haven_demultiplex(
                     )),
                 };
                 conn_queues.insert(src_visitor, send_downstream);
+
+                // Finish the handshake
+                let response = H2rMessage {
+                    dest_visitor: src_visitor,
+                    payload: HavenMsg::HavenHs(HavenHandshake {
+                        id_pk: identity.public(),
+                        eph_pk: eph_sk.public(),
+                        sig: identity.sign(eph_sk.public().as_bytes()),
+                    }),
+                };
+                n2r_socket
+                    .send_to(
+                        response.stdcode().into(),
+                        RelayEndpoint::new(rendezvous, HAVEN_FORWARD_DOCK),
+                    )
+                    .await?;
+
                 send_accepted.send(conn).await?;
             }
             Ok(R2hMessage {
