@@ -41,7 +41,7 @@ parking_lot = "0.12.1"
 rand = { version = "0.8.5", features = ["alloc"] }
 nanorpc-http = "0.1.3"
 clone-macro = "0.1.0"
-moka = { version = "0.12.1", features = ["sync"] }
+moka = { version = "0.12.1", features = ["sync", "future"] }
 lru = "0.12.0"
 smol-timeout = "0.6.0"
 base64 = "0.21.5"

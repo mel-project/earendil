@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::Context;
 use bytes::Bytes;
 
-use earendil::{HavenConnection, HavenEndpoint, HavenListener, N2rClientSocket, N2rRelaySocket};
+use earendil::{HavenEndpoint, HavenListener, HavenPacketConn, N2rClientSocket, N2rRelaySocket};
 use earendil_crypt::{AnonEndpoint, HavenIdentitySecret};
 
 use smol::{future::FutureExt as _, Timer};
@@ -74,15 +74,6 @@ fn haven() {
     smolscale::block_on(async move {
         helpers::sleep(15).await;
 
-        // tracing::debug!("there are {} relays", relays.len());
-
-        // for relay in relays.iter() {
-        //     tracing::debug!("GONNA PRINT");
-        //     let graph = relay.control_client().graph_dump(false).await.unwrap();
-        //     tracing::debug!("{graph}");
-        // }
-
-        // bob
         let bob = relays.pop().unwrap();
         let bob_haven_id = HavenIdentitySecret::generate();
         let bob_haven_port = 1234;
@@ -104,21 +95,21 @@ fn haven() {
 
         let bob_process = async {
             let bob_conn = bob_listener.accept().await.unwrap();
-            bob_conn.send(to_alice).await.unwrap();
-            let from_alice = bob_conn.recv().await.unwrap();
+            bob_conn.send_pkt(to_alice).await.unwrap();
+            let from_alice = bob_conn.recv_pkt().await.unwrap();
             assert_eq!(to_bob, from_alice.as_ref());
         };
         let alice_process = async {
             smol::Timer::after(Duration::from_secs(5)).await;
             let alice = clients.pop().unwrap();
-            let alice_conn = HavenConnection::connect(
+            let alice_conn = HavenPacketConn::connect(
                 &alice.ctx(),
                 HavenEndpoint::new(bob_haven_id.public().fingerprint(), bob_haven_port),
             )
             .await
             .unwrap();
-            alice_conn.send(to_bob).await.unwrap();
-            let from_bob = alice_conn.recv().await.unwrap();
+            alice_conn.send_pkt(to_bob).await.unwrap();
+            let from_bob = alice_conn.recv_pkt().await.unwrap();
             assert_eq!(from_bob.as_ref(), to_alice);
         };
 

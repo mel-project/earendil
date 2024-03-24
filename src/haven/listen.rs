@@ -21,7 +21,7 @@ use crate::{
 
 use super::{
     vrh::{H2rMessage, HavenMsg, R2hMessage},
-    HavenConnection, HavenLocator, RegisterHavenReq, HAVEN_DN, HAVEN_FORWARD_DOCK, HAVEN_UP,
+    HavenLocator, HavenPacketConn, RegisterHavenReq, HAVEN_DN, HAVEN_FORWARD_DOCK, HAVEN_UP,
 };
 
 pub async fn listen_loop(
@@ -29,7 +29,7 @@ pub async fn listen_loop(
     identity: HavenIdentitySecret,
     port: u16,
     rendezvous: RelayFingerprint,
-    send_accepted: Sender<HavenConnection>,
+    send_accepted: Sender<HavenPacketConn>,
 ) -> anyhow::Result<()> {
     let anon_ep = AnonEndpoint::new();
     let n2r_socket = N2rClientSocket::bind(ctx.clone(), anon_ep)?;
@@ -100,7 +100,7 @@ async fn haven_demultiplex(
     identity: HavenIdentitySecret,
     n2r_socket: N2rClientSocket,
     rendezvous: RelayFingerprint,
-    send_accepted: Sender<HavenConnection>,
+    send_accepted: Sender<HavenPacketConn>,
 ) -> anyhow::Result<()> {
     tracing::debug!("resupply reply blocks for the rendezvous first");
     n2r_socket.supply_reply_blocks(rendezvous).await?;
@@ -145,7 +145,7 @@ async fn haven_demultiplex(
                 );
                 let (send_upstream, recv_upstream) = smol::channel::bounded(1000);
                 let (send_downstream, recv_downstream) = smol::channel::bounded(1000);
-                let conn = HavenConnection {
+                let conn = HavenPacketConn {
                     enc_key: down_key,
                     enc_nonce: AtomicU64::new(0),
                     dec_key: up_key,

@@ -3298,9 +3298,12 @@ version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1911e88d5831f748a4097a43862d129e3c6fca831eecac9b8db6d01d93c9de2"
 dependencies = [
+ "async-lock 2.8.0",
+ "async-trait",
  "crossbeam-channel",
  "crossbeam-epoch",
  "crossbeam-utils",
+ "futures-util",
  "once_cell",
  "parking_lot 0.12.1",
  "quanta",

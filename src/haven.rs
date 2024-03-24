@@ -151,13 +151,14 @@ impl RegisterHavenReq {
 const HAVEN_UP: &[u8] = b"haven-up";
 const HAVEN_DN: &[u8] = b"haven-dn";
 
+/// Represents a running haven, able to accept incoming [HavenPacketConn]s.
 pub struct HavenListener {
     _listen_task: Task<anyhow::Result<()>>,
-    // channel for putting all incoming ClientHandshakes
-    recv_accepted: Receiver<HavenConnection>,
+    recv_accepted: Receiver<HavenPacketConn>,
 }
 
 impl HavenListener {
+    /// Binds a new haven. The rendezvous must be specified.
     pub async fn bind(
         ctx: &DaemonContext,
         identity: HavenIdentitySecret,
@@ -178,12 +179,14 @@ impl HavenListener {
         })
     }
 
-    pub async fn accept(&self) -> anyhow::Result<HavenConnection> {
+    /// Accepts a new unreliable connection. Wrap in a [Stream] or similar if reliability is required.
+    pub async fn accept(&self) -> anyhow::Result<HavenPacketConn> {
         Ok(self.recv_accepted.recv().await?)
     }
 }
 
-pub struct HavenConnection {
+/// A low-level, best-effort visitor-haven connection.
+pub struct HavenPacketConn {
     // encryption state for this connection
     enc_key: AeadKey,
     enc_nonce: AtomicU64,
@@ -200,7 +203,7 @@ pub struct HavenConnection {
     _task: Task<anyhow::Result<()>>,
 }
 
-impl HavenConnection {
+impl HavenPacketConn {
     /// Establish a connection to the given haven endpoint.
     pub async fn connect(ctx: &DaemonContext, dest_haven: HavenEndpoint) -> anyhow::Result<Self> {
         // lookup the haven info using the dht
@@ -261,7 +264,7 @@ impl HavenConnection {
         let (send_downstream, recv_downstream) = smol::channel::bounded(1);
 
         // construct the connection
-        Ok(HavenConnection {
+        Ok(HavenPacketConn {
             enc_key: up_key,
             enc_nonce: AtomicU64::new(0),
             dec_key: down_key,
@@ -279,7 +282,8 @@ impl HavenConnection {
         })
     }
 
-    pub async fn send(&self, bts: &[u8]) -> anyhow::Result<()> {
+    /// Sends a packet to the other side. It may or may not get there, since the connection is best-effort.
+    pub async fn send_pkt(&self, bts: &[u8]) -> anyhow::Result<()> {
         let nonce = self.enc_nonce.fetch_add(1, Ordering::SeqCst);
         let nonce_bts = [0; 12].tap_mut(|b| b[..8].copy_from_slice(&nonce.to_le_bytes()));
         let ctext = self.enc_key.seal(&nonce_bts, bts);
@@ -289,7 +293,8 @@ impl HavenConnection {
         Ok(())
     }
 
-    pub async fn recv(&self) -> anyhow::Result<Bytes> {
+    /// Receives a packet from the other side. We may not receive all the packets sent, since the connection is best-effort.
+    pub async fn recv_pkt(&self) -> anyhow::Result<Bytes> {
         let ctext = self.recv_downstream.recv().await?;
         let (nonce, ctext): (u64, Vec<u8>) = stdcode::deserialize(&ctext)?;
         // TODO TODO replay protection by preventing the nonce from repeating

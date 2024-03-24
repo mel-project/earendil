@@ -6,7 +6,7 @@ use earendil::{
     config::ConfigFile,
     daemon::Daemon,
     socket::Socket,
-    stream::{Stream, StreamListener},
+    stream::{HavenStream, StreamListener},
 };
 use earendil_crypt::RelayIdentitySecret;
 use futures_util::{io::AsyncWriteExt, AsyncReadExt};
@@ -67,7 +67,7 @@ fn main() -> anyhow::Result<()> {
         })
         .detach();
 
-        let mut client_stream = Stream::connect(client_socket, server_ep).await?;
+        let mut client_stream = HavenStream::connect(client_socket, server_ep).await?;
         log::trace!("CLIENT: established stream!");
 
         loop {
