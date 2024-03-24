@@ -15,7 +15,7 @@ mod helpers;
 #[test]
 #[traced_test]
 fn n2r() {
-    helpers::env_vars();
+    helpers::init_logs();
 
     let seed = helpers::gen_seed("n2r");
     let (mut relays, _clients) = helpers::spawn_network(5, 0, Some(seed)).unwrap();
@@ -65,9 +65,8 @@ fn n2r() {
 }
 
 #[test]
-#[traced_test]
 fn haven() {
-    helpers::env_vars();
+    helpers::init_logs();
 
     let seed = helpers::gen_seed("haven");
     let (mut relays, mut clients) = helpers::spawn_network(2, 4, Some(seed)).unwrap();
@@ -98,6 +97,9 @@ fn haven() {
             HavenListener::bind(&bob.ctx(), bob_haven_id, bob_haven_port, rendezvous)
                 .await
                 .unwrap();
+        eprintln!("BOB BOUND");
+        helpers::sleep(15).await;
+
         let bob_conn = bob_listener.accept().await.unwrap();
         // alice
         let alice = clients.pop().unwrap();

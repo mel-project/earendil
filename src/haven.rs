@@ -286,7 +286,7 @@ impl HavenConnection {
 #[instrument(skip(ctx))]
 /// Loop that listens to and handles incoming haven forwarding requests
 pub async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
-    let socket = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(HAVEN_FORWARD_DOCK))?);
+    let socket = N2rRelaySocket::bind(ctx.clone(), Some(HAVEN_FORWARD_DOCK))?;
 
     loop {
         if let Ok((msg, src_ep)) = socket.recv_from().await {
@@ -299,11 +299,7 @@ pub async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                     .get(REGISTERED_HAVENS)
                     .get_by_value(&inner.dest_haven.fingerprint)
                 {
-                    tracing::debug!(
-                        "received forward msg, from {}, to {}",
-                        src_ep,
-                        haven_anon_ep
-                    );
+                    tracing::debug!("received V2R msg, from {}, to {}", src_ep, haven_anon_ep);
 
                     let body: Bytes = R2hMessage {
                         src_visitor: src_ep,
@@ -323,8 +319,8 @@ pub async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
             } else {
                 // src is haven
                 let inner: H2rMessage = stdcode::deserialize(&msg)?;
-                tracing::trace!(
-                    "received forward msg, from {}, to {}",
+                tracing::debug!(
+                    "received H2R msg, from {}, to {}",
                     src_ep,
                     inner.dest_visitor
                 );

@@ -14,13 +14,21 @@ use earendil::{
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use smol::Timer;
 use std::net::TcpStream;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 type InRoutes = Vec<(String, InRouteConfig)>;
 type OutRoutes = Vec<(String, OutRouteConfig)>;
 
 // initializes env vars
-pub fn env_vars() {
-    env::set_var("SOSISTAB2_NO_SLEEP", "1");
+pub fn init_logs() {
+    let _ = tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().compact())
+        .with(
+            EnvFilter::builder()
+                .with_default_directive("earendil=debug".parse().unwrap())
+                .from_env_lossy(),
+        )
+        .try_init();
 }
 
 // sleeps while displaying progress
