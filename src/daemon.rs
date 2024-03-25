@@ -18,7 +18,7 @@ use nanorpc_http::server::HttpRpcServer;
 use nursery_macro::nursery;
 use smol::Task;
 use smolscale::immortal::{Immortal, RespawnStrategy};
-
+mod chat;
 use stdcode::StdcodeSerializeExt;
 use tracing::instrument;
 

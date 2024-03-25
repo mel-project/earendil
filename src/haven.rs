@@ -346,6 +346,7 @@ pub async fn rendezvous_forward_loop(ctx: DaemonContext) -> anyhow::Result<()> {
                 tracing::debug!(
                     src_ep = debug(src_ep),
                     dest_visitor = debug(inner.dest_visitor),
+                    len = msg.len(),
                     "received H2R msg",
                 );
                 let body: Bytes = inner.payload.stdcode().into();

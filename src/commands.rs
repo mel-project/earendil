@@ -49,9 +49,6 @@ pub enum ControlCommand {
     /// Lists debts between you and your neighbors
     ListDebts,
 
-    /// Lists pending debt settlements
-    ListSettlements,
-
     /// Interactive chat for talking to immediate neighbors
     Chat {
         #[command(subcommand)]

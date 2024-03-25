@@ -19,7 +19,7 @@ use smol_timeout::TimeoutExt;
 use thiserror::Error;
 
 use crate::{
-    context::{DEBTS, MY_RELAY_IDENTITY, RELAY_GRAPH, SETTLEMENTS},
+    context::{DEBTS, MY_RELAY_IDENTITY, RELAY_GRAPH},
     dht::{dht_get, dht_insert},
     haven::HavenLocator,
     n2r_socket::N2rClientSocket,
@@ -295,10 +295,6 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn list_debts(&self) -> Vec<String> {
         self.ctx.get(DEBTS).list()
-    }
-
-    async fn list_settlements(&self) -> Vec<String> {
-        self.ctx.get(SETTLEMENTS).list()
     }
 }
 

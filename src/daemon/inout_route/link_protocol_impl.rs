@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    time::{Duration},
-};
+use std::{collections::HashSet, time::Duration};
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -19,16 +16,15 @@ use rand::Rng;
 
 use smol_timeout::TimeoutExt;
 
+use crate::settlement::{Seed, SettlementRequest, SettlementResponse};
 use crate::{
-    context::{DaemonContext, MY_RELAY_IDENTITY, RELAY_GRAPH, SETTLEMENTS},
+    context::{DaemonContext, MY_RELAY_IDENTITY, RELAY_GRAPH},
     network::is_relay_neigh,
 };
-use crate::settlement::{Seed, SettlementProof, SettlementRequest, SettlementResponse};
 
 use super::link_protocol::{InfoResponse, LinkProtocol};
 
 const LABEL_LINK_RPC: &str = "link-rpc";
-
 
 pub struct LinkProtocolImpl {
     pub ctx: DaemonContext,
@@ -104,35 +100,36 @@ impl LinkProtocol for LinkProtocolImpl {
 
     #[tracing::instrument(skip(self))]
     async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse> {
-        let settlements = self.ctx.get(SETTLEMENTS);
+        todo!()
+        // let settlements = self.ctx.get(SETTLEMENTS);
 
-        match req.payment_proof {
-            SettlementProof::Automatic(_) => {
-                tracing::debug!("handling auto_settlement req: {:?}", req);
-                if let Ok(res) = settlements.verify_auto_settle(&self.ctx, req) {
-                    res
-                } else {
-                    None
-                }
-            }
-            SettlementProof::Manual => {
-                tracing::debug!("handling manual settlement req: {:?}", req);
-                let recv_res = settlements.insert_pending(req);
+        // match req.payment_proof {
+        //     SettlementProof::Automatic(_) => {
+        //         tracing::debug!("handling auto_settlement req: {:?}", req);
+        //         if let Ok(res) = settlements.verify_auto_settle(&self.ctx, req) {
+        //             res
+        //         } else {
+        //             None
+        //         }
+        //     }
+        //     SettlementProof::Manual => {
+        //         tracing::debug!("handling manual settlement req: {:?}", req);
+        //         let recv_res = settlements.insert_pending(req);
 
-                if let Ok(recv_res) = recv_res {
-                    match recv_res.recv().timeout(Duration::from_secs(300)).await {
-                        Some(Ok(res)) => res,
-                        Some(Err(e)) => {
-                            log::warn!("settlement response receive error: {e}");
-                            None
-                        }
-                        None => None,
-                    }
-                } else {
-                    None
-                }
-            }
-        }
+        //         if let Ok(recv_res) = recv_res {
+        //             match recv_res.recv().timeout(Duration::from_secs(300)).await {
+        //                 Some(Ok(res)) => res,
+        //                 Some(Err(e)) => {
+        //                     log::warn!("settlement response receive error: {e}");
+        //                     None
+        //                 }
+        //                 None => None,
+        //             }
+        //         } else {
+        //             None
+        //         }
+        //     }
+        // }
     }
 
     #[tracing::instrument(skip(self))]
@@ -147,21 +144,22 @@ impl LinkProtocol for LinkProtocolImpl {
 
     #[tracing::instrument(skip(self))]
     async fn request_seed(&self) -> Option<Seed> {
-        let seed = rand::thread_rng().gen();
-        let seed_cache = &self.ctx.get(SETTLEMENTS).seed_cache;
+        todo!()
+        // let seed = rand::thread_rng().gen();
+        // let seed_cache = &self.ctx.get(SETTLEMENTS).seed_cache;
 
-        match seed_cache.get(&self.remote_client_id) {
-            Some(mut seeds) => {
-                seeds.insert(seed);
-                seed_cache.insert(self.remote_client_id, seeds);
-                Some(seed)
-            }
-            None => {
-                let mut seed_set = HashSet::new();
-                seed_set.insert(seed);
-                seed_cache.insert(self.remote_client_id, seed_set);
-                Some(seed)
-            }
-        }
+        // match seed_cache.get(&self.remote_client_id) {
+        //     Some(mut seeds) => {
+        //         seeds.insert(seed);
+        //         seed_cache.insert(self.remote_client_id, seeds);
+        //         Some(seed)
+        //     }
+        //     None => {
+        //         let mut seed_set = HashSet::new();
+        //         seed_set.insert(seed);
+        //         seed_cache.insert(self.remote_client_id, seed_set);
+        //         Some(seed)
+        //     }
+        // }
     }
 }

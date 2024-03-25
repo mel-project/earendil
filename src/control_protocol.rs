@@ -109,11 +109,7 @@ pub async fn main_control(
                 println!("{:?}", debt);
             }
         }
-        ControlCommand::ListSettlements => {
-            for settlement in link.list_settlements().await? {
-                println!("{:?}", settlement);
-            }
-        }
+
         ControlCommand::Chat { chat_command } => match chat_command {
             ChatCommand::List => {
                 let res = link.list_chats().await?;
@@ -350,8 +346,6 @@ pub trait ControlProtocol {
     ) -> Result<(), ChatError>;
 
     async fn list_debts(&self) -> Vec<String>;
-
-    async fn list_settlements(&self) -> Vec<String>;
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]

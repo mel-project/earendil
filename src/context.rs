@@ -63,5 +63,3 @@ pub static MY_CLIENT_ID: CtxField<ClientId> = |_| {
     let rando = rand::random::<u64>();
     rando / 100000 * 100000
 };
-
-pub static SETTLEMENTS: CtxField<Settlements> = |ctx| Settlements::new(ctx.init().auto_settle);
