@@ -103,7 +103,7 @@ async fn tcp_to_mux(
         let my_relay_descr = ctx
             .get(MY_RELAY_IDENTITY)
             .as_ref()
-            .map(|id| IdentityDescriptor::new(&id, ctx.get(MY_RELAY_ONION_SK)));
+            .map(|id| IdentityDescriptor::new(id, ctx.get(MY_RELAY_ONION_SK)));
         let auth_msg = (my_client_id, my_relay_descr).stdcode();
         write_pascal(&auth_msg, &mut write).await?;
         anyhow::Ok(())

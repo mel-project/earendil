@@ -1,19 +1,7 @@
-use crate::context::DaemonContext;
-
-use crate::db::db_read;
-use crate::settlement::{SettlementProof, SettlementRequest};
-use anyhow::Context;
 use dashmap::DashMap;
 use earendil_crypt::{ClientId, RelayFingerprint};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-    time::SystemTime,
-};
-use stdcode::StdcodeSerializeExt;
-
-use crate::context::{CtxField, MY_RELAY_IDENTITY, RELAY_GRAPH};
+use std::{collections::VecDeque, time::SystemTime};
 
 #[derive(Serialize, Deserialize)]
 pub struct Chats {
@@ -47,7 +35,7 @@ impl Chats {
 
     pub async fn wait_unsent(
         &self,
-        neighbor: either::Either<ClientId, RelayFingerprint>,
+        _neighbor: either::Either<ClientId, RelayFingerprint>,
     ) -> Vec<ChatEntry> {
         // this must return all the outgoing messages to the given neighbor that *have not yet been returned by this function*.
         // additionall bookkeeping is certainly needed for this.

@@ -141,7 +141,7 @@ fn one_hop_closer(ctx: &DaemonContext, dest: RelayFingerprint) -> anyhow::Result
         if let Some(route) = ctx
             .get(RELAY_GRAPH)
             .read()
-            .find_shortest_path(&neigh, &dest)
+            .find_shortest_path(neigh, &dest)
         {
             if route.len() < shortest_route_len {
                 shortest_route_len = route.len();

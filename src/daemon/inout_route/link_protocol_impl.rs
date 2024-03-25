@@ -1,20 +1,10 @@
-use std::{collections::HashSet, time::Duration};
-
-use anyhow::Context;
 use async_trait::async_trait;
 
-use bytemuck::{Pod, Zeroable};
-use concurrent_queue::ConcurrentQueue;
-use earendil_crypt::{ClientId, NeighborId, RelayFingerprint};
-use earendil_packet::{RawBody, RawPacket};
+use earendil_crypt::{ClientId, RelayFingerprint};
+
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 
 use itertools::Itertools;
-use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
-
-use rand::Rng;
-
-use smol_timeout::TimeoutExt;
 
 use crate::settlement::{Seed, SettlementRequest, SettlementResponse};
 use crate::{
@@ -99,7 +89,7 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse> {
+    async fn start_settlement(&self, _req: SettlementRequest) -> Option<SettlementResponse> {
         todo!()
         // let settlements = self.ctx.get(SETTLEMENTS);
 

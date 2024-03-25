@@ -22,7 +22,7 @@ pub async fn socks5_loop(ctx: &DaemonContext, socks5_cfg: Socks5Config) -> anyho
 
     nursery!(loop {
         let (client_stream, _) = tcp_listener.accept().await?;
-        spawn!(socks5_once(&ctx, client_stream, fallback, &pool)
+        spawn!(socks5_once(ctx, client_stream, fallback, &pool)
             .map_err(|e| tracing::debug!(err = debug(e), "socks5 worker failed")))
         .detach();
     })
@@ -30,7 +30,7 @@ pub async fn socks5_loop(ctx: &DaemonContext, socks5_cfg: Socks5Config) -> anyho
 
 #[tracing::instrument(skip(ctx, client_stream, fallback, pool))]
 async fn socks5_once(
-    ctx: &DaemonContext,
+    _ctx: &DaemonContext,
     client_stream: TcpStream,
     fallback: Socks5Fallback,
     pool: &PooledVisitor,
@@ -69,7 +69,7 @@ async fn socks5_once(
                 HavenFingerprint::from_str(
                     split_domain.next().context("invalid Earendil address")?,
                 )?,
-                port.into(),
+                port,
             );
             let earendil_stream = pool.connect(endpoint, b"").await?;
             let (read, write) = earendil_stream.split();

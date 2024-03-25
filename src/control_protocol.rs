@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::Context;
 use async_trait::async_trait;
-use bytes::Bytes;
+
 use chrono::{DateTime, Utc};
 use colored::{ColoredString, Colorize};
 use earendil_crypt::{

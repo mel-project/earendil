@@ -93,7 +93,7 @@ async fn register_haven(
             }
             _ => {
                 dht_insert(
-                    &ctx,
+                    ctx,
                     HavenLocator::new(identity, epk, rendezvous),
                     &dht_socket,
                 )

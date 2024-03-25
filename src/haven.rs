@@ -7,7 +7,6 @@ use std::{
     str::FromStr,
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc,
     },
     time::{SystemTime, UNIX_EPOCH},
 };

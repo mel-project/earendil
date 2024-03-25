@@ -1,6 +1,6 @@
 use clap::{arg, Subcommand};
 use earendil_crypt::{ClientId, HavenFingerprint, RelayFingerprint};
-use earendil_packet::Dock;
+
 
 #[derive(Subcommand)]
 pub enum ControlCommand {

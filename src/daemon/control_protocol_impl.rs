@@ -14,9 +14,9 @@ use itertools::Itertools;
 use moka::sync::Cache;
 use nanorpc::RpcTransport;
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
+
 use smol_timeout::TimeoutExt;
-use thiserror::Error;
+
 
 use crate::{
     context::{DEBTS, MY_RELAY_IDENTITY, RELAY_GRAPH},
@@ -61,10 +61,10 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn bind_haven(
         &self,
-        socket_id: String,
+        _socket_id: String,
         _anon_id: Option<String>,
-        dock: Option<Dock>,
-        rendezvous_point: Option<RelayFingerprint>,
+        _dock: Option<Dock>,
+        _rendezvous_point: Option<RelayFingerprint>,
     ) {
         todo!()
     }
@@ -101,7 +101,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .init()
             .in_routes
             .iter()
-            .map(|(k, v)| todo!())
+            .map(|(_k, _v)| todo!())
             .collect();
         serde_json::to_value(lala).unwrap()
     }
@@ -265,17 +265,17 @@ impl ControlProtocol for ControlProtocolImpl {
         // chat::list_chats(&self.ctx)
     }
 
-    async fn get_client_chat(&self, neigh: ClientId) -> Vec<(bool, String, SystemTime)> {
+    async fn get_client_chat(&self, _neigh: ClientId) -> Vec<(bool, String, SystemTime)> {
         todo!();
         // chat::get_client_chat(&self.ctx, neigh)
     }
 
-    async fn get_relay_chat(&self, neigh: RelayFingerprint) -> Vec<(bool, String, SystemTime)> {
+    async fn get_relay_chat(&self, _neigh: RelayFingerprint) -> Vec<(bool, String, SystemTime)> {
         todo!();
         // chat::get_relay_chat(&self.ctx, neigh)
     }
 
-    async fn send_client_chat_msg(&self, dest: ClientId, msg: String) -> Result<(), ChatError> {
+    async fn send_client_chat_msg(&self, _dest: ClientId, _msg: String) -> Result<(), ChatError> {
         todo!();
         // chat::send_client_chat_msg(&self.ctx, dest, msg)
         //     .await
@@ -284,8 +284,8 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn send_relay_chat_msg(
         &self,
-        dest: RelayFingerprint,
-        msg: String,
+        _dest: RelayFingerprint,
+        _msg: String,
     ) -> Result<(), ChatError> {
         todo!();
         // chat::send_relay_chat_msg(&self.ctx, dest, msg)

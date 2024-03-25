@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, io::Write, net::SocketAddr, path::PathBuf};
 
 use anyhow::Context;
 use earendil_crypt::{HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
-use earendil_packet::Dock;
+
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fs::OpenOptions;

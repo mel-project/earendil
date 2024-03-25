@@ -34,7 +34,7 @@ pub async fn replenish_remote_rb(
         }
     }
     for _ in 0..count {
-        send_reply_blocks(&ctx, BATCH_SIZE, my_anon_id, dst_fp).await?;
+        send_reply_blocks(ctx, BATCH_SIZE, my_anon_id, dst_fp).await?;
     }
     Ok(())
 }

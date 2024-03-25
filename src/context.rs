@@ -4,7 +4,7 @@ use earendil_topology::RelayGraph;
 
 use parking_lot::RwLock;
 
-use crate::{config::ConfigFile, db::db_read, debts::Debts, settlement::Settlements};
+use crate::{config::ConfigFile, db::db_read, debts::Debts};
 
 pub type DaemonContext = anyctx::AnyCtx<ConfigFile>;
 pub type CtxField<T> = fn(&DaemonContext) -> T;
