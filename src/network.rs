@@ -53,7 +53,7 @@ pub async fn incoming_raw(
     next_peeler: RelayFingerprint,
     pkt: RawPacket,
 ) -> anyhow::Result<()> {
-    tracing::debug!("incoming raw packet!");
+    tracing::trace!("incoming raw packet!");
     static PKTS_SEEN: CtxField<DashSet<blake3::Hash>> = |_| DashSet::new();
 
     let my_fp = ctx
@@ -68,7 +68,7 @@ pub async fn incoming_raw(
         anyhow::bail!("received replayed pkt {packet_hash}");
     }
 
-    tracing::debug!(my_fp = my_fp.to_string(), "peel_forward on raw packet");
+    tracing::trace!(my_fp = my_fp.to_string(), "on raw packet");
 
     if next_peeler == my_fp {
         // I am the designated peeler, peel and forward towards next peeler
@@ -86,9 +86,15 @@ pub async fn incoming_raw(
                 pkt,
                 delay_ms,
             } => {
-                let _emit_time = Instant::now() + Duration::from_millis(delay_ms as u64);
+                let emit_time = Instant::now() + Duration::from_millis(delay_ms as u64);
                 // TODO delay queue here rather than this inefficient approach
-                send_raw(ctx, pkt, next_peeler).await?;
+                let ctx = ctx.clone();
+                smolscale::spawn(async move {
+                    smol::Timer::at(emit_time).await;
+                    send_raw(&ctx, pkt, next_peeler).await?;
+                    anyhow::Ok(())
+                })
+                .detach();
             }
             PeeledPacket::Received { from, pkt } => {
                 n2r::incoming_forward(ctx, pkt, from).await?;
@@ -98,7 +104,7 @@ pub async fn incoming_raw(
                 pkt,
                 client_id,
             } => {
-                tracing::debug!(
+                tracing::trace!(
                     rb_id,
                     client_id,
                     "got a GARBLED REPLY to FORWARD to the CLIENT!!!"
@@ -107,10 +113,10 @@ pub async fn incoming_raw(
             }
         }
     } else {
-        tracing::debug!("we are not the peeler");
+        tracing::trace!("we are not the peeler");
         // we are not peeler, forward the packet a step closer to peeler
         let next_hop = one_hop_closer(ctx, next_peeler)?;
-        tracing::debug!(
+        tracing::trace!(
             next_hop = debug(next_hop),
             "forwarding the packet one hop closer"
         );

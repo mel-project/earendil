@@ -157,7 +157,7 @@ pub async fn n2r_socket_shuttle(ctx: DaemonContext) -> anyhow::Result<()> {
     async {
         loop {
             let (msg_body, src_relay_ep, dst_anon_ep) = n2r::read_backward(&ctx).await?;
-            tracing::debug!(
+            tracing::trace!(
                 src_relay_ep = debug(src_relay_ep),
                 dst_anon_ep = debug(dst_anon_ep),
                 "shuttling a backward msg"
@@ -168,7 +168,7 @@ pub async fn n2r_socket_shuttle(ctx: DaemonContext) -> anyhow::Result<()> {
     .race(async {
         loop {
             let (msg_body, src_anon_ep, dst_dock) = n2r::read_forward(&ctx).await?;
-            tracing::debug!(
+            tracing::trace!(
                 src_anon_ep = debug(src_anon_ep),
                 dst_dock = debug(dst_dock),
                 "shuttling a forward msg"

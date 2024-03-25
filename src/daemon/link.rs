@@ -1,9 +1,12 @@
-use std::sync::Arc;
+use std::{ops::DerefMut, sync::Arc};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use earendil_crypt::RelayFingerprint;
-use futures::AsyncBufReadExt;
+use futures::{
+    io::{ReadHalf, WriteHalf},
+    AsyncBufReadExt,
+};
 use futures_util::io::AsyncReadExt;
 use nanorpc::{DynRpcTransport, JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nursery_macro::nursery;
@@ -21,35 +24,42 @@ const LABEL_RPC: &[u8] = b"!rpc";
 /// This presents a self-contained abstraction that does not depend on anything "global" in the context
 pub struct Link {
     mux: Arc<PicoMux>,
-    msg_stream: async_dup::Arc<async_dup::Mutex<Stream>>,
+    read: smol::lock::Mutex<ReadHalf<picomux::Stream>>,
+    write: smol::lock::Mutex<WriteHalf<picomux::Stream>>,
 }
 
 impl Link {
     /// Constructs a link, given a picomux multiplex. We initialize the message stream.
     pub async fn new_dial(mux: PicoMux) -> anyhow::Result<Self> {
         let msg_stream = mux.open(b"").await?;
+        let (read, write) = msg_stream.split();
         Ok(Link {
             mux: mux.into(),
-            msg_stream: async_dup::Arc::new(async_dup::Mutex::new(msg_stream)),
+            read: read.into(),
+            write: write.into(),
         })
     }
 
     /// Constructs a link, given a picomux multiplex. The other side initializes the message stream.
     pub async fn new_listen(mux: PicoMux) -> anyhow::Result<Self> {
         let msg_stream = mux.accept().await?;
+        let (read, write) = msg_stream.split();
         Ok(Link {
             mux: mux.into(),
-            msg_stream: async_dup::Arc::new(async_dup::Mutex::new(msg_stream)),
+            read: read.into(),
+            write: write.into(),
         })
     }
 
     pub async fn send_msg(&self, msg: LinkMessage) -> anyhow::Result<()> {
-        write_pascal(&msg.stdcode(), self.msg_stream.clone()).await?;
+        let mut write = self.write.lock().await;
+        write_pascal(&msg.stdcode(), write.deref_mut()).await?;
         Ok(())
     }
 
     pub async fn recv_msg(&self) -> anyhow::Result<LinkMessage> {
-        let bts = read_pascal(self.msg_stream.clone()).await?;
+        let mut read = self.read.lock().await;
+        let bts = read_pascal(read.deref_mut()).await?;
         Ok(stdcode::deserialize(&bts)?)
     }
 

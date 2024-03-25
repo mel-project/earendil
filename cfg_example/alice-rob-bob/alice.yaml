@@ -19,4 +19,4 @@ socks5:
     # remote: ar8rfz3mp32m8ffkh86q258kq21j9abk:69421 # this has to be rob??
   fallback:
     simple_proxy:
-      remote: yqem5bc2m218hqzdk01wbdak42ky715e:69421
+      remote: yqem5bc2m218hqzdk01wbdak42ky715e:29421

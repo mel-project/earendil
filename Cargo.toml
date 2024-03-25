@@ -74,6 +74,7 @@ async-dup = "1.2.4"
 [profile.dev]
 panic = 'abort'
 opt-level = 1
+lto="off"
 
 [profile.release]
 panic = 'abort'

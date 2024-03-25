@@ -23,6 +23,7 @@ use earendil_crypt::{HavenIdentitySecret, RelayFingerprint};
 use earendil_packet::crypt::DhSecret;
 use earendil_packet::crypt::{AeadKey, DhPublic};
 
+use futures::TryFutureExt;
 use serde::{Deserialize, Serialize};
 use smol::{
     channel::{Receiver, Sender},
@@ -166,13 +167,10 @@ impl HavenListener {
         rendezvous: RelayFingerprint,
     ) -> anyhow::Result<Self> {
         let (send_accepted, recv_accepted) = smol::channel::bounded(100);
-        let _listen_task = smolscale::spawn(listen_loop(
-            ctx.clone(),
-            identity,
-            port,
-            rendezvous,
-            send_accepted,
-        ));
+        let _listen_task = smolscale::spawn(
+            listen_loop(ctx.clone(), identity, port, rendezvous, send_accepted)
+                .inspect_err(|e| tracing::warn!(err = debug(e), "haven listener loop died")),
+        );
         Ok(Self {
             _listen_task,
             recv_accepted,

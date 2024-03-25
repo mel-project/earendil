@@ -10,9 +10,8 @@ control_listen: 127.0.0.1:33333
 in_routes:
   # arbitrary names, used for diagnositics and logging
   main_udp:
-    protocol: obfsudp
     listen: 0.0.0.0:34567
-    secret: labooyah hahaha lol smany
+    obfs: none
     link_price:
       max_outgoing_price: 100
       incoming_price: 1

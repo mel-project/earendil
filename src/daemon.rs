@@ -252,22 +252,22 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx, n2r_skt)));
     nursery!(loop {
         let socket = relay_skt.clone();
-        if let Ok((req, endpoint)) = socket.recv_from().await {
-            let service = service.clone();
-            spawn!(async move {
-                let req: JrpcRequest = serde_json::from_str(&String::from_utf8(req.to_vec())?)?;
-                let resp = service.respond_raw(req).await;
-                socket
-                    .send_to(
-                        Bytes::from(serde_json::to_string(&resp)?.into_bytes()),
-                        endpoint,
-                    )
-                    .await?;
+        let (req, endpoint) = socket.recv_from().await?;
+        tracing::debug!(endpoint = debug(endpoint), "global_rpc handling");
+        let service = service.clone();
+        spawn!(async move {
+            let req: JrpcRequest = serde_json::from_str(&String::from_utf8(req.to_vec())?)?;
+            let resp = service.respond_raw(req).await;
+            socket
+                .send_to(
+                    Bytes::from(serde_json::to_string(&resp)?.into_bytes()),
+                    endpoint,
+                )
+                .await?;
 
-                anyhow::Ok(())
-            })
-            .detach();
-        }
+            anyhow::Ok(())
+        })
+        .detach();
     })
 }
 

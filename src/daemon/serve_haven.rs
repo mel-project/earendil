@@ -1,5 +1,6 @@
 use crate::HavenHandler;
 use crate::{context::DaemonContext, HavenConfig, HavenListener, PooledListener};
+use anyhow::Context as _;
 use futures::AsyncReadExt;
 use nursery_macro::nursery;
 use smol::future::FutureExt;
@@ -11,7 +12,10 @@ pub async fn serve_haven(ctx: &DaemonContext, cfg: &HavenConfig) -> anyhow::Resu
     );
     nursery!({
         loop {
-            let client = listener.accept().await?;
+            let client = listener
+                .accept()
+                .await
+                .context("could not accept another from PooledListener")?;
             let handler = &cfg.handler;
             spawn!(async move {
                 match handler {

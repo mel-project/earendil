@@ -62,7 +62,7 @@ pub async fn read_forward(ctx: &DaemonContext) -> anyhow::Result<(Bytes, AnonEnd
 
         match inner {
             InnerPacket::Message(msg) => {
-                tracing::debug!("received InnerPacket::Message");
+                tracing::trace!("received InnerPacket::Message");
                 let anon_endpoint = anon_remote;
                 return Ok((msg.body, anon_endpoint, msg.relay_dock));
             }
@@ -108,7 +108,7 @@ pub async fn send_forward(
     dst_dock: Dock,
     content: Bytes,
 ) -> anyhow::Result<()> {
-    tracing::debug!("calling send_n2r here");
+    tracing::trace!("calling send_n2r here");
     let now = Instant::now();
     let _guard = scopeguard::guard((), |_| {
         let send_msg_time = now.elapsed();
@@ -121,7 +121,7 @@ pub async fn send_forward(
         .context("empty route, cannot obtain first peeler")?;
 
     let instructs = route_to_instructs(ctx, &route).context("route_to_instructs failed")?;
-    tracing::debug!(
+    tracing::trace!(
         "*************************** translated this route to instructions: {:?} => {:?}",
         route,
         instructs
@@ -187,7 +187,7 @@ fn forward_route_to(
 ) -> anyhow::Result<Vec<RelayFingerprint>> {
     let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(2);
     route.push(dest_fp);
-    tracing::debug!("forward route formed: {:?}", route);
+    tracing::trace!("forward route formed: {:?}", route);
     Ok(route)
 }
 

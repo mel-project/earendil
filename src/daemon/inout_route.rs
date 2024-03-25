@@ -64,13 +64,16 @@ pub async fn listen_in_route(ctx: &DaemonContext, cfg: &InRouteConfig) -> anyhow
     })
 }
 
+#[tracing::instrument(skip_all, fields(connect=debug(cfg.connect)))]
 pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow::Result<()> {
     loop {
         let fallible = async {
             let tcp_conn = TcpStream::connect(cfg.connect).await?;
+            tracing::debug!("TCP connected to other side");
             let (mux, their_client_id, their_relay_descr) =
                 tcp_to_mux(ctx, tcp_conn, &cfg.obfs).await?;
             let link = Link::new_dial(mux).await?;
+            tracing::debug!("link connected to other side");
             manage_mux(ctx, link, their_client_id, their_relay_descr).await?;
             anyhow::Ok(())
         };
@@ -126,6 +129,8 @@ async fn manage_mux(
     their_client_id: ClientId,
     their_relay_descr: Option<IdentityDescriptor>,
 ) -> anyhow::Result<()> {
+    scopeguard::defer!(tracing::debug!("manage_mux died"));
+
     if let Some(descr) = their_relay_descr.as_ref() {
         ctx.get(RELAY_GRAPH)
             .write()
@@ -166,21 +171,25 @@ async fn manage_mux(
             let in_msg = link.recv_msg().await?;
             match in_msg {
                 LinkMessage::ToClient { body, rb_id } => {
-                    tracing::debug!(rb_id, "incoming ToClient");
+                    tracing::trace!(rb_id, "incoming ToClient");
                     let body: RawBody = *bytemuck::try_from_bytes(&body)
                         .ok()
                         .context("failed to deserialize incoming RawBody")?;
-                    n2r::incoming_backward(ctx, body, rb_id).await?;
+                    if let Err(err) = n2r::incoming_backward(ctx, body, rb_id).await {
+                        tracing::debug!(err = debug(err), "failed to process incoming backward");
+                    }
                 }
                 LinkMessage::ToRelay {
                     packet,
                     next_peeler,
                 } => {
-                    tracing::debug!(next_peeler = debug(next_peeler), "incoming ToRelay");
+                    tracing::trace!(next_peeler = debug(next_peeler), "incoming ToRelay");
                     let pkt: RawPacket = *bytemuck::try_from_bytes(&packet)
                         .ok()
                         .context("failed to deserialize incoming RawPacket")?;
-                    network::incoming_raw(ctx, next_peeler, pkt).await?;
+                    if let Err(err) = network::incoming_raw(ctx, next_peeler, pkt).await {
+                        tracing::debug!(err = debug(err), "failed to process incoming raw");
+                    }
                 }
             }
         }

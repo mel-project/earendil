@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use anyhow::Context as _;
 use futures::{future::Shared, AsyncReadExt, FutureExt, TryFutureExt};
 use nursery_macro::nursery;
 use picomux::PicoMux;
@@ -104,7 +105,7 @@ async fn pooled_listener_task(
 ) -> anyhow::Result<()> {
     nursery!({
         loop {
-            let conn = HavenStream::new(listener.accept().await?);
+            let conn = HavenStream::new(listener.accept().await.context("inner listener failed")?);
             let (read, write) = conn.split();
             let mux = PicoMux::new(read, write);
             let send_incoming = &send_incoming;

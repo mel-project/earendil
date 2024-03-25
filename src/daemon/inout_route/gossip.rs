@@ -15,6 +15,7 @@ use crate::{
     daemon::{inout_route::link_protocol::LinkClient, link::Link},
 };
 
+#[tracing::instrument(skip_all)]
 pub async fn gossip_once(
     ctx: &DaemonContext,
     link: &Link,
@@ -53,10 +54,10 @@ async fn sign_adjacency(
     remote_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
     if let Some(my_sk) = ctx.get(MY_RELAY_IDENTITY).as_ref() {
-        tracing::debug!("signing adjacency...");
+        tracing::trace!("signing adjacency...");
         let my_fp = my_sk.public().fingerprint();
         if my_fp < remote_fp {
-            tracing::debug!("signing adjacency with {remote_fp}");
+            tracing::trace!("signing adjacency with {remote_fp}");
             let mut left_incomplete = AdjacencyDescriptor {
                 left: my_fp,
                 right: remote_fp,
