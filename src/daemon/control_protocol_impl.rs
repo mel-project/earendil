@@ -82,23 +82,13 @@ impl ControlProtocol for ControlProtocolImpl {
                     .public()
                     .fingerprint();
                 match haven_cfg.handler {
-                    crate::config::ForwardHandler::UdpService {
-                        listen_dock,
-                        upstream: _,
-                    } => (
-                        "UdpService".to_string(),
-                        fp.to_string() + ":" + &listen_dock.to_string(),
-                    ),
-                    crate::config::ForwardHandler::TcpService {
-                        listen_dock,
-                        upstream: _,
-                    } => (
+                    crate::config::HavenHandler::TcpService { upstream: _ } => (
                         "TcpService".to_string(),
-                        fp.to_string() + ":" + &listen_dock.to_string(),
+                        fp.to_string() + ":" + &haven_cfg.listen_port.to_string(),
                     ),
-                    crate::config::ForwardHandler::SimpleProxy { listen_dock } => (
+                    crate::config::HavenHandler::SimpleProxy => (
                         "SimpleProxy".to_string(),
-                        fp.to_string() + ":" + &listen_dock.to_string(),
+                        fp.to_string() + ":" + &haven_cfg.listen_port.to_string(),
                     ),
                 }
             })

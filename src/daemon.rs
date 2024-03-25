@@ -2,6 +2,8 @@ mod control_protocol_impl;
 
 mod inout_route;
 mod link;
+mod serve_haven;
+mod socks5;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
@@ -100,7 +102,7 @@ impl RpcTransport for DummyControlProtocolTransport {
 
 #[tracing::instrument(skip_all, fields(client_id=ctx.get(MY_CLIENT_ID), relay_fp=debug(ctx.get(MY_RELAY_IDENTITY).map(|id| id.public().fingerprint().to_string()[..6].to_string()))))]
 pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
-    let is_client = ctx.init().in_routes.is_empty();
+    let is_client = ctx.init().is_client();
 
     scopeguard::defer!(tracing::info!(is_client, "daemon is now DROPPED!"));
 
@@ -183,21 +185,29 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
     );
 
     nursery!({
-        let mut route_tasks = FuturesUnordered::new();
+        let mut fallible_tasks = FuturesUnordered::new();
 
         // For every in_routes block, spawn a task to handle incoming stuff
         for (_in_route_name, config) in ctx.init().in_routes.iter() {
-            route_tasks.push(spawn!(listen_in_route(&ctx, config)));
+            fallible_tasks.push(spawn!(listen_in_route(&ctx, config)));
         }
 
         // For every out_routes block, spawn a task to handle outgoing stuff
         for (_out_route_name, config) in ctx.init().out_routes.iter() {
-            route_tasks.push(spawn!(dial_out_route(&ctx, config)));
+            fallible_tasks.push(spawn!(dial_out_route(&ctx, config)));
+        }
+
+        // For every haven, serve the haven
+        for config in ctx.init().havens.iter() {
+            fallible_tasks.push(spawn!(serve_haven::serve_haven(&ctx, config)));
+        }
+
+        if let Some(socks5_cfg) = ctx.init().socks5 {
+            fallible_tasks.push(spawn!(socks5::socks5_loop(&ctx, socks5_cfg)));
         }
 
         // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
-        while let Some(next) = route_tasks.next().await {
-            tracing::debug!("ROUTE TASK DIED !!!!");
+        while let Some(next) = fallible_tasks.next().await {
             next?;
         }
         anyhow::Ok(())
@@ -212,12 +222,12 @@ async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         let global_id = ctx.get(MY_RELAY_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
         // let debts = ctx.get(DEBTS).as_bytes()?;
-        let chats = todo!();
+        // let chats = todo!();
 
         db_write(&ctx, "global_identity", global_id).await?;
         db_write(&ctx, "relay_graph", graph).await?;
         // db_write(&ctx, "debts", debts).await?;
-        db_write(&ctx, "chats", chats).await?;
+        // db_write(&ctx, "chats", chats).await?;
 
         smol::Timer::after(Duration::from_secs(10)).await;
     }

@@ -1,13 +1,12 @@
 use std::time::Duration;
 
-use earendil::{HavenEndpoint, HavenListener, HavenPacketConn, PooledListener, PooledVisitor};
+use earendil::{HavenEndpoint, HavenListener, PooledListener, PooledVisitor};
 use earendil_crypt::HavenIdentitySecret;
-use helpers::gen_seed;
+
 use smol::{
     future::FutureExt as _,
-    io::{AsyncReadExt, AsyncWriteExt},
 };
-use tracing_test::traced_test;
+
 
 mod helpers;
 
@@ -40,7 +39,7 @@ fn stream() {
 
         let bob_process = async {
             for _ in 0..10 {
-                let bob_conn = bob_listener.accept().await.unwrap();
+                let _bob_conn = bob_listener.accept().await.unwrap();
                 eprintln!("got a conn at bawb");
             }
         };

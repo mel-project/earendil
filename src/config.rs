@@ -43,10 +43,10 @@ pub struct ConfigFile {
     #[serde(default)]
     pub tcp_forwards: Vec<TcpForwardConfig>,
     /// where and how to start a socks5 proxy
-    pub socks5: Option<Socks5>,
+    pub socks5: Option<Socks5Config>,
     /// List of all haven configs
     #[serde(default)]
-    pub havens: Vec<HavenForwardConfig>,
+    pub havens: Vec<HavenConfig>,
 }
 
 impl ConfigFile {
@@ -101,15 +101,15 @@ pub struct TcpForwardConfig {
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
-pub struct Socks5 {
+pub struct Socks5Config {
     pub listen: SocketAddr,
-    pub fallback: Fallback,
+    pub fallback: Socks5Fallback,
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 #[serde(rename_all = "snake_case")]
-pub enum Fallback {
+pub enum Socks5Fallback {
     Block,
     PassThrough,
     SimpleProxy {
@@ -120,29 +120,21 @@ pub enum Fallback {
 
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct HavenForwardConfig {
+pub struct HavenConfig {
     #[serde(flatten)]
     pub identity: Identity,
+    pub listen_port: u16,
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub rendezvous: RelayFingerprint,
-    pub handler: ForwardHandler,
+    pub handler: HavenHandler,
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum ForwardHandler {
-    UdpService {
-        listen_dock: Dock,
-        upstream: SocketAddr,
-    },
-    TcpService {
-        listen_dock: Dock,
-        upstream: SocketAddr,
-    },
-    SimpleProxy {
-        listen_dock: Dock,
-    },
+pub enum HavenHandler {
+    TcpService { upstream: SocketAddr },
+    SimpleProxy,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

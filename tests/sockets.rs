@@ -6,7 +6,7 @@ use bytes::Bytes;
 use earendil::{HavenEndpoint, HavenListener, HavenPacketConn, N2rClientSocket, N2rRelaySocket};
 use earendil_crypt::{AnonEndpoint, HavenIdentitySecret};
 
-use smol::{future::FutureExt as _, Timer};
+use smol::{future::FutureExt as _};
 use smol_timeout::TimeoutExt;
 use tracing_test::traced_test;
 

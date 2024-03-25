@@ -1,6 +1,5 @@
 use std::{
-    collections::HashSet,
-    env, fs,
+    collections::HashSet, fs,
     io::{self, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     ops::RangeInclusive,
@@ -109,8 +108,8 @@ fn routes(
     is_relay: bool,
     num_outroutes_range: RangeInclusive<u8>,
 ) -> anyhow::Result<(InRoutes, OutRoutes)> {
-    let secret = "secret".to_string();
-    let link_price = LinkPrice {
+    let _secret = "secret".to_string();
+    let _link_price = LinkPrice {
         max_outgoing_price: 1,
         incoming_price: 0,
         incoming_debt_limit: 100,
