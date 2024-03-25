@@ -79,16 +79,6 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn client_push_price(&self, _price: u64, _debt_limit: u64) {
-        todo!()
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn relay_push_price(&self, _price: u64, _debt_limit: u64) {
-        todo!()
-    }
-
-    #[tracing::instrument(skip(self))]
     async fn start_settlement(&self, _req: SettlementRequest) -> Option<SettlementResponse> {
         todo!()
         // let settlements = self.ctx.get(SETTLEMENTS);
@@ -123,12 +113,7 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn push_chat_client(&self, _msg: String) {
-        todo!()
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn push_chat_relay(&self, _msg: String) {
+    async fn push_chat(&self, _msg: String) {
         todo!()
     }
 
