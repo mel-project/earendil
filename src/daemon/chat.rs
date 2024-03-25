@@ -41,6 +41,10 @@ impl Chats {
         // additionall bookkeeping is certainly needed for this.
         todo!()
     }
+
+    pub async fn dump_convo(&self, neighbor: either::Either<ClientId, RelayFingerprint>) {
+        todo!()
+    }
 }
 
 impl ChatEntry {
