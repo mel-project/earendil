@@ -7,7 +7,10 @@ use nanorpc::nanorpc_derive;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::settlement::{Seed, SettlementRequest, SettlementResponse};
+use crate::{
+    daemon::chat::ChatEntry,
+    settlement::{Seed, SettlementRequest, SettlementResponse},
+};
 
 #[nanorpc_derive]
 #[async_trait]
@@ -32,6 +35,9 @@ pub trait LinkProtocol {
 
     /// Send a chat message to the other end of the link.
     async fn push_chat(&self, msg: String);
+
+    /// Receive unread incoming chat messages
+    async fn pull_chat(&self) -> Vec<ChatEntry>;
 
     /// Request a MelPoW seed (used to create an automatic payment proof).
     async fn request_seed(&self) -> Option<Seed>;

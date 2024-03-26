@@ -6,6 +6,7 @@ use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 
 use itertools::Itertools;
 
+use crate::daemon::chat::{ChatEntry, CHATS};
 use crate::settlement::{Seed, SettlementRequest, SettlementResponse};
 use crate::{
     context::{DaemonContext, MY_RELAY_IDENTITY, RELAY_GRAPH},
@@ -113,8 +114,27 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn push_chat(&self, _msg: String) {
-        todo!()
+    async fn push_chat(&self, msg: String) {
+        if let Some(fingerprint) = self.remote_relay_fp {
+            self.ctx
+                .get(CHATS)
+                .record(either::Right(fingerprint), ChatEntry::new_incoming(msg));
+        } else {
+            self.ctx.get(CHATS).record(
+                either::Left(self.remote_client_id),
+                ChatEntry::new_incoming(msg),
+            );
+        }
+    }
+
+    async fn pull_chat(&self) -> Vec<ChatEntry> {
+        if let Some(fingerprint) = self.remote_relay_fp {
+            self.ctx.get(CHATS).wait_unsent(either::Right(fingerprint))
+        } else {
+            self.ctx
+                .get(CHATS)
+                .wait_unsent(either::Left(self.remote_client_id))
+        }
     }
 
     #[tracing::instrument(skip(self))]

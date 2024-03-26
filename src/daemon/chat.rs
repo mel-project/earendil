@@ -3,6 +3,13 @@ use earendil_crypt::{ClientId, RelayFingerprint};
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, time::SystemTime};
 
+use crate::context::CtxField;
+
+pub static CHATS: CtxField<Chats> = |_| {
+    tracing::debug!("initializing chats");
+    Chats::new(usize::MAX)
+};
+
 #[derive(Serialize, Deserialize)]
 pub struct Chats {
     history: DashMap<either::Either<ClientId, RelayFingerprint>, VecDeque<ChatEntry>>,
