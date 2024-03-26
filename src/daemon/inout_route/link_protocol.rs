@@ -36,9 +36,6 @@ pub trait LinkProtocol {
     /// Send a chat message to the other end of the link.
     async fn push_chat(&self, msg: String);
 
-    /// Receive unread incoming chat messages
-    async fn pull_chat(&self) -> Vec<ChatEntry>;
-
     /// Request a MelPoW seed (used to create an automatic payment proof).
     async fn request_seed(&self) -> Option<Seed>;
 }

@@ -127,16 +127,6 @@ impl LinkProtocol for LinkProtocolImpl {
         }
     }
 
-    async fn pull_chat(&self) -> Vec<ChatEntry> {
-        if let Some(fingerprint) = self.remote_relay_fp {
-            self.ctx.get(CHATS).wait_unsent(either::Right(fingerprint))
-        } else {
-            self.ctx
-                .get(CHATS)
-                .wait_unsent(either::Left(self.remote_client_id))
-        }
-    }
-
     #[tracing::instrument(skip(self))]
     async fn request_seed(&self) -> Option<Seed> {
         todo!()

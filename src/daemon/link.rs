@@ -10,7 +10,7 @@ use futures::{
 use futures_util::io::AsyncReadExt;
 use nanorpc::{DynRpcTransport, JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nursery_macro::nursery;
-use picomux::{PicoMux};
+use picomux::PicoMux;
 use serde::{Deserialize, Serialize};
 use smol::io::{AsyncWriteExt, BufReader};
 use stdcode::StdcodeSerializeExt;
