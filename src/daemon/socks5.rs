@@ -28,7 +28,7 @@ pub async fn socks5_loop(ctx: &DaemonContext, socks5_cfg: Socks5Config) -> anyho
     })
 }
 
-#[tracing::instrument(skip(ctx, client_stream, fallback, pool))]
+#[tracing::instrument(skip(_ctx, client_stream, fallback, pool))]
 async fn socks5_once(
     _ctx: &DaemonContext,
     client_stream: TcpStream,

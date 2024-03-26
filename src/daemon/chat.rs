@@ -14,6 +14,7 @@ pub struct ChatEntry {
     is_incoming: bool,
     text: String,
     time: SystemTime,
+    is_seen: bool,
 }
 
 impl Chats {
@@ -33,17 +34,31 @@ impl Chats {
         chat.push_back(entry);
     }
 
-    pub async fn wait_unsent(
+    pub fn wait_unsent(
         &self,
-        _neighbor: either::Either<ClientId, RelayFingerprint>,
+        neighbor: either::Either<ClientId, RelayFingerprint>,
     ) -> Vec<ChatEntry> {
-        // this must return all the outgoing messages to the given neighbor that *have not yet been returned by this function*.
-        // additionall bookkeeping is certainly needed for this.
-        todo!()
+        let mut unsent = vec![];
+        if let Some(mut chat) = self.history.get_mut(&neighbor) {
+            for entry in chat.iter_mut() {
+                if !entry.is_incoming && !entry.is_seen {
+                    entry.is_seen = true;
+                    unsent.push(entry.clone());
+                }
+            }
+        }
+
+        unsent
     }
 
-    pub async fn dump_convo(&self, neighbor: either::Either<ClientId, RelayFingerprint>) {
-        todo!()
+    pub fn dump_convo(
+        &self,
+        neighbor: either::Either<ClientId, RelayFingerprint>,
+    ) -> Vec<ChatEntry> {
+        match self.history.get(&neighbor) {
+            Some(chat_history) => chat_history.clone().into(),
+            None => vec![],
+        }
     }
 }
 
@@ -53,6 +68,7 @@ impl ChatEntry {
             is_incoming: true,
             text,
             time: SystemTime::now(),
+            is_seen: false,
         }
     }
 
@@ -61,6 +77,7 @@ impl ChatEntry {
             is_incoming: false,
             text,
             time: SystemTime::now(),
+            is_seen: false,
         }
     }
 }
