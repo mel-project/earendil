@@ -62,10 +62,7 @@ impl Chats {
         &self,
         neighbor: either::Either<ClientId, RelayFingerprint>,
     ) -> Vec<ChatEntry> {
-        match self.history.get(&neighbor) {
-            Some(chat_history) => chat_history.clone().into(),
-            None => vec![],
-        }
+        self.history.entry(neighbor).or_default().clone().into()
     }
 }
 
