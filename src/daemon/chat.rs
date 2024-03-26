@@ -1,7 +1,8 @@
+use async_event::Event;
 use dashmap::DashMap;
 use earendil_crypt::{ClientId, RelayFingerprint};
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, time::SystemTime};
+use std::{collections::VecDeque, sync::Arc, time::SystemTime};
 
 use crate::context::CtxField;
 
@@ -14,6 +15,8 @@ pub static CHATS: CtxField<Chats> = |_| {
 pub struct Chats {
     history: DashMap<either::Either<ClientId, RelayFingerprint>, VecDeque<ChatEntry>>,
     max_chat_len: usize,
+    #[serde(skip)]
+    unsent: Arc<Event>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -29,6 +32,7 @@ impl Chats {
         Self {
             history: DashMap::new(),
             max_chat_len,
+            unsent: Arc::new(Event::new()),
         }
     }
 
@@ -39,12 +43,26 @@ impl Chats {
         }
 
         chat.push_back(entry);
+        self.unsent.notify_one();
     }
 
-    pub fn wait_unsent(
+    pub async fn wait_unsent(
         &self,
         neighbor: either::Either<ClientId, RelayFingerprint>,
     ) -> Vec<ChatEntry> {
+        self.unsent
+            .wait_until(move || {
+                if let Some(mut chat) = self.history.get_mut(&neighbor) {
+                    for entry in chat.iter_mut() {
+                        if !entry.is_incoming && !entry.is_seen {
+                            return Some(());
+                        }
+                    }
+                }
+                None
+            })
+            .await;
+
         let mut unsent = vec![];
         if let Some(mut chat) = self.history.get_mut(&neighbor) {
             for entry in chat.iter_mut() {
