@@ -52,28 +52,22 @@ impl Chats {
     ) -> Vec<ChatEntry> {
         self.unsent
             .wait_until(move || {
+                let mut unsent = vec![];
                 if let Some(mut chat) = self.history.get_mut(&neighbor) {
                     for entry in chat.iter_mut() {
                         if !entry.is_incoming && !entry.is_seen {
-                            return Some(());
+                            entry.is_seen = true;
+                            unsent.push(entry.clone());
                         }
                     }
                 }
-                None
-            })
-            .await;
-
-        let mut unsent = vec![];
-        if let Some(mut chat) = self.history.get_mut(&neighbor) {
-            for entry in chat.iter_mut() {
-                if !entry.is_incoming && !entry.is_seen {
-                    entry.is_seen = true;
-                    unsent.push(entry.clone());
+                if unsent.is_empty() {
+                    None
+                } else {
+                    Some(unsent)
                 }
-            }
-        }
-
-        unsent
+            })
+            .await
     }
 
     pub fn dump_convo(
