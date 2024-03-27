@@ -27,10 +27,7 @@ fn n2r() {
 
         helpers::sleep(10).await;
 
-        println!(
-            "{}",
-            alice.control_client().relay_graphviz(true).await.unwrap()
-        );
+        println!("{}", alice.control_client().relay_graphviz().await.unwrap());
         dbg!(bob_skt.local_endpoint());
 
         let alice_msg = Bytes::from_static("in Wonderland rn, wya??".as_bytes());

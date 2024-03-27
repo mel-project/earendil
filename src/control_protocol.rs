@@ -11,6 +11,7 @@ use earendil_crypt::{
     AnonEndpoint, ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint,
 };
 use earendil_packet::{crypt::DhPublic, PacketConstructError};
+use either::Either;
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
 use serde::{Deserialize, Serialize};
@@ -87,111 +88,113 @@ pub async fn main_control(
                 println!("{res}");
             }
             ChatCommand::Start { prefix } => {
-                let clients = control.list_clients().await?;
-                let relays = control.list_relays().await?;
-                let client = client_by_prefix(clients, &prefix)?;
-                let relay = relay_by_prefix(relays, &prefix)?;
+                todo!();
+                // let clients = control.list_clients().await?;
+                // let relays = control.list_relays().await?;
+                // let client = client_by_prefix(clients, &prefix)?;
+                // let relay = relay_by_prefix(relays, &prefix)?;
 
-                if client.is_some() && relay.is_none() {
-                    let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
-                    let link = Arc::new(control);
-                    let link_clone = link.clone();
+                // if client.is_some() && relay.is_none() {
+                //     let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
+                //     let link = Arc::new(control);
+                //     let link_clone = link.clone();
 
-                    let _listen_loop = smolscale::spawn(async move {
-                        loop {
-                            let msgs = if let Ok(msgs) = link.get_client_chat(client.unwrap()).await
-                            {
-                                msgs
-                            } else {
-                                println!("error fetching messages");
-                                Timer::after(Duration::from_secs(1)).await;
-                                continue;
-                            };
-                            for (is_mine, text, time) in msgs {
-                                let msg = (is_mine, text.clone(), time);
-                                if !displayed.contains(&msg) {
-                                    println!("{}", pretty_entry(is_mine, text, time));
-                                    displayed.insert(msg);
-                                }
-                            }
-                        }
-                    });
+                //     let _listen_loop = smolscale::spawn(async move {
+                //         loop {
+                //             let msgs = if let Ok(msgs) = link.get_client_chat(client.unwrap()).await
+                //             {
+                //                 msgs
+                //             } else {
+                //                 println!("error fetching messages");
+                //                 Timer::after(Duration::from_secs(1)).await;
+                //                 continue;
+                //             };
+                //             for (is_mine, text, time) in msgs {
+                //                 let msg = (is_mine, text.clone(), time);
+                //                 if !displayed.contains(&msg) {
+                //                     println!("{}", pretty_entry(is_mine, text, time));
+                //                     displayed.insert(msg);
+                //                 }
+                //             }
+                //         }
+                //     });
 
-                    loop {
-                        let _ = std::io::stdout().flush();
-                        let message = smol::unblock(|| {
-                            let mut message = String::new();
-                            std::io::stdin()
-                                .read_line(&mut message)
-                                .expect("Failed to read line");
+                //     loop {
+                //         let _ = std::io::stdout().flush();
+                //         let message = smol::unblock(|| {
+                //             let mut message = String::new();
+                //             std::io::stdin()
+                //                 .read_line(&mut message)
+                //                 .expect("Failed to read line");
 
-                            message.trim().to_string()
-                        })
-                        .await;
+                //             message.trim().to_string()
+                //         })
+                //         .await;
 
-                        if !message.is_empty() {
-                            let msg = message.to_string();
-                            match link_clone.send_client_chat_msg(client.unwrap(), msg).await {
-                                Ok(_) => continue,
-                                Err(e) => println!("ERROR: {e}"),
-                            }
-                        }
-                    }
-                } else if client.is_none() && relay.is_some() {
-                    let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
-                    let link = Arc::new(control);
-                    let link_clone = link.clone();
+                //         if !message.is_empty() {
+                //             let msg = message.to_string();
+                //             match link_clone.send_client_chat_msg(client.unwrap(), msg).await {
+                //                 Ok(_) => continue,
+                //                 Err(e) => println!("ERROR: {e}"),
+                //             }
+                //         }
+                //     }
+                // } else if client.is_none() && relay.is_some() {
+                //     let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
+                //     let link = Arc::new(control);
+                //     let link_clone = link.clone();
 
-                    let _listen_loop = smolscale::spawn(async move {
-                        loop {
-                            let msgs = if let Ok(msgs) = link.get_relay_chat(relay.unwrap()).await {
-                                msgs
-                            } else {
-                                println!("error fetching messages");
-                                Timer::after(Duration::from_secs(1)).await;
-                                continue;
-                            };
-                            for (is_mine, text, time) in msgs {
-                                let msg = (is_mine, text.clone(), time);
-                                if !displayed.contains(&msg) {
-                                    println!("{}", pretty_entry(is_mine, text, time));
-                                    displayed.insert(msg);
-                                }
-                            }
-                        }
-                    });
+                //     let _listen_loop = smolscale::spawn(async move {
+                //         loop {
+                //             let msgs = if let Ok(msgs) = link.get_relay_chat(relay.unwrap()).await {
+                //                 msgs
+                //             } else {
+                //                 println!("error fetching messages");
+                //                 Timer::after(Duration::from_secs(1)).await;
+                //                 continue;
+                //             };
+                //             for (is_mine, text, time) in msgs {
+                //                 let msg = (is_mine, text.clone(), time);
+                //                 if !displayed.contains(&msg) {
+                //                     println!("{}", pretty_entry(is_mine, text, time));
+                //                     displayed.insert(msg);
+                //                 }
+                //             }
+                //         }
+                //     });
 
-                    loop {
-                        let _ = std::io::stdout().flush();
-                        let message = smol::unblock(|| {
-                            let mut message = String::new();
-                            std::io::stdin()
-                                .read_line(&mut message)
-                                .expect("Failed to read line");
+                //     loop {
+                //         let _ = std::io::stdout().flush();
+                //         let message = smol::unblock(|| {
+                //             let mut message = String::new();
+                //             std::io::stdin()
+                //                 .read_line(&mut message)
+                //                 .expect("Failed to read line");
 
-                            message.trim().to_string()
-                        })
-                        .await;
+                //             message.trim().to_string()
+                //         })
+                //         .await;
 
-                        if !message.is_empty() {
-                            let msg = message.to_string();
-                            match link_clone.send_relay_chat_msg(relay.unwrap(), msg).await {
-                                Ok(_) => continue,
-                                Err(e) => println!("ERROR: {e}"),
-                            }
-                        }
-                    }
-                } else if client.is_none() && relay.is_none() {
-                    anyhow::bail!("no neighbor with this prefix")
-                } else {
-                    anyhow::bail!("more than one neighbor with this prefix")
-                }
+                //         if !message.is_empty() {
+                //             let msg = message.to_string();
+                //             match link_clone.send_relay_chat_msg(relay.unwrap(), msg).await {
+                //                 Ok(_) => continue,
+                //                 Err(e) => println!("ERROR: {e}"),
+                //             }
+                //         }
+                //     }
+                // } else if client.is_none() && relay.is_none() {
+                //     anyhow::bail!("no neighbor with this prefix")
+                // } else {
+                //     anyhow::bail!("more than one neighbor with this prefix")
+                // }
             }
             ChatCommand::Get { neighbor } => {
-                let entries = todo!();
-                for (is_mine, text, time) in entries {
-                    println!("{}", pretty_entry(is_mine, text, time));
-                }
+                todo!();
+                // let entries = todo!();
+                // for (is_mine, text, time) in entries {
+                //     println!("{}", pretty_entry(is_mine, text, time));
+                // }
             }
             ChatCommand::Send { dest, msg } => todo!(),
         },
@@ -280,6 +283,8 @@ pub trait ControlProtocol {
         &self,
         fingerprint: HavenFingerprint,
     ) -> Result<Option<HavenLocator>, DhtError>;
+
+    async fn list_neighbors(&self) -> Vec<Either<ClientId, RelayFingerprint>>;
 
     async fn list_chats(&self) -> String;
 

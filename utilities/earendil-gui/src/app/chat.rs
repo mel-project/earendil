@@ -5,8 +5,9 @@ use std::{
 
 use anyctx::AnyCtx;
 use chrono::{DateTime, Local};
-use earendil_crypt::RelayFingerprint;
+use earendil_crypt::{ClientId, RelayFingerprint};
 use egui::{mutex::Mutex, Color32};
+use either::Either;
 use smol::block_on;
 
 use crate::app::refresh_cell::RefreshCell;
@@ -34,8 +35,9 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
 
         static NEIGHBORS: fn(
             &AnyCtx<()>,
-        ) -> Mutex<RefreshCell<anyhow::Result<Vec<RelayFingerprint>>>> =
-            |_| Mutex::new(RefreshCell::new());
+        ) -> Mutex<
+            RefreshCell<anyhow::Result<Vec<either::Either<ClientId, RelayFingerprint>>>>,
+        > = |_| Mutex::new(RefreshCell::new());
         let mut neighbors = app.state.get(NEIGHBORS).lock();
         let neighbors = neighbors.get_or_refresh(Duration::from_millis(100), || {
             block_on(async move {
@@ -53,7 +55,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
                     cols[0].colored_label(Color32::DARK_RED, "Loading peers failed:");
                     cols[0].label(format!("{:?}", err));
                 }
-                Some(Ok(neighs)) => {
+                Some(Ok((neighs))) => {
                     cols[0].vertical(|ui| {
                         for neigh in neighs {
                             if ui.button(neigh.to_string()).clicked() {
@@ -73,15 +75,19 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
             let chatting_with = daemon_cfg.gui_prefs.chatting_with;
             let chat = chat.get_or_refresh(Duration::from_millis(100), move || {
                 if let Some(neigh) = chatting_with {
-                    block_on(async move {
+                    Ok(block_on(async move {
                         let chat = control_clone
                             .lock()
                             .await
-                            .get_chat(neigh)
+                            .get_chat(neigh.to_string())
                             .await
-                            .map_err(|e| anyhow::anyhow!("error pulling chat with {neigh}: {e}"))?;
-                        Ok(chat)
-                    })
+                            .map_err(|e| {
+                                earendil::control_protocol::ChatError::Get(format!(
+                                    "error pulling chat with {neigh}: {e}"
+                                ))
+                            })?;
+                        chat
+                    })?)
                 } else {
                     Ok(vec![])
                 }
@@ -97,11 +103,13 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
                         render_convo(
                             &mut cols[1],
                             chat.to_vec(),
-                            daemon
-                                .global_sk()
-                                .expect("unable to get remote daemon pk")
-                                .public()
-                                .fingerprint(),
+                            Either::Right(
+                                daemon
+                                    .global_sk()
+                                    .expect("unable to get remote daemon pk")
+                                    .public()
+                                    .fingerprint(),
+                            ),
                             neigh,
                         );
                         let daemon = app.daemon.as_ref().and_then(|d| d.ready());
@@ -137,8 +145,8 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
 fn render_convo(
     ui: &mut egui::Ui,
     tuple_chat: Vec<(bool, String, SystemTime)>,
-    my_fp: RelayFingerprint,
-    their_fp: RelayFingerprint,
+    my_fp: Either<ClientId, RelayFingerprint>,
+    their_fp: Either<ClientId, RelayFingerprint>,
 ) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.set_height(ui.available_height() - 25.0);
@@ -150,13 +158,13 @@ fn render_convo(
             if is_mine {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(format!("[{time_str}]"));
-                    render_fp(ui, my_fp);
+                    color_id(ui, my_fp);
                     ui.add(egui::Label::new(msg));
                 });
             } else {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(format!("[{time_str}]"));
-                    render_fp(ui, their_fp);
+                    color_id(ui, their_fp);
                     ui.add(egui::Label::new(msg));
                 });
             }
@@ -164,26 +172,17 @@ fn render_convo(
     });
 }
 
-fn render_fp(ui: &mut egui::Ui, fp: RelayFingerprint) {
-    let bytes = fp.as_bytes();
-    let r_bytes = &bytes[0..6];
-    let g_bytes = &bytes[6..12];
-    let b_bytes = &bytes[12..18];
+fn color_id(ui: &mut egui::Ui, id: Either<ClientId, RelayFingerprint>) {
+    let (hash, id) = match id {
+        Either::Left(id) => (blake3::hash(&id.to_be_bytes()), id.to_string()),
+        Either::Right(fp) => (blake3::hash(fp.as_bytes()), fp.to_string()),
+    };
 
-    let mut r_acc: u8 = 0;
-    let mut g_acc: u8 = 0;
-    let mut b_acc: u8 = 0;
+    let r: u8 = hash.as_bytes()[0] / 2;
+    let g: u8 = hash.as_bytes()[1] / 2;
+    let b: u8 = hash.as_bytes()[2] / 2;
 
-    for i in 0..6 {
-        r_acc = r_acc.wrapping_add(r_bytes[i]);
-        g_acc = g_acc.wrapping_add(g_bytes[i]);
-        b_acc = b_acc.wrapping_add(b_bytes[i]);
-    }
-
-    ui.colored_label(
-        egui::Color32::from_rgb(r_acc / 2, g_acc / 2, b_acc / 2),
-        fp.to_string(),
-    );
+    ui.colored_label(egui::Color32::from_rgb(r, g, b), id);
 }
 
 fn render_input(
@@ -191,7 +190,7 @@ fn render_input(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
     prefs: &mut Prefs,
-    dest: RelayFingerprint,
+    dest: either::Either<ClientId, RelayFingerprint>,
 ) {
     ui.horizontal(|ui| {
         let response = ui.add(
@@ -205,7 +204,7 @@ fn render_input(
                 let msg = prefs.chat_msg.clone();
                 let daemon = daemon.clone();
                 std::thread::spawn(move || {
-                    block_on(async move { daemon.control().send_chat_msg(dest, msg).await })
+                    block_on(async move { daemon.control().send_chat(dest.to_string(), msg).await })
                 });
                 prefs.chat_msg.clear();
                 response.request_focus();

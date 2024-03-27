@@ -149,7 +149,7 @@ impl App {
                 let mut dump = self.state.get(GRAPH_DUMP).lock();
                 let dump = dump.get_or_refresh(Duration::from_millis(100), || {
                     block_on(async move {
-                        let dump = control.relay_graphviz(true).await?;
+                        let dump = control.relay_graphviz().await?;
                         Ok(dump)
                     })
                 });
@@ -246,7 +246,7 @@ impl App {
                     let config_file =
                         parse_config_yaml(&daemon_cfg).context("could not parse config file")?;
                     let daemon = Daemon::init(config_file).context("cannot start daemon")?;
-                    smol::future::block_on(daemon.control_client().relay_graphviz(false))
+                    smol::future::block_on(daemon.control_client().relay_graphviz())
                         .context("could not get graph dump")?;
                     Ok(DaemonWrap::Embedded(daemon.into()))
                 }))

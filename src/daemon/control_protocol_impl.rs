@@ -22,6 +22,7 @@ use crate::{
     dht::{dht_get, dht_insert},
     haven::HavenLocator,
     n2r_socket::N2rClientSocket,
+    network::{all_client_neighs, all_relay_neighs},
 };
 use crate::{
     control_protocol::{ChatError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError},
@@ -189,6 +190,17 @@ impl ControlProtocol for ControlProtocolImpl {
                 )),
                 |res| res,
             )
+    }
+
+    async fn list_neighbors(&self) -> Vec<Either<ClientId, RelayFingerprint>> {
+        let relays = all_relay_neighs(&self.ctx);
+        let clients = all_client_neighs(&self.ctx);
+        let neighbors: Vec<Either<ClientId, RelayFingerprint>> = relays
+            .into_iter()
+            .map(|r| Either::Right(r))
+            .chain(clients.into_iter().map(|c| Either::Left(c)))
+            .collect();
+        neighbors
     }
 
     async fn list_chats(&self) -> String {
