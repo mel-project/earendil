@@ -6,7 +6,7 @@ use super::link::LinkMessage;
 use crate::{
     config::InRouteConfig,
     context::{DaemonContext, MY_RELAY_IDENTITY, MY_RELAY_ONION_SK, RELAY_GRAPH},
-    daemon::link::Link,
+    daemon::{chat::CHATS, inout_route::link_protocol::LinkClient, link::Link},
     n2r, network,
     pascal::{read_pascal, write_pascal},
 };
@@ -214,10 +214,33 @@ async fn manage_mux(
         }
     };
 
+    // chat
+    let chat_loop = async {
+        loop {
+            let unsent = ctx
+                .get(CHATS)
+                .wait_unsent(
+                    their_relay_descr
+                        .as_ref()
+                        .map(|r| either::Either::Right(r.identity_pk.fingerprint()))
+                        .unwrap_or_else(|| either::Either::Left(their_client_id)),
+                )
+                .await;
+            tracing::debug!(len = unsent.len(), "sending batch of chats");
+            for unsent in unsent {
+                tracing::debug!(text = &unsent.text, "sending a chat");
+                LinkClient(link.rpc_transport())
+                    .push_chat(unsent.text)
+                    .await?;
+            }
+        }
+    };
+
     send_outgoing_client
         .race(send_outgoing_relay)
         .race(rpc_serve)
         .race(gossip_loop)
         .race(recv_incoming)
+        .race(chat_loop)
         .await
 }

@@ -21,10 +21,10 @@ pub struct Chats {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ChatEntry {
-    is_incoming: bool,
-    text: String,
-    time: SystemTime,
-    is_seen: bool,
+    pub is_incoming: bool,
+    pub text: String,
+    pub time: SystemTime,
+    pub is_seen: bool,
 }
 
 impl Chats {
@@ -43,7 +43,7 @@ impl Chats {
         }
 
         chat.push_back(entry);
-        self.unsent.notify_one();
+        self.unsent.notify_all();
     }
 
     pub async fn wait_unsent(
