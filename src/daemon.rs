@@ -7,7 +7,7 @@ mod socks5;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
-use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
+use earendil_crypt::{AnonEndpoint, ClientId, RelayFingerprint, RelayIdentitySecret};
 use earendil_packet::ForwardInstruction;
 
 use earendil_topology::{IdentityDescriptor, RelayGraph};
@@ -70,6 +70,10 @@ impl Daemon {
 
     pub fn identity(&self) -> Option<RelayIdentitySecret> {
         *self.ctx.get(MY_RELAY_IDENTITY)
+    }
+
+    pub fn client_id(&self) -> ClientId {
+        *self.ctx.get(MY_CLIENT_ID)
     }
 
     pub fn control_client(&self) -> ControlClient {

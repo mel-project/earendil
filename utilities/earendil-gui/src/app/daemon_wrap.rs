@@ -1,7 +1,8 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use earendil::{control_protocol::ControlClient, daemon::Daemon};
-use earendil_crypt::RelayIdentitySecret;
+use earendil_crypt::RelayFingerprint;
+use either::Either;
 
 #[derive(Clone)]
 pub enum DaemonWrap {
@@ -20,11 +21,15 @@ impl DaemonWrap {
         }
     }
 
-    pub fn global_sk(&self) -> Option<RelayIdentitySecret> {
+    pub fn identity(&self) -> Either<u64, RelayFingerprint> {
         match self {
-            DaemonWrap::Remote(_) => None, // todo: add control method?
+            DaemonWrap::Remote(_) => todo!(), // todo: add control method?
             DaemonWrap::Embedded(d) => {
-                Some(d.identity().expect("only relays have global identities"))
+                if let Some(sk) = d.identity() {
+                    Either::Right(sk.public().fingerprint())
+                } else {
+                    Either::Left(d.client_id())
+                }
             }
         }
     }

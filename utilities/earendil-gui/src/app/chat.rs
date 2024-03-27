@@ -100,18 +100,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
                     }
 
                     Some(Ok(chat)) => {
-                        render_convo(
-                            &mut cols[1],
-                            chat.to_vec(),
-                            Either::Right(
-                                daemon
-                                    .global_sk()
-                                    .expect("unable to get remote daemon pk")
-                                    .public()
-                                    .fingerprint(),
-                            ),
-                            neigh,
-                        );
+                        render_convo(&mut cols[1], chat.to_vec(), daemon.identity(), neigh);
                         let daemon = app.daemon.as_ref().and_then(|d| d.ready());
                         if let Some(Ok(_daemon)) = daemon {
                             if let Some(neigh) = chatting_with {
