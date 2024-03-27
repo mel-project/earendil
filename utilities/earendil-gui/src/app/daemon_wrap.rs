@@ -23,7 +23,9 @@ impl DaemonWrap {
     pub fn global_sk(&self) -> Option<RelayIdentitySecret> {
         match self {
             DaemonWrap::Remote(_) => None, // todo: add control method?
-            DaemonWrap::Embedded(d) => Some(d.identity()),
+            DaemonWrap::Embedded(d) => {
+                Some(d.identity().expect("only relays have global identities"))
+            }
         }
     }
 }

@@ -11,6 +11,7 @@ use earendil_crypt::{
     AnonEndpoint, ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint,
 };
 use earendil_packet::{crypt::DhPublic, PacketConstructError};
+use either::Either;
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
 use serde::{Deserialize, Serialize};
@@ -227,6 +228,8 @@ pub trait ControlProtocol {
         &self,
         fingerprint: HavenFingerprint,
     ) -> Result<Option<HavenLocator>, DhtError>;
+
+    async fn list_neighbors(&self) -> Vec<Either<ClientId, RelayFingerprint>>;
 
     async fn list_chats(&self) -> String;
 

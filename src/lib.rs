@@ -1,8 +1,8 @@
 mod commands;
-mod config;
+pub mod config;
 mod context;
-mod control_protocol;
-mod daemon;
+pub mod control_protocol;
+pub mod daemon;
 mod db;
 mod debts;
 mod dht;
