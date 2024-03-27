@@ -1,6 +1,5 @@
 use std::{
     collections::BTreeMap,
-    sync::Arc,
     time::{Duration, SystemTime},
 };
 
@@ -13,7 +12,6 @@ use either::Either;
 use itertools::Itertools;
 use moka::sync::Cache;
 use nanorpc::RpcTransport;
-use parking_lot::Mutex;
 
 use smol_timeout::TimeoutExt;
 
@@ -33,18 +31,12 @@ use crate::{
 use super::chat::{ChatEntry, CHATS};
 
 pub struct ControlProtocolImpl {
-    anon_identities: Arc<Mutex<AnonIdentities>>,
-
     ctx: DaemonContext,
 }
 
 impl ControlProtocolImpl {
     pub fn new(ctx: DaemonContext) -> Self {
-        Self {
-            ctx,
-
-            anon_identities: Arc::new(Mutex::new(AnonIdentities::new())),
-        }
+        Self { ctx }
     }
 }
 

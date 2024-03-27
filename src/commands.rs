@@ -54,8 +54,8 @@ pub enum ChatCommand {
     /// start an interactive chat session with a neighbor
     Start {
         /// The fingerprint or client id of the neighbor to start a chat with.
-        /// Accepts prefixes.
-        prefix: String,
+        /// Accepts prefixes: TODO
+        neighbor: String,
     },
 
     /// Pulls conversation between you and neighbor
