@@ -1,6 +1,5 @@
 use clap::{arg, Subcommand};
-use earendil_crypt::{ClientId, HavenFingerprint, RelayFingerprint};
-
+use earendil_crypt::{HavenFingerprint, RelayFingerprint};
 
 #[derive(Subcommand)]
 pub enum ControlCommand {
@@ -34,20 +33,11 @@ pub enum ControlCommand {
         key: HavenFingerprint,
     },
 
-    /// Insert and get a randomly generated HavenLocator.
-    RendezvousHavenTest,
-
-    /// Dumps the graph.
-    GraphDump {
-        #[arg(long)]
-        human: bool,
-    },
+    /// Dumps the relay graph in graphviz format.
+    RelayGraphviz,
 
     /// Dumps my own routes.
     MyRoutes,
-
-    /// Lists debts between you and your neighbors
-    ListDebts,
 
     /// Interactive chat for talking to immediate neighbors
     Chat {
@@ -68,30 +58,16 @@ pub enum ChatCommand {
         prefix: String,
     },
 
-    /// Pulls conversation between you and neighboring client
-    GetClient {
+    /// Pulls conversation between you and neighbor
+    Get {
         #[arg(short, long)]
-        neighbor: ClientId,
+        neighbor: String,
     },
 
-    /// Pulls conversation between you and neighboring relay
-    GetRelay {
+    /// Sends a single chat message to a neighbor
+    Send {
         #[arg(short, long)]
-        neighbor: RelayFingerprint,
-    },
-
-    /// Sends a single chat message to client
-    SendClient {
-        #[arg(short, long)]
-        dest: ClientId,
-        #[arg(short, long)]
-        msg: String,
-    },
-
-    /// Sends a single chat message to relay
-    SendRelay {
-        #[arg(short, long)]
-        dest: RelayFingerprint,
+        dest: String,
         #[arg(short, long)]
         msg: String,
     },

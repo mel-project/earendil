@@ -10,13 +10,9 @@ use colored::{ColoredString, Colorize};
 use earendil_crypt::{
     AnonEndpoint, ClientId, HavenFingerprint, HavenIdentitySecret, RelayFingerprint,
 };
-use earendil_packet::{
-    crypt::{DhPublic, DhSecret},
-    Dock, PacketConstructError,
-};
+use earendil_packet::{crypt::DhPublic, PacketConstructError};
 use nanorpc::nanorpc_derive;
 use nanorpc_http::client::HttpRpcTransport;
-use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use smol::Timer;
@@ -31,7 +27,7 @@ pub async fn main_control(
     control_command: ControlCommand,
     connect: SocketAddr,
 ) -> anyhow::Result<()> {
-    let link = ControlClient::from(HttpRpcTransport::new(connect));
+    let control = ControlClient::from(HttpRpcTransport::new(connect));
     match control_command {
         ControlCommand::GlobalRpc {
             id,
@@ -42,7 +38,7 @@ pub async fn main_control(
             let args: Result<Vec<serde_json::Value>, _> =
                 args.into_iter().map(|a| serde_yaml::from_str(&a)).collect();
             let args = args.context("arguments not YAML")?;
-            let res = link
+            let res = control
                 .send_global_rpc(GlobalRpcArgs {
                     id,
                     destination,
@@ -62,68 +58,43 @@ pub async fn main_control(
                 DhPublic::from_str(&onion_pk)?,
                 rendezvous_fingerprint,
             );
-            link.insert_rendezvous(locator).await??;
+            control.insert_rendezvous(locator).await??;
         }
         ControlCommand::GetRendezvous { key } => {
-            let locator = link.get_rendezvous(key).await??;
+            let locator = control.get_rendezvous(key).await??;
             if let Some(locator) = locator {
                 println!("{:?}", locator);
             } else {
                 println!("No haven locator found for fingerprint {key}")
             }
         }
-        ControlCommand::RendezvousHavenTest => {
-            let mut fingerprint_bytes = [0; 32];
-            rand::thread_rng().fill_bytes(&mut fingerprint_bytes);
-            let fingerprint = RelayFingerprint::from_bytes(&fingerprint_bytes);
-            let id_sk = HavenIdentitySecret::generate();
-            let id_pk = id_sk.public();
-            let locator = HavenLocator::new(id_sk, DhSecret::generate().public(), fingerprint);
-            eprintln!("created haven locator: {:?}", &locator);
-
-            link.insert_rendezvous(locator.clone()).await??;
-            eprintln!("inserted haven locator... sleeping for 5s");
-
-            if let Some(fetched_locator) = link.get_rendezvous(id_pk.fingerprint()).await?? {
-                eprintln!("got haven locator: {:?}", &fetched_locator);
-                assert_eq!(locator.rendezvous_point, fetched_locator.rendezvous_point);
-            } else {
-                eprintln!("oh no couldn't find locator");
-            }
-        }
-        ControlCommand::GraphDump { human } => {
-            let res = link.relay_graphviz(human).await?;
+        ControlCommand::RelayGraphviz => {
+            let res = control.relay_graphviz().await?;
             println!("{res}");
         }
         ControlCommand::MyRoutes => {
-            let routes = link.my_routes().await?;
+            let routes = control.my_routes().await?;
             println!("{}", serde_yaml::to_string(&routes)?);
         }
         ControlCommand::HavensInfo => {
-            for info in link.havens_info().await? {
+            for info in control.havens_info().await? {
                 println!("{} - {}", info.0, info.1);
             }
         }
-        ControlCommand::ListDebts => {
-            for debt in link.list_debts().await? {
-                println!("{:?}", debt);
-            }
-        }
-
         ControlCommand::Chat { chat_command } => match chat_command {
             ChatCommand::List => {
-                let res = link.list_chats().await?;
+                let res = control.list_chats().await?;
                 println!("{res}");
             }
             ChatCommand::Start { prefix } => {
-                let clients = link.list_clients().await?;
-                let relays = link.list_relays().await?;
+                let clients = control.list_clients().await?;
+                let relays = control.list_relays().await?;
                 let client = client_by_prefix(clients, &prefix)?;
                 let relay = relay_by_prefix(relays, &prefix)?;
 
                 if client.is_some() && relay.is_none() {
                     let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
-                    let link = Arc::new(link);
+                    let link = Arc::new(control);
                     let link_clone = link.clone();
 
                     let _listen_loop = smolscale::spawn(async move {
@@ -168,7 +139,7 @@ pub async fn main_control(
                     }
                 } else if client.is_none() && relay.is_some() {
                     let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
-                    let link = Arc::new(link);
+                    let link = Arc::new(control);
                     let link_clone = link.clone();
 
                     let _listen_loop = smolscale::spawn(async move {
@@ -216,20 +187,13 @@ pub async fn main_control(
                     anyhow::bail!("more than one neighbor with this prefix")
                 }
             }
-            ChatCommand::GetClient { neighbor } => {
-                let entries = link.get_client_chat(neighbor).await?;
+            ChatCommand::Get { neighbor } => {
+                let entries = todo!();
                 for (is_mine, text, time) in entries {
                     println!("{}", pretty_entry(is_mine, text, time));
                 }
             }
-            ChatCommand::GetRelay { neighbor } => {
-                let entries = link.get_relay_chat(neighbor).await?;
-                for (is_mine, text, time) in entries {
-                    println!("{}", pretty_entry(is_mine, text, time));
-                }
-            }
-            ChatCommand::SendClient { dest, msg } => link.send_client_chat_msg(dest, msg).await??,
-            ChatCommand::SendRelay { dest, msg } => link.send_relay_chat_msg(dest, msg).await??,
+            ChatCommand::Send { dest, msg } => todo!(),
         },
     }
     Ok(())
@@ -317,9 +281,10 @@ pub trait ControlProtocol {
         fingerprint: HavenFingerprint,
     ) -> Result<Option<HavenLocator>, DhtError>;
 
-    async fn list_chats(&self) -> Vec<String>;
+    async fn list_chats(&self) -> String;
 
-    async fn get_chat(&self, neigh: String) -> Vec<(bool, String, SystemTime)>;
+    // true = incoming, false = outgoing
+    async fn get_chat(&self, neigh: String) -> Result<Vec<(bool, String, SystemTime)>, ChatError>;
 
     async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError>;
 }
@@ -370,6 +335,8 @@ pub enum GlobalRpcError {
 
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum ChatError {
+    #[error("error getting conversation {0}")]
+    Get(String),
     #[error("error sending chat message {0}")]
     Send(String),
 }

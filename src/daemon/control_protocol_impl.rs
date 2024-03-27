@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use earendil_crypt::{
     AnonEndpoint, ClientId, HavenFingerprint, RelayFingerprint, RelayIdentitySecret,
 };
-use earendil_packet::Dock;
+use either::Either;
 use itertools::Itertools;
 use moka::sync::Cache;
 use nanorpc::RpcTransport;
@@ -18,18 +18,19 @@ use parking_lot::Mutex;
 use smol_timeout::TimeoutExt;
 
 use crate::{
-    context::{DEBTS, MY_RELAY_IDENTITY, RELAY_GRAPH},
+    context::{MY_RELAY_IDENTITY, RELAY_GRAPH},
     dht::{dht_get, dht_insert},
     haven::HavenLocator,
     n2r_socket::N2rClientSocket,
-    network::all_client_neighs,
 };
 use crate::{
     control_protocol::{ChatError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError},
     daemon::DaemonContext,
     global_rpc::transport::GlobalRpcTransport,
-    network::{all_relay_neighs, is_relay_neigh},
+    network::is_relay_neigh,
 };
+
+use super::chat::{ChatEntry, CHATS};
 
 pub struct ControlProtocolImpl {
     anon_identities: Arc<Mutex<AnonIdentities>>,
@@ -49,25 +50,6 @@ impl ControlProtocolImpl {
 
 #[async_trait]
 impl ControlProtocol for ControlProtocolImpl {
-    async fn bind_n2r(&self, _socket_id: String, _anon_id: Option<String>, _dock: Option<Dock>) {
-        todo!();
-        // let anon_id = anon_id
-        //     .map(|id| self.anon_identities.lock().get(&id))
-        //     .unwrap_or_else(|| *self.ctx.get(GLOBAL_IDENTITY));
-        // let socket = Socket::bind_n2r_internal(self.ctx.clone(), anon_id, dock);
-        // self.sockets.insert(socket_id, socket);
-    }
-
-    async fn bind_haven(
-        &self,
-        _socket_id: String,
-        _anon_id: Option<String>,
-        _dock: Option<Dock>,
-        _rendezvous_point: Option<RelayFingerprint>,
-    ) {
-        todo!()
-    }
-
     async fn havens_info(&self) -> Vec<(String, String)> {
         self.ctx
             .init()
@@ -105,7 +87,7 @@ impl ControlProtocol for ControlProtocolImpl {
         serde_json::to_value(lala).unwrap()
     }
 
-    async fn relay_graphviz(&self, human: bool) -> String {
+    async fn relay_graphviz(&self) -> String {
         let my_fp = self
             .ctx
             .get(MY_RELAY_IDENTITY)
@@ -116,88 +98,48 @@ impl ControlProtocol for ControlProtocolImpl {
         } else {
             "rect"
         };
-        if human {
-            let clients = all_client_neighs(&self.ctx)
-                .iter()
-                .fold(String::new(), |acc, neigh| {
-                    let fp = neigh;
-                    acc + &format!(
-                        "\n{:?}\nnet debt: {:?}\n",
-                        fp.to_string(),
-                        self.ctx.get(DEBTS).client_net_debt_est(fp)
-                    )
-                });
-            let relays = all_relay_neighs(&self.ctx)
-                .iter()
-                .fold(String::new(), |acc, neigh| {
-                    let fp = neigh;
-                    acc + &format!(
-                        "\n{:?}\nnet debt: {:?}\n",
-                        fp.to_string(),
-                        self.ctx.get(DEBTS).relay_net_debt_est(fp)
-                    )
-                });
-            let all_adjs = self
-                .ctx
+        let all_adjs = self
+            .ctx
+            .get(RELAY_GRAPH)
+            .read()
+            .all_adjacencies()
+            .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
+            .fold(String::new(), |acc, adj| {
+                acc + &format!(
+                    "{:?} -- {:?};\n",
+                    adj.left.to_string(),
+                    adj.right.to_string()
+                )
+            });
+        let all_nodes: String =
+            self.ctx
                 .get(RELAY_GRAPH)
                 .read()
-                .all_adjacencies()
-                .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
-                .fold(String::new(), |acc, adj| {
+                .all_nodes()
+                .fold(String::new(), |acc, node| {
+                    let node_str = node.to_string();
+                    let _desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
                     acc + &format!(
-                        "{:?} -- {:?}\n",
-                        adj.left.to_string(),
-                        adj.right.to_string()
+                        "{:?} [label={:?}, shape={}]\n",
+                        node_str,
+                        get_node_label(&node),
+                        "oval".to_string()
+                            + (if is_relay_neigh(&self.ctx, node) {
+                                ", color=lightpink,style=filled"
+                            } else {
+                                ""
+                            })
                     )
                 });
-            format!(
-                "My fingerprint:\n{}\t[{}]\n\nMy neighbors:{}\n{}\nRelay graph:\n{}",
-                my_fp, relay_or_client, clients, relays, all_adjs
-            )
-        } else {
-            let all_adjs = self
-                .ctx
-                .get(RELAY_GRAPH)
-                .read()
-                .all_adjacencies()
-                .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
-                .fold(String::new(), |acc, adj| {
-                    acc + &format!(
-                        "{:?} -- {:?};\n",
-                        adj.left.to_string(),
-                        adj.right.to_string()
-                    )
-                });
-            let all_nodes: String =
-                self.ctx
-                    .get(RELAY_GRAPH)
-                    .read()
-                    .all_nodes()
-                    .fold(String::new(), |acc, node| {
-                        let node_str = node.to_string();
-                        let _desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
-                        acc + &format!(
-                            "{:?} [label={:?}, shape={}]\n",
-                            node_str,
-                            get_node_label(&node),
-                            "oval".to_string()
-                                + (if is_relay_neigh(&self.ctx, node) {
-                                    ", color=lightpink,style=filled"
-                                } else {
-                                    ""
-                                })
-                        )
-                    });
-            format!(
-                "graph G {{
+        format!(
+            "graph G {{
                     rankdir=\"LR\"
                     {:?} [shape={},color=lightblue,style=filled]
                 {}
                 {}
             }}",
-                my_fp, relay_or_client, all_nodes, all_adjs
-            )
-        }
+            my_fp, relay_or_client, all_nodes, all_adjs
+        )
     }
 
     #[tracing::instrument(skip(self))]
@@ -249,51 +191,38 @@ impl ControlProtocol for ControlProtocolImpl {
             )
     }
 
-    async fn list_clients(&self) -> Vec<ClientId> {
-        todo!();
-        // chat::list_clients(&self.ctx)
-    }
-
-    async fn list_relays(&self) -> Vec<RelayFingerprint> {
-        todo!();
-        // chat::list_relays(&self.ctx)
-    }
-
     async fn list_chats(&self) -> String {
-        todo!();
-        // chat::list_chats(&self.ctx)
+        self.ctx.get(CHATS).list_chats()
     }
 
-    async fn get_client_chat(&self, _neigh: ClientId) -> Vec<(bool, String, SystemTime)> {
-        todo!();
-        // chat::get_client_chat(&self.ctx, neigh)
+    async fn get_chat(&self, neigh: String) -> Result<Vec<(bool, String, SystemTime)>, ChatError> {
+        let neighbor = if let Ok(client) = neigh.parse::<ClientId>() {
+            Either::Left(client)
+        } else if let Ok(relay) = neigh.parse::<RelayFingerprint>() {
+            Either::Right(relay)
+        } else {
+            return Err(ChatError::Get("unrecognized neighbor".into()));
+        };
+
+        let convo = self.ctx.get(CHATS).dump_convo(neighbor);
+        Ok(convo
+            .into_iter()
+            .map(|entry| (entry.is_incoming, entry.text, entry.time))
+            .collect())
     }
 
-    async fn get_relay_chat(&self, _neigh: RelayFingerprint) -> Vec<(bool, String, SystemTime)> {
-        todo!();
-        // chat::get_relay_chat(&self.ctx, neigh)
-    }
+    async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError> {
+        let neigh = if let Ok(client) = dest.parse::<ClientId>() {
+            Either::Left(client)
+        } else if let Ok(relay) = dest.parse::<RelayFingerprint>() {
+            Either::Right(relay)
+        } else {
+            return Err(ChatError::Send("unrecognized neighbor".into()));
+        };
 
-    async fn send_client_chat_msg(&self, _dest: ClientId, _msg: String) -> Result<(), ChatError> {
-        todo!();
-        // chat::send_client_chat_msg(&self.ctx, dest, msg)
-        //     .await
-        //     .map_err(|e| ChatError::Send(e.to_string()))
-    }
-
-    async fn send_relay_chat_msg(
-        &self,
-        _dest: RelayFingerprint,
-        _msg: String,
-    ) -> Result<(), ChatError> {
-        todo!();
-        // chat::send_relay_chat_msg(&self.ctx, dest, msg)
-        //     .await
-        //     .map_err(|e| ChatError::Send(e.to_string()))
-    }
-
-    async fn list_debts(&self) -> Vec<String> {
-        self.ctx.get(DEBTS).list()
+        let entry = ChatEntry::new_outgoing(msg);
+        self.ctx.get(CHATS).record(neigh, entry);
+        Ok(())
     }
 }
 

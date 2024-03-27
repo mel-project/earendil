@@ -76,6 +76,34 @@ impl Chats {
     ) -> Vec<ChatEntry> {
         self.history.entry(neighbor).or_default().clone().into()
     }
+
+    pub fn list_chats(&self) -> String {
+        let mut info = "+----------------------------------+-------------------+-----------------------------------+\n".to_owned();
+        info += "| Neighbor                         | # of Messages     | Last chat                         |\n";
+        info += "+----------------------------------+-------------------+-----------------------------------+\n";
+
+        for entry in self.history.iter() {
+            let (neigh, chat) = entry.pair();
+            let num_messages = chat.len();
+            if let Some(ChatEntry {
+                is_incoming,
+                text,
+                time,
+                is_seen,
+            }) = chat.back()
+            {
+                info += &format!(
+                    "| {:<32} | {:<17} | {} {}\n",
+                    neigh,
+                    num_messages,
+                    text,
+                    create_timestamp(*time)
+                );
+                info += "+----------------------------------+-------------------+-----------------------------------+\n";
+            }
+        }
+        info
+    }
 }
 
 impl ChatEntry {
@@ -96,4 +124,10 @@ impl ChatEntry {
             is_seen: false,
         }
     }
+}
+
+pub fn create_timestamp(now: SystemTime) -> String {
+    let datetime: chrono::DateTime<chrono::Local> = now.into();
+
+    format!("[{}]", datetime.format("%Y-%m-%d %H:%M:%S"))
 }
