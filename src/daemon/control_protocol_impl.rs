@@ -17,7 +17,6 @@ use parking_lot::Mutex;
 
 use smol_timeout::TimeoutExt;
 
-
 use crate::{
     context::{DEBTS, MY_RELAY_IDENTITY, RELAY_GRAPH},
     dht::{dht_get, dht_insert},
@@ -106,7 +105,7 @@ impl ControlProtocol for ControlProtocolImpl {
         serde_json::to_value(lala).unwrap()
     }
 
-    async fn graph_dump(&self, human: bool) -> String {
+    async fn relay_graphviz(&self, human: bool) -> String {
         let my_fp = self
             .ctx
             .get(MY_RELAY_IDENTITY)

@@ -6,7 +6,7 @@ use bytes::Bytes;
 use earendil::{HavenEndpoint, HavenListener, HavenPacketConn, N2rClientSocket, N2rRelaySocket};
 use earendil_crypt::{AnonEndpoint, HavenIdentitySecret};
 
-use smol::{future::FutureExt as _};
+use smol::future::FutureExt as _;
 use smol_timeout::TimeoutExt;
 use tracing_test::traced_test;
 
@@ -27,7 +27,10 @@ fn n2r() {
 
         helpers::sleep(10).await;
 
-        println!("{}", alice.control_client().graph_dump(true).await.unwrap());
+        println!(
+            "{}",
+            alice.control_client().relay_graphviz(true).await.unwrap()
+        );
         dbg!(bob_skt.local_endpoint());
 
         let alice_msg = Bytes::from_static("in Wonderland rn, wya??".as_bytes());

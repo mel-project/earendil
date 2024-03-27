@@ -92,7 +92,7 @@ pub async fn main_control(
             }
         }
         ControlCommand::GraphDump { human } => {
-            let res = link.graph_dump(human).await?;
+            let res = link.relay_graphviz(human).await?;
             println!("{res}");
         }
         ControlCommand::MyRoutes => {
@@ -299,16 +299,6 @@ fn pretty_time(time: SystemTime) -> ColoredString {
 #[nanorpc_derive]
 #[async_trait]
 pub trait ControlProtocol {
-    async fn bind_n2r(&self, socket_id: String, anon_id: Option<String>, dock: Option<Dock>);
-
-    async fn bind_haven(
-        &self,
-        socket_id: String,
-        anon_id: Option<String>,
-        dock: Option<Dock>,
-        rendezvous_point: Option<RelayFingerprint>,
-    );
-
     async fn havens_info(&self) -> Vec<(String, String)>;
 
     async fn send_global_rpc(
@@ -316,7 +306,7 @@ pub trait ControlProtocol {
         args: GlobalRpcArgs,
     ) -> Result<serde_json::Value, GlobalRpcError>;
 
-    async fn graph_dump(&self, human: bool) -> String;
+    async fn relay_graphviz(&self) -> String; // graphviz
 
     async fn my_routes(&self) -> serde_json::Value;
 
@@ -327,25 +317,11 @@ pub trait ControlProtocol {
         fingerprint: HavenFingerprint,
     ) -> Result<Option<HavenLocator>, DhtError>;
 
-    async fn list_clients(&self) -> Vec<ClientId>;
+    async fn list_chats(&self) -> Vec<String>;
 
-    async fn list_relays(&self) -> Vec<RelayFingerprint>;
+    async fn get_chat(&self, neigh: String) -> Vec<(bool, String, SystemTime)>;
 
-    async fn list_chats(&self) -> String;
-
-    async fn get_client_chat(&self, neigh: ClientId) -> Vec<(bool, String, SystemTime)>;
-
-    async fn get_relay_chat(&self, neigh: RelayFingerprint) -> Vec<(bool, String, SystemTime)>;
-
-    async fn send_client_chat_msg(&self, dest: ClientId, msg: String) -> Result<(), ChatError>;
-
-    async fn send_relay_chat_msg(
-        &self,
-        dest: RelayFingerprint,
-        msg: String,
-    ) -> Result<(), ChatError>;
-
-    async fn list_debts(&self) -> Vec<String>;
+    async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError>;
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
