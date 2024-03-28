@@ -16,7 +16,7 @@ use nanorpc::RpcTransport;
 use smol_timeout::TimeoutExt;
 
 use crate::{
-    context::{MY_RELAY_IDENTITY, RELAY_GRAPH},
+    context::{MY_CLIENT_ID, MY_RELAY_IDENTITY, RELAY_GRAPH},
     dht::{dht_get, dht_insert},
     haven::HavenLocator,
     n2r_socket::N2rClientSocket,
@@ -81,17 +81,39 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn relay_graphviz(&self) -> String {
-        let my_fp = self
+        let my_id = self
             .ctx
             .get(MY_RELAY_IDENTITY)
-            .map(|id| id.public().fingerprint().to_string())
-            .unwrap_or("node is not a relay".to_string());
-        let relay_or_client = if self.ctx.init().in_routes.is_empty() {
-            "oval"
-        } else {
+            .map(|id| get_node_label(&id.public().fingerprint()) + "\n[relay]")
+            .unwrap_or(self.ctx.get(MY_CLIENT_ID).to_string() + "\n[client]");
+        let my_shape = if self.ctx.init().in_routes.is_empty() {
             "rect"
+        } else {
+            "oval"
         };
-        let all_adjs = self
+
+        let all_relays =
+            self.ctx
+                .get(RELAY_GRAPH)
+                .read()
+                .all_nodes()
+                .fold(String::new(), |acc, node| {
+                    let node_label = get_node_label(&node);
+                    if my_id.contains(&node_label) {
+                        // if we're a relay, don't print two nodes for ourselves in the graphviz
+                        acc
+                    } else {
+                        let _desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
+                        acc + &format!(
+                            "{:?} [label={:?}, shape={}]\n",
+                            node.to_string(),
+                            node_label,
+                            "oval, color=lightpink,style=filled".to_string()
+                        )
+                    }
+                });
+
+        let all_relay_adjs = self
             .ctx
             .get(RELAY_GRAPH)
             .read()
@@ -104,34 +126,22 @@ impl ControlProtocol for ControlProtocolImpl {
                     adj.right.to_string()
                 )
             });
-        let all_nodes: String =
-            self.ctx
-                .get(RELAY_GRAPH)
-                .read()
-                .all_nodes()
-                .fold(String::new(), |acc, node| {
-                    let node_str = node.to_string();
-                    let _desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
-                    acc + &format!(
-                        "{:?} [label={:?}, shape={}]\n",
-                        node_str,
-                        get_node_label(&node),
-                        "oval".to_string()
-                            + (if is_relay_neigh(&self.ctx, node) {
-                                ", color=lightpink,style=filled"
-                            } else {
-                                ""
-                            })
-                    )
-                });
+
+        let all_my_adjs = all_relay_neighs(&self.ctx)
+            .iter()
+            .fold(String::new(), |acc, neigh| {
+                acc + &format!("{:?} -- {:?};\n", my_id, neigh.to_string())
+            });
+
         format!(
             "graph G {{
                     rankdir=\"LR\"
                     {:?} [shape={},color=lightblue,style=filled]
                 {}
                 {}
+                {}
             }}",
-            my_fp, relay_or_client, all_nodes, all_adjs
+            my_id, my_shape, all_relays, all_relay_adjs, all_my_adjs
         )
     }
 
