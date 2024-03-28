@@ -89,13 +89,13 @@ pub async fn main_control(
             }
             ChatCommand::Start { neighbor } => {
                 let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
-                let link = Arc::new(control);
-                let link_clone = link.clone();
+                let control = Arc::new(control);
+                let control_clone = control.clone();
                 let neighbor_clone = neighbor.clone();
 
                 let _listen_loop = smolscale::spawn(async move {
                     loop {
-                        let msgs = if let Ok(Ok(msgs)) = link.get_chat(neighbor.clone()).await {
+                        let msgs = if let Ok(Ok(msgs)) = control.get_chat(neighbor.clone()).await {
                             msgs
                         } else {
                             println!("error fetching messages");
@@ -126,7 +126,7 @@ pub async fn main_control(
 
                     if !message.is_empty() {
                         let msg = message.to_string();
-                        match link_clone.send_chat(neighbor_clone.clone(), msg).await? {
+                        match control_clone.send_chat(neighbor_clone.clone(), msg).await? {
                             Ok(_) => continue,
                             Err(e) => println!("ERROR: {e}"),
                         }
@@ -233,7 +233,7 @@ pub trait ControlProtocol {
 
     async fn list_chats(&self) -> String;
 
-    // true = incoming, false = outgoing
+    // true = outgoing, false = incoming
     async fn get_chat(&self, neigh: String) -> Result<Vec<(bool, String, SystemTime)>, ChatError>;
 
     async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError>;

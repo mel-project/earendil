@@ -211,7 +211,7 @@ impl ControlProtocol for ControlProtocolImpl {
         let convo = self.ctx.get(CHATS).dump_convo(neighbor);
         Ok(convo
             .into_iter()
-            .map(|entry| (entry.is_incoming, entry.text, entry.time))
+            .map(|entry| (entry.is_outgoing, entry.text, entry.time))
             .collect())
     }
 
@@ -221,7 +221,7 @@ impl ControlProtocol for ControlProtocolImpl {
         } else if let Ok(relay) = dest.parse::<RelayFingerprint>() {
             Either::Right(relay)
         } else {
-            return Err(ChatError::Send("unrecognized neighbor".into()));
+            return Err(ChatError::Send(format!("unrecognized neighbor {}", dest)));
         };
 
         let entry = ChatEntry::new_outgoing(msg);

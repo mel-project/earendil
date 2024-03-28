@@ -19,12 +19,12 @@ pub struct Chats {
     unsent: Arc<Event>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatEntry {
-    pub is_incoming: bool,
+    pub is_outgoing: bool,
     pub text: String,
     pub time: SystemTime,
-    pub is_seen: bool,
+    pub is_sent: bool,
 }
 
 impl Chats {
@@ -55,8 +55,8 @@ impl Chats {
                 let mut unsent = vec![];
                 if let Some(mut chat) = self.history.get_mut(&neighbor) {
                     for entry in chat.iter_mut() {
-                        if !entry.is_incoming && !entry.is_seen {
-                            entry.is_seen = true;
+                        if entry.is_outgoing && !entry.is_sent {
+                            entry.is_sent = true;
                             unsent.push(entry.clone());
                         }
                     }
@@ -86,10 +86,10 @@ impl Chats {
             let (neigh, chat) = entry.pair();
             let num_messages = chat.len();
             if let Some(ChatEntry {
-                is_incoming,
+                is_outgoing: _,
                 text,
                 time,
-                is_seen,
+                is_sent: _,
             }) = chat.back()
             {
                 info += &format!(
@@ -109,19 +109,19 @@ impl Chats {
 impl ChatEntry {
     pub fn new_outgoing(text: String) -> Self {
         Self {
-            is_incoming: true,
+            is_outgoing: true,
             text,
             time: SystemTime::now(),
-            is_seen: false,
+            is_sent: false,
         }
     }
 
     pub fn new_incoming(text: String) -> Self {
         Self {
-            is_incoming: false,
+            is_outgoing: false,
             text,
             time: SystemTime::now(),
-            is_seen: false,
+            is_sent: false,
         }
     }
 }
