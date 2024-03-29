@@ -1,14 +1,9 @@
 # relay with fingerprint: 04c48b49e5ba915e2f47655011a3aed75b3ac7e3b468bbc84b23884546312046
 
 identity_seed: rob
-# state_cache: rob.db
 control_listen: 127.0.0.1:33333
 
-# auto_settle:
-#   interval: 10
-
 in_routes:
-  # arbitrary names, used for diagnositics and logging
   main_udp:
     listen: 0.0.0.0:34567
     obfs: none

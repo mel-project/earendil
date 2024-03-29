@@ -130,7 +130,9 @@ pub async fn send_forward(
         .get(RELAY_GRAPH)
         .read()
         .identity(&dst_fp)
-        .context("couldn't get the identity of the destination fp")?
+        .context(format!(
+            "couldn't get the identity of the destination fp {dst_fp}"
+        ))?
         .onion_pk;
     let wrapped_onion = RawPacket::new_normal(
         &instructs,
