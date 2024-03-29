@@ -61,7 +61,7 @@ pub enum ChatCommand {
     /// Pulls conversation between you and neighbor
     Get {
         #[arg(short, long)]
-        neighbor: String,
+        src: String,
     },
 
     /// Sends a single chat message to a neighbor

@@ -1,6 +1,8 @@
 use crate::{
     commands::{ChatCommand, ControlCommand},
+    daemon::ChatEntry,
     haven::HavenLocator,
+    network::all_client_neighs,
 };
 use anyhow::Context;
 use async_trait::async_trait;
@@ -17,7 +19,7 @@ use nanorpc_http::client::HttpRpcTransport;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use smol::Timer;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{io::Write, marker::Send};
@@ -84,8 +86,32 @@ pub async fn main_control(
         }
         ControlCommand::Chat { chat_command } => match chat_command {
             ChatCommand::List => {
-                let res = control.list_chats().await?;
-                println!("{res}");
+                let divider = "+----------------------------------------+---------------+-----------------------------------+\n";
+                let chats = control.list_chats().await?;
+                println!("{divider}");
+                println!("| Neighbor                               | # of Messages | Last chat                         |\n");
+                println!("{divider}");
+
+                for (neigh, (maybe_entry, num_msgs)) in chats {
+                    let neigh = if neigh.len() > 32 {
+                        neigh[..32].to_owned() + "..."
+                    } else {
+                        neigh
+                    };
+                    let (text, timestamp) = if let Some(entry) = maybe_entry {
+                        (entry.text, create_timestamp(entry.time))
+                    } else {
+                        (
+                            "                               ".to_owned(),
+                            "               ".to_owned(),
+                        )
+                    };
+                    println!(
+                        "| {:<38} | {:<13} | {} {}\n",
+                        neigh, num_msgs, text, timestamp
+                    );
+                    println!("{divider}");
+                }
             }
             ChatCommand::Start { neighbor } => {
                 let mut displayed: HashSet<(bool, String, SystemTime)> = HashSet::new();
@@ -133,8 +159,8 @@ pub async fn main_control(
                     }
                 }
             }
-            ChatCommand::Get { neighbor } => {
-                let entries = control.get_chat(neighbor).await??;
+            ChatCommand::Get { src } => {
+                let entries = control.get_chat(src).await??;
                 for (is_mine, text, time) in entries {
                     println!("{}", pretty_entry(is_mine, text, time));
                 }
@@ -163,37 +189,6 @@ fn left_arrow() -> ColoredString {
 
 fn right_arrow() -> ColoredString {
     earendil_blue("->")
-}
-
-fn client_by_prefix(clients: Vec<ClientId>, prefix: &str) -> anyhow::Result<Option<ClientId>> {
-    let valid: Vec<ClientId> = clients
-        .into_iter()
-        .filter(|fp| fp.to_string().starts_with(prefix))
-        .collect();
-    if valid.len() == 1 {
-        Ok(Some(valid[0]))
-    } else if valid.is_empty() {
-        Ok(None)
-    } else {
-        anyhow::bail!("Multiple clients have this prefix! Try a longer prefix.")
-    }
-}
-
-fn relay_by_prefix(
-    relays: Vec<RelayFingerprint>,
-    prefix: &str,
-) -> anyhow::Result<Option<RelayFingerprint>> {
-    let valid: Vec<RelayFingerprint> = relays
-        .into_iter()
-        .filter(|fp| fp.to_string().starts_with(prefix))
-        .collect();
-    if valid.len() == 1 {
-        Ok(Some(valid[0]))
-    } else if valid.is_empty() {
-        Ok(None)
-    } else {
-        anyhow::bail!("Multiple relays have this prefix! Try a longer prefix.")
-    }
 }
 
 fn pretty_entry(is_mine: bool, text: String, time: SystemTime) -> String {
@@ -231,10 +226,10 @@ pub trait ControlProtocol {
 
     async fn list_neighbors(&self) -> Vec<Either<ClientId, RelayFingerprint>>;
 
-    async fn list_chats(&self) -> String;
+    async fn list_chats(&self) -> HashMap<String, (Option<ChatEntry>, u32)>;
 
     // true = outgoing, false = incoming
-    async fn get_chat(&self, neigh: String) -> Result<Vec<(bool, String, SystemTime)>, ChatError>;
+    async fn get_chat(&self, src: String) -> Result<Vec<(bool, String, SystemTime)>, ChatError>;
 
     async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError>;
 }
@@ -289,4 +284,10 @@ pub enum ChatError {
     Get(String),
     #[error("error sending chat message {0}")]
     Send(String),
+}
+
+fn create_timestamp(now: SystemTime) -> String {
+    let datetime: chrono::DateTime<chrono::Local> = now.into();
+
+    format!("[{}]", datetime.format("%Y-%m-%d %H:%M:%S"))
 }

@@ -47,6 +47,7 @@ use crate::{
 use crate::{context::DaemonContext, global_rpc::server::GlobalRpcImpl};
 use crate::{control_protocol::SendMessageError, global_rpc::GlobalRpcService};
 
+pub use self::chat::ChatEntry;
 use self::control_protocol_impl::ControlProtocolImpl;
 
 pub struct Daemon {

@@ -1,8 +1,14 @@
 use async_event::Event;
 use dashmap::DashMap;
 use earendil_crypt::{ClientId, RelayFingerprint};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, sync::Arc, time::SystemTime};
+use std::{
+    collections::{HashMap, VecDeque},
+    slice::Iter,
+    sync::Arc,
+    time::SystemTime,
+};
 
 use crate::context::CtxField;
 
@@ -77,32 +83,21 @@ impl Chats {
         self.history.entry(neighbor).or_default().clone().into()
     }
 
-    pub fn list_chats(&self) -> String {
-        let mut info = "+----------------------------------+-------------------+-----------------------------------+\n".to_owned();
-        info += "| Neighbor                         | # of Messages     | Last chat                         |\n";
-        info += "+----------------------------------+-------------------+-----------------------------------+\n";
-
-        for entry in self.history.iter() {
-            let (neigh, chat) = entry.pair();
-            let num_messages = chat.len();
-            if let Some(ChatEntry {
-                is_outgoing: _,
-                text,
-                time,
-                is_sent: _,
-            }) = chat.back()
-            {
-                info += &format!(
-                    "| {:<32} | {:<17} | {} {}\n",
-                    neigh,
-                    num_messages,
-                    text,
-                    create_timestamp(*time)
-                );
-                info += "+----------------------------------+-------------------+-----------------------------------+\n";
-            }
-        }
-        info
+    pub fn all_chats(
+        &self,
+    ) -> HashMap<either::Either<ClientId, RelayFingerprint>, (Option<ChatEntry>, u32)> {
+        self.history
+            .iter()
+            .map(|x| {
+                let (neigh, deq) = x.pair();
+                let info = if let Some(entry) = deq.back() {
+                    (Some(entry.clone()), deq.len() as u32)
+                } else {
+                    (None, 0)
+                };
+                (neigh.clone(), info)
+            })
+            .collect()
     }
 }
 
@@ -124,10 +119,4 @@ impl ChatEntry {
             is_sent: false,
         }
     }
-}
-
-pub fn create_timestamp(now: SystemTime) -> String {
-    let datetime: chrono::DateTime<chrono::Local> = now.into();
-
-    format!("[{}]", datetime.format("%Y-%m-%d %H:%M:%S"))
 }

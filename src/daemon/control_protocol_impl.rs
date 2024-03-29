@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     time::{Duration, SystemTime},
 };
 
@@ -26,7 +26,6 @@ use crate::{
     control_protocol::{ChatError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError},
     daemon::DaemonContext,
     global_rpc::transport::GlobalRpcTransport,
-    network::is_relay_neigh,
 };
 
 use super::chat::{ChatEntry, CHATS};
@@ -205,19 +204,38 @@ impl ControlProtocol for ControlProtocolImpl {
         neighbors
     }
 
-    async fn list_chats(&self) -> String {
-        self.ctx.get(CHATS).list_chats()
+    /// returns not only all active chats but also all potential chat destinations
+    async fn list_chats(&self) -> HashMap<String, (Option<ChatEntry>, u32)> {
+        let mut chat_info: HashMap<String, (Option<ChatEntry>, u32)> = self
+            .ctx
+            .get(CHATS)
+            .all_chats()
+            .into_iter()
+            .map(|(neigh, info)| (neigh.to_string(), info))
+            .collect();
+        let mut client_neighs: Vec<String> = all_client_neighs(&self.ctx)
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect();
+        let mut relay_neighs = all_relay_neighs(&self.ctx)
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect();
+        client_neighs.append(&mut relay_neighs);
+        for neigh in client_neighs {
+            if !chat_info.contains_key(&neigh) {
+                chat_info.insert(neigh, (None, 0));
+            }
+        }
+        chat_info
     }
 
-    async fn get_chat(&self, neigh: String) -> Result<Vec<(bool, String, SystemTime)>, ChatError> {
-        let neighbor = if let Ok(client) = neigh.parse::<ClientId>() {
-            Either::Left(client)
-        } else if let Ok(relay) = neigh.parse::<RelayFingerprint>() {
-            Either::Right(relay)
-        } else {
-            return Err(ChatError::Get("unrecognized neighbor".into()));
-        };
-
+    async fn get_chat(
+        &self,
+        src_prefix: String,
+    ) -> Result<Vec<(bool, String, SystemTime)>, ChatError> {
+        let neighbor =
+            neigh_by_prefix(&self.ctx, &src_prefix).map_err(|e| ChatError::Get(format!("{e}")))?;
         let convo = self.ctx.get(CHATS).dump_convo(neighbor);
         Ok(convo
             .into_iter()
@@ -225,17 +243,11 @@ impl ControlProtocol for ControlProtocolImpl {
             .collect())
     }
 
-    async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError> {
-        let neigh = if let Ok(client) = dest.parse::<ClientId>() {
-            Either::Left(client)
-        } else if let Ok(relay) = dest.parse::<RelayFingerprint>() {
-            Either::Right(relay)
-        } else {
-            return Err(ChatError::Send(format!("unrecognized neighbor {}", dest)));
-        };
-
+    async fn send_chat(&self, dest_prefix: String, msg: String) -> Result<(), ChatError> {
+        let neighbor = neigh_by_prefix(&self.ctx, &dest_prefix)
+            .map_err(|e| ChatError::Send(format!("{e}")))?;
         let entry = ChatEntry::new_outgoing(msg);
-        self.ctx.get(CHATS).record(neigh, entry);
+        self.ctx.get(CHATS).record(neighbor, entry);
         Ok(())
     }
 }
@@ -263,5 +275,29 @@ impl AnonIdentities {
         self.map.get_with_by_ref(id, || {
             RelayIdentitySecret::from_bytes(pseudo_secret.as_bytes())
         })
+    }
+}
+
+fn neigh_by_prefix(
+    ctx: &DaemonContext,
+    prefix: &str,
+) -> anyhow::Result<Either<ClientId, RelayFingerprint>> {
+    let valid_clients = all_client_neighs(ctx)
+        .into_iter()
+        .map(|client| Either::Left(client));
+    let valid_relays = all_relay_neighs(ctx)
+        .into_iter()
+        .map(|relay| Either::Right(relay));
+    let valid_neighs: Vec<Either<ClientId, RelayFingerprint>> = valid_clients
+        .chain(valid_relays)
+        .filter(|fp| fp.to_string().starts_with(prefix))
+        .collect();
+
+    if valid_neighs.len() == 1 {
+        Ok(valid_neighs[0])
+    } else if valid_neighs.is_empty() {
+        anyhow::bail!("No neighbors with this prefix! Double check the spelling.")
+    } else {
+        anyhow::bail!("Prefix matches multiple neighbors! Try a longer prefix.")
     }
 }
