@@ -5,12 +5,10 @@ use std::{
 
 use async_trait::async_trait;
 
-use earendil_crypt::{
-    AnonEndpoint, ClientId, HavenFingerprint, RelayFingerprint, RelayIdentitySecret,
-};
+use earendil_crypt::{AnonEndpoint, ClientId, HavenFingerprint, RelayFingerprint};
 use either::Either;
 use itertools::Itertools;
-use moka::sync::Cache;
+
 use nanorpc::RpcTransport;
 
 use smol_timeout::TimeoutExt;
@@ -149,7 +147,7 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         send_args: GlobalRpcArgs,
     ) -> Result<serde_json::Value, GlobalRpcError> {
-        let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::new())
+        let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::random())
             .expect("failed to bind n2r socket");
         let client = GlobalRpcTransport::new(self.ctx.clone(), send_args.destination, n2r_skt);
         let res = if let Some(res) = client
@@ -170,7 +168,7 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn insert_rendezvous(&self, locator: HavenLocator) -> Result<(), DhtError> {
-        let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::new())
+        let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::random())
             .expect("failed to bind n2r client socket");
         dht_insert(&self.ctx, locator, &n2r_skt).await;
         Ok(())
@@ -180,7 +178,7 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         fingerprint: HavenFingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::new())
+        let n2r_skt = N2rClientSocket::bind(self.ctx.clone(), AnonEndpoint::random())
             .expect("failed to bind n2r client socket");
         dht_get(&self.ctx, fingerprint, &n2r_skt)
             .timeout(Duration::from_secs(30))

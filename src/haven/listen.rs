@@ -31,7 +31,7 @@ pub async fn listen_loop(
     rendezvous: RelayFingerprint,
     send_accepted: Sender<HavenPacketConn>,
 ) -> anyhow::Result<()> {
-    let anon_ep = AnonEndpoint::new();
+    let anon_ep = AnonEndpoint::random();
     let n2r_socket = N2rClientSocket::bind(ctx.clone(), anon_ep)?;
     loop {
         // register ourselves with rendezvous & upload info to DHT in a loop
@@ -69,10 +69,10 @@ async fn register_haven(
     let gclient = GlobalRpcClient(GlobalRpcTransport::new(
         ctx.clone(),
         rendezvous,
-        N2rClientSocket::bind(ctx.clone(), AnonEndpoint::new())?,
+        N2rClientSocket::bind(ctx.clone(), AnonEndpoint::random())?,
     ));
     loop {
-        let dht_socket = N2rClientSocket::bind(ctx.clone(), AnonEndpoint::new())?;
+        let dht_socket = N2rClientSocket::bind(ctx.clone(), AnonEndpoint::random())?;
         match gclient
             .alloc_forward(forward_req.clone())
             .timeout(Duration::from_secs(10))

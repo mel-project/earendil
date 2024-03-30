@@ -139,8 +139,8 @@ impl RawPacket {
                 buffer
             };
 
-            let (header_outer, our_sk) = box_encrypt(&buffer, &dest_opk);
-            let shared_sec = our_sk.shared_secret(&dest_opk);
+            let (header_outer, our_sk) = box_encrypt(&buffer, dest_opk);
+            let shared_sec = our_sk.shared_secret(dest_opk);
             let onion_body = {
                 let body_key = blake3::keyed_hash(b"body____________________________", &shared_sec);
                 let mut new = sealed_payload;

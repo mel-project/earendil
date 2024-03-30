@@ -252,7 +252,7 @@ async fn control_protocol_loop(ctx: DaemonContext) -> anyhow::Result<()> {
 async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     let relay_skt = Arc::new(N2rRelaySocket::bind(ctx.clone(), Some(GLOBAL_RPC_DOCK))?);
 
-    let my_anon_ep = AnonEndpoint::new();
+    let my_anon_ep = AnonEndpoint::random();
     let n2r_skt = N2rClientSocket::bind(ctx.clone(), my_anon_ep)?;
     let service = Arc::new(GlobalRpcService(GlobalRpcImpl::new(ctx, n2r_skt)));
     nursery!(loop {

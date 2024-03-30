@@ -128,7 +128,7 @@ mod tests {
         use crate::RawPacket;
 
         // Generate  identity secrets
-        let alice_anon_id = AnonEndpoint::new();
+        let alice_anon_id = AnonEndpoint::random();
         let alice_osk = DhSecret::generate();
         let alice_opk = alice_osk.public();
         // Generate 5-hop route

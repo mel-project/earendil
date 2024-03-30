@@ -4,8 +4,8 @@ use clone_macro::clone;
 use futures_util::{AsyncRead, AsyncWrite};
 use parking_lot::Mutex;
 use smol::{future::FutureExt, Task, Timer};
-use sosistab2::{StreamMessage, StreamState};
 use stdcode::StdcodeSerializeExt;
+use virta::{stream_state::StreamState, StreamMessage};
 
 use crate::haven::HavenPacketConn;
 
@@ -18,7 +18,7 @@ use crate::haven::HavenPacketConn;
 ///
 /// In fact, the de-facto standard protocol used in Earendil to represent TCP channels is [picomux] over [HavenStream]s. The convenience wrappers [crate::PooledListener] and [crate::PooledVisitor] are provided for that.
 pub struct HavenStream {
-    inner_stream: sosistab2::Stream,
+    inner_stream: virta::Stream,
     _task: Arc<Task<()>>,
 }
 
@@ -39,7 +39,7 @@ impl HavenStream {
             }
         };
 
-        let (s2_state, s2_stream) = StreamState::new_established(tick_notify, 0, "".to_owned());
+        let (s2_state, s2_stream) = StreamState::new_established(tick_notify);
 
         let wrapped_ss = Arc::new(Mutex::new(s2_state));
         let ticker_task = clone!([wrapped_ss], async move {
@@ -87,7 +87,7 @@ impl HavenStream {
         }
     }
 
-    fn pin_project_inner(self: std::pin::Pin<&mut Self>) -> Pin<&mut sosistab2::Stream> {
+    fn pin_project_inner(self: std::pin::Pin<&mut Self>) -> Pin<&mut virta::Stream> {
         // SAFETY: this is a safe pin-projection, since we never get a &mut sosistab2::Stream from a Pin<&mut Stream> elsewhere.
         // Safety requires that we either consistently lose Pin or keep it.
         // We could use the "pin_project" crate but I'm too lazy.

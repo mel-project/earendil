@@ -100,7 +100,7 @@ mod tests {
             .iter()
             .map(|(inst, _)| *inst)
             .collect();
-        let alice_anon_id = AnonEndpoint::new();
+        let alice_anon_id = AnonEndpoint::random();
         let alice_osk = DhSecret::generate();
         let alice_opk = alice_osk.public();
         let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn test_reply_block_store_insert() {
         let mut rb_store = ReplyBlockStore::new();
-        let anon_id = AnonEndpoint::new();
+        let anon_id = AnonEndpoint::random();
         let rb = create_reply_block();
 
         // Testing insert in empty store
@@ -165,7 +165,7 @@ mod tests {
     #[test]
     fn test_reply_block_store_pop() {
         let mut rb_store = ReplyBlockStore::new();
-        let anon_id = AnonEndpoint::new();
+        let anon_id = AnonEndpoint::random();
         let rb = create_reply_block();
 
         // Testing get when item exists

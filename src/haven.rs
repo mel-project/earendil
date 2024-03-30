@@ -5,9 +5,7 @@ mod vrh;
 use std::{
     fmt::{self, Display, Formatter},
     str::FromStr,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -207,13 +205,13 @@ impl HavenPacketConn {
         let locator = dht_get(
             ctx,
             dest_haven.fingerprint,
-            &N2rClientSocket::bind(ctx.clone(), AnonEndpoint::new())?,
+            &N2rClientSocket::bind(ctx.clone(), AnonEndpoint::random())?,
         )
         .await
         .context("dht_get failed")?
         .context("haven not found in DHT")?;
 
-        let n2r_skt = N2rClientSocket::bind(ctx.clone(), AnonEndpoint::new())?;
+        let n2r_skt = N2rClientSocket::bind(ctx.clone(), AnonEndpoint::random())?;
         let rendezvous_ep = RelayEndpoint::new(locator.rendezvous_point, HAVEN_FORWARD_DOCK);
 
         // do the handshake to the other side over N2R

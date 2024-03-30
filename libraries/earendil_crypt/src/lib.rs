@@ -323,7 +323,7 @@ impl RelayFingerprint {
 pub struct AnonEndpoint(pub [u8; 16]);
 
 impl AnonEndpoint {
-    pub fn new() -> Self {
+    pub fn random() -> Self {
         let new_anon_id: [u8; 16] = rand::thread_rng().gen();
         AnonEndpoint(new_anon_id)
     }
@@ -331,22 +331,14 @@ impl AnonEndpoint {
 
 impl Display for AnonEndpoint {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let hex_string = self
-            .0
-            .iter()
-            .map(|byte| format!("{:02x}", byte))
-            .collect::<String>();
+        let hex_string = hex::encode(self.0);
         write!(f, "ANON-{}", hex_string)
     }
 }
 
 impl Debug for AnonEndpoint {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let hex_string = self
-            .0
-            .iter()
-            .map(|byte| format!("{:02x}", byte))
-            .collect::<String>();
+        let hex_string = hex::encode(self.0);
         write!(f, "ANON-{}", hex_string)
     }
 }

@@ -42,7 +42,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             relay_dock: 0u32,
             body: Bytes::from_static(b"hello world"),
         });
-        let my_anon_id = AnonEndpoint::new();
+        let my_anon_id = AnonEndpoint::random();
         let my_osk = DhSecret::generate();
         let my_opk = my_osk.public();
 
