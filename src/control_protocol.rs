@@ -2,7 +2,6 @@ use crate::{
     commands::{ChatCommand, ControlCommand},
     daemon::ChatEntry,
     haven::HavenLocator,
-    network::all_client_neighs,
 };
 use anyhow::Context;
 use async_trait::async_trait;

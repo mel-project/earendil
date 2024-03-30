@@ -107,7 +107,7 @@ impl ControlProtocol for ControlProtocolImpl {
                             "{:?} [label={:?}, shape={}]\n",
                             node.to_string(),
                             node_label,
-                            "oval, color=lightpink,style=filled".to_string()
+                            "oval, color=lightpink,style=filled"
                         )
                     }
                 });
@@ -198,8 +198,8 @@ impl ControlProtocol for ControlProtocolImpl {
         let clients = all_client_neighs(&self.ctx);
         let neighbors: Vec<Either<ClientId, RelayFingerprint>> = relays
             .into_iter()
-            .map(|r| Either::Right(r))
-            .chain(clients.into_iter().map(|c| Either::Left(c)))
+            .map(Either::Right)
+            .chain(clients.into_iter().map(Either::Left))
             .collect();
         neighbors
     }
@@ -223,9 +223,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .collect();
         client_neighs.append(&mut relay_neighs);
         for neigh in client_neighs {
-            if !chat_info.contains_key(&neigh) {
-                chat_info.insert(neigh, (None, 0));
-            }
+            chat_info.entry(neigh).or_insert((None, 0));
         }
         chat_info
     }
@@ -257,37 +255,12 @@ fn get_node_label(fp: &RelayFingerprint) -> String {
     format!("{}..{}", &node[..4], &node[node.len() - 4..node.len()])
 }
 
-struct AnonIdentities {
-    map: Cache<String, RelayIdentitySecret>,
-}
-
-impl AnonIdentities {
-    pub fn new() -> Self {
-        let map = Cache::builder()
-            .max_capacity(100_000)
-            .time_to_idle(Duration::from_secs(3600))
-            .build();
-        Self { map }
-    }
-
-    pub fn get(&mut self, id: &str) -> RelayIdentitySecret {
-        let pseudo_secret = blake3::hash(id.as_bytes());
-        self.map.get_with_by_ref(id, || {
-            RelayIdentitySecret::from_bytes(pseudo_secret.as_bytes())
-        })
-    }
-}
-
 fn neigh_by_prefix(
     ctx: &DaemonContext,
     prefix: &str,
 ) -> anyhow::Result<Either<ClientId, RelayFingerprint>> {
-    let valid_clients = all_client_neighs(ctx)
-        .into_iter()
-        .map(|client| Either::Left(client));
-    let valid_relays = all_relay_neighs(ctx)
-        .into_iter()
-        .map(|relay| Either::Right(relay));
+    let valid_clients = all_client_neighs(ctx).into_iter().map(Either::Left);
+    let valid_relays = all_relay_neighs(ctx).into_iter().map(Either::Right);
     let valid_neighs: Vec<Either<ClientId, RelayFingerprint>> = valid_clients
         .chain(valid_relays)
         .filter(|fp| fp.to_string().starts_with(prefix))

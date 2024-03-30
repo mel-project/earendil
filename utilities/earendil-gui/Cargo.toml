@@ -7,9 +7,9 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.79"
-eframe = "0.26.2"
-egui = "0.26.2"
-egui-modal = "0.3.5"
+eframe = "0.27"
+egui = "0.27"
+egui-modal = "0.3.6"
 tap = "1.0.1"
 earendil={path="../../"}
 nanorpc-http = "0.1.3"

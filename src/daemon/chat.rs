@@ -1,11 +1,10 @@
 use async_event::Event;
 use dashmap::DashMap;
 use earendil_crypt::{ClientId, RelayFingerprint};
-use itertools::Itertools;
+
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, VecDeque},
-    slice::Iter,
     sync::Arc,
     time::SystemTime,
 };
@@ -95,7 +94,7 @@ impl Chats {
                 } else {
                     (None, 0)
                 };
-                (neigh.clone(), info)
+                (*neigh, info)
             })
             .collect()
     }
