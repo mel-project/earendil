@@ -92,7 +92,7 @@ pub async fn read_backward(
             let anon_endpoint = degarbler.my_anon_id();
             let relay_endpoint = RelayEndpoint::new(relay_fp, msg.relay_dock);
             // consume a reply block
-            remote_rb::consume_remote_rb(ctx, anon_endpoint, relay_endpoint.fingerprint);
+            remote_rb::consume_remote_rb(ctx, anon_endpoint, relay_endpoint.fingerprint).await;
             Ok((msg.body, relay_endpoint, anon_endpoint))
         }
         InnerPacket::ReplyBlocks(_) => anyhow::bail!("we shouldn't be getting reply blocks here"),

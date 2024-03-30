@@ -40,7 +40,7 @@ pub async fn replenish_remote_rb(
 }
 
 /// Decrements the estimate of how many reply blocks the other side has. If needed, replenishes too.
-pub fn consume_remote_rb(
+pub async fn consume_remote_rb(
     ctx: &DaemonContext,
     my_anon_id: AnonEndpoint,
     reply_source: RelayFingerprint,
@@ -48,7 +48,7 @@ pub fn consume_remote_rb(
     let new_balance = rb_balance(ctx, my_anon_id, reply_source);
     ctx.get(BALANCE_TABLE)
         .insert((my_anon_id, reply_source), new_balance - 1.0);
-    let _ = replenish_remote_rb(ctx, my_anon_id, reply_source);
+    let _ = replenish_remote_rb(ctx, my_anon_id, reply_source).await;
 }
 
 fn rb_balance(
