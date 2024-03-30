@@ -14,7 +14,7 @@ use crate::{
     InnerPacket, ReplyBlock,
 };
 
-const RAW_BODY_SIZE: usize = 8192;
+pub const RAW_BODY_SIZE: usize = 20000;
 const MAX_HOPS: usize = 10;
 const LOW_LATENCY_MS: u16 = 15;
 const METADATA_BUFFER_SIZE: usize = 35;
@@ -26,7 +26,7 @@ const INNER_HEADER_SIZE: usize = HEADER_LAYER_SIZE * (MAX_HOPS - 1);
 const HEADER_LAYER_SIZE: usize = METADATA_BUFFER_SIZE + BOX_OVERHEAD;
 pub const RAW_PACKET_SIZE: usize = std::mem::size_of::<RawPacket>();
 
-pub type RawBody = [u8; 8192];
+pub type RawBody = [u8; RAW_BODY_SIZE];
 
 /// A raw, on-the-wire Earendil packet.
 #[repr(C)]

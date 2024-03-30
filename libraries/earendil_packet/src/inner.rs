@@ -5,10 +5,10 @@ use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentityPublic, Remote
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::reply_block::ReplyBlock;
+use crate::{reply_block::ReplyBlock, RawBody, RAW_BODY_SIZE};
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
-/// Represents the actual end-to-end packet that is carried in the 8192-byte payloads. Either an application-level message, or a batch of reply blocks.
+/// Represents the actual end-to-end packet that is carried in the fixed-size payloads. Either an application-level message, or a batch of reply blocks.
 pub enum InnerPacket {
     /// Normal messages
     Message(Message),
@@ -58,7 +58,7 @@ const SOURCE_LENGTH: usize = 33;
 
 impl InnerPacket {
     /// From a raw payload, deduce the inner packet as well as the source id.
-    pub fn decode(raw: &[u8; 8192]) -> Result<(Self, RemoteId), DecodeError> {
+    pub fn decode(raw: &RawBody) -> Result<(Self, RemoteId), DecodeError> {
         let src_node_id = match array_ref![raw, 0, 1] {
             [0u8] => {
                 let src_fp = RelayFingerprint::from_bytes(array_ref![raw, 1, 32]);
@@ -78,8 +78,8 @@ impl InnerPacket {
     }
 
     /// Encodes into a raw payload, given our node id
-    pub fn encode(&self, my_id: &RemoteId) -> Result<[u8; 8192], EncodeError> {
-        let mut toret = [0u8; 8192];
+    pub fn encode(&self, my_id: &RemoteId) -> Result<RawBody, EncodeError> {
+        let mut toret = [0u8; RAW_BODY_SIZE];
 
         match my_id {
             RemoteId::Relay(fingerprint) => {

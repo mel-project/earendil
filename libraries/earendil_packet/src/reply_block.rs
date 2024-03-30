@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     crypt::{stream_dencrypt, DhPublic},
-    ForwardInstruction, InnerPacket, Message, PacketConstructError, RawHeader, RawPacket,
+    ForwardInstruction, InnerPacket, Message, PacketConstructError, RawBody, RawHeader, RawPacket,
 };
 
 /// A reply block. Reply blocks are constructed by endpoints who wish other endpoints to talk to them via an anonymous address, and are single-use, consumed when used to construct a packet going to that anonymous address.
@@ -69,10 +69,7 @@ pub struct ReplyDegarbler {
 }
 
 impl ReplyDegarbler {
-    pub fn degarble(
-        &self,
-        raw: &mut [u8; 8192],
-    ) -> anyhow::Result<(InnerPacket, RelayFingerprint)> {
+    pub fn degarble(&self, raw: &mut RawBody) -> anyhow::Result<(InnerPacket, RelayFingerprint)> {
         for shared_sec in &self.shared_secs {
             let body_key = blake3::keyed_hash(b"body____________________________", shared_sec);
             stream_dencrypt(body_key.as_bytes(), &[0; 12], raw);

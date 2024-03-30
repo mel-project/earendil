@@ -14,7 +14,7 @@ use stdcode::StdcodeSerializeExt;
 use crate::{RelKind, Stream, StreamMessage};
 
 use super::{inflight::Inflight, reorderer::Reorderer, StreamQueues};
-const MSS: usize = 7000;
+const MSS: usize = 19000;
 
 /// The raw internal state of a stream.
 ///
