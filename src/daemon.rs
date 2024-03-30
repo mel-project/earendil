@@ -258,10 +258,15 @@ async fn global_rpc_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     nursery!(loop {
         let socket = relay_skt.clone();
         let (req, endpoint) = socket.recv_from().await?;
-        tracing::debug!(endpoint = debug(endpoint), "global_rpc handling");
+        tracing::debug!(endpoint = debug(endpoint), "incoming GlobalRpc server");
         let service = service.clone();
         spawn!(async move {
             let req: JrpcRequest = serde_json::from_str(&String::from_utf8(req.to_vec())?)?;
+            tracing::debug!(
+                endpoint = debug(endpoint),
+                method = req.method,
+                "incoming GlobalRpc call"
+            );
             let resp = service.respond_raw(req).await;
             socket
                 .send_to(
