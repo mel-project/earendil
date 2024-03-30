@@ -136,21 +136,16 @@ async fn manage_mux(
             .write()
             .insert_identity(descr.clone())?;
     }
-
     // subscribe to the right outgoing stuff and stuff them into the link
+    let recv_outgoing_client = network::subscribe_outgoing_client(ctx, their_client_id);
     let send_outgoing_client = async {
-        if their_relay_descr.as_ref().is_none() {
-            let recv_outgoing_client = network::subscribe_outgoing_client(ctx, their_client_id);
-            loop {
-                let msg = recv_outgoing_client.recv().await?;
-                link.send_msg(LinkMessage::ToClient {
-                    body: Bytes::copy_from_slice(&msg.0),
-                    rb_id: msg.1,
-                })
-                .await?;
-            }
-        } else {
-            smol::future::pending().await
+        loop {
+            let msg = recv_outgoing_client.recv().await?;
+            link.send_msg(LinkMessage::ToClient {
+                body: Bytes::copy_from_slice(&msg.0),
+                rb_id: msg.1,
+            })
+            .await?;
         }
     };
 
