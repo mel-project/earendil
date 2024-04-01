@@ -85,10 +85,10 @@ pub async fn main_control(
         }
         ControlCommand::Chat { chat_command } => match chat_command {
             ChatCommand::List => {
-                let divider = "+----------------------------------------+---------------+-----------------------------------+\n";
+                let divider = "+-------------------------------------+---------------+-----------------------------------+";
                 let chats = control.list_chats().await?;
                 println!("{divider}");
-                println!("| Neighbor                               | # of Messages | Last chat                         |\n");
+                println!("| Neighbor                            | # of Messages | Last chat                         |");
                 println!("{divider}");
 
                 for (neigh, (maybe_entry, num_msgs)) in chats {
@@ -106,7 +106,7 @@ pub async fn main_control(
                         )
                     };
                     println!(
-                        "| {:<38} | {:<13} | {} {}\n",
+                        "| {:<35} | {:<13} | {} {}",
                         neigh, num_msgs, text, timestamp
                     );
                     println!("{divider}");

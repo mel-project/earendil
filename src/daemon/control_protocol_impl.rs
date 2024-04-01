@@ -11,6 +11,8 @@ use itertools::Itertools;
 
 use nanorpc::RpcTransport;
 
+use serde::Serialize;
+use serde_json::json;
 use smol_timeout::TimeoutExt;
 
 use crate::{
@@ -19,6 +21,7 @@ use crate::{
     haven::HavenLocator,
     n2r_socket::N2rClientSocket,
     network::{all_client_neighs, all_relay_neighs},
+    InRouteConfig,
 };
 use crate::{
     control_protocol::{ChatError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError},
@@ -67,14 +70,27 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn my_routes(&self) -> serde_json::Value {
-        let lala: BTreeMap<String, serde_json::Value> = self
-            .ctx
-            .init()
-            .in_routes
-            .iter()
-            .map(|(_k, _v)| todo!())
-            .collect();
-        serde_json::to_value(lala).unwrap()
+        if let Some(my_relay_id) = self.ctx.get(MY_RELAY_IDENTITY) {
+            let lala: BTreeMap<String, serde_json::Value> = self
+                .ctx
+                .init()
+                .in_routes
+                .iter()
+                .map(|(k, InRouteConfig { listen, obfs })| {
+                    (
+                        k.clone(),
+                        json!({
+                            "connect": format!("<YOUR_IP>:{}", listen.port()),
+                            "fingerprint": format!("{}", my_relay_id.public().fingerprint()),
+                            "obfs": serde_json::to_value(obfs).unwrap(),
+                        }),
+                    )
+                })
+                .collect();
+            serde_json::to_value(lala).unwrap()
+        } else {
+            "This is a client node. Client nodes do not have in-routes.".into()
+        }
     }
 
     async fn relay_graphviz(&self) -> String {
