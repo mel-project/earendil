@@ -189,6 +189,10 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             .map_err(log_error("n2r_socket_shuttle"))),
     );
 
+    if ctx.init().in_routes.is_empty() && ctx.init().out_routes.is_empty() {
+        anyhow::bail!("must have routes to start daemon")
+    }
+
     nursery!({
         let mut fallible_tasks = FuturesUnordered::new();
 

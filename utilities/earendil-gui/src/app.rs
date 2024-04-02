@@ -24,7 +24,7 @@ use crate::{app::refresh_cell::RefreshCell, subscriber::LOGS};
 
 use self::{
     chat::render_chat,
-    config::{parse_config_yaml, ConfigState, DaemonMode},
+    config::{parse_config_yaml, ConfigState},
     daemon_wrap::DaemonWrap,
     modal_state::{ModalState, Severity},
 };
