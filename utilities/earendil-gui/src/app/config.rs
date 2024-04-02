@@ -78,6 +78,11 @@ impl ConfigState {
         }
         parse_config_yaml(&self.raw_yaml)
     }
+
+    /// Clears any session-specific data. This should be called every time the earendil daemon disconnects
+    pub fn clear_session(&mut self) {
+        self.gui_prefs.chatting_with = None;
+    }
 }
 
 pub fn parse_config_yaml(yaml: &str) -> anyhow::Result<ConfigFile> {

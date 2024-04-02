@@ -226,6 +226,8 @@ impl App {
                         self.modal
                             .lock()
                             .replace(ModalState(Severity::Error, format!("{:?}", err)));
+
+                        self.daemon_cfg.lock().clear_session();
                         self.daemon = None;
                     }
                 },
@@ -253,6 +255,7 @@ impl App {
             }
 
             if label_text == "Running" && ui.button("Stop").clicked() {
+                self.daemon_cfg.lock().clear_session();
                 self.daemon = None;
             }
         });
