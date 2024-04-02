@@ -25,6 +25,7 @@ use tracing::instrument;
 use std::convert::Infallible;
 use std::{sync::Arc, time::Duration};
 
+use crate::daemon::chat::CHATS;
 use crate::{
     context::MY_CLIENT_ID,
     daemon::inout_route::{dial_out_route, listen_in_route},
@@ -226,13 +227,11 @@ async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
         tracing::debug!("DBDBDBDB syncing DB...");
         let global_id = ctx.get(MY_RELAY_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
-        // let debts = ctx.get(DEBTS).as_bytes()?;
-        // let chats = todo!();
+        let chats = ctx.get(CHATS).stdcode();
 
         db_write(&ctx, "global_identity", global_id).await?;
         db_write(&ctx, "relay_graph", graph).await?;
-        // db_write(&ctx, "debts", debts).await?;
-        // db_write(&ctx, "chats", chats).await?;
+        db_write(&ctx, "chats", chats).await?;
 
         smol::Timer::after(Duration::from_secs(10)).await;
     }
