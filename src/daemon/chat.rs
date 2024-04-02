@@ -8,12 +8,31 @@ use std::{
     sync::Arc,
     time::SystemTime,
 };
+use stdcode::deserialize;
 
-use crate::context::CtxField;
+use crate::{context::CtxField, db::db_read};
 
-pub static CHATS: CtxField<Chats> = |_| {
-    tracing::debug!("initializing chats");
-    Chats::new(usize::MAX)
+const MAX_CHAT_LEN: usize = usize::MAX;
+
+pub static CHATS: CtxField<Chats> = |ctx| {
+    smol::future::block_on(async move {
+        let mut chats: Option<Chats> = None;
+
+        match db_read(ctx, "chats").await {
+            Ok(Some(c)) => {
+                tracing::debug!("retrieving chats");
+                chats = deserialize(&c).ok();
+            }
+            Ok(None) => {
+                tracing::debug!("initializing chats");
+            }
+            Err(e) => {
+                tracing::warn!("error retrieving chats: {e}");
+            }
+        }
+
+        chats.unwrap_or(Chats::new(MAX_CHAT_LEN))
+    })
 };
 
 #[derive(Serialize, Deserialize)]
