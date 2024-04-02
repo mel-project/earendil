@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{borrow::Borrow, time::Duration};
 
 use self::{gossip::gossip_once, link_protocol::LinkService};
 
@@ -22,10 +22,14 @@ use earendil_topology::IdentityDescriptor;
 use futures::AsyncReadExt as _;
 use nursery_macro::nursery;
 use picomux::PicoMux;
-use smol::{
-    future::FutureExt,
-    net::{TcpListener, TcpStream},
+use sillad::{
+    dialer::Dialer,
+    listener::Listener,
+    tcp::{TcpDialer, TcpListener},
+    Pipe,
 };
+use sillad_sosistab3::{dialer::SosistabDialer, Cookie};
+use smol::future::FutureExt;
 use stdcode::StdcodeSerializeExt as _;
 
 mod gossip;
@@ -46,36 +50,73 @@ Relay and client messages are then put on the same link.
 
 #[tracing::instrument(skip_all, fields(listen=debug(cfg.listen)))]
 pub async fn listen_in_route(ctx: &DaemonContext, cfg: &InRouteConfig) -> anyhow::Result<()> {
-    let listener = TcpListener::bind(cfg.listen).await?;
-    nursery!(loop {
-        let (tcp_conn, remote_addr) = listener.accept().await?;
-        tracing::debug!(
-            remote_addr = debug(remote_addr),
-            "accepted a TCP connection"
-        );
+    async fn manage_pipe(ctx: &DaemonContext, pipe: impl Pipe) -> anyhow::Result<()> {
+        let (mux, their_client_id, their_relay_descr) = pipe_to_mux(ctx, pipe).await?;
+        let link = Link::new_listen(mux).await?;
+        manage_mux(ctx, link, their_client_id, their_relay_descr).await
+    }
 
-        spawn!(async move {
-            let (mux, their_client_id, their_relay_descr) =
-                tcp_to_mux(ctx, tcp_conn, &cfg.obfs).await?;
-            let link = Link::new_listen(mux).await?;
-            manage_mux(ctx, link, their_client_id, their_relay_descr).await
-        })
-        .detach();
-    })
+    let mut listener = TcpListener::bind(cfg.listen).await?;
+    nursery!(match &cfg.obfs {
+        ObfsConfig::None => {
+            loop {
+                let tcp_pipe = listener.accept().await?;
+                tracing::debug!(
+                    remote_addr = debug(tcp_pipe.remote_addr()),
+                    "accepted a TCP connection"
+                );
+                spawn!(manage_pipe(ctx, tcp_pipe)).detach();
+            }
+            anyhow::Ok(())
+        }
+        ObfsConfig::Sosistab3(cookie) => {
+            let mut sosistab_listener =
+                sillad_sosistab3::listener::SosistabListener::new(listener, Cookie::new(cookie));
+            loop {
+                let sosistab_pipe = sosistab_listener.accept().await?;
+                tracing::debug!(
+                    remote_addr = debug(sosistab_pipe.remote_addr()),
+                    "accepted a SOSISTAB connection"
+                );
+                spawn!(manage_pipe(ctx, sosistab_pipe)).detach();
+            }
+            anyhow::Ok(())
+        }
+    });
+    Ok(())
 }
 
 #[tracing::instrument(skip_all, fields(connect=debug(cfg.connect)))]
 pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow::Result<()> {
+    async fn manage_out_pipe(ctx: &DaemonContext, pipe: impl Pipe) -> anyhow::Result<()> {
+        let (mux, their_client_id, their_relay_descr) = pipe_to_mux(ctx, pipe).await?;
+        let link = Link::new_dial(mux).await?;
+        tracing::debug!("link connected to other side");
+        manage_mux(ctx, link, their_client_id, their_relay_descr).await?;
+        anyhow::Ok(())
+    }
+
     loop {
         let fallible = async {
-            let tcp_conn = TcpStream::connect(cfg.connect).await?;
-            tracing::debug!("TCP connected to other side");
-            let (mux, their_client_id, their_relay_descr) =
-                tcp_to_mux(ctx, tcp_conn, &cfg.obfs).await?;
-            let link = Link::new_dial(mux).await?;
-            tracing::debug!("link connected to other side");
-            manage_mux(ctx, link, their_client_id, their_relay_descr).await?;
-            anyhow::Ok(())
+            let tcp_dialer = TcpDialer {
+                dest_addr: cfg.connect,
+            };
+            match &cfg.obfs {
+                ObfsConfig::None => {
+                    let tcp_pipe = tcp_dialer.dial().await?;
+                    tracing::debug!("TCP connected to other side");
+                    manage_out_pipe(ctx, tcp_pipe).await
+                }
+                ObfsConfig::Sosistab3(cookie) => {
+                    let sosistab_dialer = SosistabDialer {
+                        inner: tcp_dialer,
+                        cookie: Cookie::new(cookie),
+                    };
+                    let sosistab_pipe = sosistab_dialer.dial().await?;
+                    tracing::debug!("SOSISTAB connected to other side");
+                    manage_out_pipe(ctx, sosistab_pipe).await
+                }
+            }
         };
         if let Err(err) = fallible.await {
             tracing::warn!(
@@ -88,15 +129,11 @@ pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow
     }
 }
 
-async fn tcp_to_mux(
+async fn pipe_to_mux(
     ctx: &DaemonContext,
-    tcp_stream: TcpStream,
-    obfs_cfg: &ObfsConfig,
+    pipe: impl Pipe,
 ) -> anyhow::Result<(PicoMux, ClientId, Option<IdentityDescriptor>)> {
-    let obfsed_conn = match &obfs_cfg {
-        ObfsConfig::None => tcp_stream,
-    };
-    let (mut read, mut write) = obfsed_conn.split();
+    let (mut read, mut write) = pipe.split();
 
     let send_auth = async {
         let my_client_id = *ctx.get(MY_CLIENT_ID);

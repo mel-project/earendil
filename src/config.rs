@@ -69,6 +69,7 @@ pub struct InRouteConfig {
 #[serde(rename_all = "snake_case")]
 pub enum ObfsConfig {
     None,
+    Sosistab3(String),
 }
 
 #[serde_as]

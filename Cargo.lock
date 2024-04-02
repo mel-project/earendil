@@ -1927,6 +1927,7 @@ dependencies = [
  "serde_json",
  "serde_with 3.7.0",
  "serde_yaml",
+ "sillad",
  "sillad-sosistab3",
  "smol 1.3.0",
  "smol-timeout",

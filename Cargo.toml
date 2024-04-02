@@ -72,6 +72,7 @@ async-recursion = "1.0.5"
 picomux = "0.1.1"
 async-dup = "1.2.4"
 sillad-sosistab3 = "0.1.2"
+sillad = "0.1.1"
 
 [profile.dev]
 panic = 'abort'
