@@ -120,12 +120,18 @@ pub async fn main_control(
 
                 let _listen_loop = smolscale::spawn(async move {
                     loop {
-                        let msgs = if let Ok(Ok(msgs)) = control.get_chat(neighbor.clone()).await {
-                            msgs
-                        } else {
-                            println!("error fetching messages");
-                            Timer::after(Duration::from_secs(1)).await;
-                            continue;
+                        let msgs = match control.get_chat(neighbor.clone()).await {
+                            Ok(Ok(msgs)) => msgs,
+                            Ok(Err(e)) => {
+                                println!("error fetching messages: {:?}", e);
+                                Timer::after(Duration::from_secs(1)).await;
+                                continue;
+                            }
+                            Err(control_err) => {
+                                println!("control protocol error: {:?}", control_err);
+                                Timer::after(Duration::from_secs(1)).await;
+                                continue;
+                            }
                         };
                         for (is_mine, text, time) in msgs {
                             let msg = (is_mine, text.clone(), time);

@@ -122,16 +122,6 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
                 .fingerprint()
         );
 
-        scopeguard::defer!({
-            tracing::info!(
-                "daemon with fingerprint {:?} is now DROPPED!",
-                ctx.get(MY_RELAY_IDENTITY)
-                    .expect("only relays have global identities")
-                    .public()
-                    .fingerprint()
-            )
-        });
-
         let identity_refresh_loop = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx], move || clone!([ctx], async move {
@@ -207,7 +197,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             fallible_tasks.push(spawn!(dial_out_route(&ctx, config)));
         }
 
-        // For every haven, serve the haven
+        // For every haven, serve the haven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
         for config in ctx.init().havens.iter() {
             fallible_tasks.push(spawn!(serve_haven::serve_haven(&ctx, config)));
         }
