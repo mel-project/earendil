@@ -197,7 +197,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             fallible_tasks.push(spawn!(dial_out_route(&ctx, config)));
         }
 
-        // For every haven, serve the haven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
+        // For every haven, serve the haven
         for config in ctx.init().havens.iter() {
             fallible_tasks.push(spawn!(serve_haven::serve_haven(&ctx, config)));
         }
