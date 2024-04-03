@@ -243,7 +243,7 @@ impl RelayGraph {
             .filter_map(|(&(left_id, right_id), descriptor)| {
                 if outdated_identities.contains(&left_id)
                     || outdated_identities.contains(&right_id)
-                    || now - descriptor.unix_timestamp > ROUTE_TIMEOUT
+                    || now.saturating_sub(descriptor.unix_timestamp) > ROUTE_TIMEOUT
                 {
                     Some((left_id, right_id))
                 } else {
