@@ -222,7 +222,7 @@ impl RelayGraph {
             .id_to_descriptor
             .iter()
             .filter_map(|(&id, descriptor)| {
-                if now - descriptor.unix_timestamp > ROUTE_TIMEOUT {
+                if now.saturating_sub(descriptor.unix_timestamp) > ROUTE_TIMEOUT {
                     Some(id)
                 } else {
                     None
