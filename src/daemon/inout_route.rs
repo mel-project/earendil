@@ -1,4 +1,7 @@
-use std::{borrow::Borrow, time::Duration};
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+    time::Duration,
+};
 
 use self::{gossip::gossip_once, link_protocol::LinkService};
 
@@ -86,7 +89,7 @@ pub async fn listen_in_route(ctx: &DaemonContext, cfg: &InRouteConfig) -> anyhow
     Ok(())
 }
 
-#[tracing::instrument(skip_all, fields(connect=debug(cfg.connect)))]
+#[tracing::instrument(skip_all, fields(connect=debug(&cfg.connect)))]
 pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow::Result<()> {
     async fn manage_out_pipe(ctx: &DaemonContext, pipe: impl Pipe) -> anyhow::Result<()> {
         let (mux, their_client_id, their_relay_descr) = pipe_to_mux(ctx, pipe).await?;
@@ -98,9 +101,22 @@ pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow
 
     loop {
         let fallible = async {
-            let tcp_dialer = TcpDialer {
-                dest_addr: cfg.connect,
+            let dest_addr = if let Ok(socket_addr) = cfg.connect.parse() {
+                socket_addr
+            } else {
+                let addrs: Vec<SocketAddr> = cfg
+                    .connect
+                    .clone()
+                    .to_socket_addrs()
+                    .map(|iter| iter.collect())
+                    .map_err(|e| {
+                        anyhow::anyhow!("unable to resolve domain {}: {}", &cfg.connect, e)
+                    })?;
+                let addr = addrs.get(0).context("empty list of resolved domains")?;
+
+                *addr
             };
+            let tcp_dialer = TcpDialer { dest_addr };
             match &cfg.obfs {
                 ObfsConfig::None => {
                     let tcp_pipe = tcp_dialer.dial().await?;
@@ -121,7 +137,7 @@ pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow
         if let Err(err) = fallible.await {
             tracing::warn!(
                 err = debug(err),
-                connect = debug(cfg.connect),
+                connect = debug(&cfg.connect),
                 "restarting out route"
             );
         }
