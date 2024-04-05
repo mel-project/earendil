@@ -277,7 +277,9 @@ impl App {
 
         ui.separator();
         ui.centered_and_justified(|ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| ui.code_editor(&mut logs_str.as_str()))
+            egui::ScrollArea::vertical()
+                .stick_to_bottom(true)
+                .show(ui, |ui| ui.code_editor(&mut logs_str.as_str()))
         });
     }
 }
