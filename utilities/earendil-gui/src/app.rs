@@ -61,7 +61,7 @@ impl App {
         let mut fonts = FontDefinitions::default();
         fonts.font_data.insert(
             "sarasa_sc".into(),
-            FontData::from_static(include_bytes!("assets/SarasaUiSC-Regular.ttf")),
+            FontData::from_static(include_bytes!("assets/subset.ttf")),
         );
         fonts
             .families
