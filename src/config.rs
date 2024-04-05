@@ -12,6 +12,7 @@ use crate::haven::HavenEndpoint;
 
 /// A YAML-serializable configuration file
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct ConfigFile {
     /// Seed of the long-term identity. Must be long and difficult to guess!
     ///
