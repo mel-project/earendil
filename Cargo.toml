@@ -19,7 +19,7 @@ earendil_packet = { version="0.1", path = "libraries/earendil_packet" }
 earendil_crypt = { version="0.1", path = "libraries/earendil_crypt" }
 earendil_topology = { version="0.1", path = "libraries/earendil_topology" }
 nursery_macro = { version="0.1", path = "libraries/nursery_macro" }
-virta = {version="0.1",  path = "libraries/virta" }
+virta = {version="0.1", path = "libraries/virta" }
 serde_yaml = "0.9.25"
 clap = { version = "4.4.6", features = ["derive"] }
 anyhow = "1.0.75"
