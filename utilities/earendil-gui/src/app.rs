@@ -217,8 +217,13 @@ impl App {
                         label_text = "Connecting...".into();
                     }
                     Some(Ok(daemon)) => {
-                        circle_color = Color32::GREEN;
-                        label_text = "Running".into();
+                        if daemon.is_dead() {
+                            circle_color = Color32::RED;
+                            label_text = "Disconnected".into()
+                        } else {
+                            circle_color = Color32::GREEN;
+                            label_text = "Running".into();
+                        }
                     }
                     Some(Err(err)) => {
                         circle_color = Color32::RED;

@@ -33,4 +33,11 @@ impl DaemonWrap {
             }
         }
     }
+
+    pub fn is_dead(&self) -> bool {
+        match self {
+            DaemonWrap::Remote(_) => todo!(),
+            DaemonWrap::Embedded(daemon) => daemon.is_dead(),
+        }
+    }
 }
