@@ -74,7 +74,7 @@ async fn send_reply_blocks(
     my_anon_id: AnonEndpoint,
     dst_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
-    tracing::debug!("sending a batch of {count} reply blocks for {my_anon_id} to {dst_fp}");
+    tracing::trace!("sending a batch of {count} reply blocks for {my_anon_id} to {dst_fp}");
 
     let route = forward_route_to(ctx, dst_fp).context("failed to form forward route")?;
     let first_peeler = route[0];
