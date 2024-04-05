@@ -91,6 +91,10 @@ impl Daemon {
     pub fn ctx(&self) -> DaemonContext {
         self.ctx.clone()
     }
+
+    pub fn is_dead(&self) -> bool {
+        self._task.is_finished()
+    }
 }
 
 struct DummyControlProtocolTransport {
