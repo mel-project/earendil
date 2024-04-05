@@ -1985,7 +1985,7 @@ dependencies = [
 
 [[package]]
 name = "earendil_crypt"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "argon2",
@@ -2005,7 +2005,7 @@ dependencies = [
 
 [[package]]
 name = "earendil_packet"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "arrayref",
@@ -2029,7 +2029,7 @@ dependencies = [
 
 [[package]]
 name = "earendil_topology"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "arrayref",
@@ -3777,7 +3777,7 @@ dependencies = [
 
 [[package]]
 name = "nursery_macro"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "smol 1.3.0",
 ]
