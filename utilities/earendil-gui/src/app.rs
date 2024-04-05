@@ -268,11 +268,14 @@ impl App {
 
     fn render_logs(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.heading("Logs");
-        ui.separator();
+        if ui.button("Clear logs").clicked() {
+            LOGS.write().unwrap().clear();
+        }
 
         let logs = LOGS.read().unwrap();
         let logs_str = logs.iter().fold(String::new(), |init, x| init + "\n" + x);
 
+        ui.separator();
         ui.centered_and_justified(|ui| {
             egui::ScrollArea::vertical().show(ui, |ui| ui.code_editor(&mut logs_str.as_str()))
         });
