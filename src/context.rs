@@ -26,7 +26,6 @@ pub static MY_RELAY_ONION_SK: CtxField<DhSecret> = |_| DhSecret::generate();
 pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
     let ctx = ctx.clone();
     smol::future::block_on(async move {
-        tracing::debug!("BLOCKING ON DB");
         match db_read(&ctx, "relay_graph")
             .await
             .ok()

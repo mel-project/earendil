@@ -116,7 +116,7 @@ async fn haven_demultiplex(
     let resupply_loop = async {
         loop {
             smol::Timer::after(Duration::from_secs(10)).await;
-            tracing::debug!("resupplying reply blocks for the rendezvous ");
+            tracing::trace!("resupplying reply blocks for the rendezvous ");
             n2r_socket.supply_reply_blocks(rendezvous).await?;
         }
     };
