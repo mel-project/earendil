@@ -144,14 +144,13 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
             clone!([ctx], move || clone!([ctx], async move {
                 tracing::trace!("WE ARE INSERTING OURSELVES");
                 // first insert ourselves
-                ctx.get(RELAY_GRAPH)
-                    .write()
-                    .insert_identity(IdentityDescriptor::new(
-                        &ctx.get(MY_RELAY_IDENTITY)
-                            .expect("only relays have global identities"),
-                        ctx.get(MY_RELAY_ONION_SK),
-                    ))?;
-                smol::Timer::after(Duration::from_secs(60)).await;
+                let us = IdentityDescriptor::new(
+                    &ctx.get(MY_RELAY_IDENTITY)
+                        .expect("only relays have global identities"),
+                    ctx.get(MY_RELAY_ONION_SK),
+                );
+                ctx.get(RELAY_GRAPH).write().insert_identity(us)?;
+                smol::Timer::after(Duration::from_secs(1)).await;
                 anyhow::Ok(())
             })),
         );
@@ -235,7 +234,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 /// Loop that handles the persistence of contex state
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
-        tracing::debug!("syncing DB...");
+        tracing::trace!("syncing DB...");
         let global_id = ctx.get(MY_RELAY_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
         let chats = ctx.get(CHATS).stdcode();
