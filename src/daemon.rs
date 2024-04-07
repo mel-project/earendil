@@ -129,15 +129,17 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         let identity_refresh_loop = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx], move || clone!([ctx], async move {
-                tracing::trace!("WE ARE INSERTING OURSELVES");
+                let ourselves = IdentityDescriptor::new(
+                    &ctx.get(MY_RELAY_IDENTITY)
+                        .expect("only relays have global identities"),
+                    ctx.get(MY_RELAY_ONION_SK),
+                );
+                tracing::debug!(
+                    fp = debug(ourselves.identity_pk.fingerprint()),
+                    "WE ARE INSERTING OURSELVES"
+                );
                 // first insert ourselves
-                ctx.get(RELAY_GRAPH)
-                    .write()
-                    .insert_identity(IdentityDescriptor::new(
-                        &ctx.get(MY_RELAY_IDENTITY)
-                            .expect("only relays have global identities"),
-                        ctx.get(MY_RELAY_ONION_SK),
-                    ))?;
+                ctx.get(RELAY_GRAPH).write().insert_identity(ourselves)?;
                 smol::Timer::after(Duration::from_secs(60)).await;
                 anyhow::Ok(())
             })),

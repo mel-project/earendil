@@ -1,0 +1,16 @@
+identity_seed: bob
+
+in_routes:
+  main_obfs:
+    # obfuscation protocol to use, for resisting ISP-level censorship
+    obfs:
+      sosistab3: snake-before-antenna-toward-floor-stuff-frozen-power-avocado-retire-grunt-nation
+    # TCP port this in_route listens at
+    listen: 0.0.0.0:19999
+
+havens: # havens we're hosting
+  - identity_seed: bobrr
+    listen_port: 19999 # port where proxy server listens
+    rendezvous: 2d2b5429d2c814c05c31bc67b3731817a1b09ba353f8b31b54dce7f149fa16a7
+    handler:
+      type: simple_proxy # Earendil's web proxy protocol
