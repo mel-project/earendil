@@ -3,20 +3,23 @@ members = ["libraries/*", "utilities/*", "infra/spawn-network"]
 
 [package]
 name = "earendil"
-version = "0.0.1"
+version = "0.4.0"
 edition = "2021"
+repository = "https://github.com/mel-project/earendil"
+license="MPL-2.0"
+description = "A decentralized, ban-resistant mixnet"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyctx = { git = "https://github.com/nullchinchilla/anyctx.git" }
+anyctx =  "0.1"
 serde = { version = "1.0.188", features = ["derive"] }
 serde_with = { version = "3.3.0", features = ["hex", "base64"] }
-earendil_packet = { path = "libraries/earendil_packet" }
-earendil_crypt = { path = "libraries/earendil_crypt" }
-earendil_topology = { path = "libraries/earendil_topology" }
-nursery_macro = { path = "libraries/nursery_macro" }
-virta = { path = "libraries/virta" }
+earendil_packet = { version="0.1", path = "libraries/earendil_packet" }
+earendil_crypt = { version="0.1", path = "libraries/earendil_crypt" }
+earendil_topology = { version="0.1", path = "libraries/earendil_topology" }
+nursery_macro = { version="0.1", path = "libraries/nursery_macro" }
+virta = {version="0.1", path = "libraries/virta" }
 serde_yaml = "0.9.25"
 clap = { version = "4.4.6", features = ["derive"] }
 anyhow = "1.0.75"

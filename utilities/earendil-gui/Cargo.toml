@@ -2,6 +2,11 @@
 name = "earendil-gui"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/mel-project/earendil"
+license="MPL-2.0"
+description="Earendil GUI"
+exclude = ["src/assets/big.ttf"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,10 +16,10 @@ eframe = "0.27"
 egui = "0.27"
 egui-modal = "0.3.6"
 tap = "1.0.1"
-earendil={path="../../"}
+earendil={version="0.4", path="../../"}
 nanorpc-http = "0.1.3"
 poll-promise = "0.3.0"
-anyctx = { git = "https://github.com/nullchinchilla/anyctx.git" }
+anyctx = "0.1"
 serde_yaml = "0.9.30"
 dirs = "5.0.1"
 futures-util = "0.3.30"

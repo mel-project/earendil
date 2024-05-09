@@ -1,7 +1,10 @@
 [package]
 name = "nursery_macro"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
+repository = "https://github.com/mel-project/earendil"
+license="MPL-2.0"
+description="tbd"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

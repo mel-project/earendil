@@ -7,7 +7,7 @@ use rand::prelude::*;
 use std::time::Duration;
 
 use crate::{
-    context::{CtxField, DaemonContext, MY_CLIENT_ID, RELAY_GRAPH},
+    context::{CtxField, DaemonContext, MY_CLIENT_ID, MY_RELAY_IDENTITY, RELAY_GRAPH},
     n2r::{forward_route_to, route_to_instructs, DEGARBLERS},
     network::{all_relay_neighs, send_raw},
 };
@@ -130,7 +130,10 @@ async fn send_reply_blocks(
 
 fn reply_route(ctx: &DaemonContext) -> anyhow::Result<Vec<RelayFingerprint>> {
     let mut route = ctx.get(RELAY_GRAPH).read().rand_relays(2);
-    let my_neighs: Vec<RelayFingerprint> = all_relay_neighs(ctx);
+    let mut my_neighs: Vec<RelayFingerprint> = all_relay_neighs(ctx);
+    if let Some(myself) = ctx.get(MY_RELAY_IDENTITY) {
+        my_neighs.push(myself.public().fingerprint());
+    }
     let rand_neigh = my_neighs.choose(&mut rand::thread_rng()).copied();
 
     match rand_neigh {
