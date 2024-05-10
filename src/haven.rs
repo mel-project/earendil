@@ -201,11 +201,12 @@ pub struct HavenPacketConn {
 impl HavenPacketConn {
     /// Establish a connection to the given haven endpoint.
     pub async fn connect(ctx: &DaemonContext, dest_haven: HavenEndpoint) -> anyhow::Result<Self> {
+        let haven_internal_skt = N2rClientSocket::bind(ctx.clone(), AnonEndpoint::random())?;
         // lookup the haven info using the dht
         let locator = dht_get(
             ctx,
             dest_haven.fingerprint,
-            &N2rClientSocket::bind(ctx.clone(), AnonEndpoint::random())?,
+            &haven_internal_skt
         )
         .await
         .context("dht_get failed")?

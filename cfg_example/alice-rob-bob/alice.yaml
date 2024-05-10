@@ -1,11 +1,11 @@
 # client
 
-# control_listen: 127.0.0.1:11111
+control_listen: 127.0.0.1:11111
 
 out_routes:
   bob:
     fingerprint: 2d2b5429d2c814c05c31bc67b3731817a1b09ba353f8b31b54dce7f149fa16a7
-    obfs: 
+    obfs:
       sosistab3: "some-cookie-lala-doodoo"
     connect: 127.0.0.1:12345
   example-relay:
@@ -13,8 +13,8 @@ out_routes:
     fingerprint: 4b7a641b77c2d6ceb8b3fecec2b2978dfe81ae045ed9a25ed78b828009c4967a
     obfs: none
 
-# socks5:
-#   listen: 127.0.0.1:8081
-#   fallback:
-#     simple_proxy:
-#       remote: yqem5bc2m218hqzdk01wbdak42ky715e:29421
+socks5:
+  listen: 127.0.0.1:8081
+  fallback:
+    simple_proxy:
+      remote: yqem5bc2m218hqzdk01wbdak42ky715e:29421
