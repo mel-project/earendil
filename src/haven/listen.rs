@@ -154,6 +154,7 @@ async fn haven_demultiplex(
                         payload: HavenMsg::VisitorHs(handshake),
                     }) => {
                         let eph_sk = if let Some((_, eph_sk)) = conn_queues.get(&src_visitor) {
+                            tracing::debug!("RECEIVED DUPLICATE HavenMsg::VisitorHs");
                             eph_sk.clone()
                         } else {
                             let eph_sk = DhSecret::generate();

@@ -223,7 +223,7 @@ impl HavenPacketConn {
             n2r_skt
                 .send_to(my_hs.stdcode().into(), rendezvous_ep)
                 .await?;
-            tracing::debug!("sent handshake");
+            tracing::debug!("sent handshake! i = {i}");
             // they sign their ephemeral public key
             let (from_haven, addr) = n2r_skt.recv_from().await?;
             tracing::debug!(
