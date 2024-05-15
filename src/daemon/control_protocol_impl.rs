@@ -11,7 +11,6 @@ use itertools::Itertools;
 
 use nanorpc::RpcTransport;
 
-use serde::Serialize;
 use serde_json::json;
 use smol_timeout::TimeoutExt;
 

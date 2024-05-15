@@ -6,7 +6,7 @@ use std::{
     fmt::{self, Display, Formatter},
     str::FromStr,
     sync::atomic::{AtomicU64, Ordering},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use crate::{context::DaemonContext, dht::dht_get};
@@ -201,53 +201,59 @@ pub struct HavenPacketConn {
 impl HavenPacketConn {
     /// Establish a connection to the given haven endpoint.
     pub async fn connect(ctx: &DaemonContext, dest_haven: HavenEndpoint) -> anyhow::Result<Self> {
-        // lookup the haven info using the dht
-        let locator = dht_get(
-            ctx,
-            dest_haven.fingerprint,
-            &N2rClientSocket::bind(ctx.clone(), AnonEndpoint::random())?,
-        )
-        .await
-        .context("dht_get failed")?
-        .context("haven not found in DHT")?;
-
+        let rpc_n2r_skt = N2rClientSocket::bind(ctx.clone(), AnonEndpoint::random())?;
         let n2r_skt = N2rClientSocket::bind(ctx.clone(), AnonEndpoint::random())?;
-        let rendezvous_ep = RelayEndpoint::new(locator.rendezvous_point, HAVEN_FORWARD_DOCK);
 
+        // lookup the haven info using the dht
+        let locator = dht_get(ctx, dest_haven.fingerprint, &rpc_n2r_skt)
+            .await
+            .context("dht_get failed")?
+            .context("haven not found in DHT")?;
+
+        let rendezvous_ep = RelayEndpoint::new(locator.rendezvous_point, HAVEN_FORWARD_DOCK);
+        tracing::debug!("got n2r_skt: {}", n2r_skt.local_endpoint());
         // do the handshake to the other side over N2R
         let my_esk = DhSecret::generate();
         let my_hs = V2rMessage {
             dest_haven,
             payload: HavenMsg::VisitorHs(VisitorHandshake(my_esk.public())),
         };
-        n2r_skt
-            .send_to(my_hs.stdcode().into(), rendezvous_ep)
-            .await?;
-        // they sign their ephemeral public key
-        let (their_hs, addr) = n2r_skt.recv_from().await?;
-        tracing::debug!(
-            their_hs_len = their_hs.len(),
-            addr = debug(addr),
-            my_endpoint = debug(n2r_skt.local_endpoint()),
-            "received their_hs"
-        );
-        let their_hs: HavenMsg =
-            stdcode::deserialize(&their_hs).context("deserialization of haven handshake failed")?;
-        let their_hs = match their_hs {
-            HavenMsg::HavenHs(server_hs) => server_hs,
-            x => anyhow::bail!(
-                "haven sent us something other than a haven handshake: {:?}",
-                x
-            ),
-        };
-        their_hs
-            .id_pk
-            .verify(their_hs.eph_pk.as_bytes(), &their_hs.sig)?;
-        if their_hs.id_pk.fingerprint() != dest_haven.fingerprint {
-            anyhow::bail!("haven public key verification failed")
+        let mut shared_sec: Option<[u8; 32]> = None;
+        for i in 0.. {
+            n2r_skt
+                .send_to(my_hs.stdcode().into(), rendezvous_ep)
+                .await?;
+            tracing::debug!("sent handshake");
+            // they sign their ephemeral public key
+            let (from_haven, addr) = n2r_skt.recv_from().await?;
+            tracing::debug!(
+                from_haven_len = from_haven.len(),
+                addr = debug(addr),
+                my_endpoint = debug(n2r_skt.local_endpoint()),
+                "received from_haven"
+            );
+            let haven_msg: HavenMsg = stdcode::deserialize(&from_haven)
+                .context("deserialization of haven handshake failed")?;
+            match haven_msg {
+                HavenMsg::HavenHs(server_hs) => {
+                    server_hs
+                        .id_pk
+                        .verify(server_hs.eph_pk.as_bytes(), &server_hs.sig)?;
+                    if server_hs.id_pk.fingerprint() != dest_haven.fingerprint {
+                        anyhow::bail!("haven public key verification failed")
+                    }
+                    shared_sec = Some(my_esk.shared_secret(&server_hs.eph_pk));
+                    break;
+                }
+                x => tracing::debug!(
+                    "haven sent us something other than a haven handshake: {:?}",
+                    x
+                ),
+            };
+            smol::Timer::after(Duration::from_secs(2u64.pow(i))).await;
         }
 
-        let shared_sec = my_esk.shared_secret(&their_hs.eph_pk);
+        let shared_sec = shared_sec.context("impossible")?;
         let up_key = AeadKey::from_bytes(
             blake3::keyed_hash(blake3::hash(HAVEN_UP).as_bytes(), &shared_sec).as_bytes(),
         );

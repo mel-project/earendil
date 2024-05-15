@@ -61,6 +61,7 @@ pub async fn dht_get(
         return Ok(Some(locator));
     }
     let replicas = dht_key_to_fps(ctx, &fingerprint.to_string());
+
     let mut gatherer = FuturesUnordered::new();
     for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
         let n2r_skt = n2r_skt.clone();
@@ -76,6 +77,7 @@ pub async fn dht_get(
             Ok(Err(err)) => retval = Err(err),
             Ok(Ok(None)) => continue,
             Ok(Ok(Some(locator))) => {
+                tracing::debug!("got locator");
                 let id_pk = locator.identity_pk;
                 let payload = locator.to_sign();
                 if id_pk.fingerprint() == fingerprint {

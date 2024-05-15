@@ -90,10 +90,15 @@ async fn socks5_once(
                 }
                 Socks5Fallback::SimpleProxy { remote } => {
                     let remote_stream = pool.connect(remote, addr.as_bytes()).await?;
+                    tracing::debug!(addr = debug(&addr), "got remote stream");
                     let (read, write) = remote_stream.split();
-                    smol::io::copy(client_stream.clone(), write)
+                    match smol::io::copy(client_stream.clone(), write)
                         .race(smol::io::copy(read, client_stream.clone()))
-                        .await?;
+                        .await
+                    {
+                        Ok(x) => tracing::debug!("RETURNED with {x}"),
+                        Err(e) => tracing::debug!("RETURNED with ERR: {e}"),
+                    }
                 }
             }
         }

@@ -13,8 +13,8 @@ out_routes:
     fingerprint: 4b7a641b77c2d6ceb8b3fecec2b2978dfe81ae045ed9a25ed78b828009c4967a
     obfs: none
 
-# socks5:
-#   listen: 127.0.0.1:8081
-#   fallback:
-#     simple_proxy:
-#       remote: yqem5bc2m218hqzdk01wbdak42ky715e:29421
+socks5:
+  listen: 127.0.0.1:23456
+  fallback:
+    simple_proxy:
+      remote: yqem5bc2m218hqzdk01wbdak42ky715e:29421

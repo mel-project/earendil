@@ -45,7 +45,7 @@ pub async fn visitor_loop(
             let msg: HavenMsg = stdcode::deserialize(&msg)?;
             match msg {
                 HavenMsg::Regular(payload) => send_downstream.send(payload).await?,
-                _ => anyhow::bail!("haven sent a non-regular message"),
+                _ => tracing::debug!("haven sent a non-regular message"),
             }
         }
     };

@@ -123,12 +123,12 @@ async fn haven_demultiplex(
 
     resupply_loop
         .race(async {
-            let mut conn_queues: HashMap<AnonEndpoint, Sender<Bytes>> = HashMap::new();
+            let mut conn_queues: HashMap<AnonEndpoint, (Sender<Bytes>, DhSecret)> = HashMap::new();
             loop {
                 // *occasionally* cleanup the conn_queue. the probability given here makes this asymptotically constant time.
                 if rand::random::<f64>() < 1.0 / (conn_queues.len() as f64) {
                     // eliminate all queues where the other side is gone
-                    conn_queues.retain(|_, q| q.receiver_count() > 0)
+                    conn_queues.retain(|_, q| q.0.receiver_count() > 0)
                 }
 
                 let (msg, _) = n2r_socket.recv_from().await?;
@@ -140,7 +140,7 @@ async fn haven_demultiplex(
                         payload: HavenMsg::Regular(normal),
                     }) => {
                         let queue = conn_queues.get(&src_visitor);
-                        if let Some(queue) = queue {
+                        if let Some((queue, _)) = queue {
                             let _ = queue.try_send(normal);
                         } else {
                             tracing::warn!(
@@ -153,34 +153,39 @@ async fn haven_demultiplex(
                         src_visitor,
                         payload: HavenMsg::VisitorHs(handshake),
                     }) => {
-                        let eph_sk = DhSecret::generate();
-                        let shared_sec = eph_sk.shared_secret(&handshake.0);
-                        let up_key = AeadKey::from_bytes(
-                            blake3::keyed_hash(blake3::hash(HAVEN_UP).as_bytes(), &shared_sec)
-                                .as_bytes(),
-                        );
-                        let down_key = AeadKey::from_bytes(
-                            blake3::keyed_hash(blake3::hash(HAVEN_DN).as_bytes(), &shared_sec)
-                                .as_bytes(),
-                        );
-                        let (send_upstream, recv_upstream) = smol::channel::bounded(1000);
-                        let (send_downstream, recv_downstream) = smol::channel::bounded(1000);
-                        let conn = HavenPacketConn {
-                            enc_key: down_key,
-                            enc_nonce: AtomicU64::new(0),
-                            dec_key: up_key,
+                        let eph_sk = if let Some((_, eph_sk)) = conn_queues.get(&src_visitor) {
+                            eph_sk.clone()
+                        } else {
+                            let eph_sk = DhSecret::generate();
+                            let shared_sec = eph_sk.shared_secret(&handshake.0);
+                            let up_key = AeadKey::from_bytes(
+                                blake3::keyed_hash(blake3::hash(HAVEN_UP).as_bytes(), &shared_sec)
+                                    .as_bytes(),
+                            );
+                            let down_key = AeadKey::from_bytes(
+                                blake3::keyed_hash(blake3::hash(HAVEN_DN).as_bytes(), &shared_sec)
+                                    .as_bytes(),
+                            );
+                            let (send_upstream, recv_upstream) = smol::channel::bounded(1000);
+                            let (send_downstream, recv_downstream) = smol::channel::bounded(1000);
+                            let conn = HavenPacketConn {
+                                enc_key: down_key,
+                                enc_nonce: AtomicU64::new(0),
+                                dec_key: up_key,
 
-                            send_upstream,
-                            recv_downstream,
-                            _task: smolscale::spawn(per_conn_loop(
-                                recv_upstream,
-                                src_visitor,
-                                n2r_socket.clone(),
-                                rendezvous,
-                            )),
+                                send_upstream,
+                                recv_downstream,
+                                _task: smolscale::spawn(per_conn_loop(
+                                    recv_upstream,
+                                    src_visitor,
+                                    n2r_socket.clone(),
+                                    rendezvous,
+                                )),
+                            };
+                            conn_queues.insert(src_visitor, (send_downstream, eph_sk.clone()));
+                            send_accepted.send(conn).await?;
+                            eph_sk
                         };
-                        conn_queues.insert(src_visitor, send_downstream);
-
                         // Finish the handshake
                         let response = H2rMessage {
                             dest_visitor: src_visitor,
@@ -196,8 +201,7 @@ async fn haven_demultiplex(
                                 RelayEndpoint::new(rendezvous, HAVEN_FORWARD_DOCK),
                             )
                             .await?;
-
-                        send_accepted.send(conn).await?;
+                        tracing::debug!("returned HavenHandshake to {src_visitor}");
                     }
                     Ok(R2hMessage {
                         src_visitor,
