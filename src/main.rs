@@ -61,7 +61,10 @@ fn main() -> anyhow::Result<()> {
             );
             tracing::info!("about to init daemon!");
             let daemon = Daemon::init(config_parsed)?;
-            anyhow::bail!(smol::future::block_on(daemon.wait_until_dead()))
+            match smol::future::block_on(daemon.wait_until_dead()) {
+                Ok(_) => anyhow::bail!("daemon is dead, with no error msg"),
+                Err(err) => anyhow::bail!(err),
+            }
         }
         Commands::Control {
             control_command,

@@ -79,7 +79,7 @@ pub async fn main_control(
             println!("{}", serde_yaml::to_string(&routes)?);
         }
         ControlCommand::HavensInfo => {
-            for info in control.havens_info().await? {
+            for info in control.havens_info().await?? {
                 println!("{} - {}", info.0, info.1);
             }
         }
@@ -211,7 +211,7 @@ fn pretty_time(time: SystemTime) -> ColoredString {
 #[nanorpc_derive]
 #[async_trait]
 pub trait ControlProtocol {
-    async fn havens_info(&self) -> Vec<(String, String)>;
+    async fn havens_info(&self) -> Result<Vec<(String, String)>, ConfigError>;
 
     async fn send_global_rpc(
         &self,
@@ -289,6 +289,12 @@ pub enum ChatError {
     Get(String),
     #[error("error sending chat message {0}")]
     Send(String),
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum ConfigError {
+    #[error("{0}")]
+    Error(String),
 }
 
 fn create_timestamp(now: SystemTime) -> String {

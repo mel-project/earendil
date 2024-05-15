@@ -5,6 +5,7 @@ mod modal_state;
 mod refresh_cell;
 
 use std::{
+    cell::Ref,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -135,12 +136,41 @@ impl eframe::App for App {
 impl App {
     fn render_dashboard(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            // ui.columns(2, |cols| {
-            //     cols[0].vertical(|ui| ui.heading("Peers"));
-            //     cols[1].vertical(|ui| ui.heading("Stats"));
-            // });
-            // ui.separator();
-            ui.heading("Graph dump");
+            ui.heading("My Havens");
+            if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
+                static MY_HAVENS: fn(
+                    &AnyCtx<()>,
+                )
+                    -> Mutex<RefreshCell<anyhow::Result<Vec<(String, String)>>>> =
+                    |_| Mutex::new(RefreshCell::new());
+                let control = daemon.control();
+                let mut my_havens = self.state.get(MY_HAVENS).lock();
+                let my_havens = my_havens.get_or_refresh(Duration::from_millis(100), || {
+                    block_on(async move {
+                        let my_havens = control.havens_info().await??;
+                        Ok(my_havens)
+                    })
+                });
+                match my_havens {
+                    None => {
+                        ui.label("Loading...");
+                    }
+                    Some(Err(err)) => {
+                        ui.colored_label(Color32::DARK_RED, "Loading my havens failed:");
+                        ui.label(format!("{:?}", err));
+                    }
+                    Some(Ok(my_havens)) => {
+                        for (kind, addr) in my_havens {
+                            ui.label(format!("{kind} - {addr}"));
+                        }
+                    }
+                }
+            };
+
+            ui.add_space(20.0);
+            ui.separator();
+            ui.add_space(20.0);
+            ui.heading("Relay Graph");
             if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
                 static GRAPH_DUMP: fn(&AnyCtx<()>) -> Mutex<RefreshCell<anyhow::Result<String>>> =
                     |_| Mutex::new(RefreshCell::new());
@@ -158,7 +188,7 @@ impl App {
                         ui.label("Loading...");
                     }
                     Some(Err(err)) => {
-                        ui.colored_label(Color32::DARK_RED, "Loading graph failed:");
+                        ui.colored_label(Color32::DARK_RED, "Loading relay graph failed:");
                         ui.label(format!("{:?}", err));
                     }
                     Some(Ok(dump)) => {
@@ -216,15 +246,23 @@ impl App {
                         circle_color = Color32::from_rgb(0xff, 0xd7, 0x00);
                         label_text = "Connecting...".into();
                     }
-                    Some(Ok(daemon)) => {
-                        if daemon.is_dead() {
-                            circle_color = Color32::RED;
-                            label_text = "Disconnected".into()
-                        } else {
+                    Some(Ok(daemon)) => match daemon.check_dead() {
+                        Ok(_) => {
                             circle_color = Color32::GREEN;
                             label_text = "Running".into();
                         }
-                    }
+                        Err(err) => {
+                            circle_color = Color32::RED;
+                            label_text = "Disconnected".into();
+
+                            self.modal
+                                .lock()
+                                .replace(ModalState(Severity::Error, format!("{:?}", err)));
+
+                            self.daemon_cfg.lock().clear_session();
+                            self.daemon = None;
+                        }
+                    },
                     Some(Err(err)) => {
                         circle_color = Color32::RED;
                         label_text = "Dead".into();

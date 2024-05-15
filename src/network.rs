@@ -36,7 +36,9 @@ pub async fn send_raw(
 
         if next_peeler == my_fp {
             // todo: don't allow ourselves to be the first hop when choosing forward routes
-            incoming_raw(ctx, next_peeler, packet).await?;
+            incoming_raw(ctx, next_peeler, packet)
+                .await
+                .context("incoming_raw failed")?;
         } else {
             let next_hop = one_hop_closer(ctx, next_peeler)?;
             ctx.get(RELAY_SPIDER)
@@ -138,11 +140,7 @@ fn one_hop_closer(ctx: &DaemonContext, dest: RelayFingerprint) -> anyhow::Result
     let mut next_hop = None;
 
     for neigh in my_neighs.iter() {
-        if let Some(route) = ctx
-            .get(RELAY_GRAPH)
-            .read()
-            .find_shortest_path(neigh, &dest)
-        {
+        if let Some(route) = ctx.get(RELAY_GRAPH).read().find_shortest_path(neigh, &dest) {
             if route.len() < shortest_route_len {
                 shortest_route_len = route.len();
                 next_hop = Some(*neigh);

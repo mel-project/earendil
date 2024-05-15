@@ -101,24 +101,32 @@ async fn gossip_graph(ctx: &DaemonContext, link: &Link) -> anyhow::Result<()> {
                 .time_to_live(Duration::from_secs(60))
                 .build()
         };
-
-        let left_id = if let Some(val) = ctx.get(IDENTITY_CACHE).get(&left_fp) {
-            Some(val)
+        let ourselves = ctx.get(MY_RELAY_IDENTITY);
+        let left_id = if ourselves.is_some() && ourselves.unwrap().public().fingerprint() == left_fp
+        {
+            None
+        } else if ctx.get(IDENTITY_CACHE).get(&left_fp).is_some() {
+            None
         } else {
-            LinkClient(link.rpc_transport())
+            let val = LinkClient(link.rpc_transport())
                 .identity(left_fp)
                 .await?
-                .tap_some(|id| ctx.get(IDENTITY_CACHE).insert(left_fp, id.clone()))
+                .tap_some(|id| ctx.get(IDENTITY_CACHE).insert(left_fp, id.clone()));
+            val
         };
 
-        let right_id = if let Some(val) = ctx.get(IDENTITY_CACHE).get(&right_fp) {
-            Some(val)
-        } else {
-            LinkClient(link.rpc_transport())
-                .identity(right_fp)
-                .await?
-                .tap_some(|id| ctx.get(IDENTITY_CACHE).insert(right_fp, id.clone()))
-        };
+        let right_id =
+            if ourselves.is_some() && ourselves.unwrap().public().fingerprint() == right_fp {
+                None
+            } else if ctx.get(IDENTITY_CACHE).get(&right_fp).is_some() {
+                None
+            } else {
+                let val = LinkClient(link.rpc_transport())
+                    .identity(right_fp)
+                    .await?
+                    .tap_some(|id| ctx.get(IDENTITY_CACHE).insert(right_fp, id.clone()));
+                val
+            };
 
         // fetch and insert the identities. we unconditionally do this since identity descriptors may change over time
         if let Some(left_id) = left_id {

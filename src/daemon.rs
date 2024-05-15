@@ -11,18 +11,20 @@ use earendil_crypt::{AnonEndpoint, ClientId, RelayFingerprint, RelayIdentitySecr
 use earendil_packet::ForwardInstruction;
 
 use earendil_topology::{IdentityDescriptor, RelayGraph};
-use futures_util::{stream::FuturesUnordered, StreamExt, TryFutureExt};
+use futures::future::Shared;
+use futures::task::noop_waker;
+use futures_util::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 
 use nursery_macro::nursery;
-use smol::Task;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 mod chat;
 use stdcode::StdcodeSerializeExt;
 use tracing::instrument;
 
 use std::convert::Infallible;
+use std::task::Context;
 use std::{sync::Arc, time::Duration};
 
 use crate::daemon::chat::CHATS;
@@ -53,7 +55,7 @@ use self::control_protocol_impl::ControlProtocolImpl;
 
 pub struct Daemon {
     pub(crate) ctx: DaemonContext,
-    _task: Task<anyhow::Result<()>>,
+    task: Shared<smol::Task<Result<(), Arc<anyhow::Error>>>>,
 }
 
 impl Daemon {
@@ -62,8 +64,11 @@ impl Daemon {
         let ctx = DaemonContext::new(config);
 
         tracing::info!("starting background task for main_daemon");
-        let task = smolscale::spawn(main_daemon(ctx.clone()));
-        Ok(Self { ctx, _task: task })
+        let task = smolscale::spawn(main_daemon(ctx.clone()).map_err(Arc::new));
+        Ok(Self {
+            ctx,
+            task: task.shared(),
+        })
     }
 
     pub fn is_client(&self) -> bool {
@@ -84,16 +89,24 @@ impl Daemon {
         })
     }
 
-    pub async fn wait_until_dead(self) -> anyhow::Error {
-        self._task.await.unwrap_err()
+    pub async fn wait_until_dead(self) -> anyhow::Result<()> {
+        self.task.await.map_err(|e| anyhow::anyhow!(e))
     }
 
     pub fn ctx(&self) -> DaemonContext {
         self.ctx.clone()
     }
 
-    pub fn is_dead(&self) -> bool {
-        self._task.is_finished()
+    /// Check for an error.
+    pub fn check_dead(&self) -> anyhow::Result<()> {
+        match smol::future::FutureExt::poll(
+            &mut self.task.clone(),
+            &mut Context::from_waker(&noop_waker()),
+        ) {
+            std::task::Poll::Ready(val) => val.map_err(|e| anyhow::anyhow!(e))?,
+            std::task::Poll::Pending => {}
+        }
+        Ok(())
     }
 }
 
@@ -129,18 +142,15 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
         let identity_refresh_loop = Immortal::respawn(
             RespawnStrategy::Immediate,
             clone!([ctx], move || clone!([ctx], async move {
-                let ourselves = IdentityDescriptor::new(
+                tracing::trace!("WE ARE INSERTING OURSELVES");
+                // first insert ourselves
+                let us = IdentityDescriptor::new(
                     &ctx.get(MY_RELAY_IDENTITY)
                         .expect("only relays have global identities"),
                     ctx.get(MY_RELAY_ONION_SK),
                 );
-                tracing::debug!(
-                    fp = debug(ourselves.identity_pk.fingerprint()),
-                    "WE ARE INSERTING OURSELVES"
-                );
-                // first insert ourselves
-                ctx.get(RELAY_GRAPH).write().insert_identity(ourselves)?;
-                smol::Timer::after(Duration::from_secs(60)).await;
+                ctx.get(RELAY_GRAPH).write().insert_identity(us)?;
+                smol::Timer::after(Duration::from_secs(1)).await;
                 anyhow::Ok(())
             })),
         );
@@ -224,7 +234,7 @@ pub async fn main_daemon(ctx: DaemonContext) -> anyhow::Result<()> {
 /// Loop that handles the persistence of contex state
 async fn db_sync_loop(ctx: DaemonContext) -> anyhow::Result<()> {
     loop {
-        tracing::debug!("syncing DB...");
+        tracing::trace!("syncing DB...");
         let global_id = ctx.get(MY_RELAY_IDENTITY).stdcode();
         let graph = ctx.clone().get(RELAY_GRAPH).read().stdcode();
         let chats = ctx.get(CHATS).stdcode();

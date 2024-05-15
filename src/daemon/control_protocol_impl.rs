@@ -16,6 +16,7 @@ use smol_timeout::TimeoutExt;
 
 use crate::{
     context::{MY_CLIENT_ID, MY_RELAY_IDENTITY, RELAY_GRAPH},
+    control_protocol::ConfigError,
     dht::{dht_get, dht_insert},
     haven::HavenLocator,
     n2r_socket::N2rClientSocket,
@@ -42,28 +43,26 @@ impl ControlProtocolImpl {
 
 #[async_trait]
 impl ControlProtocol for ControlProtocolImpl {
-    async fn havens_info(&self) -> Vec<(String, String)> {
+    async fn havens_info(&self) -> Result<Vec<(String, String)>, ConfigError> {
         self.ctx
             .init()
             .havens
             .iter()
-            .map(|haven_cfg| {
-                let fp = haven_cfg
-                    .identity
-                    .actualize_haven()
-                    .unwrap()
-                    .public()
-                    .fingerprint();
-                match haven_cfg.handler {
-                    crate::config::HavenHandler::TcpService { upstream: _ } => (
-                        "TcpService".to_string(),
-                        fp.to_string() + ":" + &haven_cfg.listen_port.to_string(),
-                    ),
-                    crate::config::HavenHandler::SimpleProxy => (
-                        "SimpleProxy".to_string(),
-                        fp.to_string() + ":" + &haven_cfg.listen_port.to_string(),
-                    ),
+            .map(|haven_cfg| match haven_cfg.identity.actualize_haven() {
+                Ok(secret) => {
+                    let fp = secret.public().fingerprint();
+                    match haven_cfg.handler {
+                        crate::config::HavenHandler::TcpService { upstream: _ } => Ok((
+                            "TcpService".to_string(),
+                            fp.to_string() + ":" + &haven_cfg.listen_port.to_string(),
+                        )),
+                        crate::config::HavenHandler::SimpleProxy => Ok((
+                            "SimpleProxy".to_string(),
+                            fp.to_string() + ":" + &haven_cfg.listen_port.to_string(),
+                        )),
+                    }
                 }
+                Err(err) => Err(ConfigError::Error(err.to_string())),
             })
             .collect()
     }
@@ -117,7 +116,7 @@ impl ControlProtocol for ControlProtocolImpl {
                     } else {
                         let _desc = self.ctx.get(RELAY_GRAPH).read().identity(&node).unwrap();
                         acc + &format!(
-                            "{:?} [label={:?}, shape={}]\n",
+                            "    {:?} [label={:?}, shape={}]\n",
                             node.to_string(),
                             node_label,
                             "oval, color=lightpink,style=filled"
@@ -133,7 +132,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
             .fold(String::new(), |acc, adj| {
                 acc + &format!(
-                    "{:?} -- {:?};\n",
+                    "    {:?} -- {:?};\n",
                     adj.left.to_string(),
                     adj.right.to_string()
                 )
@@ -142,17 +141,11 @@ impl ControlProtocol for ControlProtocolImpl {
         let all_my_adjs = all_relay_neighs(&self.ctx)
             .iter()
             .fold(String::new(), |acc, neigh| {
-                acc + &format!("{:?} -- {:?};\n", my_id, neigh.to_string())
+                acc + &format!("    {:?} -- {:?};\n", my_id, neigh.to_string())
             });
 
         format!(
-            "graph G {{
-                    rankdir=\"LR\"
-                    {:?} [shape={},color=lightblue,style=filled]
-                {}
-                {}
-                {}
-            }}",
+            "graph G {{\n    rankdir=\"LR\"\n    # my ID\n    {:?} [shape={},color=lightblue,style=filled]\n\n    # all relays\n{}\n    # all relay connections\n{}\n    # all my connections\n{}\n}}",
             my_id, my_shape, all_relays, all_relay_adjs, all_my_adjs
         )
     }

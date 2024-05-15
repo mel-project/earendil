@@ -139,6 +139,7 @@ impl RawPacket {
                 buffer
             };
 
+            // println!("encrypting msg for pk = {:?}", dest_opk);
             let (header_outer, our_sk) = box_encrypt(&buffer, dest_opk);
             let shared_sec = our_sk.shared_secret(dest_opk);
             let onion_body = {
@@ -217,6 +218,7 @@ impl RawPacket {
     /// "Peels off" one layer of the onion, by decryption using the specified secret key.
     pub fn peel(&self, our_sk: &DhSecret) -> Result<PeeledPacket, PacketPeelError> {
         // First, decode the header
+        // println!("decrypting header with our_pk = {:?}", our_sk.public());
         let (metadata, their_pk) = box_decrypt(&self.header.outer, our_sk)
             .map_err(|_| PacketPeelError::DecryptionError)?;
         assert_eq!(metadata.len(), METADATA_BUFFER_SIZE);

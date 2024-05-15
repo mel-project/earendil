@@ -1,5 +1,6 @@
 use std::{
-    collections::HashSet, fs,
+    collections::HashSet,
+    fs,
     io::{self, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     ops::RangeInclusive,
@@ -173,7 +174,7 @@ fn routes(
                     .actualize_relay()?
                     .public()
                     .fingerprint(),
-                connect,
+                connect: connect.to_string(),
                 obfs: obfs.clone(),
             },
         ));

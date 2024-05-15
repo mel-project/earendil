@@ -34,10 +34,10 @@ impl DaemonWrap {
         }
     }
 
-    pub fn is_dead(&self) -> bool {
+    pub fn check_dead(&self) -> anyhow::Result<()> {
         match self {
             DaemonWrap::Remote(_) => todo!(),
-            DaemonWrap::Embedded(daemon) => daemon.is_dead(),
+            DaemonWrap::Embedded(daemon) => daemon.check_dead(),
         }
     }
 }
