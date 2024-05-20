@@ -35,6 +35,7 @@ pub async fn send_raw(
             .fingerprint();
 
         if next_peeler == my_fp {
+            // println!("next_peeler == my_fp");
             // todo: don't allow ourselves to be the first hop when choosing forward routes
             incoming_raw(ctx, next_peeler, packet)
                 .await
