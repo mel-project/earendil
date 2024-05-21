@@ -8,7 +8,7 @@ pub struct Spider<T, U> {
     inner: RwLock<HashMap<T, (Sender<U>, Receiver<U>)>>,
 }
 
-impl<T: Eq + std::hash::Hash + Clone, U> Spider<T, U> {
+impl<T: Eq + std::hash::Hash + Clone + std::fmt::Display, U> Spider<T, U> {
     pub fn new() -> Self {
         Self {
             inner: Default::default(),
@@ -27,7 +27,9 @@ impl<T: Eq + std::hash::Hash + Clone, U> Spider<T, U> {
 
     pub fn send(&self, dest: &T, val: U) -> anyhow::Result<()> {
         let inner = self.inner.read();
-        let chan = inner.get(dest).context("no such destination")?;
+        let chan = inner
+            .get(dest)
+            .context(format!("no such destination: {}", dest))?;
         let _ = chan.0.try_send(val);
         Ok(())
     }

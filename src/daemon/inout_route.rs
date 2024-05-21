@@ -191,6 +191,7 @@ async fn manage_mux(
     }
     // subscribe to the right outgoing stuff and stuff them into the link
     let recv_outgoing_client = network::subscribe_outgoing_client(ctx, their_client_id);
+    println!("ADDED CLIENT_ID: {their_client_id}");
     let send_outgoing_client = async {
         loop {
             let msg = recv_outgoing_client.recv().await?;

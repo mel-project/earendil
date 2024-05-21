@@ -116,6 +116,7 @@ pub async fn send_forward(
     });
 
     let route = forward_route_to(ctx, dst_fp).context("failed to create forward route")?;
+    tracing::trace!("RRRRRRRRRRRRRRRRRRRRRR route: {:?}", route);
     let first_peeler = *route
         .first()
         .context("empty route, cannot obtain first peeler")?;
