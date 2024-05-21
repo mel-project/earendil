@@ -3,7 +3,7 @@ members = ["libraries/*", "utilities/*", "infra/spawn-network"]
 
 [package]
 name = "earendil"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 repository = "https://github.com/mel-project/earendil"
 license="MPL-2.0"
