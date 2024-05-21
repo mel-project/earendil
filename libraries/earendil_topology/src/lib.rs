@@ -10,6 +10,7 @@ use indexmap::IndexMap;
 use rand::{seq::IteratorRandom, Rng};
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
+use thiserror::Error;
 
 /// A full, indexed representation of the Earendil relay graph. Includes info about:
 /// - Which fingerprints are adjacent to which fingerprints
@@ -373,4 +374,23 @@ impl IdentityDescriptor {
         this.sig = Bytes::new();
         blake3::keyed_hash(b"identity_descriptor_____________", &this.stdcode())
     }
+
+    /// Verifies the signature of the IdentityDescriptor
+    pub fn verify(&self) -> Result<(), IdentityError> {
+        if self
+            .identity_pk
+            .verify(self.to_sign().as_bytes(), &self.sig)
+            .is_ok()
+        {
+            Ok(())
+        } else {
+            Err(IdentityError::InvalidSignature)
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum IdentityError {
+    #[error("Invalid signature")]
+    InvalidSignature,
 }

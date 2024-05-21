@@ -13,9 +13,13 @@ mod n2r_socket;
 mod network;
 mod settlement;
 
+mod link_node;
+mod n2r_node;
+mod node;
 mod pascal;
 mod pooled;
 mod stream;
+mod v2h_node;
 
 // Create the public API here.
 

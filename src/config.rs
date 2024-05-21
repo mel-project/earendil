@@ -60,13 +60,13 @@ fn default_control_listen() -> SocketAddr {
     "127.0.0.1:18964".parse().unwrap()
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InRouteConfig {
     pub listen: SocketAddr,
     pub obfs: ObfsConfig,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum ObfsConfig {
     None,
@@ -74,7 +74,7 @@ pub enum ObfsConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct OutRouteConfig {
     pub connect: String,
     #[serde_as(as = "serde_with::DisplayFromStr")]
