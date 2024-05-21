@@ -191,6 +191,7 @@ async fn manage_mux(
     }
     // subscribe to the right outgoing stuff and stuff them into the link
     let recv_outgoing_client = network::subscribe_outgoing_client(ctx, their_client_id);
+    println!("ADDED CLIENT_ID: {their_client_id}");
     let send_outgoing_client = async {
         loop {
             let msg = recv_outgoing_client.recv().await?;
@@ -241,7 +242,11 @@ async fn manage_mux(
                         .ok()
                         .context("failed to deserialize incoming RawPacket")?;
                     if let Err(err) = network::incoming_raw(ctx, next_peeler, pkt).await {
-                        tracing::debug!(err = debug(err), "failed to process incoming raw");
+                        tracing::debug!(
+                            err = debug(err),
+                            next_peeler = debug(next_peeler),
+                            "failed to process incoming raw",
+                        );
                     }
                 }
             }

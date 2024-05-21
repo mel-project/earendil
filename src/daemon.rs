@@ -18,6 +18,8 @@ use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 
 use nursery_macro::nursery;
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 mod chat;
 use stdcode::StdcodeSerializeExt;
@@ -40,7 +42,7 @@ use crate::control_protocol::ControlClient;
 use crate::db::db_write;
 
 use crate::control_protocol::ControlService;
-use crate::log_error;
+use crate::{log_error, OutRouteConfig};
 
 use crate::{
     config::ConfigFile,
@@ -60,7 +62,27 @@ pub struct Daemon {
 
 impl Daemon {
     /// Initializes the daemon and starts all background loops
-    pub fn init(config: ConfigFile) -> anyhow::Result<Daemon> {
+    pub fn init(mut config: ConfigFile) -> anyhow::Result<Daemon> {
+        // If we are a relay, add ourselves into out_routes
+        if let Some((_k, v)) = config.in_routes.first_key_value() {
+            let my_relay_fp = config
+                .identity
+                .clone()
+                .unwrap()
+                .actualize_relay()
+                .expect("failed to initialize global identity")
+                .public()
+                .fingerprint();
+            let mut rng = rand::thread_rng();
+            let key: String = (0..20).map(|_| rng.sample(Alphanumeric) as char).collect();
+            let self_outroute_cfg = OutRouteConfig {
+                connect: v.listen.to_string(),
+                fingerprint: my_relay_fp,
+                obfs: v.obfs.clone(),
+            };
+            config.out_routes.insert(key, self_outroute_cfg);
+        }
+
         let ctx = DaemonContext::new(config);
 
         tracing::info!("starting background task for main_daemon");

@@ -36,13 +36,19 @@ pub async fn send_raw(
 
         if next_peeler == my_fp {
             // todo: don't allow ourselves to be the first hop when choosing forward routes
-            incoming_raw(ctx, next_peeler, packet)
-                .await
-                .context("incoming_raw failed")?;
+            if let Err(e) = incoming_raw(ctx, next_peeler, packet).await {
+                anyhow::bail!("incoming_raw failed with: {e}")
+            }
         } else {
             let next_hop = one_hop_closer(ctx, next_peeler)?;
-            ctx.get(RELAY_SPIDER)
-                .send(&next_hop, (packet, next_peeler))?;
+            match ctx.get(RELAY_SPIDER).send(&next_hop, (packet, next_peeler)) {
+                Ok(_) => (),
+                Err(e) => {
+                    let relays = ctx.get(RELAY_SPIDER).keys();
+                    println!("network.rs 48: RELAY_SPIDER: {:?}", relays);
+                    anyhow::bail!(e)
+                }
+            }
         }
     }
     Ok(())
@@ -93,13 +99,20 @@ pub async fn incoming_raw(
                 let ctx = ctx.clone();
                 smolscale::spawn(async move {
                     smol::Timer::at(emit_time).await;
-                    send_raw(&ctx, pkt, next_peeler).await?;
+                    if let Err(e) = send_raw(&ctx, pkt, next_peeler).await {
+                        println!("network.rs line 102 failed with next_peeler = {next_peeler}, err = {e}");
+                        anyhow::bail!(e)
+                    }
                     anyhow::Ok(())
                 })
                 .detach();
             }
             PeeledPacket::Received { from, pkt } => {
-                n2r::incoming_forward(ctx, pkt, from).await?;
+                if let Err(e) = n2r::incoming_forward(ctx, pkt, from).await {
+                    anyhow::bail!(
+                        "PeelPacket::Received called n2r::incoming_forward failed with: {e}"
+                    )
+                }
             }
             PeeledPacket::GarbledReply {
                 rb_id,
@@ -111,7 +124,12 @@ pub async fn incoming_raw(
                     client_id,
                     "got a GARBLED REPLY to FORWARD to the CLIENT!!!"
                 );
-                ctx.get(CLIENT_SPIDER).send(&client_id, (pkt, rb_id))?;
+                if let Err(e) = ctx.get(CLIENT_SPIDER).send(&client_id, (pkt, rb_id)) {
+                    let clients = ctx.get(CLIENT_SPIDER).keys();
+                    anyhow::bail!(
+                        "PeeledPacket::GarbledReply CLIENT_SPIDER.send() failed with: {e}. CLIENT_SPIDER: {:?}", clients
+                    )
+                }
             }
         }
     } else {
