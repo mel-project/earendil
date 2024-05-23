@@ -3,28 +3,25 @@ name = "earendil_topology"
 version = "0.1.2"
 edition = "2021"
 repository = "https://github.com/mel-project/earendil"
-license="MPL-2.0"
-description="tbd"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MPL-2.0"
+description = "tbd"
 
 [dependencies]
-anyhow = "1.0.75"
-async-trait = "0.1.73"
-earendil_packet={version="0.1", path="../earendil_packet"}
-ed25519-compact = "2.0.4"
-log = "0.4.20"
+anyhow = "1.0.86"
+async-trait = "0.1.80"
+earendil_packet = { version = "0.1", path = "../earendil_packet" }
+ed25519-compact = "2.1.1"
+log = "0.4.21"
 pod = "0.5.0"
-serde = { version = "1.0.188", features = ["derive"] }
+serde = { version = "1.0.202", features = ["derive"] }
 slab = "0.4.9"
-bytemuck = { version = "1.14.0", features = ["derive", "min_const_generics"] }
-bytes = { version = "1.5.0", features = ["serde"] }
-blake3 = "1.5.0"
+bytemuck = { version = "1.16.0", features = ["derive", "min_const_generics"] }
+bytes = { version = "1.6.0", features = ["serde"] }
+blake3 = "1.5.1"
 stdcode = "0.1.14"
 arrayref = "0.3.7"
 rand = "0.8.5"
-indexmap = { version = "1.9.3", features = ["serde"] }
-thiserror= "1.0.49"
-earendil_crypt={ version="0.1", path="../earendil_crypt"}
+thiserror = "1.0.61"
+earendil_crypt = { version = "0.1", path = "../earendil_crypt" }
 tracing = "0.1.40"
-
+indexmap = { version = "2.2.6", features = ["serde"] }

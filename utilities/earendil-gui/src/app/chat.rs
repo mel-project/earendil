@@ -55,7 +55,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
                     cols[0].colored_label(Color32::DARK_RED, "Loading peers failed:");
                     cols[0].label(format!("{:?}", err));
                 }
-                Some(Ok((neighs))) => {
+                Some(Ok(neighs)) => {
                     cols[0].vertical(|ui| {
                         for neigh in neighs {
                             if ui.button(neigh.to_string()).clicked() {

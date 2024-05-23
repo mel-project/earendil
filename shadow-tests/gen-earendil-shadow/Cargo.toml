@@ -5,20 +5,17 @@ name = "gen-earendil-shadow"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-anyhow = "1.0.75"
+anyhow = "1.0.86"
 bip39 = "2.0.0"
-blake3 = "1.5.0"
-clap = { version="4.4.7", features = ["derive"] }
-earendil_crypt = {path = "../../libraries/earendil_crypt/"}
+blake3 = "1.5.1"
+clap = { version = "4.5.4", features = ["derive"] }
+earendil_crypt = { path = "../../libraries/earendil_crypt/" }
 hex = "0.4.3"
 rand = "0.8.5"
-serde = "1.0.190"
-serde_json = "1.0.107"
-serde_with = {version="3.4.0",  features = ["hex", "base64"]}
-serde_yaml = "0.9.27"
-sosistab2 = "0.9.7"
+serde = "1.0.202"
+serde_json = "1.0.117"
+serde_with = { version = "3.8.1", features = ["hex", "base64"] }
+serde_yaml = "0.9.34"
+sosistab2-obfsudp = "0.1.12"
 stdcode = "0.1.14"
- 
