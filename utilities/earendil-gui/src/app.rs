@@ -5,7 +5,6 @@ mod modal_state;
 mod refresh_cell;
 
 use std::{
-    cell::Ref,
     sync::Arc,
     time::{Duration, Instant},
 };

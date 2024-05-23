@@ -24,4 +24,4 @@ rand = "0.8.5"
 thiserror = "1.0.61"
 earendil_crypt = { version = "0.1", path = "../earendil_crypt" }
 tracing = "0.1.40"
-indexmap = "2.2.6"
+indexmap = { version = "2.2.6", features = ["serde"] }

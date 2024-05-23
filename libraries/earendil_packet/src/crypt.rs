@@ -50,12 +50,13 @@ impl FromStr for DhPublic {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let decoded = general_purpose::STANDARD.decode(s)?;
-        if decoded.len() == 32 {
+        let decoded_len = decoded.len();
+        if decoded_len == 32 {
             let mut array = [0u8; 32];
             array.copy_from_slice(&decoded);
             Ok(DhPublic::from_bytes(&array))
         } else {
-            Err(base64::DecodeError::InvalidLength)
+            Err(base64::DecodeError::InvalidLength(decoded_len))
         }
     }
 }
@@ -162,7 +163,7 @@ pub fn box_decrypt(
 ///
 /// The underlying algorithm is ChaCha20 (IETF variant).
 pub fn stream_dencrypt(key: &[u8; 32], nonce: &[u8; 12], buf: &mut [u8]) {
-    let mut cipher = ChaCha20::new(key.into(), nonce.into());
+    let mut cipher: ChaCha20 = KeyIvInit::new(key.into(), nonce.into());
     cipher.apply_keystream(buf);
 }
 
