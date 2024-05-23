@@ -3,10 +3,8 @@ name = "earendil_packet"
 version = "0.1.1"
 edition = "2021"
 repository = "https://github.com/mel-project/earendil"
-license="MPL-2.0"
-description="tbd"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MPL-2.0"
+description = "tbd"
 
 [dependencies]
 arrayref = "0.3.7"
@@ -15,7 +13,6 @@ bytemuck = { version = "1.14.0", features = ["derive", "min_const_generics"] }
 bytes = { version = "1.5.0", features = ["serde"] }
 chacha20 = "0.9.1"
 chacha20poly1305 = "0.10.1"
-
 rand = "0.8.5"
 thiserror = "1.0.49"
 serde = { version = "1.0.188", features = ["derive"] }
@@ -23,9 +20,9 @@ bincode = "1.3.3"
 anyhow = "1.0.75"
 bs58 = "0.5.0"
 serde-big-array = "0.5.1"
-earendil_crypt = { version="0.1", path = "../earendil_crypt" }
+earendil_crypt = { version = "0.1", path = "../earendil_crypt" }
 base64 = "0.21.5"
-x25519-dalek = {version="2.0.0", features=["reusable_secrets"]}
+x25519-dalek = { version = "2.0.0", features = ["reusable_secrets"] }
 rand_distr = "0.4.3"
 
 [dev-dependencies]
