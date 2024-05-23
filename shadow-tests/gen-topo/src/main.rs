@@ -1,7 +1,5 @@
-use std::ops::Index;
-
 use clap::Parser;
-use rand::{seq::SliceRandom, Rng};
+use rand::seq::SliceRandom;
 
 #[derive(Parser)]
 struct Args {
@@ -20,7 +18,7 @@ fn main() {
     let mut ret = "adjacencies:\n".to_owned();
 
     for _ in 0..args.number {
-        let pname = petname::petname(1, ":");
+        let pname = petname::petname(1, ":").unwrap();
         nodes.push(pname);
     }
 

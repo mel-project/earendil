@@ -4,7 +4,7 @@ use clap::Parser;
 use earendil_crypt::{Fingerprint, IdentitySecret};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sosistab2::ObfsUdpSecret;
+use sosistab2_obfsudp::ObfsUdpSecret;
 
 use std::{
     collections::{HashMap, HashSet},
