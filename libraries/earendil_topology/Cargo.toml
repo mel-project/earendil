@@ -21,7 +21,7 @@ blake3 = "1.5.1"
 stdcode = "0.1.14"
 arrayref = "0.3.7"
 rand = "0.8.5"
-indexmap = { version = "1.9.3", features = ["serde"] }
 thiserror = "1.0.61"
 earendil_crypt = { version = "0.1", path = "../earendil_crypt" }
 tracing = "0.1.40"
+indexmap = "2.2.6"

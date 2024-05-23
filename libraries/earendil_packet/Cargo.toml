@@ -21,13 +21,13 @@ anyhow = "1.0.86"
 bs58 = "0.5.1"
 serde-big-array = "0.5.1"
 earendil_crypt = { version = "0.1", path = "../earendil_crypt" }
-base64 = "0.21.7"
 x25519-dalek = { version = "2.0.1", features = ["reusable_secrets"] }
 rand_distr = "0.4.3"
-
-[dev-dependencies]
-criterion = "0.3"
+base64 = "0.22.1"
 
 [[bench]]
 name = "benchmark"
 harness = false
+
+[dev-dependencies]
+criterion = "0.5.1"
