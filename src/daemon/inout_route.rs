@@ -112,7 +112,7 @@ pub async fn dial_out_route(ctx: &DaemonContext, cfg: &OutRouteConfig) -> anyhow
                     .map_err(|e| {
                         anyhow::anyhow!("unable to resolve domain {}: {}", &cfg.connect, e)
                     })?;
-                let addr = addrs.get(0).context("empty list of resolved domains")?;
+                let addr = addrs.first().context("empty list of resolved domains")?;
 
                 *addr
             };

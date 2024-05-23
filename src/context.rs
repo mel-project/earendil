@@ -43,7 +43,7 @@ pub static RELAY_GRAPH: CtxField<RwLock<RelayGraph>> = |ctx| {
 
 pub static DEBTS: CtxField<Debts> = |ctx| {
     smol::future::block_on(async move {
-        match db_read(&ctx, "debts").await {
+        match db_read(ctx, "debts").await {
             Ok(Some(debts)) => {
                 tracing::debug!("retrieving persisted debts");
                 match Debts::from_bytes(debts) {

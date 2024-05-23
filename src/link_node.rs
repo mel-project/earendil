@@ -1,4 +1,7 @@
+mod gossip;
 mod link;
+mod link_protocol;
+mod link_protocol_impl;
 mod route_util;
 mod types;
 
@@ -13,8 +16,8 @@ use anyhow::Context as _;
 use bytes::Bytes;
 use clone_macro::clone;
 use dashmap::DashMap;
-use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
-use earendil_packet::{crypt::DhSecret, InnerPacket, PeeledPacket, RawPacket};
+use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret, RemoteId};
+use earendil_packet::{crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, ReplyBlock};
 use earendil_topology::{IdentityDescriptor, RelayGraph};
 use futures::AsyncReadExt;
 use itertools::Itertools;
@@ -34,18 +37,22 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use stdcode::StdcodeSerializeExt as _;
 
 use crate::{
-    link_node::route_util::one_hop_closer,
+    link_node::route_util::{forward_route_to, one_hop_closer, route_to_instructs},
     pascal::{read_pascal, write_pascal},
     InRouteConfig, ObfsConfig, OutRouteConfig,
 };
 
 use self::{
+    gossip::gossip_once,
     link::{Link, LinkMessage},
+    link_protocol::LinkService,
+    link_protocol_impl::LinkProtocolImpl,
     types::{ClientId, NeighborId},
 };
 
 /// An implementation of the link-level interface.
 pub struct LinkNode {
+    ctx: LinkNodeCtx,
     _task: Immortal,
     send_raw: Sender<LinkMessage>,
     recv_incoming: Receiver<IncomingMsg>,
@@ -56,24 +63,94 @@ impl LinkNode {
     pub fn new(cfg: LinkConfig) -> Self {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
+        let ctx = LinkNodeCtx {
+            cfg,
+            my_client_id: rand::random(),
+            relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
+            my_onion_sk: DhSecret::generate(),
+        };
         let _task = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([cfg, send_raw, recv_raw], move || link_loop(
-                cfg.clone(),
+            clone!([ctx, send_raw, recv_raw], move || link_loop(
+                ctx.clone(),
                 send_raw.clone(),
                 recv_raw.clone(),
                 send_incoming.clone(),
             )),
         );
         Self {
+            ctx,
             send_raw,
             recv_incoming,
             _task,
         }
     }
 
+    /// Sends a "forward" packet, which could be either a message or a batch of reply blocks.
+    pub async fn send_forward(
+        &self,
+        packet: InnerPacket,
+        src: AnonEndpoint,
+        dest_relay: RelayFingerprint,
+    ) -> anyhow::Result<()> {
+        let (first_peeler, wrapped_onion) = {
+            let relay_graph = self.ctx.relay_graph.read();
+            let route = forward_route_to(&relay_graph, dest_relay)
+                .context("failed to create forward route")?;
+            let first_peeler = *route
+                .first()
+                .context("empty route, cannot obtain first peeler")?;
+
+            let instructs =
+                route_to_instructs(&relay_graph, &route).context("route_to_instructs failed")?;
+            tracing::trace!(
+                "translated this route to instructions: {:?} => {:?}",
+                route,
+                instructs
+            );
+
+            let dest_opk = relay_graph
+                .identity(&dest_relay)
+                .context(format!(
+                    "couldn't get the identity of the destination fp {dest_relay}"
+                ))?
+                .onion_pk;
+
+            (
+                first_peeler,
+                RawPacket::new_normal(&instructs, &dest_opk, packet, RemoteId::Anon(src))?,
+            )
+        };
+
+        // send the raw packet
+        self.send_raw(wrapped_onion, first_peeler).await;
+        Ok(())
+    }
+
+    /// Sends a "backwards" packet, which consumes a reply block.
+    pub async fn send_backwards(
+        &self,
+        reply_block: ReplyBlock,
+        message: Message,
+    ) -> anyhow::Result<()> {
+        let packet = RawPacket::new_reply(
+            &reply_block,
+            InnerPacket::Message(message.clone()),
+            &RemoteId::Relay(
+                self.ctx
+                    .cfg
+                    .my_idsk
+                    .context("we must be a relay to send backwards packets")?
+                    .public()
+                    .fingerprint(),
+            ),
+        )?;
+        self.send_raw(packet, reply_block.first_peeler).await;
+        Ok(())
+    }
+
     /// Sends a raw packet.
-    pub async fn send_raw(&self, raw: RawPacket, next_peeler: RelayFingerprint) {
+    async fn send_raw(&self, raw: RawPacket, next_peeler: RelayFingerprint) {
         self.send_raw
             .send(LinkMessage::ToRelay {
                 packet: bytemuck::bytes_of(&raw).to_vec().into(),
@@ -83,7 +160,12 @@ impl LinkNode {
             .unwrap();
     }
 
-    /// Reveives an incoming message. Blocks until we have something that's for us, and not to be forwarded elsewhere.
+    /// Obtains the current LinkNode's client ID, for creating raw packets.
+    fn client_id(&self) -> ClientId {
+        self.ctx.my_client_id
+    }
+
+    /// Receives an incoming message. Blocks until we have something that's for us, and not to be forwarded elsewhere.
     pub async fn recv(&self) -> IncomingMsg {
         self.recv_incoming.recv().await.unwrap()
     }
@@ -110,17 +192,11 @@ struct LinkNodeCtx {
 }
 
 async fn link_loop(
-    cfg: LinkConfig,
+    link_ctx: LinkNodeCtx,
     send_raw: Sender<LinkMessage>,
     recv_raw: Receiver<LinkMessage>,
     send_incoming: Sender<IncomingMsg>,
 ) -> anyhow::Result<()> {
-    let link_ctx = LinkNodeCtx {
-        cfg,
-        my_client_id: rand::random(),
-        relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
-        my_onion_sk: DhSecret::generate(),
-    };
     let table = Arc::new(DashMap::new());
     let in_tasks = link_ctx.cfg.in_routes.iter().map(|(name, in_route)| {
         process_in_route(
@@ -311,7 +387,7 @@ async fn process_out_route(
                     .map_err(|e| {
                         anyhow::anyhow!("unable to resolve domain {}: {}", &out_route.connect, e)
                     })?;
-                let addr = addrs.get(0).context("empty list of resolved domains")?;
+                let addr = addrs.first().context("empty list of resolved domains")?;
 
                 *addr
             };
@@ -329,7 +405,7 @@ async fn process_out_route(
                     )
                     .await
                 }
-                ObfsConfig::Sosistab3(cookie) => {
+                ObfsConfig::Sosistab3(_cookie) => {
                     todo!()
                 }
             }
@@ -352,7 +428,7 @@ async fn handle_pipe(
     send_raw: Sender<LinkMessage>,
     is_dial: bool,
 ) -> anyhow::Result<()> {
-    let (mux, their_client_id, their_id_desc) = pipe_to_mux(link_ctx, pipe).await?;
+    let (mux, their_client_id, their_id_desc) = pipe_to_mux(&link_ctx, pipe).await?;
     let link = if is_dial {
         Link::new_dial(mux).await?
     } else {
@@ -360,7 +436,7 @@ async fn handle_pipe(
     };
 
     // insert *both* as client and as relay
-    if let Some(their_id_desc) = their_id_desc {
+    if let Some(their_id_desc) = &their_id_desc {
         their_id_desc.verify()?;
         table.insert(
             NeighborId::Relay(their_id_desc.identity_pk.fingerprint()),
@@ -369,17 +445,37 @@ async fn handle_pipe(
     }
     table.insert(NeighborId::Client(their_client_id), link.clone());
 
-    // TODO gossip, etc!!!!!!
+    let their_relay_fp = their_id_desc
+        .as_ref()
+        .map(|desc| desc.identity_pk.fingerprint());
+
+    let gossip_loop = async {
+        loop {
+            smol::Timer::after(Duration::from_secs(1)).await;
+            gossip_once(&link_ctx, &link, their_relay_fp).await?;
+        }
+    };
+
+    let rpc_serve_loop = link.rpc_serve(LinkService(LinkProtocolImpl {
+        ctx: link_ctx.clone(),
+        remote_client_id: their_client_id,
+        remote_relay_fp: their_relay_fp,
+    }));
 
     // pull messages from the link
-    loop {
-        let msg = link.recv_msg().await?;
-        send_raw.send(msg).await?;
-    }
+    gossip_loop
+        .race(rpc_serve_loop)
+        .race(async {
+            loop {
+                let msg = link.recv_msg().await?;
+                send_raw.send(msg).await?;
+            }
+        })
+        .await
 }
 
 async fn pipe_to_mux(
-    link_ctx: LinkNodeCtx,
+    link_ctx: &LinkNodeCtx,
     pipe: impl Pipe,
 ) -> anyhow::Result<(PicoMux, ClientId, Option<IdentityDescriptor>)> {
     let (mut read, mut write) = pipe.split();

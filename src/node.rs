@@ -3,7 +3,7 @@ use crate::ConfigFile;
 pub struct Node {}
 
 impl Node {
-    pub fn new(config: ConfigFile) -> anyhow::Result<Self> {
+    pub fn new(_config: ConfigFile) -> anyhow::Result<Self> {
         todo!()
     }
 }
