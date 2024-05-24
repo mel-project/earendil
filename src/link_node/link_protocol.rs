@@ -7,7 +7,7 @@ use nanorpc::nanorpc_derive;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::settlement::{Seed, SettlementRequest, SettlementResponse};
+use super::settlement::{Seed, SettlementRequest, SettlementResponse};
 
 #[nanorpc_derive]
 #[async_trait]

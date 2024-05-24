@@ -6,15 +6,11 @@ use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 
 use itertools::Itertools;
 
-use crate::settlement::{Seed, SettlementRequest, SettlementResponse};
-
-
 use super::{
     link_protocol::{InfoResponse, LinkProtocol},
+    settlement::{Seed, SettlementRequest, SettlementResponse},
     LinkNodeCtx,
 };
-
-const LABEL_LINK_RPC: &str = "link-rpc";
 
 pub struct LinkProtocolImpl {
     pub ctx: LinkNodeCtx,

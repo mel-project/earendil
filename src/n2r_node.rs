@@ -4,39 +4,46 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
 use bytes::Bytes;
+use clone_macro::clone;
 use dashmap::DashMap;
-use earendil_crypt::{AnonEndpoint, RelayFingerprint};
+use earendil_crypt::{AnonEndpoint, RelayEndpoint, RelayFingerprint};
 use earendil_packet::{Dock, InnerPacket, Message, RawBody, ReplyDegarbler};
 use itertools::Itertools;
 use moka::sync::Cache;
 use parking_lot::Mutex;
 use smol::channel::{Receiver, Sender};
+use smolscale::immortal::{Immortal, RespawnStrategy};
 
-use crate::{
-    link_node::{IncomingMsg, LinkNode},
-    RelayEndpoint,
-};
+use crate::link_node::{IncomingMsg, LinkNode};
 
 use self::reply_block_store::ReplyBlockStore;
 
 /// An implementation of the N2R layer.
 pub struct N2rNode {
     ctx: N2rNodeCtx,
+
+    _task: Immortal,
 }
 
 impl N2rNode {
     pub fn new(link_node: LinkNode, cfg: N2rConfig) -> Self {
+        let ctx = N2rNodeCtx {
+            cfg,
+            link_node: Arc::new(link_node),
+            anon_queues: Arc::new(DashMap::new()),
+            relay_queues: Arc::new(DashMap::new()),
+            rb_store: Arc::new(Mutex::new(ReplyBlockStore::new())),
+            degarblers: Cache::builder()
+                .time_to_live(Duration::from_secs(60))
+                .build(),
+        };
+        let task = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([ctx], move || n2r_incoming_loop(ctx.clone())),
+        );
         Self {
-            ctx: N2rNodeCtx {
-                cfg,
-                link_node: Arc::new(link_node),
-                anon_queues: Arc::new(DashMap::new()),
-                relay_queues: Arc::new(DashMap::new()),
-                rb_store: Arc::new(Mutex::new(ReplyBlockStore::new())),
-                degarblers: Cache::builder()
-                    .time_to_live(Duration::from_secs(60))
-                    .build(),
-            },
+            ctx: ctx.clone(),
+            _task: task,
         }
     }
 
@@ -126,7 +133,7 @@ impl N2rAnonSocket {
                 .try_collect()?;
             self.ctx
                 .link_node
-                .send_forward(InnerPacket::ReplyBlocks(rbs), self.my_endpoint, fingerprint)
+                .send_forward(InnerPacket::Surbs(rbs), self.my_endpoint, fingerprint)
                 .await?;
         }
         Ok(())
@@ -164,9 +171,9 @@ async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
                 }
                 IncomingMsg::Forward {
                     from,
-                    body: InnerPacket::ReplyBlocks(reply_blocks),
+                    body: InnerPacket::Surbs(surbs),
                 } => {
-                    for rb in reply_blocks {
+                    for rb in surbs {
                         ctx.rb_store.lock().insert(from, rb);
                     }
                 }

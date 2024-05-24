@@ -101,9 +101,4 @@ impl BwCalculator {
     pub fn delivered(&self) -> u64 {
         self.delivered
     }
-
-    /// Gets the current delivered time
-    pub fn delivered_time(&self) -> Instant {
-        self.delivered_time
-    }
 }

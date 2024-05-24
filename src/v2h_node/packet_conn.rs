@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Context;
 use bytes::Bytes;
-use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint};
+use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayEndpoint, RelayFingerprint};
 use earendil_packet::crypt::{AeadKey, DhSecret};
 use futures::TryFutureExt;
 use smol::{
@@ -25,7 +25,6 @@ use crate::{
         vrh::{HavenMsg, V2rMessage, VisitorHandshake},
         HAVEN_FORWARD_DOCK,
     },
-    RelayEndpoint,
 };
 
 use self::listen::listen_loop;
@@ -209,7 +208,7 @@ pub struct HavenListener {
 
 impl HavenListener {
     /// Binds a new haven. The rendezvous must be specified.
-    pub async fn bind(
+    pub(super) async fn bind(
         ctx: &V2hNodeCtx,
         identity: HavenIdentitySecret,
         port: u16,

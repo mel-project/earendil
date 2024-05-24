@@ -1,6 +1,6 @@
 use bytes::Bytes;
 
-use earendil_crypt::{AnonEndpoint, HavenIdentitySecret, RelayFingerprint};
+use earendil_crypt::{AnonEndpoint, HavenIdentitySecret, RelayEndpoint, RelayFingerprint};
 use earendil_packet::crypt::{AeadKey, DhSecret};
 use smol::{
     channel::{Receiver, Sender},
@@ -24,7 +24,6 @@ use crate::{
         vrh::{H2rMessage, HavenHandshake, HavenMsg, R2hMessage},
         V2hNodeCtx, HAVEN_FORWARD_DOCK,
     },
-    RelayEndpoint,
 };
 
 use super::HavenPacketConn;

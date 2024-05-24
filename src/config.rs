@@ -1,14 +1,12 @@
 use std::{collections::BTreeMap, io::Write, net::SocketAddr, path::PathBuf};
 
 use anyhow::Context;
-use earendil_crypt::{HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
+use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
 
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fs::OpenOptions;
 use tracing::instrument;
-
-use crate::haven::HavenEndpoint;
 
 /// A YAML-serializable configuration file
 #[derive(Serialize, Deserialize, Clone)]

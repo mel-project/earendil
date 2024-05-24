@@ -199,9 +199,4 @@ impl Inflight {
     pub fn min_rtt(&self) -> Duration {
         self.rtt.min_rtt()
     }
-
-    /// The estimated delivery rate of the link
-    pub fn delivery_rate(&self) -> f64 {
-        self.bw.delivery_rate()
-    }
 }

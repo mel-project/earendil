@@ -3,6 +3,7 @@ mod link;
 mod link_protocol;
 mod link_protocol_impl;
 mod route_util;
+mod settlement;
 mod types;
 
 use std::{
@@ -166,7 +167,7 @@ impl LinkNode {
         } else {
             let mut lala = self.ctx.cfg.out_routes.values().collect_vec();
             lala.shuffle(&mut rand::thread_rng());
-            lala.get(0).context("no out routes")?.fingerprint
+            lala.first().context("no out routes")?.fingerprint
         };
         let graph = self.ctx.relay_graph.read();
         let reverse_route = forward_route_to(&graph, destination)?;
@@ -191,11 +192,6 @@ impl LinkNode {
             })
             .await
             .unwrap();
-    }
-
-    /// Obtains the current LinkNode's client ID, for creating raw packets.
-    fn client_id(&self) -> ClientId {
-        self.ctx.my_client_id
     }
 
     /// Receives an incoming message. Blocks until we have something that's for us, and not to be forwarded elsewhere.

@@ -13,7 +13,7 @@ pub enum InnerPacket {
     /// Normal messages
     Message(Message),
     /// Reply blocks, used to construct relay->anon messages
-    ReplyBlocks(Vec<Surb>),
+    Surbs(Vec<Surb>),
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]

@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Context as _;
+use earendil_crypt::HavenEndpoint;
 use futures::{future::Shared, AsyncReadExt, FutureExt, TryFutureExt};
 use nursery_macro::nursery;
 use picomux::PicoMux;
@@ -10,9 +11,10 @@ use smol::{
     Task,
 };
 
-use crate::{
-    context::DaemonContext, stream::HavenStream, HavenEndpoint, HavenListener, HavenPacketConn,
-};
+use crate::v2h_node::stream::HeavyStream;
+use crate::v2h_node::HavenPacketConn;
+
+use super::{HavenListener, V2hNodeCtx};
 
 /// Since [HavenStream]s are quite expensive to construct, they are not the best choice for representing or proxying TCP connections, which need to be cheap. They also do not come with timeout and keepalive functionality.
 ///
@@ -22,14 +24,14 @@ use crate::{
 ///
 /// **A note on anonymity**: Unlike [HavenStream]s, different picomux streams returned by the same PooledVisitor may be linkable to each other by the haven. Different [PooledVisitor]s, however, are not linkable to each other.
 pub struct PooledVisitor {
-    ctx: DaemonContext,
+    ctx: V2hNodeCtx,
     // one mux per endpoint for now
     pool: moka::future::Cache<HavenEndpoint, Arc<PicoMux>>,
 }
 
 impl PooledVisitor {
     /// Creates a new visitor pool.
-    pub fn new(ctx: DaemonContext) -> Self {
+    pub(super) fn new(ctx: V2hNodeCtx) -> Self {
         Self {
             ctx,
             pool: moka::future::Cache::builder()
@@ -51,7 +53,7 @@ impl PooledVisitor {
                     tracing::debug!("pool cache MISS destination={}", dest);
                     let pkt_conn = HavenPacketConn::connect(&self.ctx, dest).await?;
                     tracing::warn!("got HavenPacketConn");
-                    let stream = HavenStream::new(pkt_conn);
+                    let stream = HeavyStream::new(pkt_conn);
                     let (read, write) = stream.split();
                     anyhow::Ok(Arc::new(PicoMux::new(read, write)))
                 })
@@ -107,7 +109,7 @@ async fn pooled_listener_task(
 ) -> anyhow::Result<()> {
     nursery!({
         loop {
-            let conn = HavenStream::new(listener.accept().await.context("inner listener failed")?);
+            let conn = HeavyStream::new(listener.accept().await.context("inner listener failed")?);
             let (read, write) = conn.split();
             let mux = PicoMux::new(read, write);
             let send_incoming = &send_incoming;

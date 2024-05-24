@@ -7,22 +7,22 @@ use smol::{future::FutureExt, Task, Timer};
 use stdcode::StdcodeSerializeExt;
 use virta::{stream_state::StreamState, StreamMessage};
 
-use crate::haven::HavenPacketConn;
+use super::HavenPacketConn;
 
 #[derive(Clone)]
-/// A reliable, TCP-like stream for visitor-haven communication. Constructed from [HavenPacketConn], the raw unreliable visitor-haven connection.
+/// A reliable, TCP-like stream for visitor-haven communication.
 ///
 /// Streams, like their underlying packet connections, have a very high degree of anonymity. Each stream is unlinkable with other streams, including streams by the same visitor, to both Earendil infrastructure and the destination haven. In exchange, creating and maintaining a stream is relatively expensive --- significantly more so than a TCP connection.
 ///
 /// For most applications where a single identified user opens many connection, such as HTTP or proxying, using a stream to represent an application-level connection is inefficient. Using some form of one-to-many multiplexing is strongly recommended.
 ///
 /// In fact, the de-facto standard protocol used in Earendil to represent TCP channels is [picomux] over [HavenStream]s. The convenience wrappers [crate::PooledListener] and [crate::PooledVisitor] are provided for that.
-pub struct HavenStream {
+pub struct HeavyStream {
     inner_stream: virta::Stream,
     _task: Arc<Task<()>>,
 }
 
-impl HavenStream {
+impl HeavyStream {
     /// Creates a reliable stream from the underlying packet connection.
     pub fn new(underlying: HavenPacketConn) -> Self {
         let underlying = Arc::new(underlying);
@@ -95,7 +95,7 @@ impl HavenStream {
     }
 }
 
-impl AsyncRead for HavenStream {
+impl AsyncRead for HeavyStream {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -106,7 +106,7 @@ impl AsyncRead for HavenStream {
     }
 }
 
-impl AsyncWrite for HavenStream {
+impl AsyncWrite for HeavyStream {
     fn poll_write(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,

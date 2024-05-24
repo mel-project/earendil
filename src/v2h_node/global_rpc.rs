@@ -1,4 +1,3 @@
-mod bicache;
 mod server;
 mod transport;
 
@@ -6,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+pub use server::GlobalRpcImpl;
 use stdcode::StdcodeSerializeExt;
 pub use transport::GlobalRpcTransport;
 
