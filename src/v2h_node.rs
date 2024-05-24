@@ -26,11 +26,11 @@ use crate::{
 
 pub use self::packet_conn::HavenListener;
 pub use self::packet_conn::HavenPacketConn;
+pub use self::pooled::PooledListener;
 pub use self::pooled::PooledVisitor;
 use self::{
     bicache::Bicache,
     global_rpc::{GlobalRpcImpl, GlobalRpcService, GLOBAL_RPC_DOCK},
-    pooled::PooledListener,
     vrh::V2rMessage,
 };
 

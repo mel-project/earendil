@@ -40,9 +40,9 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use stdcode::StdcodeSerializeExt as _;
 
 use crate::{
+    config::{InRouteConfig, ObfsConfig, OutRouteConfig},
     link_node::route_util::{forward_route_to, one_hop_closer, route_to_instructs},
     pascal::{read_pascal, write_pascal},
-    InRouteConfig, ObfsConfig, OutRouteConfig,
 };
 
 use self::{
@@ -381,7 +381,7 @@ async fn process_in_route(
 ) -> anyhow::Result<()> {
     let mut listener = TcpListener::bind(in_route.listen).await?;
     match &in_route.obfs {
-        crate::ObfsConfig::None => loop {
+        ObfsConfig::None => loop {
             let pipe = listener.accept().await?;
             tracing::debug!(
                 name,
@@ -397,7 +397,7 @@ async fn process_in_route(
             ))
             .detach();
         },
-        crate::ObfsConfig::Sosistab3(_) => todo!(),
+        ObfsConfig::Sosistab3(_) => todo!(),
     }
 }
 

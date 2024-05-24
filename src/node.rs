@@ -1,11 +1,16 @@
+use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint};
+
 use crate::{
+    config::ConfigFile,
     link_node::{LinkConfig, LinkNode},
     n2r_node::{N2rConfig, N2rNode},
-    v2h_node::{V2hConfig, V2hNode},
-    ConfigFile,
+    v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, V2hConfig, V2hNode},
 };
 
-pub struct Node {}
+/// The public interface to the whole Earendil system.
+pub struct Node {
+    v2h: V2hNode,
+}
 
 impl Node {
     pub fn new(config: ConfigFile) -> anyhow::Result<Self> {
@@ -26,7 +31,33 @@ impl Node {
         todo!()
     }
 
-    pub fn v2h(&self) -> &V2hNode {
-        todo!()
+    /// Creates a low-level, unreliable packet connection.
+    pub async fn packet_connect(&self, dest: HavenEndpoint) -> anyhow::Result<HavenPacketConn> {
+        self.v2h.packet_connect(dest).await
+    }
+
+    /// Creates a low-level, unreliable packet listener.
+    pub async fn packet_listen(
+        &self,
+        identity: HavenIdentitySecret,
+        port: u16,
+        rendezvous: RelayFingerprint,
+    ) -> anyhow::Result<HavenListener> {
+        self.v2h.packet_listen(identity, port, rendezvous).await
+    }
+
+    /// Creates a new pooled visitor. Under Earendil's anonymity model, each visitor should be unlinkable to any other visitor, but streams created within each visitor are linkable to the same haven each other by the haven (though not by the network).
+    pub async fn pooled_visitor(&self) -> PooledVisitor {
+        self.v2h.pooled_visitor().await
+    }
+
+    /// Creates a new pooled listener.
+    pub async fn pooled_listen(
+        &self,
+        identity: HavenIdentitySecret,
+        port: u16,
+        rendezvous: RelayFingerprint,
+    ) -> anyhow::Result<PooledListener> {
+        self.v2h.pooled_listen(identity, port, rendezvous).await
     }
 }

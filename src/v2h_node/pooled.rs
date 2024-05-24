@@ -16,13 +16,11 @@ use crate::v2h_node::HavenPacketConn;
 
 use super::{HavenListener, V2hNodeCtx};
 
-/// Since [HavenStream]s are quite expensive to construct, they are not the best choice for representing or proxying TCP connections, which need to be cheap. They also do not come with timeout and keepalive functionality.
+/// HavenPacketConn is heavyweight, non-reliable, and does not come with timeout and keepalive functionality.
 ///
-/// The standard solution in Earendil is to use [picomux] to multiplex many cheap TCP-like connections on top of each [HavenStream]. But managing that is rather tricky.
+/// The standard solution in Earendil is to use this struct. [PooledVisitor] represents internally contains one or more HavenPacketConns to every haven destination you might want to connect, and multiplexes many streams on top of each.
 ///
-/// Instead, use this struct. [PooledVisitor] represents internally contains one or more [HavenStream]s to every haven destination you might want to connect, and multiplexes many streams on top of each.
-///
-/// **A note on anonymity**: Unlike [HavenStream]s, different picomux streams returned by the same PooledVisitor may be linkable to each other by the haven. Different [PooledVisitor]s, however, are not linkable to each other.
+/// **A note on anonymity**: Different picomux streams returned by the same PooledVisitor may be linkable to each other by the haven. Different [PooledVisitor]s, however, are not linkable to each other.
 pub struct PooledVisitor {
     ctx: V2hNodeCtx,
     // one mux per endpoint for now
