@@ -202,6 +202,11 @@ impl LinkNode {
     pub async fn recv(&self) -> IncomingMsg {
         self.recv_incoming.recv().await.unwrap()
     }
+
+    /// Gets all the currently known relays.
+    pub fn all_relays(&self) -> Vec<RelayFingerprint> {
+        self.ctx.relay_graph.read().all_nodes().collect_vec()
+    }
 }
 
 /// Incoming messages from the link layer that are addressed to "us".

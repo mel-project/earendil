@@ -174,6 +174,38 @@ impl HavenFingerprint {
     }
 }
 
+#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct HavenEndpoint {
+    pub fingerprint: HavenFingerprint,
+    pub port: u16,
+}
+
+impl HavenEndpoint {
+    pub fn new(fingerprint: HavenFingerprint, port: u16) -> Self {
+        Self { fingerprint, port }
+    }
+}
+
+impl Display for HavenEndpoint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.fingerprint, self.port)
+    }
+}
+
+impl FromStr for HavenEndpoint {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() != 2 {
+            return Err(anyhow::anyhow!("invalid haven endpoint format"));
+        }
+        let fingerprint = HavenFingerprint::from_str(parts[0])?;
+        let port = u16::from_str(parts[1])?;
+        Ok(HavenEndpoint::new(fingerprint, port))
+    }
+}
+
 /// The public half of a "relay identity" on the network.
 ///
 /// Underlying representation is a Ed25519 public key.

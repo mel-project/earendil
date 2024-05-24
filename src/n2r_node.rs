@@ -53,7 +53,8 @@ impl N2rNode {
     }
 
     /// Binds an anonymous endpoint to the node, creating a new `N2rAnonSocket` for communication.
-    pub fn bind_anon(&self, my_endpoint: AnonEndpoint) -> N2rAnonSocket {
+    pub fn bind_anon(&self) -> N2rAnonSocket {
+        let my_endpoint = AnonEndpoint::random();
         let (sender, receiver) = smol::channel::bounded(100);
         self.ctx.anon_queues.insert(my_endpoint, sender);
 
@@ -64,6 +65,11 @@ impl N2rNode {
 
             surb_counts: DashMap::new(),
         }
+    }
+
+    /// Gets the link layer.
+    pub fn link_node(&self) -> &LinkNode {
+        &self.ctx.link_node
     }
 }
 
@@ -104,7 +110,8 @@ impl N2rAnonSocket {
         Ok((message, source))
     }
 
-    async fn replenish_surb(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
+    /// Replenishes missing SURBs for the given destination.
+    pub async fn replenish_surb(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
         while *self.surb_counts.entry(fingerprint).or_insert(0) < 10 {
             *self.surb_counts.entry(fingerprint).or_insert(0) += 2;
             let rbs = (0..4)
@@ -123,6 +130,10 @@ impl N2rAnonSocket {
                 .await?;
         }
         Ok(())
+    }
+
+    pub fn local_endpoint(&self) -> AnonEndpoint {
+        self.my_endpoint
     }
 }
 
