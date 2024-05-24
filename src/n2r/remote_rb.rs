@@ -1,6 +1,6 @@
 use anyhow::Context;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
-use earendil_packet::{InnerPacket, RawPacket, ReplyBlock};
+use earendil_packet::{InnerPacket, RawPacket, Surb};
 use moka::sync::Cache;
 use parking_lot::Mutex;
 use rand::prelude::*;
@@ -99,9 +99,9 @@ async fn send_reply_blocks(
     let reverse_instructs =
         route_to_instructs(ctx, &reverse_route).context("failed to translate reply route")?;
 
-    let mut rbs: Vec<ReplyBlock> = vec![];
+    let mut rbs: Vec<Surb> = vec![];
     for _ in 0..count {
-        let (rb, (id, degarbler)) = ReplyBlock::new(
+        let (rb, (id, degarbler)) = Surb::new(
             &reverse_instructs,
             reverse_route[0],
             &rb_dest_opk,

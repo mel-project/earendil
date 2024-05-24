@@ -5,8 +5,9 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Context;
 use bytes::Bytes;
 use dashmap::DashMap;
-use earendil_crypt::AnonEndpoint;
-use earendil_packet::{Dock, InnerPacket, RawBody, ReplyDegarbler};
+use earendil_crypt::{AnonEndpoint, RelayFingerprint};
+use earendil_packet::{Dock, InnerPacket, Message, RawBody, ReplyDegarbler};
+use itertools::Itertools;
 use moka::sync::Cache;
 use parking_lot::Mutex;
 use smol::channel::{Receiver, Sender};
@@ -18,6 +19,7 @@ use crate::{
 
 use self::reply_block_store::ReplyBlockStore;
 
+/// An implementation of the N2R layer.
 pub struct N2rNode {
     ctx: N2rNodeCtx,
 }
@@ -36,6 +38,91 @@ impl N2rNode {
                     .build(),
             },
         }
+    }
+
+    /// Binds a relay endpoint to the node, creating a new `N2rRelaySocket` for communication.
+    pub fn bind_relay(&self, dock: Dock) -> N2rRelaySocket {
+        let (sender, receiver) = smol::channel::bounded(100);
+        self.ctx.relay_queues.insert(dock, sender);
+
+        N2rRelaySocket {
+            ctx: self.ctx.clone(),
+            dock,
+            queue: receiver,
+        }
+    }
+
+    /// Binds an anonymous endpoint to the node, creating a new `N2rAnonSocket` for communication.
+    pub fn bind_anon(&self, my_endpoint: AnonEndpoint) -> N2rAnonSocket {
+        let (sender, receiver) = smol::channel::bounded(100);
+        self.ctx.anon_queues.insert(my_endpoint, sender);
+
+        N2rAnonSocket {
+            ctx: self.ctx.clone(),
+            my_endpoint,
+            queue: receiver,
+
+            surb_counts: DashMap::new(),
+        }
+    }
+}
+
+pub struct N2rAnonSocket {
+    ctx: N2rNodeCtx,
+    my_endpoint: AnonEndpoint,
+    queue: Receiver<(Bytes, RelayEndpoint)>,
+
+    surb_counts: DashMap<RelayFingerprint, i64>,
+}
+
+impl Drop for N2rAnonSocket {
+    fn drop(&mut self) {
+        self.ctx.anon_queues.remove(&self.my_endpoint);
+    }
+}
+
+impl N2rAnonSocket {
+    /// Sends a packet to a particular relay endpoint.
+    pub async fn send_to(&self, body: Bytes, dest: RelayEndpoint) -> anyhow::Result<()> {
+        self.replenish_surb(dest.fingerprint).await?;
+
+        self.ctx
+            .link_node
+            .send_forward(
+                InnerPacket::Message(Message::new(dest.dock, body)),
+                self.my_endpoint,
+                dest.fingerprint,
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Receives an incoming packet.
+    pub async fn recv_from(&self) -> anyhow::Result<(Bytes, RelayEndpoint)> {
+        let (message, source) = self.queue.recv().await?;
+
+        Ok((message, source))
+    }
+
+    async fn replenish_surb(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
+        while *self.surb_counts.entry(fingerprint).or_insert(0) < 10 {
+            *self.surb_counts.entry(fingerprint).or_insert(0) += 2;
+            let rbs = (0..4)
+                .map(|_| {
+                    let (rb, id, degarble) = self
+                        .ctx
+                        .link_node
+                        .surb_from(self.my_endpoint, fingerprint)?;
+                    self.ctx.degarblers.insert(id, degarble);
+                    anyhow::Ok(rb)
+                })
+                .try_collect()?;
+            self.ctx
+                .link_node
+                .send_forward(InnerPacket::ReplyBlocks(rbs), self.my_endpoint, fingerprint)
+                .await?;
+        }
+        Ok(())
     }
 }
 
@@ -91,6 +178,41 @@ async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
         if let Err(err) = fallible.await {
             tracing::warn!(err = debug(err), "dropping an incoming");
         }
+    }
+}
+
+pub struct N2rRelaySocket {
+    ctx: N2rNodeCtx,
+    dock: Dock,
+    queue: Receiver<(Bytes, AnonEndpoint)>,
+}
+
+impl Drop for N2rRelaySocket {
+    fn drop(&mut self) {
+        self.ctx.relay_queues.remove(&self.dock);
+    }
+}
+
+impl N2rRelaySocket {
+    /// Sends a packet to a particular anonymous endpoint.
+    pub async fn send_to(&self, body: Bytes, anon_endpoint: AnonEndpoint) -> anyhow::Result<()> {
+        let rb = self
+            .ctx
+            .rb_store
+            .lock()
+            .pop(anon_endpoint)
+            .context(format!("no rb for anon endpoint: {:?}", anon_endpoint))?;
+        self.ctx
+            .link_node
+            .send_backwards(rb, Message::new(self.dock, body))
+            .await?;
+        Ok(())
+    }
+
+    /// Receives an incoming packet.
+    pub async fn recv_from(&self) -> anyhow::Result<(Bytes, AnonEndpoint)> {
+        let (message, source) = self.queue.recv().await?;
+        Ok((message, source))
     }
 }
 

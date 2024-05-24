@@ -5,7 +5,7 @@ use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentityPublic, Remote
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{reply_block::ReplyBlock, RawBody, RAW_BODY_SIZE};
+use crate::{reply_block::Surb, RawBody, RAW_BODY_SIZE};
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 /// Represents the actual end-to-end packet that is carried in the fixed-size payloads. Either an application-level message, or a batch of reply blocks.
@@ -13,7 +13,7 @@ pub enum InnerPacket {
     /// Normal messages
     Message(Message),
     /// Reply blocks, used to construct relay->anon messages
-    ReplyBlocks(Vec<ReplyBlock>),
+    ReplyBlocks(Vec<Surb>),
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]

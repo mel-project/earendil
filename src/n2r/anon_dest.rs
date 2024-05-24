@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, num::NonZeroUsize};
 
 use earendil_crypt::AnonEndpoint;
-use earendil_packet::ReplyBlock;
+use earendil_packet::Surb;
 use lru::LruCache;
 use parking_lot::Mutex;
 
@@ -10,7 +10,7 @@ use crate::context::CtxField;
 pub static ANON_DESTS: CtxField<Mutex<ReplyBlockStore>> = |_| Mutex::new(ReplyBlockStore::new());
 
 struct ReplyBlockDeque {
-    pub deque: VecDeque<ReplyBlock>,
+    pub deque: VecDeque<Surb>,
     pub capacity: usize,
 }
 
@@ -22,7 +22,7 @@ impl ReplyBlockDeque {
         }
     }
 
-    fn insert(&mut self, item: ReplyBlock) {
+    fn insert(&mut self, item: Surb) {
         if self.deque.len() == self.capacity {
             // remove the oldest element
             self.deque.pop_front();
@@ -31,7 +31,7 @@ impl ReplyBlockDeque {
         self.deque.push_back(item);
     }
 
-    fn pop(&mut self) -> Option<ReplyBlock> {
+    fn pop(&mut self) -> Option<Surb> {
         self.deque.pop_back()
     }
 }
@@ -53,14 +53,14 @@ impl ReplyBlockStore {
         Self { items }
     }
 
-    pub fn insert(&mut self, anon_dest: AnonEndpoint, rb: ReplyBlock) {
+    pub fn insert(&mut self, anon_dest: AnonEndpoint, rb: Surb) {
         let deque = self
             .items
             .get_or_insert_mut(anon_dest, || ReplyBlockDeque::new(1000));
         deque.insert(rb);
     }
 
-    pub fn pop(&mut self, anon_dest: &AnonEndpoint) -> Option<ReplyBlock> {
+    pub fn pop(&mut self, anon_dest: &AnonEndpoint) -> Option<Surb> {
         match self.items.get_mut(anon_dest) {
             Some(deque) => deque.pop(),
             None => None,
@@ -94,7 +94,7 @@ mod tests {
             .collect()
     }
 
-    fn create_reply_block() -> ReplyBlock {
+    fn create_reply_block() -> Surb {
         let route_with_onion_secrets = generate_forward_instructions(1);
         let route: Vec<ForwardInstruction> = route_with_onion_secrets
             .iter()
@@ -105,7 +105,7 @@ mod tests {
         let alice_opk = alice_osk.public();
         let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
 
-        let (rb, _) = ReplyBlock::new(&route, first_peeler, &alice_opk, 0, alice_anon_id)
+        let (rb, _) = Surb::new(&route, first_peeler, &alice_opk, 0, alice_anon_id)
             .expect("failed to create reply block");
         rb
     }

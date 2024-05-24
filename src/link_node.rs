@@ -17,7 +17,9 @@ use bytes::Bytes;
 use clone_macro::clone;
 use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret, RemoteId};
-use earendil_packet::{crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, ReplyBlock};
+use earendil_packet::{
+    crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, ReplyDegarbler, Surb,
+};
 use earendil_topology::{IdentityDescriptor, RelayGraph};
 use futures::AsyncReadExt;
 use itertools::Itertools;
@@ -49,6 +51,7 @@ use self::{
     link_protocol_impl::LinkProtocolImpl,
     types::{ClientId, NeighborId},
 };
+use rand::prelude::*;
 
 /// An implementation of the link-level interface.
 pub struct LinkNode {
@@ -128,11 +131,7 @@ impl LinkNode {
     }
 
     /// Sends a "backwards" packet, which consumes a reply block.
-    pub async fn send_backwards(
-        &self,
-        reply_block: ReplyBlock,
-        message: Message,
-    ) -> anyhow::Result<()> {
+    pub async fn send_backwards(&self, reply_block: Surb, message: Message) -> anyhow::Result<()> {
         let packet = RawPacket::new_reply(
             &reply_block,
             InnerPacket::Message(message.clone()),
@@ -147,6 +146,40 @@ impl LinkNode {
         )?;
         self.send_raw(packet, reply_block.first_peeler).await;
         Ok(())
+    }
+
+    /// Constructs a reply block back from the given relay.
+    pub fn surb_from(
+        &self,
+        my_anon_id: AnonEndpoint,
+        remote: RelayFingerprint,
+    ) -> anyhow::Result<(Surb, u64, ReplyDegarbler)> {
+        let remote_opk = self
+            .ctx
+            .relay_graph
+            .read()
+            .identity(&remote)
+            .context("no such remote")?
+            .onion_pk;
+        let destination = if let Some(my_relay) = self.ctx.cfg.my_idsk {
+            my_relay.public().fingerprint()
+        } else {
+            let mut lala = self.ctx.cfg.out_routes.values().collect_vec();
+            lala.shuffle(&mut rand::thread_rng());
+            lala.get(0).context("no out routes")?.fingerprint
+        };
+        let graph = self.ctx.relay_graph.read();
+        let reverse_route = forward_route_to(&graph, destination)?;
+        let reverse_instructs = route_to_instructs(&graph, &reverse_route)?;
+        let (rb, (id, degarbler)) = Surb::new(
+            &reverse_instructs,
+            reverse_route[0],
+            &remote_opk,
+            self.ctx.my_client_id,
+            my_anon_id,
+        )
+        .context("cannot build reply block")?;
+        Ok((rb, id, degarbler))
     }
 
     /// Sends a raw packet.

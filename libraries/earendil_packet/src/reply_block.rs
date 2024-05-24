@@ -9,15 +9,15 @@ use crate::{
     ForwardInstruction, InnerPacket, Message, PacketConstructError, RawBody, RawHeader, RawPacket,
 };
 
-/// A reply block. Reply blocks are constructed by endpoints who wish other endpoints to talk to them via an anonymous address, and are single-use, consumed when used to construct a packet going to that anonymous address.
+/// A single-use reply block. Surbs are constructed by endpoints who wish other endpoints to talk to them via an anonymous address, and are single-use, consumed when used to construct a packet going to that anonymous address.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
-pub struct ReplyBlock {
+pub struct Surb {
     pub header: RawHeader,
     pub stream_key: [u8; 32],
     pub first_peeler: RelayFingerprint,
 }
 
-impl ReplyBlock {
+impl Surb {
     pub fn new(
         route: &[ForwardInstruction],
         first_peeler: RelayFingerprint,
