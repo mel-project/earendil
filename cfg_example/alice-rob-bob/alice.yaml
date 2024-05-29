@@ -5,8 +5,8 @@ control_listen: 127.0.0.1:11111
 out_routes:
   bob:
     fingerprint: 2d2b5429d2c814c05c31bc67b3731817a1b09ba353f8b31b54dce7f149fa16a7
-    obfs:
-      sosistab3: "some-cookie-lala-doodoo"
+    obfs: none
+      # sosistab3: "some-cookie-lala-doodoo"
     connect: 127.0.0.1:12345
   example-relay:
     connect: 45.33.109.28:12345

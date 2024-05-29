@@ -5,8 +5,8 @@ control_listen: 127.0.0.1:22222
 
 in_routes:
   main_udp:
-    obfs:
-      sosistab3: "some-cookie-lala-doodoo"
+    obfs: none
+      # sosistab3: "some-cookie-lala-doodoo"
     listen: 0.0.0.0:12345
 
 out_routes:

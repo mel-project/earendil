@@ -21,7 +21,6 @@ use self::reply_block_store::ReplyBlockStore;
 /// An implementation of the N2R layer.
 pub struct N2rNode {
     ctx: N2rNodeCtx,
-
     _task: Immortal,
 }
 

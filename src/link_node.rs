@@ -9,6 +9,8 @@ mod types;
 use std::{
     collections::BTreeMap,
     net::{SocketAddr, ToSocketAddrs as _},
+    path::PathBuf,
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -37,7 +39,8 @@ use smol::{
     future::FutureExt as _,
 };
 use smolscale::immortal::{Immortal, RespawnStrategy};
-use stdcode::StdcodeSerializeExt as _;
+use sqlx::{sqlite::SqliteConnectOptions, Pool, Row, Sqlite, SqlitePool};
+use stdcode::StdcodeSerializeExt;
 
 use crate::{
     config::{InRouteConfig, ObfsConfig, OutRouteConfig},
@@ -67,11 +70,42 @@ impl LinkNode {
     pub fn new(cfg: LinkConfig) -> Self {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
+
+        let db = cfg.cache_path.clone().map(|db_path| {
+            tracing::debug!("INITIALIZING DATABASE");
+            let options = SqliteConnectOptions::from_str(db_path.to_str().unwrap())
+                .unwrap()
+                .create_if_missing(true);
+            smol::future::block_on(async move {
+                let pool = Pool::connect_with(options).await.unwrap();
+                sqlx::query(
+                    "CREATE TABLE IF NOT EXISTS misc (
+                key TEXT PRIMARY KEY,
+                value BLOB NOT NULL
+            );",
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+                pool
+            })
+        });
+
+        let relay_graph = match smol::future::block_on(db_read(&db, "relay_graph"))
+            .ok()
+            .flatten()
+            .and_then(|s| stdcode::deserialize(&s).ok())
+        {
+            Some(graph) => graph,
+            None => RelayGraph::new(),
+        };
+
         let ctx = LinkNodeCtx {
             cfg,
             my_client_id: rand::random(),
-            relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
+            relay_graph: Arc::new(RwLock::new(relay_graph)),
             my_onion_sk: DhSecret::generate(),
+            db,
         };
         let _task = Immortal::respawn(
             RespawnStrategy::Immediate,
@@ -223,6 +257,7 @@ struct LinkNodeCtx {
     my_client_id: ClientId,
     my_onion_sk: DhSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
+    db: Option<SqlitePool>,
 }
 
 async fn link_loop(
@@ -232,7 +267,20 @@ async fn link_loop(
     send_incoming: Sender<IncomingMsg>,
 ) -> anyhow::Result<()> {
     let table = Arc::new(DashMap::new());
+    let db_sync_loop = async {
+        loop {
+            tracing::debug!("syncing DB...");
+            let relay_graph = link_ctx.relay_graph.read().stdcode();
+            match db_write(&link_ctx.db, "relay_graph", relay_graph).await {
+                Ok(_) => (),
+                Err(e) => tracing::warn!("db_write failed with: {e}"),
+            };
+            smol::Timer::after(Duration::from_secs(10)).await;
+        }
+    };
+    // println!("number of in_routes: {}", link_ctx.cfg.in_routes.len());
     let in_tasks = link_ctx.cfg.in_routes.iter().map(|(name, in_route)| {
+        // tracing::debug!("lol starting one in_route");
         process_in_route(
             link_ctx.clone(),
             name,
@@ -365,10 +413,15 @@ async fn link_loop(
         }
     };
 
-    futures_util::future::try_join_all(in_tasks)
+    match futures_util::future::try_join_all(in_tasks)
         .race(futures_util::future::try_join_all(out_tasks))
         .race(peel_loop)
-        .await?;
+        .race(db_sync_loop)
+        .await
+    {
+        Ok(_) => tracing::debug!("lol returned?"),
+        Err(e) => tracing::error!("link loop error: {e}"),
+    }
     Ok(())
 }
 
@@ -543,4 +596,36 @@ pub struct LinkConfig {
     pub in_routes: BTreeMap<String, InRouteConfig>,
     pub out_routes: BTreeMap<String, OutRouteConfig>,
     pub my_idsk: Option<RelayIdentitySecret>,
+    pub cache_path: Option<PathBuf>,
+}
+
+pub async fn db_write(
+    pool: &Option<Pool<Sqlite>>,
+    key: &str,
+    value: Vec<u8>,
+) -> Result<(), sqlx::Error> {
+    if let Some(pool) = pool {
+        sqlx::query("INSERT INTO misc (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+        .bind(key)
+        .bind(value)
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
+}
+
+pub async fn db_read(
+    pool: &Option<Pool<Sqlite>>,
+    key: &str,
+) -> Result<Option<Vec<u8>>, sqlx::Error> {
+    if let Some(pool) = pool {
+        let result = sqlx::query("SELECT value FROM misc WHERE key = ?")
+            .bind(key)
+            .fetch_optional(pool)
+            .await?
+            .map(|row| row.get("value"));
+        Ok(result)
+    } else {
+        Ok(None)
+    }
 }
