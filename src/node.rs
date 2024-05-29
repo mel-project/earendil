@@ -39,8 +39,11 @@ impl Node {
             },
             cache_path: config.state_cache,
         });
+        println!("started LinkNode");
         let n2r = N2rNode::new(link, N2rConfig {});
+        println!("started N2rNode");
         let v2h = Arc::new(V2hNode::new(n2r, V2hConfig {}));
+        println!("started V2hNode");
 
         // start loops for handling socks5, etc, etc
         let v2h_clone = v2h.clone();

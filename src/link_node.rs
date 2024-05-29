@@ -269,7 +269,7 @@ async fn link_loop(
     let table = Arc::new(DashMap::new());
     let db_sync_loop = async {
         loop {
-            tracing::debug!("syncing DB...");
+            println!("syncing DB...");
             let relay_graph = link_ctx.relay_graph.read().stdcode();
             match db_write(&link_ctx.db, "relay_graph", relay_graph).await {
                 Ok(_) => (),
@@ -278,9 +278,12 @@ async fn link_loop(
             smol::Timer::after(Duration::from_secs(10)).await;
         }
     };
-    // println!("number of in_routes: {}", link_ctx.cfg.in_routes.len());
-    let in_tasks = link_ctx.cfg.in_routes.iter().map(|(name, in_route)| {
-        // tracing::debug!("lol starting one in_route");
+    let in_task = async {
+        if link_ctx.cfg.in_routes.is_empty() {
+        smol::future::pending().await
+    } else {
+        futures_util::future::try_join_all(
+        link_ctx.cfg.in_routes.iter().map(|(name, in_route)| {
         process_in_route(
             link_ctx.clone(),
             name,
@@ -288,16 +291,26 @@ async fn link_loop(
             table.clone(),
             send_raw.clone(),
         )
-    });
-    let out_tasks = link_ctx.cfg.out_routes.iter().map(|(name, out_route)| {
-        process_out_route(
-            link_ctx.clone(),
-            name,
-            out_route,
-            table.clone(),
-            send_raw.clone(),
-        )
-    });
+    })).await
+}
+};
+
+    let out_task = async {
+        if link_ctx.cfg.out_routes.is_empty() {
+        smol::future::pending().await
+    } else {
+        futures_util::future::try_join_all(
+    link_ctx.cfg.out_routes.iter().map(|(name, out_route)| {
+            process_out_route(
+                link_ctx.clone(),
+                name,
+                out_route,
+                table.clone(),
+                send_raw.clone(),
+            )
+        })).await
+}
+};
 
     // the main peel loop
     let peel_loop = async {
@@ -413,14 +426,15 @@ async fn link_loop(
         }
     };
 
-    match futures_util::future::try_join_all(in_tasks)
-        .race(futures_util::future::try_join_all(out_tasks))
+
+    match in_task
+        .race(out_task)
         .race(peel_loop)
         .race(db_sync_loop)
         .await
     {
-        Ok(_) => tracing::debug!("lol returned?"),
-        Err(e) => tracing::error!("link loop error: {e}"),
+        Ok(_) => tracing::debug!("link_loop() returned?"),
+        Err(e) => tracing::error!("link_loop() error: {e}"),
     }
     Ok(())
 }
@@ -432,6 +446,7 @@ async fn process_in_route(
     table: Arc<DashMap<NeighborId, Link>>,
     send_raw: Sender<LinkMessage>,
 ) -> anyhow::Result<()> {
+    println!("process_in_route");
     let mut listener = TcpListener::bind(in_route.listen).await?;
     match &in_route.obfs {
         ObfsConfig::None => loop {
@@ -542,7 +557,7 @@ async fn handle_pipe(
             gossip_once(&link_ctx, &link, their_relay_fp).await?;
         }
     };
-
+println!("starting rpc_serve_loop");
     let rpc_serve_loop = link.rpc_serve(LinkService(LinkProtocolImpl {
         ctx: link_ctx.clone(),
         remote_client_id: their_client_id,

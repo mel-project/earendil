@@ -8,10 +8,10 @@ out_routes:
     obfs: none
       # sosistab3: "some-cookie-lala-doodoo"
     connect: 127.0.0.1:12345
-  example-relay:
-    connect: 45.33.109.28:12345
-    fingerprint: 4b7a641b77c2d6ceb8b3fecec2b2978dfe81ae045ed9a25ed78b828009c4967a
-    obfs: none
+  # example-relay:
+  #   connect: 45.33.109.28:12345
+  #   fingerprint: 4b7a641b77c2d6ceb8b3fecec2b2978dfe81ae045ed9a25ed78b828009c4967a
+  #   obfs: none
 
 socks5:
   listen: 127.0.0.1:23456
