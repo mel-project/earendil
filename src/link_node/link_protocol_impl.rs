@@ -61,6 +61,8 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     async fn identity(&self, fp: RelayFingerprint) -> Option<IdentityDescriptor> {
+        // let all_nodes: Vec<_> = self.ctx.relay_graph.read().all_nodes().collect();
+        // println!("{:?}", all_nodes);
         self.ctx.relay_graph.read().identity(&fp)
     }
 

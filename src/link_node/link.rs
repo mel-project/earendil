@@ -71,6 +71,7 @@ impl Link {
     }
 
     pub async fn rpc_serve(&self, service: impl RpcService) -> anyhow::Result<()> {
+        
         nursery!({
             loop {
                 let stream = self.mux.accept().await?;
@@ -82,7 +83,9 @@ impl Link {
                             let mut line = String::new();
                             read.read_line(&mut line).await?;
                             let req: JrpcRequest = serde_json::from_str(&line)?;
+                            // println!("got req: {:?}", req);
                             let resp = service.respond_raw(req).await;
+                            // println!("got resp: {:?}", resp);
                             write
                                 .write_all(
                                     format!("{}\n", serde_json::to_string(&resp)?).as_bytes(),

@@ -267,9 +267,10 @@ async fn link_loop(
     send_incoming: Sender<IncomingMsg>,
 ) -> anyhow::Result<()> {
     let table = Arc::new(DashMap::new());
+
     let db_sync_loop = async {
         loop {
-            println!("syncing DB...");
+            // println!("syncing DB...");
             let relay_graph = link_ctx.relay_graph.read().stdcode();
             match db_write(&link_ctx.db, "relay_graph", relay_graph).await {
                 Ok(_) => (),
@@ -278,39 +279,57 @@ async fn link_loop(
             smol::Timer::after(Duration::from_secs(10)).await;
         }
     };
+
+    let identity_refresh_loop = async {
+        if let Some(my_idsk) = link_ctx.cfg.my_idsk {
+            loop {
+                // println!("WE ARE INSERTING OURSELVES");
+                let myself = IdentityDescriptor::new(&my_idsk, &link_ctx.my_onion_sk);
+                link_ctx.relay_graph.write().insert_identity(myself)?;
+                smol::Timer::after(Duration::from_secs(1)).await;
+            }
+        } else {
+            smol::future::pending().await
+        }
+    };
+
     let in_task = async {
         if link_ctx.cfg.in_routes.is_empty() {
-        smol::future::pending().await
-    } else {
-        futures_util::future::try_join_all(
-        link_ctx.cfg.in_routes.iter().map(|(name, in_route)| {
-        process_in_route(
-            link_ctx.clone(),
-            name,
-            in_route,
-            table.clone(),
-            send_raw.clone(),
-        )
-    })).await
-}
-};
+            smol::future::pending().await
+        } else {
+            futures_util::future::try_join_all(link_ctx.cfg.in_routes.iter().map(
+                |(name, in_route)| {
+                    process_in_route(
+                        link_ctx.clone(),
+                        name,
+                        in_route,
+                        table.clone(),
+                        send_raw.clone(),
+                    )
+                },
+            ))
+            .await
+        }
+    };
 
     let out_task = async {
         if link_ctx.cfg.out_routes.is_empty() {
-        smol::future::pending().await
-    } else {
-        futures_util::future::try_join_all(
-    link_ctx.cfg.out_routes.iter().map(|(name, out_route)| {
-            process_out_route(
-                link_ctx.clone(),
-                name,
-                out_route,
-                table.clone(),
-                send_raw.clone(),
-            )
-        })).await
-}
-};
+            smol::future::pending().await
+        } else {
+            futures_util::future::try_join_all(link_ctx.cfg.out_routes.iter().map(
+                |(name, out_route)| {
+                    process_out_route(
+                        link_ctx.clone(),
+                        name,
+                        out_route,
+                        table.clone(),
+                        send_raw.clone(),
+                    )
+                },
+            ))
+            .await
+        }
+    };
 
     // the main peel loop
     let peel_loop = async {
@@ -426,11 +445,11 @@ async fn link_loop(
         }
     };
 
-
     match in_task
         .race(out_task)
         .race(peel_loop)
         .race(db_sync_loop)
+        .race(identity_refresh_loop)
         .await
     {
         Ok(_) => tracing::debug!("link_loop() returned?"),
@@ -554,10 +573,12 @@ async fn handle_pipe(
     let gossip_loop = async {
         loop {
             smol::Timer::after(Duration::from_secs(1)).await;
-            gossip_once(&link_ctx, &link, their_relay_fp).await?;
+            if let Err(e) = gossip_once(&link_ctx, &link, their_relay_fp).await {
+                tracing::warn!(err = debug(e), "gossip_once failed");
+            };
         }
     };
-println!("starting rpc_serve_loop");
+
     let rpc_serve_loop = link.rpc_serve(LinkService(LinkProtocolImpl {
         ctx: link_ctx.clone(),
         remote_client_id: their_client_id,
