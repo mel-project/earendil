@@ -164,9 +164,12 @@ async fn serve_rpc(ctx: V2hNodeCtx) -> anyhow::Result<()> {
         // TODO this is not concurrent, but it is fine since nothing takes too long
         let fallible = async {
             let req: JrpcRequest = serde_json::from_slice(&bts)?;
+            // println!("req = {:?}", req);
             let res = service.respond_raw(req).await;
+            // println!("resp = {:?}", res);
             let body = serde_json::to_vec(&res)?.into();
             rpc_socket.send_to(body, from).await?;
+            // println!("successfully sent rpc response");
             anyhow::Ok(())
         };
         if let Err(err) = fallible.await {

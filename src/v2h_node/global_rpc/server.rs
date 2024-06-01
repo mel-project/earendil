@@ -1,16 +1,9 @@
-
-
 use async_trait::async_trait;
 
 use moka::sync::Cache;
 
-
-use crate::{
-    v2h_node::{dht::HavenLocator, V2hNodeCtx},
-};
-use earendil_crypt::{
-    HavenFingerprint, VerifyError,
-};
+use crate::v2h_node::{dht::HavenLocator, V2hNodeCtx};
+use earendil_crypt::{HavenFingerprint, VerifyError};
 
 use super::{GlobalRpcProtocol, RegisterHavenReq};
 

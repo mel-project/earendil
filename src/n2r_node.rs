@@ -156,6 +156,7 @@ struct N2rNodeCtx {
 async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
     loop {
         let incoming = ctx.link_node.recv().await;
+        // println!("got incoming n2r");
         let fallible = async {
             match incoming {
                 IncomingMsg::Forward {
@@ -218,7 +219,7 @@ impl N2rRelaySocket {
             .rb_store
             .lock()
             .pop(anon_endpoint)
-            .context(format!("no rb for anon endpoint: {:?}", anon_endpoint))?;
+            .context(format!("no surb for anon endpoint: {:?}", anon_endpoint))?;
         self.ctx
             .link_node
             .send_backwards(rb, Message::new(self.dock, body))

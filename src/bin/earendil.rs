@@ -1,11 +1,24 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::Context;
 use bip39::Mnemonic;
+use bytes::Bytes;
 use clap::Parser;
 use clap::Subcommand;
 use earendil::config::ConfigFile;
+use earendil::config::InRouteConfig;
+use earendil::config::ObfsConfig;
+use earendil::config::OutRouteConfig;
+use earendil::IncomingMsg;
+use earendil::LinkConfig;
+use earendil::LinkNode;
 use earendil::Node;
+use earendil_crypt::AnonEndpoint;
+use earendil_crypt::RelayIdentitySecret;
+use earendil_packet::InnerPacket;
+use earendil_packet::Message;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
@@ -35,9 +48,7 @@ enum Commands {
     GenerateSeed,
 }
 
-#[tracing::instrument]
-fn main() -> anyhow::Result<()> {
-    // initialize tracing subscriber that displays to output
+pub fn init_tracing() -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().compact())
         .with(
@@ -46,6 +57,13 @@ fn main() -> anyhow::Result<()> {
                 .from_env_lossy(),
         )
         .init();
+    Ok(())
+}
+
+#[tracing::instrument]
+fn main() -> anyhow::Result<()> {
+    // initialize tracing subscriber that displays to output
+    init_tracing();
 
     match Args::parse().command {
         Commands::Daemon { config } => {

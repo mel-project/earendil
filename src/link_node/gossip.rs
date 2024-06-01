@@ -35,7 +35,7 @@ async fn fetch_identity(
     link: &Link,
     remote_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
-    tracing::trace!("fetching identity...");
+    // tracing::trace!("fetching identity...");
     let their_id = LinkClient(link.rpc_transport())
         .identity(remote_fp)
         .await?
@@ -52,10 +52,10 @@ async fn sign_adjacency(
     remote_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
     if let Some(my_sk) = ctx.cfg.my_idsk.as_ref() {
-        tracing::trace!("signing adjacency...");
+        // tracing::trace!("signing adjacency...");
         let my_fp = my_sk.public().fingerprint();
         if my_fp < remote_fp {
-            tracing::trace!("signing adjacency with {remote_fp}");
+            // tracing::trace!("signing adjacency with {remote_fp}");
             let mut left_incomplete = AdjacencyDescriptor {
                 left: my_fp,
                 right: remote_fp,
@@ -79,7 +79,7 @@ async fn sign_adjacency(
 // Step 3: Gossip the relay graph, by asking info about random nodes.
 #[tracing::instrument(skip_all)]
 async fn gossip_graph(ctx: &LinkNodeCtx, link: &Link) -> anyhow::Result<()> {
-    tracing::trace!("gossipping relay graph...");
+    // tracing::trace!("gossipping relay graph...");
     let all_known_nodes = ctx.relay_graph.read().all_nodes().collect_vec();
     let random_sample = all_known_nodes
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))

@@ -41,6 +41,7 @@ use smol::{
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use sqlx::{sqlite::SqliteConnectOptions, Pool, Row, Sqlite, SqlitePool};
 use stdcode::StdcodeSerializeExt;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::{
     config::{InRouteConfig, ObfsConfig, OutRouteConfig},
@@ -135,17 +136,13 @@ impl LinkNode {
             let relay_graph = self.ctx.relay_graph.read();
             let route = forward_route_to(&relay_graph, dest_relay)
                 .context("failed to create forward route")?;
+            tracing::trace!("route to {dest_relay}: {:?}", route);
             let first_peeler = *route
                 .first()
                 .context("empty route, cannot obtain first peeler")?;
 
             let instructs =
                 route_to_instructs(&relay_graph, &route).context("route_to_instructs failed")?;
-            tracing::trace!(
-                "translated this route to instructions: {:?} => {:?}",
-                route,
-                instructs
-            );
 
             let dest_opk = relay_graph
                 .identity(&dest_relay)
@@ -187,15 +184,9 @@ impl LinkNode {
     pub fn surb_from(
         &self,
         my_anon_id: AnonEndpoint,
-        remote: RelayFingerprint,
+        remote: RelayFingerprint, // will use in the future for finding more efficient routes
     ) -> anyhow::Result<(Surb, u64, ReplyDegarbler)> {
-        let remote_opk = self
-            .ctx
-            .relay_graph
-            .read()
-            .identity(&remote)
-            .context("no such remote")?
-            .onion_pk;
+        let remote_opk = self.ctx.my_onion_sk.public();
         let destination = if let Some(my_relay) = self.ctx.cfg.my_idsk {
             my_relay.public().fingerprint()
         } else {
@@ -206,7 +197,7 @@ impl LinkNode {
         let graph = self.ctx.relay_graph.read();
         let reverse_route = forward_route_to(&graph, destination)?;
         let reverse_instructs = route_to_instructs(&graph, &reverse_route)?;
-        let (rb, (id, degarbler)) = Surb::new(
+        let (surb, (id, degarbler)) = Surb::new(
             &reverse_instructs,
             reverse_route[0],
             &remote_opk,
@@ -214,7 +205,7 @@ impl LinkNode {
             my_anon_id,
         )
         .context("cannot build reply block")?;
-        Ok((rb, id, degarbler))
+        Ok((surb, id, degarbler))
     }
 
     /// Sends a raw packet.
@@ -260,6 +251,7 @@ struct LinkNodeCtx {
     db: Option<SqlitePool>,
 }
 
+#[tracing::instrument(skip_all)]
 async fn link_loop(
     link_ctx: LinkNodeCtx,
     send_raw: Sender<LinkMessage>,
@@ -331,6 +323,40 @@ async fn link_loop(
         }
     };
 
+    let send_to_nonself_next_peeler =
+        |emit_time: Option<Instant>, next_peeler: RelayFingerprint, pkt: RawPacket| {
+            let closer_hop = {
+                let graph = link_ctx.relay_graph.read();
+                let my_neighs = table
+                    .iter()
+                    .map(|p| *p.key())
+                    .filter_map(|p| match p {
+                        NeighborId::Relay(r) => Some(r),
+                        NeighborId::Client(_) => None,
+                    })
+                    .collect_vec();
+                one_hop_closer(&my_neighs, &graph, next_peeler)?
+            };
+            let pipe = table
+                .get(&NeighborId::Relay(closer_hop))
+                .context("cannot find closer hop")?
+                .clone();
+            // TODO delay queue here rather than this inefficient approach
+            smolscale::spawn(async move {
+                if let Some(emit_time) = emit_time {
+                    smol::Timer::at(emit_time).await;
+                }
+                pipe.send_msg(LinkMessage::ToRelay {
+                    packet: bytemuck::bytes_of(&pkt).to_vec().into(),
+                    next_peeler,
+                })
+                .await?;
+                anyhow::Ok(())
+            })
+            .detach();
+            anyhow::Ok(())
+        };
+
     // the main peel loop
     let peel_loop = async {
         loop {
@@ -341,55 +367,51 @@ async fn link_loop(
                         packet,
                         next_peeler,
                     } => {
+                        tracing::debug!(
+                            "{} received incoming linkmsg ToRelay. next_peeler = {next_peeler}",
+                            link_ctx.cfg.my_idsk.unwrap().public().fingerprint()
+                        );
                         let packet: &RawPacket = bytemuck::try_from_bytes(&packet)
                             .ok()
                             .context("could not cast")?;
                         if let Some(my_idsk) = link_ctx.cfg.my_idsk {
                             if next_peeler == my_idsk.public().fingerprint() {
-                                tracing::debug!(
-                                    next_peeler = display(next_peeler),
-                                    "I am the designated peeler"
-                                );
+                                // tracing::debug!(
+                                //     next_peeler = display(next_peeler),
+                                //     "I am the designated peeler"
+                                // );
                                 let now = Instant::now();
                                 let peeled: PeeledPacket = packet.peel(&link_ctx.my_onion_sk)?;
-                                tracing::debug!("message peel took {:?}", now.elapsed());
+                                tracing::trace!("message peel took {:?}", now.elapsed());
                                 match peeled {
                                     PeeledPacket::Relay {
                                         next_peeler,
                                         pkt,
                                         delay_ms,
                                     } => {
+                                        // println!(
+                                        //     "peeled ToRelay packet. next_peeler = {next_peeler}"
+                                        // );
                                         let emit_time =
                                             Instant::now() + Duration::from_millis(delay_ms as u64);
-                                        let closer_hop = {
-                                            let graph = link_ctx.relay_graph.read();
-                                            let my_neighs = table
-                                                .iter()
-                                                .map(|p| *p.key())
-                                                .filter_map(|p| match p {
-                                                    NeighborId::Relay(r) => Some(r),
-                                                    NeighborId::Client(_) => None,
-                                                })
-                                                .collect_vec();
-                                            one_hop_closer(&my_neighs, &graph, next_peeler)?
-                                        };
-                                        let pipe = table
-                                            .get(&NeighborId::Relay(closer_hop))
-                                            .context("cannot find closer hop")?
-                                            .clone();
-                                        // TODO delay queue here rather than this inefficient approach
-                                        smolscale::spawn(async move {
-                                            smol::Timer::at(emit_time).await;
-                                            pipe.send_msg(LinkMessage::ToRelay {
+                                        if next_peeler == my_idsk.public().fingerprint() {
+                                            let link_msg = LinkMessage::ToRelay {
                                                 packet: bytemuck::bytes_of(&pkt).to_vec().into(),
                                                 next_peeler,
-                                            })
-                                            .await?;
-                                            anyhow::Ok(())
-                                        })
-                                        .detach();
+                                            };
+                                            send_raw.clone().send(link_msg).await?;
+                                        } else {
+                                            send_to_nonself_next_peeler(
+                                                Some(emit_time),
+                                                next_peeler,
+                                                pkt,
+                                            )?;
+                                        }
                                     }
                                     PeeledPacket::Received { from, pkt } => {
+                                        tracing::debug!(
+                                            "received incoming forward linkmsg from = {from}"
+                                        );
                                         send_incoming
                                             .send(IncomingMsg::Forward { from, body: pkt })
                                             .await?;
@@ -400,6 +422,10 @@ async fn link_loop(
                                         client_id,
                                     } => {
                                         if client_id == link_ctx.my_client_id {
+                                            tracing::debug!(
+                                                rb_id = rb_id,
+                                                "received a GARBLED REPLY for myself"
+                                            );
                                             send_incoming
                                                 .send(IncomingMsg::Backward {
                                                     rb_id,
@@ -407,10 +433,10 @@ async fn link_loop(
                                                 })
                                                 .await?;
                                         } else {
-                                            tracing::trace!(
+                                            tracing::debug!(
                                                 rb_id,
                                                 client_id,
-                                                "got a GARBLED REPLY to FORWARD to the CLIENT!!!"
+                                                "got a GARBLED REPLY to FORWARD to a CLIENT"
                                             );
                                             let table = table.clone();
                                             smolscale::spawn(async move {
@@ -428,10 +454,13 @@ async fn link_loop(
                                         }
                                     }
                                 }
+                            } else {
+                                send_to_nonself_next_peeler(None, next_peeler, packet.clone())?
                             }
                         }
                     }
                     LinkMessage::ToClient { body, rb_id } => {
+                        tracing::debug!(rb_id = rb_id, "received a GARBLED REPLY for myself");
                         send_incoming
                             .send(IncomingMsg::Backward { rb_id, body })
                             .await?;
@@ -465,7 +494,6 @@ async fn process_in_route(
     table: Arc<DashMap<NeighborId, Link>>,
     send_raw: Sender<LinkMessage>,
 ) -> anyhow::Result<()> {
-    println!("process_in_route");
     let mut listener = TcpListener::bind(in_route.listen).await?;
     match &in_route.obfs {
         ObfsConfig::None => loop {
@@ -663,5 +691,153 @@ pub async fn db_read(
         Ok(result)
     } else {
         Ok(None)
+    }
+}
+
+pub fn get_two_connected_relay_link_nodes() -> (LinkNode, LinkNode) {
+    let idsk1 = RelayIdentitySecret::generate();
+    let mut in_1 = BTreeMap::new();
+    in_1.insert(
+        "1".to_owned(),
+        InRouteConfig {
+            listen: "127.0.0.1:30000".parse().unwrap(),
+            obfs: ObfsConfig::None,
+        },
+    );
+
+    let idsk2 = RelayIdentitySecret::generate();
+    let mut in_2 = BTreeMap::new();
+    in_2.insert(
+        "2".to_owned(),
+        InRouteConfig {
+            listen: "127.0.0.1:30001".parse().unwrap(),
+            obfs: ObfsConfig::None,
+        },
+    );
+    let mut out_2 = BTreeMap::new();
+    out_2.insert(
+        "1".to_owned(),
+        OutRouteConfig {
+            connect: "127.0.0.1:30000".parse().unwrap(),
+            fingerprint: idsk1.public().fingerprint(),
+            obfs: ObfsConfig::None,
+        },
+    );
+
+    let node1 = LinkNode::new(LinkConfig {
+        in_routes: in_1,
+        out_routes: BTreeMap::new(),
+        my_idsk: Some(idsk1),
+        cache_path: None,
+    });
+
+    let node2 = LinkNode::new(LinkConfig {
+        in_routes: in_2,
+        out_routes: out_2,
+        my_idsk: Some(idsk2),
+        cache_path: None,
+    });
+
+    (node1, node2)
+}
+
+pub fn init_tracing() -> anyhow::Result<()> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().compact())
+        .with(
+            EnvFilter::builder()
+                .with_default_directive("earendil=debug".parse()?)
+                .from_env_lossy(),
+        )
+        .init();
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use earendil_packet::RawBody;
+    use env_logger;
+
+    #[test]
+    fn two_relays_one_forward_pkt() {
+        init_tracing().unwrap();
+
+        let (node1, node2) = get_two_connected_relay_link_nodes();
+        let pkt = InnerPacket::Message(Message {
+            relay_dock: 123,
+            body: Bytes::from_static(b"lol"),
+        });
+        smol::block_on(async {
+            smol::Timer::after(Duration::from_secs(3)).await;
+            node2
+                .send_forward(
+                    pkt.clone(),
+                    AnonEndpoint::random(),
+                    node1.ctx.cfg.my_idsk.unwrap().public().fingerprint(), // we know node1 is a relay
+                )
+                .await
+                .unwrap();
+            match node1.recv().await {
+                IncomingMsg::Forward { from: _, body } => {
+                    assert_eq!(body, pkt);
+                }
+                IncomingMsg::Backward { rb_id: _, body: _ } => panic!("not supposed to happen"),
+            }
+        });
+    }
+
+    #[test]
+    fn two_relays_one_backward_pkt() {
+        init_tracing().unwrap();
+
+        let (node1, node2) = get_two_connected_relay_link_nodes();
+        println!(
+            "node1 fp = {}",
+            node1.ctx.cfg.my_idsk.unwrap().public().fingerprint()
+        );
+        println!(
+            "node2 fp = {}",
+            node2.ctx.cfg.my_idsk.unwrap().public().fingerprint()
+        );
+        smol::block_on(async {
+            smol::Timer::after(Duration::from_secs(3)).await;
+            let (surb_1to2, surb_id, degarbler) = node2
+                .surb_from(
+                    AnonEndpoint::random(),
+                    node1.ctx.cfg.my_idsk.unwrap().public().fingerprint(),
+                )
+                .unwrap(); // we know that node1 is a relay
+            println!("got surb");
+            let msg_relay_dock = 123;
+            let msg_body = Bytes::from_static(b"lol");
+            node1
+                .send_backwards(
+                    surb_1to2,
+                    Message {
+                        relay_dock: msg_relay_dock,
+                        body: msg_body.clone(),
+                    },
+                )
+                .await
+                .unwrap();
+            println!("msg sent");
+            match node2.recv().await {
+                IncomingMsg::Forward { from: _, body: _ } => panic!("not supposed to happen"),
+                IncomingMsg::Backward { rb_id, body } => {
+                    assert_eq!(rb_id, surb_id);
+                    let mut body: RawBody = *bytemuck::try_from_bytes(&body).unwrap();
+                    let (inner_pkt, _) = degarbler.degarble(&mut body).unwrap();
+                    match inner_pkt {
+                        InnerPacket::Message(Message { relay_dock, body }) => {
+                            assert_eq!(msg_body, body);
+                            assert_eq!(msg_relay_dock, relay_dock);
+                            println!("YAY SUCCESS")
+                        }
+                        InnerPacket::Surbs(_) => todo!(),
+                    }
+                }
+            }
+        })
     }
 }
