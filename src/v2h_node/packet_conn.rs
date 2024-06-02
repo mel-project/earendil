@@ -15,6 +15,7 @@ use smol::{
     future::FutureExt as _,
     Task,
 };
+use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
 use tap::Tap as _;
 
@@ -81,31 +82,34 @@ impl HavenPacketConn {
                 .await?;
             tracing::debug!("sent handshake! i = {i}");
             // they sign their ephemeral public key
-            let (from_haven, addr) = n2r_skt.recv_from().await?;
-            tracing::debug!(
-                from_haven_len = from_haven.len(),
-                addr = debug(addr),
-                my_endpoint = debug(n2r_skt.local_endpoint()),
-                "received from_haven"
-            );
-            let haven_msg: HavenMsg = stdcode::deserialize(&from_haven)
-                .context("deserialization of haven handshake failed")?;
-            match haven_msg {
-                HavenMsg::HavenHs(server_hs) => {
-                    server_hs
-                        .id_pk
-                        .verify(server_hs.eph_pk.as_bytes(), &server_hs.sig)?;
-                    if server_hs.id_pk.fingerprint() != dest_haven.fingerprint {
-                        anyhow::bail!("haven public key verification failed")
+            if let Some(Ok((from_haven, addr))) =
+                n2r_skt.recv_from().timeout(Duration::from_secs(5)).await
+            {
+                tracing::debug!(
+                    from_haven_len = from_haven.len(),
+                    addr = debug(addr),
+                    my_endpoint = debug(n2r_skt.local_endpoint()),
+                    "received from_haven"
+                );
+                let haven_msg: HavenMsg = stdcode::deserialize(&from_haven)
+                    .context("deserialization of haven handshake failed")?;
+                match haven_msg {
+                    HavenMsg::HavenHs(server_hs) => {
+                        server_hs
+                            .id_pk
+                            .verify(server_hs.eph_pk.as_bytes(), &server_hs.sig)?;
+                        if server_hs.id_pk.fingerprint() != dest_haven.fingerprint {
+                            anyhow::bail!("haven public key verification failed")
+                        }
+                        shared_sec = Some(my_esk.shared_secret(&server_hs.eph_pk));
+                        break;
                     }
-                    shared_sec = Some(my_esk.shared_secret(&server_hs.eph_pk));
-                    break;
-                }
-                x => tracing::debug!(
-                    "haven sent us something other than a haven handshake: {:?}",
-                    x
-                ),
-            };
+                    x => tracing::debug!(
+                        "haven sent us something other than a haven handshake: {:?}",
+                        x
+                    ),
+                };
+            }
             smol::Timer::after(Duration::from_secs(2u64.pow(i))).await;
         }
 

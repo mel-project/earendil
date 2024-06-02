@@ -117,7 +117,7 @@ async fn rendezvous_forward(ctx: V2hNodeCtx) -> anyhow::Result<()> {
                     .registered_havens
                     .get_by_value(&inner.dest_haven.fingerprint)
                 {
-                    tracing::debug!(
+                    tracing::trace!(
                         src_ep = debug(src_ep),
                         haven_anon_ep = debug(haven_anon_ep),
                         "received V2R msg"
@@ -131,7 +131,7 @@ async fn rendezvous_forward(ctx: V2hNodeCtx) -> anyhow::Result<()> {
                     .stdcode()
                     .into();
 
-                    tracing::debug!(haven_anon_ep = debug(haven_anon_ep), "sending R2H");
+                    tracing::trace!(haven_anon_ep = debug(haven_anon_ep), "sending R2H");
                     socket.send_to(body, haven_anon_ep).await?;
                 } else {
                     tracing::warn!(
@@ -142,14 +142,14 @@ async fn rendezvous_forward(ctx: V2hNodeCtx) -> anyhow::Result<()> {
             } else {
                 // src is haven
                 let inner: H2rMessage = stdcode::deserialize(&msg)?;
-                tracing::debug!(
+                tracing::trace!(
                     src_ep = debug(src_ep),
                     dest_visitor = debug(inner.dest_visitor),
                     len = msg.len(),
                     "received H2R msg",
                 );
                 let body: Bytes = inner.payload.stdcode().into();
-                tracing::debug!(dest_visitor = debug(inner.dest_visitor), "sending bare");
+                tracing::trace!(dest_visitor = debug(inner.dest_visitor), "sending bare");
                 socket.send_to(body, inner.dest_visitor).await?;
             }
         };
