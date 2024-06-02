@@ -38,6 +38,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
             .is_ok()
         {
             self.local_dht_shard.insert(key, locator.clone());
+            tracing::debug!("inserted dht entry for haven {key}");
         } else {
             tracing::error!("Invalid locator signature");
         }
@@ -48,12 +49,14 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
     }
 
     async fn alloc_forward(&self, registration: RegisterHavenReq) -> Result<(), VerifyError> {
+        tracing::trace!("received alloc_forward request");
         registration
             .identity_pk
             .verify(registration.to_sign().as_bytes(), &registration.sig)?;
         self.ctx
             .registered_havens
             .insert(registration.anon_id, registration.identity_pk.fingerprint());
+        tracing::trace!("successfully registered haven");
         Ok(())
     }
 }

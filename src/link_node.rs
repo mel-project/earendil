@@ -186,7 +186,6 @@ impl LinkNode {
         my_anon_id: AnonEndpoint,
         remote: RelayFingerprint, // will use in the future for finding more efficient routes
     ) -> anyhow::Result<(Surb, u64, ReplyDegarbler)> {
-        let remote_opk = self.ctx.my_onion_sk.public();
         let destination = if let Some(my_relay) = self.ctx.cfg.my_idsk {
             my_relay.public().fingerprint()
         } else {
@@ -195,12 +194,18 @@ impl LinkNode {
             lala.first().context("no out routes")?.fingerprint
         };
         let graph = self.ctx.relay_graph.read();
+        let dest_opk = graph
+            .identity(&destination)
+            .context(format!(
+                "destination {destination} is surprisingly not in our RelayGraph"
+            ))?
+            .onion_pk;
         let reverse_route = forward_route_to(&graph, destination)?;
         let reverse_instructs = route_to_instructs(&graph, &reverse_route)?;
         let (surb, (id, degarbler)) = Surb::new(
             &reverse_instructs,
             reverse_route[0],
-            &remote_opk,
+            &dest_opk,
             self.ctx.my_client_id,
             my_anon_id,
         )
@@ -231,6 +236,7 @@ impl LinkNode {
 }
 
 /// Incoming messages from the link layer that are addressed to "us".
+#[derive(Debug)]
 pub enum IncomingMsg {
     Forward {
         from: AnonEndpoint,
@@ -337,6 +343,7 @@ async fn link_loop(
                     .collect_vec();
                 one_hop_closer(&my_neighs, &graph, next_peeler)?
             };
+            tracing::trace!("sending peeled packet to nonself next_peeler = {next_peeler}");
             let pipe = table
                 .get(&NeighborId::Relay(closer_hop))
                 .context("cannot find closer hop")?
@@ -357,6 +364,32 @@ async fn link_loop(
             anyhow::Ok(())
         };
 
+    let send_to_next_peeler = |emit_time: Option<Instant>,
+                               next_peeler: RelayFingerprint,
+                               pkt: RawPacket,
+                               send_raw: Sender<LinkMessage>,
+                               my_fp: RelayFingerprint| {
+        if next_peeler == my_fp {
+            tracing::trace!("sending peeled packet to self = next_peeler");
+            smolscale::spawn(async move {
+                if let Some(emit_time) = emit_time {
+                    smol::Timer::at(emit_time).await;
+                }
+                send_raw
+                    .send(LinkMessage::ToRelay {
+                        packet: bytemuck::bytes_of(&pkt).to_vec().into(),
+                        next_peeler,
+                    })
+                    .await?;
+                anyhow::Ok(())
+            })
+            .detach();
+        } else {
+            send_to_nonself_next_peeler(emit_time, next_peeler, pkt)?;
+        }
+        anyhow::Ok(())
+    };
+
     // the main peel loop
     let peel_loop = async {
         loop {
@@ -368,13 +401,14 @@ async fn link_loop(
                         next_peeler,
                     } => {
                         tracing::debug!(
-                            "{} received incoming linkmsg ToRelay. next_peeler = {next_peeler}",
-                            link_ctx.cfg.my_idsk.unwrap().public().fingerprint()
+                            "{:?} received incoming linkmsg ToRelay. next_peeler = {next_peeler}",
+                            link_ctx.cfg.my_idsk.map(|idsk| idsk.public().fingerprint())
                         );
                         let packet: &RawPacket = bytemuck::try_from_bytes(&packet)
                             .ok()
                             .context("could not cast")?;
                         if let Some(my_idsk) = link_ctx.cfg.my_idsk {
+                            // I am a relay
                             if next_peeler == my_idsk.public().fingerprint() {
                                 // tracing::debug!(
                                 //     next_peeler = display(next_peeler),
@@ -394,22 +428,16 @@ async fn link_loop(
                                         // );
                                         let emit_time =
                                             Instant::now() + Duration::from_millis(delay_ms as u64);
-                                        if next_peeler == my_idsk.public().fingerprint() {
-                                            let link_msg = LinkMessage::ToRelay {
-                                                packet: bytemuck::bytes_of(&pkt).to_vec().into(),
-                                                next_peeler,
-                                            };
-                                            send_raw.clone().send(link_msg).await?;
-                                        } else {
-                                            send_to_nonself_next_peeler(
-                                                Some(emit_time),
-                                                next_peeler,
-                                                pkt,
-                                            )?;
-                                        }
+                                        send_to_next_peeler(
+                                            Some(emit_time),
+                                            next_peeler,
+                                            pkt,
+                                            send_raw.clone(),
+                                            my_idsk.public().fingerprint(),
+                                        )?;
                                     }
                                     PeeledPacket::Received { from, pkt } => {
-                                        tracing::debug!(
+                                        tracing::trace!(
                                             "received incoming forward linkmsg from = {from}"
                                         );
                                         send_incoming
@@ -422,7 +450,7 @@ async fn link_loop(
                                         client_id,
                                     } => {
                                         if client_id == link_ctx.my_client_id {
-                                            tracing::debug!(
+                                            tracing::trace!(
                                                 rb_id = rb_id,
                                                 "received a GARBLED REPLY for myself"
                                             );
@@ -433,7 +461,7 @@ async fn link_loop(
                                                 })
                                                 .await?;
                                         } else {
-                                            tracing::debug!(
+                                            tracing::trace!(
                                                 rb_id,
                                                 client_id,
                                                 "got a GARBLED REPLY to FORWARD to a CLIENT"
@@ -457,6 +485,8 @@ async fn link_loop(
                             } else {
                                 send_to_nonself_next_peeler(None, next_peeler, packet.clone())?
                             }
+                        } else {
+                            send_to_nonself_next_peeler(None, next_peeler, packet.clone())?
                         }
                     }
                     LinkMessage::ToClient { body, rb_id } => {
@@ -619,6 +649,10 @@ async fn handle_pipe(
         .race(async {
             loop {
                 let msg = link.recv_msg().await?;
+                tracing::trace!(
+                    "received LinkMessage from {:?} | {their_client_id}",
+                    their_relay_fp
+                );
                 send_raw.send(msg).await?;
             }
         })
@@ -694,7 +728,7 @@ pub async fn db_read(
     }
 }
 
-pub fn get_two_connected_relay_link_nodes() -> (LinkNode, LinkNode) {
+pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
     let mut in_1 = BTreeMap::new();
     in_1.insert(
@@ -753,17 +787,157 @@ pub fn init_tracing() -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
+    let idsk1 = RelayIdentitySecret::generate();
+    let mut in_1 = BTreeMap::new();
+    in_1.insert(
+        "1".to_owned(),
+        InRouteConfig {
+            listen: "127.0.0.1:30000".parse().unwrap(),
+            obfs: ObfsConfig::None,
+        },
+    );
+
+    let mut in_2 = BTreeMap::new();
+    in_2.insert(
+        "2".to_owned(),
+        InRouteConfig {
+            listen: "127.0.0.1:30001".parse().unwrap(),
+            obfs: ObfsConfig::None,
+        },
+    );
+    let mut out_2 = BTreeMap::new();
+    out_2.insert(
+        "1".to_owned(),
+        OutRouteConfig {
+            connect: "127.0.0.1:30000".parse().unwrap(),
+            fingerprint: idsk1.public().fingerprint(),
+            obfs: ObfsConfig::None,
+        },
+    );
+
+    let node1 = LinkNode::new(LinkConfig {
+        in_routes: in_1,
+        out_routes: BTreeMap::new(),
+        my_idsk: Some(idsk1),
+        cache_path: None,
+    });
+
+    let node2 = LinkNode::new(LinkConfig {
+        in_routes: in_2,
+        out_routes: out_2,
+        my_idsk: None,
+        cache_path: None,
+    });
+
+    (node1, node2)
+}
+
+pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
+    let idsk1 = RelayIdentitySecret::generate();
+    let mut in_1 = BTreeMap::new();
+    in_1.insert(
+        "1".to_owned(),
+        InRouteConfig {
+            listen: "127.0.0.1:30000".parse().unwrap(),
+            obfs: ObfsConfig::None,
+        },
+    );
+
+    let idsk2 = RelayIdentitySecret::generate();
+    let mut in_2 = BTreeMap::new();
+    in_2.insert(
+        "2".to_owned(),
+        InRouteConfig {
+            listen: "127.0.0.1:30001".parse().unwrap(),
+            obfs: ObfsConfig::None,
+        },
+    );
+    let mut out_2 = BTreeMap::new();
+    out_2.insert(
+        "1".to_owned(),
+        OutRouteConfig {
+            connect: "127.0.0.1:30000".parse().unwrap(),
+            fingerprint: idsk1.public().fingerprint(),
+            obfs: ObfsConfig::None,
+        },
+    );
+
+    let idsk3 = RelayIdentitySecret::generate();
+    let mut in_3 = BTreeMap::new();
+    in_3.insert(
+        "1".to_owned(),
+        InRouteConfig {
+            listen: "127.0.0.1:30002".parse().unwrap(),
+            obfs: ObfsConfig::None,
+        },
+    );
+    let mut out_3 = BTreeMap::new();
+    out_3.insert(
+        "1".to_owned(),
+        OutRouteConfig {
+            connect: "127.0.0.1:30001".parse().unwrap(),
+            fingerprint: idsk1.public().fingerprint(),
+            obfs: ObfsConfig::None,
+        },
+    );
+    let idsk4 = RelayIdentitySecret::generate();
+    let mut in_4 = BTreeMap::new();
+    in_4.insert(
+        "2".to_owned(),
+        InRouteConfig {
+            listen: "127.0.0.1:30003".parse().unwrap(),
+            obfs: ObfsConfig::None,
+        },
+    );
+    let mut out_4 = BTreeMap::new();
+    out_4.insert(
+        "1".to_owned(),
+        OutRouteConfig {
+            connect: "127.0.0.1:30002".parse().unwrap(),
+            fingerprint: idsk1.public().fingerprint(),
+            obfs: ObfsConfig::None,
+        },
+    );
+
+    let node1 = LinkNode::new(LinkConfig {
+        in_routes: in_1,
+        out_routes: BTreeMap::new(),
+        my_idsk: Some(idsk1),
+        cache_path: None,
+    });
+    let node2 = LinkNode::new(LinkConfig {
+        in_routes: in_2,
+        out_routes: out_2,
+        my_idsk: Some(idsk2),
+        cache_path: None,
+    });
+    let node3 = LinkNode::new(LinkConfig {
+        in_routes: in_3,
+        out_routes: out_3,
+        my_idsk: Some(idsk3),
+        cache_path: None,
+    });
+    let node4 = LinkNode::new(LinkConfig {
+        in_routes: in_4,
+        out_routes: out_4,
+        my_idsk: Some(idsk4),
+        cache_path: None,
+    });
+
+    (node1, node2, node3, node4)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use earendil_packet::RawBody;
-    use env_logger;
 
     #[test]
     fn two_relays_one_forward_pkt() {
         init_tracing().unwrap();
 
-        let (node1, node2) = get_two_connected_relay_link_nodes();
+        let (node1, node2) = get_two_connected_relays();
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
             body: Bytes::from_static(b"lol"),
@@ -791,7 +965,7 @@ mod tests {
     fn two_relays_one_backward_pkt() {
         init_tracing().unwrap();
 
-        let (node1, node2) = get_two_connected_relay_link_nodes();
+        let (node1, node2) = get_two_connected_relays();
         println!(
             "node1 fp = {}",
             node1.ctx.cfg.my_idsk.unwrap().public().fingerprint()
@@ -839,5 +1013,112 @@ mod tests {
                 }
             }
         })
+    }
+
+    #[test]
+    fn client_relay_one_forward_pkt() {
+        init_tracing().unwrap();
+
+        let (relay_node, client_node) = get_connected_relay_client();
+        let pkt = InnerPacket::Message(Message {
+            relay_dock: 123,
+            body: Bytes::from_static(b"lol"),
+        });
+        smol::block_on(async {
+            smol::Timer::after(Duration::from_secs(3)).await;
+            client_node
+                .send_forward(
+                    pkt.clone(),
+                    AnonEndpoint::random(),
+                    relay_node.ctx.cfg.my_idsk.unwrap().public().fingerprint(), // we know node1 is a relay
+                )
+                .await
+                .unwrap();
+            println!("client --> relay LinkMsg sent");
+            match relay_node.recv().await {
+                IncomingMsg::Forward { from: _, body } => {
+                    assert_eq!(body, pkt);
+                }
+                IncomingMsg::Backward { rb_id: _, body: _ } => panic!("not supposed to happen"),
+            }
+        });
+    }
+
+    #[test]
+    fn client_relay_one_backward_pkt() {
+        init_tracing().unwrap();
+
+        let (relay_node, client_node) = get_connected_relay_client();
+        println!(
+            "node1 fp = {}",
+            relay_node.ctx.cfg.my_idsk.unwrap().public().fingerprint()
+        );
+        smol::block_on(async {
+            smol::Timer::after(Duration::from_secs(3)).await;
+            let (surb_1to2, surb_id, degarbler) = client_node
+                .surb_from(
+                    AnonEndpoint::random(),
+                    relay_node.ctx.cfg.my_idsk.unwrap().public().fingerprint(),
+                )
+                .unwrap(); // we know that node1 is a relay
+            println!("got surb");
+            let msg_relay_dock = 123;
+            let msg_body = Bytes::from_static(b"lol");
+            relay_node
+                .send_backwards(
+                    surb_1to2,
+                    Message {
+                        relay_dock: msg_relay_dock,
+                        body: msg_body.clone(),
+                    },
+                )
+                .await
+                .unwrap();
+            println!("msg sent");
+            match client_node.recv().await {
+                IncomingMsg::Forward { from: _, body: _ } => panic!("not supposed to happen"),
+                IncomingMsg::Backward { rb_id, body } => {
+                    assert_eq!(rb_id, surb_id);
+                    let mut body: RawBody = *bytemuck::try_from_bytes(&body).unwrap();
+                    let (inner_pkt, _) = degarbler.degarble(&mut body).unwrap();
+                    match inner_pkt {
+                        InnerPacket::Message(Message { relay_dock, body }) => {
+                            assert_eq!(msg_body, body);
+                            assert_eq!(msg_relay_dock, relay_dock);
+                            println!("YAY SUCCESS")
+                        }
+                        InnerPacket::Surbs(_) => todo!(),
+                    }
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn four_relays_forward_pkt() {
+        init_tracing().unwrap();
+
+        let (node1, node2, node3, node4) = get_four_connected_relays();
+        let pkt = InnerPacket::Message(Message {
+            relay_dock: 123,
+            body: Bytes::from_static(b"lol"),
+        });
+        smol::block_on(async {
+            smol::Timer::after(Duration::from_secs(5)).await;
+            node4
+                .send_forward(
+                    pkt.clone(),
+                    AnonEndpoint::random(),
+                    node1.ctx.cfg.my_idsk.unwrap().public().fingerprint(), // we know node1 is a relay
+                )
+                .await
+                .unwrap();
+            match node1.recv().await {
+                IncomingMsg::Forward { from: _, body } => {
+                    assert_eq!(body, pkt);
+                }
+                IncomingMsg::Backward { rb_id: _, body: _ } => panic!("not supposed to happen"),
+            }
+        });
     }
 }

@@ -156,13 +156,13 @@ struct N2rNodeCtx {
 async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
     loop {
         let incoming = ctx.link_node.recv().await;
-        // println!("got incoming n2r");
         let fallible = async {
             match incoming {
                 IncomingMsg::Forward {
                     from,
                     body: InnerPacket::Message(message),
                 } => {
+                    tracing::debug!("incoming n2r: IncomingMsg::Forward from {from}");
                     let queue = ctx
                         .relay_queues
                         .get(&message.relay_dock)
@@ -173,12 +173,17 @@ async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
                     from,
                     body: InnerPacket::Surbs(surbs),
                 } => {
+                    tracing::debug!("incoming n2r: IncomingMsg::Forward of Surbs from {from}");
                     for rb in surbs {
                         ctx.rb_store.lock().insert(from, rb);
                     }
                 }
                 IncomingMsg::Backward { rb_id, body } => {
                     let degarbler = ctx.degarblers.remove(&rb_id).context("no such degarbler")?;
+                    tracing::debug!(
+                        "incoming n2r: IncomingMsg::Backward with rb_id = {rb_id} for {}",
+                        degarbler.my_anon_id()
+                    );
                     let mut body: RawBody = *bytemuck::try_from_bytes(&body)
                         .ok()
                         .context("failed to deserialize incoming RawBody")?;
