@@ -400,7 +400,7 @@ async fn link_loop(
                         packet,
                         next_peeler,
                     } => {
-                        tracing::debug!(
+                        tracing::trace!(
                             "{:?} received incoming linkmsg ToRelay. next_peeler = {next_peeler}",
                             link_ctx.cfg.my_idsk.map(|idsk| idsk.public().fingerprint())
                         );
@@ -490,7 +490,7 @@ async fn link_loop(
                         }
                     }
                     LinkMessage::ToClient { body, rb_id } => {
-                        tracing::debug!(rb_id = rb_id, "received a GARBLED REPLY for myself");
+                        tracing::trace!(rb_id = rb_id, "received a GARBLED REPLY for myself");
                         send_incoming
                             .send(IncomingMsg::Backward { rb_id, body })
                             .await?;

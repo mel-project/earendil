@@ -112,7 +112,8 @@ impl N2rAnonSocket {
     /// Receives an incoming packet.
     pub async fn recv_from(&self) -> anyhow::Result<(Bytes, RelayEndpoint)> {
         let (message, source) = self.queue.recv().await?;
-
+        *self.surb_counts.entry(source.fingerprint).or_insert(0) -= 1;
+        self.replenish_surb(source.fingerprint).await?;
         Ok((message, source))
     }
 
@@ -120,7 +121,7 @@ impl N2rAnonSocket {
     pub async fn replenish_surb(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
         while *self.surb_counts.entry(fingerprint).or_insert(0) < 10 {
             *self.surb_counts.entry(fingerprint).or_insert(0) += 2;
-            let rbs = (0..4)
+            let surbs = (0..4)
                 .map(|_| {
                     let (rb, id, degarble) = self
                         .ctx
@@ -132,7 +133,7 @@ impl N2rAnonSocket {
                 .try_collect()?;
             self.ctx
                 .link_node
-                .send_forward(InnerPacket::Surbs(rbs), self.my_endpoint, fingerprint)
+                .send_forward(InnerPacket::Surbs(surbs), self.my_endpoint, fingerprint)
                 .await?;
         }
         Ok(())
