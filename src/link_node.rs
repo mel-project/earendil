@@ -68,31 +68,29 @@ pub struct LinkNode {
 
 impl LinkNode {
     /// Creates a new link node.
-    pub fn new(cfg: LinkConfig) -> Self {
+    pub async fn new(cfg: LinkConfig) -> Self {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
 
-        let db = cfg.cache_path.clone().map(|db_path| {
+        let db_path = cfg.cache_path.clone().expect("wth i need a path");
+
             tracing::debug!("INITIALIZING DATABASE");
             let options = SqliteConnectOptions::from_str(db_path.to_str().unwrap())
                 .unwrap()
                 .create_if_missing(true);
-            smol::future::block_on(async move {
-                let pool = Pool::connect_with(options).await.unwrap();
+           
+                let db: Pool<Sqlite> = Pool::connect_with(options).await.unwrap();
                 sqlx::query(
                     "CREATE TABLE IF NOT EXISTS misc (
                 key TEXT PRIMARY KEY,
                 value BLOB NOT NULL
             );",
                 )
-                .execute(&pool)
+                .execute(&db)
                 .await
                 .unwrap();
-                pool
-            })
-        });
 
-        let relay_graph = match smol::future::block_on(db_read(&db, "relay_graph"))
+        let relay_graph = match db_read(&db, "relay_graph").await
             .ok()
             .flatten()
             .and_then(|s| stdcode::deserialize(&s).ok())
@@ -106,7 +104,7 @@ impl LinkNode {
             my_client_id: rand::random(),
             relay_graph: Arc::new(RwLock::new(relay_graph)),
             my_onion_sk: DhSecret::generate(),
-            db,
+            db: Some(db),
         };
         let _task = Immortal::respawn(
             RespawnStrategy::Immediate,
@@ -713,22 +711,19 @@ pub async fn db_write(
 }
 
 pub async fn db_read(
-    pool: &Option<Pool<Sqlite>>,
+    pool: &Pool<Sqlite>,
     key: &str,
 ) -> Result<Option<Vec<u8>>, sqlx::Error> {
-    if let Some(pool) = pool {
         let result = sqlx::query("SELECT value FROM misc WHERE key = ?")
             .bind(key)
             .fetch_optional(pool)
             .await?
             .map(|row| row.get("value"));
         Ok(result)
-    } else {
-        Ok(None)
-    }
+    
 }
 
-pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
+pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
     let mut in_1 = BTreeMap::new();
     in_1.insert(
@@ -763,14 +758,14 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
         out_routes: BTreeMap::new(),
         my_idsk: Some(idsk1),
         cache_path: None,
-    });
+    }).await;
 
     let node2 = LinkNode::new(LinkConfig {
         in_routes: in_2,
         out_routes: out_2,
         my_idsk: Some(idsk2),
         cache_path: None,
-    });
+    }).await;
 
     (node1, node2)
 }
@@ -787,7 +782,7 @@ pub fn init_tracing() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
+pub async fn get_connected_relay_client() -> (LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
     let mut in_1 = BTreeMap::new();
     in_1.insert(
@@ -821,19 +816,19 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
         out_routes: BTreeMap::new(),
         my_idsk: Some(idsk1),
         cache_path: None,
-    });
+    }).await;
 
     let node2 = LinkNode::new(LinkConfig {
         in_routes: in_2,
         out_routes: out_2,
         my_idsk: None,
         cache_path: None,
-    });
+    }).await;
 
     (node1, node2)
 }
 
-pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
+pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
     let mut in_1 = BTreeMap::new();
     in_1.insert(
@@ -905,25 +900,25 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
         out_routes: BTreeMap::new(),
         my_idsk: Some(idsk1),
         cache_path: None,
-    });
+    }).await;
     let node2 = LinkNode::new(LinkConfig {
         in_routes: in_2,
         out_routes: out_2,
         my_idsk: Some(idsk2),
         cache_path: None,
-    });
+    }).await;
     let node3 = LinkNode::new(LinkConfig {
         in_routes: in_3,
         out_routes: out_3,
         my_idsk: Some(idsk3),
         cache_path: None,
-    });
+    }).await;
     let node4 = LinkNode::new(LinkConfig {
         in_routes: in_4,
         out_routes: out_4,
         my_idsk: Some(idsk4),
         cache_path: None,
-    });
+    }).await;
 
     (node1, node2, node3, node4)
 }
@@ -935,14 +930,15 @@ mod tests {
 
     #[test]
     fn two_relays_one_forward_pkt() {
-        init_tracing().unwrap();
-
-        let (node1, node2) = get_two_connected_relays();
-        let pkt = InnerPacket::Message(Message {
-            relay_dock: 123,
-            body: Bytes::from_static(b"lol"),
-        });
+        
         smol::block_on(async {
+            init_tracing().unwrap();
+
+            let (node1, node2) = get_two_connected_relays().await;
+            let pkt = InnerPacket::Message(Message {
+                relay_dock: 123,
+                body: Bytes::from_static(b"lol"),
+            });
             smol::Timer::after(Duration::from_secs(3)).await;
             node2
                 .send_forward(
@@ -963,18 +959,19 @@ mod tests {
 
     #[test]
     fn two_relays_one_backward_pkt() {
-        init_tracing().unwrap();
 
-        let (node1, node2) = get_two_connected_relays();
-        println!(
-            "node1 fp = {}",
-            node1.ctx.cfg.my_idsk.unwrap().public().fingerprint()
-        );
-        println!(
-            "node2 fp = {}",
-            node2.ctx.cfg.my_idsk.unwrap().public().fingerprint()
-        );
         smol::block_on(async {
+            init_tracing().unwrap();
+
+            let (node1, node2) = get_two_connected_relays().await;
+            println!(
+                "node1 fp = {}",
+                node1.ctx.cfg.my_idsk.unwrap().public().fingerprint()
+            );
+            println!(
+                "node2 fp = {}",
+                node2.ctx.cfg.my_idsk.unwrap().public().fingerprint()
+            );
             smol::Timer::after(Duration::from_secs(3)).await;
             let (surb_1to2, surb_id, degarbler) = node2
                 .surb_from(
@@ -1017,14 +1014,15 @@ mod tests {
 
     #[test]
     fn client_relay_one_forward_pkt() {
-        init_tracing().unwrap();
-
-        let (relay_node, client_node) = get_connected_relay_client();
-        let pkt = InnerPacket::Message(Message {
-            relay_dock: 123,
-            body: Bytes::from_static(b"lol"),
-        });
+       
         smol::block_on(async {
+            init_tracing().unwrap();
+
+            let (relay_node, client_node) = get_connected_relay_client().await;
+            let pkt = InnerPacket::Message(Message {
+                relay_dock: 123,
+                body: Bytes::from_static(b"lol"),
+            });
             smol::Timer::after(Duration::from_secs(3)).await;
             client_node
                 .send_forward(
@@ -1046,14 +1044,15 @@ mod tests {
 
     #[test]
     fn client_relay_one_backward_pkt() {
-        init_tracing().unwrap();
-
-        let (relay_node, client_node) = get_connected_relay_client();
-        println!(
-            "node1 fp = {}",
-            relay_node.ctx.cfg.my_idsk.unwrap().public().fingerprint()
-        );
+      
         smol::block_on(async {
+            init_tracing().unwrap();
+
+            let (relay_node, client_node) = get_connected_relay_client().await;
+            println!(
+                "node1 fp = {}",
+                relay_node.ctx.cfg.my_idsk.unwrap().public().fingerprint()
+            );
             smol::Timer::after(Duration::from_secs(3)).await;
             let (surb_1to2, surb_id, degarbler) = client_node
                 .surb_from(
@@ -1096,14 +1095,15 @@ mod tests {
 
     #[test]
     fn four_relays_forward_pkt() {
-        init_tracing().unwrap();
-
-        let (node1, node2, node3, node4) = get_four_connected_relays();
-        let pkt = InnerPacket::Message(Message {
-            relay_dock: 123,
-            body: Bytes::from_static(b"lol"),
-        });
+       
         smol::block_on(async {
+            init_tracing().unwrap();
+
+            let (node1, node2, node3, node4) = get_four_connected_relays().await;
+            let pkt = InnerPacket::Message(Message {
+                relay_dock: 123,
+                body: Bytes::from_static(b"lol"),
+            });
             smol::Timer::after(Duration::from_secs(5)).await;
             node4
                 .send_forward(

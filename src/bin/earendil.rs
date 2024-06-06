@@ -76,7 +76,7 @@ fn main() -> anyhow::Result<()> {
                 serde_json::to_string_pretty(&config_parsed)?
             );
             tracing::info!("about to init daemon!");
-            let node = Node::new(config_parsed)?;
+            let node = smol::block_on(Node::new(config_parsed))?;
             match smol::future::block_on(node.wait_until_dead()) {
                 Ok(_) => anyhow::bail!("daemon is dead, with no error msg"),
                 Err(err) => anyhow::bail!(err),
