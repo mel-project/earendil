@@ -68,31 +68,30 @@ pub struct LinkNode {
 
 impl LinkNode {
     /// Creates a new link node.
-    pub fn new(cfg: LinkConfig) -> Self {
+    pub async fn new(cfg: LinkConfig) -> Self {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
 
-        let db = cfg.cache_path.clone().map(|db_path| {
-            tracing::debug!("INITIALIZING DATABASE");
-            let options = SqliteConnectOptions::from_str(db_path.to_str().unwrap())
-                .unwrap()
-                .create_if_missing(true);
-            smol::future::block_on(async move {
-                let pool = Pool::connect_with(options).await.unwrap();
-                sqlx::query(
-                    "CREATE TABLE IF NOT EXISTS misc (
-                key TEXT PRIMARY KEY,
-                value BLOB NOT NULL
-            );",
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
-                pool
-            })
-        });
+        let db_path = cfg.cache_path.clone().expect("wth i need a path");
 
-        let relay_graph = match smol::future::block_on(db_read(&db, "relay_graph"))
+        tracing::debug!("INITIALIZING DATABASE");
+        let options = SqliteConnectOptions::from_str(db_path.to_str().unwrap())
+            .unwrap()
+            .create_if_missing(true);
+
+        let db: Pool<Sqlite> = Pool::connect_with(options).await.unwrap();
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS misc (
+            key TEXT PRIMARY KEY,
+            value BLOB NOT NULL
+        );",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let relay_graph = match db_read(&db, "relay_graph")
+            .await
             .ok()
             .flatten()
             .and_then(|s| stdcode::deserialize(&s).ok())
@@ -106,7 +105,7 @@ impl LinkNode {
             my_client_id: rand::random(),
             relay_graph: Arc::new(RwLock::new(relay_graph)),
             my_onion_sk: DhSecret::generate(),
-            db,
+            db: Some(db),
         };
         let _task = Immortal::respawn(
             RespawnStrategy::Immediate,
@@ -329,67 +328,6 @@ async fn link_loop(
         }
     };
 
-    let send_to_nonself_next_peeler =
-        |emit_time: Option<Instant>, next_peeler: RelayFingerprint, pkt: RawPacket| {
-            let closer_hop = {
-                let graph = link_ctx.relay_graph.read();
-                let my_neighs = table
-                    .iter()
-                    .map(|p| *p.key())
-                    .filter_map(|p| match p {
-                        NeighborId::Relay(r) => Some(r),
-                        NeighborId::Client(_) => None,
-                    })
-                    .collect_vec();
-                one_hop_closer(&my_neighs, &graph, next_peeler)?
-            };
-            tracing::trace!("sending peeled packet to nonself next_peeler = {next_peeler}");
-            let pipe = table
-                .get(&NeighborId::Relay(closer_hop))
-                .context("cannot find closer hop")?
-                .clone();
-            // TODO delay queue here rather than this inefficient approach
-            smolscale::spawn(async move {
-                if let Some(emit_time) = emit_time {
-                    smol::Timer::at(emit_time).await;
-                }
-                pipe.send_msg(LinkMessage::ToRelay {
-                    packet: bytemuck::bytes_of(&pkt).to_vec().into(),
-                    next_peeler,
-                })
-                .await?;
-                anyhow::Ok(())
-            })
-            .detach();
-            anyhow::Ok(())
-        };
-
-    let send_to_next_peeler = |emit_time: Option<Instant>,
-                               next_peeler: RelayFingerprint,
-                               pkt: RawPacket,
-                               send_raw: Sender<LinkMessage>,
-                               my_fp: RelayFingerprint| {
-        if next_peeler == my_fp {
-            tracing::trace!("sending peeled packet to self = next_peeler");
-            smolscale::spawn(async move {
-                if let Some(emit_time) = emit_time {
-                    smol::Timer::at(emit_time).await;
-                }
-                send_raw
-                    .send(LinkMessage::ToRelay {
-                        packet: bytemuck::bytes_of(&pkt).to_vec().into(),
-                        next_peeler,
-                    })
-                    .await?;
-                anyhow::Ok(())
-            })
-            .detach();
-        } else {
-            send_to_nonself_next_peeler(emit_time, next_peeler, pkt)?;
-        }
-        anyhow::Ok(())
-    };
-
     // the main peel loop
     let peel_loop = async {
         loop {
@@ -417,76 +355,34 @@ async fn link_loop(
                                 let now = Instant::now();
                                 let peeled: PeeledPacket = packet.peel(&link_ctx.my_onion_sk)?;
                                 tracing::trace!("message peel took {:?}", now.elapsed());
-                                match peeled {
-                                    PeeledPacket::Relay {
-                                        next_peeler,
-                                        pkt,
-                                        delay_ms,
-                                    } => {
-                                        // println!(
-                                        //     "peeled ToRelay packet. next_peeler = {next_peeler}"
-                                        // );
-                                        let emit_time =
-                                            Instant::now() + Duration::from_millis(delay_ms as u64);
-                                        send_to_next_peeler(
-                                            Some(emit_time),
-                                            next_peeler,
-                                            pkt,
-                                            send_raw.clone(),
-                                            my_idsk.public().fingerprint(),
-                                        )?;
-                                    }
-                                    PeeledPacket::Received { from, pkt } => {
-                                        tracing::trace!(
-                                            "received incoming forward linkmsg from = {from}"
-                                        );
-                                        send_incoming
-                                            .send(IncomingMsg::Forward { from, body: pkt })
-                                            .await?;
-                                    }
-                                    PeeledPacket::GarbledReply {
-                                        rb_id,
-                                        pkt,
-                                        client_id,
-                                    } => {
-                                        if client_id == link_ctx.my_client_id {
-                                            tracing::trace!(
-                                                rb_id = rb_id,
-                                                "received a GARBLED REPLY for myself"
-                                            );
-                                            send_incoming
-                                                .send(IncomingMsg::Backward {
-                                                    rb_id,
-                                                    body: pkt.to_vec().into(),
-                                                })
-                                                .await?;
-                                        } else {
-                                            tracing::trace!(
-                                                rb_id,
-                                                client_id,
-                                                "got a GARBLED REPLY to FORWARD to a CLIENT"
-                                            );
-                                            let table = table.clone();
-                                            smolscale::spawn(async move {
-                                                table
-                                                    .get(&NeighborId::Client(client_id))
-                                                    .context("no such client")?
-                                                    .send_msg(LinkMessage::ToClient {
-                                                        body: pkt.to_vec().into(),
-                                                        rb_id,
-                                                    })
-                                                    .await?;
-                                                anyhow::Ok(())
-                                            })
-                                            .detach();
-                                        }
-                                    }
-                                }
+                                handle_peeled_packet(
+                                    peeled,
+                                    &table,
+                                    &link_ctx,
+                                    &send_raw,
+                                    &send_incoming,
+                                    my_idsk,
+                                )
+                                .await?
                             } else {
-                                send_to_nonself_next_peeler(None, next_peeler, packet.clone())?
+                                send_to_nonself_next_peeler(
+                                    &table,
+                                    &link_ctx,
+                                    None,
+                                    next_peeler,
+                                    packet.clone(),
+                                )
+                                .await?
                             }
                         } else {
-                            send_to_nonself_next_peeler(None, next_peeler, packet.clone())?
+                            send_to_nonself_next_peeler(
+                                &table,
+                                &link_ctx,
+                                None,
+                                next_peeler,
+                                packet.clone(),
+                            )
+                            .await?
                         }
                     }
                     LinkMessage::ToClient { body, rb_id } => {
@@ -514,6 +410,147 @@ async fn link_loop(
         Ok(_) => tracing::debug!("link_loop() returned?"),
         Err(e) => tracing::error!("link_loop() error: {e}"),
     }
+    Ok(())
+}
+async fn send_to_nonself_next_peeler(
+    table: &Arc<DashMap<NeighborId, Link>>,
+    link_ctx: &LinkNodeCtx,
+    emit_time: Option<Instant>,
+    next_peeler: RelayFingerprint,
+    pkt: RawPacket,
+) -> anyhow::Result<()> {
+    let closer_hop = {
+        let graph = link_ctx.relay_graph.read();
+        let my_neighs = table
+            .iter()
+            .map(|p| *p.key())
+            .filter_map(|p| match p {
+                NeighborId::Relay(r) => Some(r),
+                NeighborId::Client(_) => None,
+            })
+            .collect_vec();
+        one_hop_closer(&my_neighs, &graph, next_peeler)?
+    };
+    tracing::trace!("sending peeled packet to nonself next_peeler = {next_peeler}");
+    let pipe = table
+        .get(&NeighborId::Relay(closer_hop))
+        .context("cannot find closer hop")?
+        .clone();
+    // TODO delay queue here rather than this inefficient approach
+    smolscale::spawn(async move {
+        if let Some(emit_time) = emit_time {
+            smol::Timer::at(emit_time).await;
+        }
+        pipe.send_msg(LinkMessage::ToRelay {
+            packet: bytemuck::bytes_of(&pkt).to_vec().into(),
+            next_peeler,
+        })
+        .await?;
+        anyhow::Ok(())
+    })
+    .detach();
+    anyhow::Ok(())
+}
+
+async fn send_to_next_peeler(
+    table: &Arc<DashMap<NeighborId, Link>>,
+    link_ctx: &LinkNodeCtx,
+    emit_time: Option<Instant>,
+    next_peeler: RelayFingerprint,
+    pkt: RawPacket,
+    send_raw: Sender<LinkMessage>,
+    my_fp: RelayFingerprint,
+) -> anyhow::Result<()> {
+    if next_peeler == my_fp {
+        tracing::trace!("sending peeled packet to self = next_peeler");
+        smolscale::spawn(async move {
+            if let Some(emit_time) = emit_time {
+                smol::Timer::at(emit_time).await;
+            }
+            send_raw
+                .send(LinkMessage::ToRelay {
+                    packet: bytemuck::bytes_of(&pkt).to_vec().into(),
+                    next_peeler,
+                })
+                .await?;
+            anyhow::Ok(())
+        })
+        .detach();
+    } else {
+        send_to_nonself_next_peeler(table, link_ctx, emit_time, next_peeler, pkt).await?;
+    }
+    anyhow::Ok(())
+}
+async fn handle_peeled_packet(
+    peeled: PeeledPacket,
+    table: &Arc<DashMap<NeighborId, Link>>,
+    link_ctx: &LinkNodeCtx,
+    send_raw: &Sender<LinkMessage>,
+    send_incoming: &Sender<IncomingMsg>,
+    my_idsk: RelayIdentitySecret,
+) -> anyhow::Result<()> {
+    match peeled {
+        PeeledPacket::Relay {
+            next_peeler,
+            pkt,
+            delay_ms,
+        } => {
+            // println!(
+            //     "peeled ToRelay packet. next_peeler = {next_peeler}"
+            // );
+            let emit_time = Instant::now() + Duration::from_millis(delay_ms as u64);
+            send_to_next_peeler(
+                table,
+                link_ctx,
+                Some(emit_time),
+                next_peeler,
+                pkt,
+                send_raw.clone(),
+                my_idsk.public().fingerprint(),
+            )
+            .await?;
+        }
+        PeeledPacket::Received { from, pkt } => {
+            tracing::trace!("received incoming forward linkmsg from = {from}");
+            send_incoming
+                .send(IncomingMsg::Forward { from, body: pkt })
+                .await?;
+        }
+        PeeledPacket::GarbledReply {
+            rb_id,
+            pkt,
+            client_id,
+        } => {
+            if client_id == link_ctx.my_client_id {
+                tracing::trace!(rb_id = rb_id, "received a GARBLED REPLY for myself");
+                send_incoming
+                    .send(IncomingMsg::Backward {
+                        rb_id,
+                        body: pkt.to_vec().into(),
+                    })
+                    .await?;
+            } else {
+                tracing::trace!(
+                    rb_id,
+                    client_id,
+                    "got a GARBLED REPLY to FORWARD to a CLIENT"
+                );
+                let table = table.clone();
+                smolscale::spawn(async move {
+                    table
+                        .get(&NeighborId::Client(client_id))
+                        .context("no such client")?
+                        .send_msg(LinkMessage::ToClient {
+                            body: pkt.to_vec().into(),
+                            rb_id,
+                        })
+                        .await?;
+                    anyhow::Ok(())
+                })
+                .detach();
+            }
+        }
+    };
     Ok(())
 }
 
@@ -712,23 +749,16 @@ pub async fn db_write(
     Ok(())
 }
 
-pub async fn db_read(
-    pool: &Option<Pool<Sqlite>>,
-    key: &str,
-) -> Result<Option<Vec<u8>>, sqlx::Error> {
-    if let Some(pool) = pool {
-        let result = sqlx::query("SELECT value FROM misc WHERE key = ?")
-            .bind(key)
-            .fetch_optional(pool)
-            .await?
-            .map(|row| row.get("value"));
-        Ok(result)
-    } else {
-        Ok(None)
-    }
+pub async fn db_read(pool: &Pool<Sqlite>, key: &str) -> Result<Option<Vec<u8>>, sqlx::Error> {
+    let result = sqlx::query("SELECT value FROM misc WHERE key = ?")
+        .bind(key)
+        .fetch_optional(pool)
+        .await?
+        .map(|row| row.get("value"));
+    Ok(result)
 }
 
-pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
+pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
     let mut in_1 = BTreeMap::new();
     in_1.insert(
@@ -763,14 +793,16 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
         out_routes: BTreeMap::new(),
         my_idsk: Some(idsk1),
         cache_path: None,
-    });
+    })
+    .await;
 
     let node2 = LinkNode::new(LinkConfig {
         in_routes: in_2,
         out_routes: out_2,
         my_idsk: Some(idsk2),
         cache_path: None,
-    });
+    })
+    .await;
 
     (node1, node2)
 }
@@ -787,7 +819,7 @@ pub fn init_tracing() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
+pub async fn get_connected_relay_client() -> (LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
     let mut in_1 = BTreeMap::new();
     in_1.insert(
@@ -821,19 +853,21 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
         out_routes: BTreeMap::new(),
         my_idsk: Some(idsk1),
         cache_path: None,
-    });
+    })
+    .await;
 
     let node2 = LinkNode::new(LinkConfig {
         in_routes: in_2,
         out_routes: out_2,
         my_idsk: None,
         cache_path: None,
-    });
+    })
+    .await;
 
     (node1, node2)
 }
 
-pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
+pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
     let mut in_1 = BTreeMap::new();
     in_1.insert(
@@ -905,25 +939,29 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
         out_routes: BTreeMap::new(),
         my_idsk: Some(idsk1),
         cache_path: None,
-    });
+    })
+    .await;
     let node2 = LinkNode::new(LinkConfig {
         in_routes: in_2,
         out_routes: out_2,
         my_idsk: Some(idsk2),
         cache_path: None,
-    });
+    })
+    .await;
     let node3 = LinkNode::new(LinkConfig {
         in_routes: in_3,
         out_routes: out_3,
         my_idsk: Some(idsk3),
         cache_path: None,
-    });
+    })
+    .await;
     let node4 = LinkNode::new(LinkConfig {
         in_routes: in_4,
         out_routes: out_4,
         my_idsk: Some(idsk4),
         cache_path: None,
-    });
+    })
+    .await;
 
     (node1, node2, node3, node4)
 }
@@ -935,14 +973,14 @@ mod tests {
 
     #[test]
     fn two_relays_one_forward_pkt() {
-        init_tracing().unwrap();
-
-        let (node1, node2) = get_two_connected_relays();
-        let pkt = InnerPacket::Message(Message {
-            relay_dock: 123,
-            body: Bytes::from_static(b"lol"),
-        });
         smol::block_on(async {
+            init_tracing().unwrap();
+
+            let (node1, node2) = get_two_connected_relays().await;
+            let pkt = InnerPacket::Message(Message {
+                relay_dock: 123,
+                body: Bytes::from_static(b"lol"),
+            });
             smol::Timer::after(Duration::from_secs(3)).await;
             node2
                 .send_forward(
@@ -963,18 +1001,18 @@ mod tests {
 
     #[test]
     fn two_relays_one_backward_pkt() {
-        init_tracing().unwrap();
-
-        let (node1, node2) = get_two_connected_relays();
-        println!(
-            "node1 fp = {}",
-            node1.ctx.cfg.my_idsk.unwrap().public().fingerprint()
-        );
-        println!(
-            "node2 fp = {}",
-            node2.ctx.cfg.my_idsk.unwrap().public().fingerprint()
-        );
         smol::block_on(async {
+            init_tracing().unwrap();
+
+            let (node1, node2) = get_two_connected_relays().await;
+            println!(
+                "node1 fp = {}",
+                node1.ctx.cfg.my_idsk.unwrap().public().fingerprint()
+            );
+            println!(
+                "node2 fp = {}",
+                node2.ctx.cfg.my_idsk.unwrap().public().fingerprint()
+            );
             smol::Timer::after(Duration::from_secs(3)).await;
             let (surb_1to2, surb_id, degarbler) = node2
                 .surb_from(
@@ -1017,14 +1055,14 @@ mod tests {
 
     #[test]
     fn client_relay_one_forward_pkt() {
-        init_tracing().unwrap();
-
-        let (relay_node, client_node) = get_connected_relay_client();
-        let pkt = InnerPacket::Message(Message {
-            relay_dock: 123,
-            body: Bytes::from_static(b"lol"),
-        });
         smol::block_on(async {
+            init_tracing().unwrap();
+
+            let (relay_node, client_node) = get_connected_relay_client().await;
+            let pkt = InnerPacket::Message(Message {
+                relay_dock: 123,
+                body: Bytes::from_static(b"lol"),
+            });
             smol::Timer::after(Duration::from_secs(3)).await;
             client_node
                 .send_forward(
@@ -1046,14 +1084,14 @@ mod tests {
 
     #[test]
     fn client_relay_one_backward_pkt() {
-        init_tracing().unwrap();
-
-        let (relay_node, client_node) = get_connected_relay_client();
-        println!(
-            "node1 fp = {}",
-            relay_node.ctx.cfg.my_idsk.unwrap().public().fingerprint()
-        );
         smol::block_on(async {
+            init_tracing().unwrap();
+
+            let (relay_node, client_node) = get_connected_relay_client().await;
+            println!(
+                "node1 fp = {}",
+                relay_node.ctx.cfg.my_idsk.unwrap().public().fingerprint()
+            );
             smol::Timer::after(Duration::from_secs(3)).await;
             let (surb_1to2, surb_id, degarbler) = client_node
                 .surb_from(
@@ -1096,14 +1134,14 @@ mod tests {
 
     #[test]
     fn four_relays_forward_pkt() {
-        init_tracing().unwrap();
-
-        let (node1, node2, node3, node4) = get_four_connected_relays();
-        let pkt = InnerPacket::Message(Message {
-            relay_dock: 123,
-            body: Bytes::from_static(b"lol"),
-        });
         smol::block_on(async {
+            init_tracing().unwrap();
+
+            let (node1, node2, node3, node4) = get_four_connected_relays().await;
+            let pkt = InnerPacket::Message(Message {
+                relay_dock: 123,
+                body: Bytes::from_static(b"lol"),
+            });
             smol::Timer::after(Duration::from_secs(5)).await;
             node4
                 .send_forward(
