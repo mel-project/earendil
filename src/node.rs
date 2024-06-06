@@ -38,9 +38,10 @@ impl Node {
                 None
             },
             cache_path: config.state_cache,
-        }).await; 
-        let n2r = N2rNode::new(link, N2rConfig {}); 
-        let v2h = Arc::new(V2hNode::new(n2r, V2hConfig {}));    
+        })
+        .await;
+        let n2r = N2rNode::new(link, N2rConfig {});
+        let v2h = Arc::new(V2hNode::new(n2r, V2hConfig {}));
 
         // start loops for handling socks5, etc, etc
         let v2h_clone = v2h.clone();
@@ -159,11 +160,14 @@ async fn socks5_loop(v2h: Arc<V2hNode>, cfg: Socks5Config) -> anyhow::Result<()>
     exec.run(async {
         loop {
             let (client_stream, _) = tcp_listener.accept().await?;
-            exec.spawn(socks5_once(client_stream, fallback, &pool)
-                .map_err(|e| tracing::debug!(err = debug(e), "socks5 worker failed")))
+            exec.spawn(
+                socks5_once(client_stream, fallback, &pool)
+                    .map_err(|e| tracing::debug!(err = debug(e), "socks5 worker failed")),
+            )
             .detach();
-        };
-    }).await
+        }
+    })
+    .await
 }
 
 #[tracing::instrument(skip(client_stream, fallback, pool))]
