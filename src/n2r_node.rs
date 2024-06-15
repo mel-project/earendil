@@ -119,9 +119,9 @@ impl N2rAnonSocket {
 
     /// Replenishes missing SURBs for the given destination.
     pub async fn replenish_surb(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
-        while *self.surb_counts.entry(fingerprint).or_insert(0) < 10 {
+        while *self.surb_counts.entry(fingerprint).or_insert(0) < 100 {
             *self.surb_counts.entry(fingerprint).or_insert(0) += 2;
-            let surbs = (0..4)
+            let surbs = (0..10)
                 .map(|_| {
                     let (rb, id, degarble) = self
                         .ctx
@@ -180,7 +180,10 @@ async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
                     }
                 }
                 IncomingMsg::Backward { rb_id, body } => {
-                    let degarbler = ctx.degarblers.remove(&rb_id).context("no such degarbler")?;
+                    let degarbler = ctx
+                        .degarblers
+                        .remove(&rb_id)
+                        .context("no degarbler for rb_id = {rb_id}")?;
                     tracing::trace!(
                         "incoming n2r: IncomingMsg::Backward with rb_id = {rb_id} for {}",
                         degarbler.my_anon_id()

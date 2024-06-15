@@ -165,10 +165,13 @@ async fn serve_rpc(ctx: V2hNodeCtx) -> anyhow::Result<()> {
         let fallible = async {
             let req: JrpcRequest = serde_json::from_slice(&bts)?;
             // println!("req = {:?}", req);
-            let res = service.respond_raw(req).await;
+            let res = service.respond_raw(req.clone()).await;
             // println!("resp = {:?}", res);
             let body = serde_json::to_vec(&res)?.into();
-            rpc_socket.send_to(body, from).await?;
+            rpc_socket.send_to(body, from).await.map_err(|e| {
+                tracing::error!(err = debug(&e), req = debug(req), "error serving RPC");
+                e
+            })?;
             // println!("successfully sent rpc response");
             anyhow::Ok(())
         };

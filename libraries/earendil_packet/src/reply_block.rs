@@ -26,6 +26,7 @@ impl Surb {
         my_anon_id: AnonEndpoint,
     ) -> Result<(Self, (u64, ReplyDegarbler)), PacketConstructError> {
         let rb_id: u64 = rand::random();
+        // println!("made rb with rb_id = {rb_id}");
         let mut metadata = [0; 32];
         // metadata field for reply blocks: 8 bytes of a big-endian encoded unsigned integer, followed by 12 bytes of 0's
         metadata[0..8].copy_from_slice(&my_client_id.to_be_bytes());

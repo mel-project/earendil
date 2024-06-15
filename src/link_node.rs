@@ -2,10 +2,12 @@ mod gossip;
 mod link;
 mod link_protocol;
 mod link_protocol_impl;
+mod link_store;
 mod route_util;
 mod settlement;
 mod types;
 
+pub use link_store::*;
 use std::{
     collections::BTreeMap,
     net::{SocketAddr, ToSocketAddrs as _},
