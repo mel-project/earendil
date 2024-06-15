@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use async_trait::async_trait;
 
 use earendil_crypt::{ClientId, RelayFingerprint};
@@ -6,9 +8,12 @@ use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 
 use itertools::Itertools;
 
+use crate::ChatEntry;
+
 use super::{
-    link_protocol::{InfoResponse, LinkProtocol},
+    link_protocol::{InfoResponse, LinkProtocol, LinkRpcErr},
     settlement::{Seed, SettlementRequest, SettlementResponse},
+    types::NeighborId,
     LinkNodeCtx,
 };
 
@@ -79,8 +84,24 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn push_chat(&self, _msg: String) {
-        todo!()
+    async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr> {
+        let neigh = match self.remote_relay_fp {
+            Some(remote_relay_fp) => NeighborId::Relay(remote_relay_fp),
+            None => NeighborId::Client(self.remote_client_id),
+        };
+        let chat_entry = ChatEntry {
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_| LinkRpcErr::PushChatFailed)?
+                .as_secs(),
+            text: msg,
+            is_outgoing: false,
+        };
+        self.ctx
+            .store
+            .insert_chat_entry(neigh, chat_entry)
+            .await
+            .map_err(|_| LinkRpcErr::PushChatFailed)
     }
 
     #[tracing::instrument(skip(self))]

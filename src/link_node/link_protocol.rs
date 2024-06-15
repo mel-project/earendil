@@ -6,6 +6,7 @@ use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use nanorpc::nanorpc_derive;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use thiserror::Error;
 
 use super::settlement::{Seed, SettlementRequest, SettlementResponse};
 
@@ -31,7 +32,7 @@ pub trait LinkProtocol {
     async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse>;
 
     /// Send a chat message to the other end of the link.
-    async fn push_chat(&self, msg: String);
+    async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr>;
 
     /// Request a MelPoW seed (used to create an automatic payment proof).
     async fn request_seed(&self) -> Option<Seed>;
@@ -51,4 +52,11 @@ pub struct AuthResponse {
 #[derive(Serialize, Deserialize)]
 pub struct InfoResponse {
     pub version: String,
+}
+
+/// Errors that can occur during a Link RPC call.
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum LinkRpcErr {
+    #[error("push chat failed")]
+    PushChatFailed,
 }

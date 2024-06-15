@@ -1,9 +1,10 @@
 use std::{path::PathBuf, str::FromStr};
 
 use anyhow::Context;
-use earendil_crypt::NeighborId;
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
+
+use super::types::NeighborId;
 
 pub struct LinkStore {
     pool: SqlitePool,
@@ -13,7 +14,7 @@ pub struct LinkStore {
 pub struct ChatEntry {
     pub text: String,
     /// unix timestamp
-    pub timestamp: i64,
+    pub timestamp: u64,
     pub is_outgoing: bool,
 }
 
@@ -22,7 +23,7 @@ pub struct DebtEntry {
     /// micromels
     pub delta: i64,
     /// unix timestamp
-    pub timestamp: i64,
+    pub timestamp: u64,
     pub proof: Option<String>,
 }
 
@@ -67,7 +68,7 @@ impl LinkStore {
             "INSERT INTO chats (neighbor, timestamp, text, is_outgoing) VALUES ($1, $2, $3, $4)",
         )
         .bind(serde_json::to_string(&neighbor)?)
-        .bind(chat_entry.timestamp)
+        .bind(chat_entry.timestamp as i64)
         .bind(chat_entry.text)
         .bind(chat_entry.is_outgoing)
         .execute(&self.pool)
@@ -85,7 +86,7 @@ impl LinkStore {
             .into_iter()
             .map(|(timestamp, text, is_outgoing)| ChatEntry {
                 text,
-                timestamp,
+                timestamp: timestamp as u64,
                 is_outgoing,
             })
             .collect())
@@ -100,7 +101,7 @@ impl LinkStore {
             "INSERT INTO debts (neighbor, timestamp, delta, proof) VALUES ($1, $2, $3, $4)",
         )
         .bind(serde_json::to_string(&neighbor)?)
-        .bind(debt_entry.timestamp)
+        .bind(debt_entry.timestamp as i64)
         .bind(debt_entry.delta)
         .bind(debt_entry.proof)
         .execute(&self.pool)

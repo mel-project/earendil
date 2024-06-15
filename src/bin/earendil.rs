@@ -50,7 +50,7 @@ pub fn init_tracing() -> anyhow::Result<()> {
 #[tracing::instrument]
 fn main() -> anyhow::Result<()> {
     // initialize tracing subscriber that displays to output
-    init_tracing();
+    init_tracing().unwrap();
 
     match Args::parse().command {
         Commands::Daemon { config } => {

@@ -7,13 +7,14 @@ mod route_util;
 mod settlement;
 mod types;
 
+use link_protocol::LinkClient;
 pub use link_store::*;
 use std::{
     collections::BTreeMap,
     net::{SocketAddr, ToSocketAddrs as _},
     path::PathBuf,
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::Context as _;
@@ -40,7 +41,6 @@ use smol::{
     future::FutureExt as _,
 };
 use smolscale::immortal::{Immortal, RespawnStrategy};
-use sqlx::Row;
 use stdcode::StdcodeSerializeExt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -86,6 +86,7 @@ impl LinkNode {
             my_client_id: rand::random(),
             relay_graph: Arc::new(RwLock::new(relay_graph)),
             my_onion_sk: DhSecret::generate(),
+            link_table: Arc::new(DashMap::new()),
             store: Arc::new(store),
         };
         let _task = Immortal::respawn(
@@ -164,7 +165,7 @@ impl LinkNode {
     pub fn surb_from(
         &self,
         my_anon_id: AnonEndpoint,
-        remote: RelayFingerprint, // will use in the future for finding more efficient routes
+        _remote: RelayFingerprint, // will use in the future for finding more efficient routes
     ) -> anyhow::Result<(Surb, u64, ReplyDegarbler)> {
         let destination = if let Some(my_relay) = self.ctx.cfg.my_idsk {
             my_relay.public().fingerprint()
@@ -213,6 +214,33 @@ impl LinkNode {
     pub fn all_relays(&self) -> Vec<RelayFingerprint> {
         self.ctx.relay_graph.read().all_nodes().collect_vec()
     }
+
+    pub async fn send_chat(&self, neighbor: NeighborId, text: String) -> anyhow::Result<()> {
+        let link = self
+            .ctx
+            .link_table
+            .get(&neighbor)
+            .context(format!("not connected to neighbor {:?}", neighbor))?;
+        LinkClient(link.rpc_transport())
+            .push_chat(text.clone())
+            .await??;
+        self.ctx
+            .store
+            .insert_chat_entry(
+                neighbor,
+                ChatEntry {
+                    text,
+                    timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+                    is_outgoing: true,
+                },
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_chat_history(&self, neighbor: NeighborId) -> anyhow::Result<Vec<ChatEntry>> {
+        self.ctx.store.get_chat_history(neighbor).await
+    }
 }
 
 /// Incoming messages from the link layer that are addressed to "us".
@@ -234,6 +262,7 @@ struct LinkNodeCtx {
     my_client_id: ClientId,
     my_onion_sk: DhSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
+    link_table: Arc<DashMap<NeighborId, Link>>,
     store: Arc<LinkStore>,
 }
 
@@ -244,8 +273,6 @@ async fn link_loop(
     recv_raw: Receiver<LinkMessage>,
     send_incoming: Sender<IncomingMsg>,
 ) -> anyhow::Result<()> {
-    let table = Arc::new(DashMap::new());
-
     let save_relay_graph_loop = async {
         loop {
             // println!("syncing DB...");
@@ -281,13 +308,7 @@ async fn link_loop(
         } else {
             futures_util::future::try_join_all(link_ctx.cfg.in_routes.iter().map(
                 |(name, in_route)| {
-                    process_in_route(
-                        link_ctx.clone(),
-                        name,
-                        in_route,
-                        table.clone(),
-                        send_raw.clone(),
-                    )
+                    process_in_route(link_ctx.clone(), name, in_route, send_raw.clone())
                 },
             ))
             .await
@@ -300,13 +321,7 @@ async fn link_loop(
         } else {
             futures_util::future::try_join_all(link_ctx.cfg.out_routes.iter().map(
                 |(name, out_route)| {
-                    process_out_route(
-                        link_ctx.clone(),
-                        name,
-                        out_route,
-                        table.clone(),
-                        send_raw.clone(),
-                    )
+                    process_out_route(link_ctx.clone(), name, out_route, send_raw.clone())
                 },
             ))
             .await
@@ -317,7 +332,8 @@ async fn link_loop(
         |emit_time: Option<Instant>, next_peeler: RelayFingerprint, pkt: RawPacket| {
             let closer_hop = {
                 let graph = link_ctx.relay_graph.read();
-                let my_neighs = table
+                let my_neighs = link_ctx
+                    .link_table
                     .iter()
                     .map(|p| *p.key())
                     .filter_map(|p| match p {
@@ -328,7 +344,8 @@ async fn link_loop(
                 one_hop_closer(&my_neighs, &graph, next_peeler)?
             };
             tracing::trace!("sending peeled packet to nonself next_peeler = {next_peeler}");
-            let pipe = table
+            let pipe = link_ctx
+                .link_table
                 .get(&NeighborId::Relay(closer_hop))
                 .context("cannot find closer hop")?
                 .clone();
@@ -450,7 +467,7 @@ async fn link_loop(
                                                 client_id,
                                                 "got a GARBLED REPLY to FORWARD to a CLIENT"
                                             );
-                                            let table = table.clone();
+                                            let table = link_ctx.link_table.clone();
                                             smolscale::spawn(async move {
                                                 table
                                                     .get(&NeighborId::Client(client_id))
@@ -505,7 +522,6 @@ async fn process_in_route(
     link_ctx: LinkNodeCtx,
     name: &str,
     in_route: &InRouteConfig,
-    table: Arc<DashMap<NeighborId, Link>>,
     send_raw: Sender<LinkMessage>,
 ) -> anyhow::Result<()> {
     let mut listener = TcpListener::bind(in_route.listen).await?;
@@ -517,14 +533,7 @@ async fn process_in_route(
                 remote_addr = debug(pipe.remote_addr()),
                 "accepted a TCP connection"
             );
-            smolscale::spawn(handle_pipe(
-                link_ctx.clone(),
-                pipe,
-                table.clone(),
-                send_raw.clone(),
-                false,
-            ))
-            .detach();
+            smolscale::spawn(handle_pipe(link_ctx.clone(), pipe, send_raw.clone(), false)).detach();
         },
         ObfsConfig::Sosistab3(_) => todo!(),
     }
@@ -534,7 +543,6 @@ async fn process_out_route(
     link_ctx: LinkNodeCtx,
     name: &str,
     out_route: &OutRouteConfig,
-    table: Arc<DashMap<NeighborId, Link>>,
     send_raw: Sender<LinkMessage>,
 ) -> anyhow::Result<()> {
     loop {
@@ -559,14 +567,7 @@ async fn process_out_route(
                 ObfsConfig::None => {
                     let tcp_pipe = tcp_dialer.dial().await?;
                     tracing::debug!(name, "TCP connected to other side");
-                    handle_pipe(
-                        link_ctx.clone(),
-                        tcp_pipe,
-                        table.clone(),
-                        send_raw.clone(),
-                        true,
-                    )
-                    .await
+                    handle_pipe(link_ctx.clone(), tcp_pipe, send_raw.clone(), true).await
                 }
                 ObfsConfig::Sosistab3(_cookie) => {
                     todo!()
@@ -587,7 +588,6 @@ async fn process_out_route(
 async fn handle_pipe(
     link_ctx: LinkNodeCtx,
     pipe: impl Pipe,
-    table: Arc<DashMap<NeighborId, Link>>,
     send_raw: Sender<LinkMessage>,
     is_dial: bool,
 ) -> anyhow::Result<()> {
@@ -601,12 +601,14 @@ async fn handle_pipe(
     // insert *both* as client and as relay
     if let Some(their_id_desc) = &their_id_desc {
         their_id_desc.verify()?;
-        table.insert(
+        link_ctx.link_table.insert(
             NeighborId::Relay(their_id_desc.identity_pk.fingerprint()),
             link.clone(),
         );
     }
-    table.insert(NeighborId::Client(their_client_id), link.clone());
+    link_ctx
+        .link_table
+        .insert(NeighborId::Client(their_client_id), link.clone());
 
     let their_relay_fp = their_id_desc
         .as_ref()
@@ -1081,7 +1083,7 @@ mod tests {
     fn four_relays_forward_pkt() {
         init_tracing().unwrap();
 
-        let (node1, node2, node3, node4) = get_four_connected_relays();
+        let (node1, _node2, _node3, node4) = get_four_connected_relays();
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
             body: Bytes::from_static(b"lol"),
@@ -1102,6 +1104,35 @@ mod tests {
                 }
                 IncomingMsg::Backward { rb_id: _, body: _ } => panic!("not supposed to happen"),
             }
+        });
+    }
+
+    #[test]
+    fn two_relays_one_chat() {
+        init_tracing().unwrap();
+
+        let (node1, node2) = get_two_connected_relays();
+        smol::block_on(async {
+            smol::Timer::after(Duration::from_secs(3)).await;
+            let chat_msg = "hi test".to_string();
+            node2
+                .send_chat(
+                    NeighborId::Relay(node1.ctx.cfg.my_idsk.unwrap().public().fingerprint()), // we know node1 is a relay
+                    chat_msg.clone(),
+                )
+                .await
+                .unwrap();
+
+            smol::Timer::after(Duration::from_secs(1)).await;
+
+            let node1_chat_hist = node1
+                .get_chat_history(NeighborId::Relay(
+                    node2.ctx.cfg.my_idsk.unwrap().public().fingerprint(),
+                ))
+                .await
+                .unwrap();
+
+            assert_eq!(node1_chat_hist[0].text, chat_msg);
         });
     }
 }

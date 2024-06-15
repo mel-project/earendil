@@ -409,12 +409,6 @@ impl FromStr for RelayEndpoint {
 
 pub type ClientId = u64;
 
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash, Serialize, Deserialize)]
-pub enum NeighborId {
-    Relay(RelayFingerprint),
-    Client(ClientId),
-}
-
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
 pub enum RemoteId {
     Relay(RelayFingerprint),
