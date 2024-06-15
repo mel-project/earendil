@@ -19,7 +19,7 @@ pub struct ConfigFile {
     pub identity: Option<Identity>,
 
     /// Path to database file.
-    pub state_cache: Option<PathBuf>,
+    pub db_path: Option<PathBuf>,
 
     /// Where to listen for the local control protocol.
     #[serde(default = "default_control_listen")]

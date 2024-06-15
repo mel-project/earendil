@@ -37,10 +37,14 @@ impl Node {
             } else {
                 None
             },
-            cache_path: config.state_cache,
-        }); 
-        let n2r = N2rNode::new(link, N2rConfig {}); 
-        let v2h = Arc::new(V2hNode::new(n2r, V2hConfig {}));    
+            db_path: config.db_path.unwrap_or_else(|| {
+                let mut data_dir = dirs::data_dir().unwrap();
+                data_dir.push("earendil-link-store.db");
+                data_dir
+            }),
+        });
+        let n2r = N2rNode::new(link, N2rConfig {});
+        let v2h = Arc::new(V2hNode::new(n2r, V2hConfig {}));
 
         // start loops for handling socks5, etc, etc
         let v2h_clone = v2h.clone();

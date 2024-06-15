@@ -79,6 +79,8 @@ async-dup = "1.2.4"
 sillad-sosistab3 = "0.1.2"
 sillad = "0.1.1"
 env_logger = "0.11.3"
+dirs = "5.0.1"
+tempfile = "3.10.1"
 
 [profile.dev]
 panic = 'abort'

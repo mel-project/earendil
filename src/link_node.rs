@@ -12,7 +12,6 @@ use std::{
     collections::BTreeMap,
     net::{SocketAddr, ToSocketAddrs as _},
     path::PathBuf,
-    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -41,7 +40,7 @@ use smol::{
     future::FutureExt as _,
 };
 use smolscale::immortal::{Immortal, RespawnStrategy};
-use sqlx::{sqlite::SqliteConnectOptions, Pool, Row, Sqlite, SqlitePool};
+use sqlx::Row;
 use stdcode::StdcodeSerializeExt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -73,28 +72,8 @@ impl LinkNode {
     pub fn new(cfg: LinkConfig) -> Self {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
-
-        let db = cfg.cache_path.clone().map(|db_path| {
-            tracing::debug!("INITIALIZING DATABASE");
-            let options = SqliteConnectOptions::from_str(db_path.to_str().unwrap())
-                .unwrap()
-                .create_if_missing(true);
-            smol::future::block_on(async move {
-                let pool = Pool::connect_with(options).await.unwrap();
-                sqlx::query(
-                    "CREATE TABLE IF NOT EXISTS misc (
-                key TEXT PRIMARY KEY,
-                value BLOB NOT NULL
-            );",
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
-                pool
-            })
-        });
-
-        let relay_graph = match smol::future::block_on(db_read(&db, "relay_graph"))
+        let store = smolscale::block_on(LinkStore::new(cfg.db_path.clone())).unwrap();
+        let relay_graph = match smol::future::block_on(store.get_misc("relay-graph"))
             .ok()
             .flatten()
             .and_then(|s| stdcode::deserialize(&s).ok())
@@ -102,13 +81,12 @@ impl LinkNode {
             Some(graph) => graph,
             None => RelayGraph::new(),
         };
-
         let ctx = LinkNodeCtx {
             cfg,
             my_client_id: rand::random(),
             relay_graph: Arc::new(RwLock::new(relay_graph)),
             my_onion_sk: DhSecret::generate(),
-            db,
+            store: Arc::new(store),
         };
         let _task = Immortal::respawn(
             RespawnStrategy::Immediate,
@@ -256,7 +234,7 @@ struct LinkNodeCtx {
     my_client_id: ClientId,
     my_onion_sk: DhSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
-    db: Option<SqlitePool>,
+    store: Arc<LinkStore>,
 }
 
 #[tracing::instrument(skip_all)]
@@ -268,13 +246,17 @@ async fn link_loop(
 ) -> anyhow::Result<()> {
     let table = Arc::new(DashMap::new());
 
-    let db_sync_loop = async {
+    let save_relay_graph_loop = async {
         loop {
             // println!("syncing DB...");
             let relay_graph = link_ctx.relay_graph.read().stdcode();
-            match db_write(&link_ctx.db, "relay_graph", relay_graph).await {
+            match link_ctx
+                .store
+                .insert_misc("relay_graph".to_string(), relay_graph)
+                .await
+            {
                 Ok(_) => (),
-                Err(e) => tracing::warn!("db_write failed with: {e}"),
+                Err(e) => tracing::warn!("saving relay graph failed with: {e}"),
             };
             smol::Timer::after(Duration::from_secs(10)).await;
         }
@@ -485,10 +467,10 @@ async fn link_loop(
                                     }
                                 }
                             } else {
-                                send_to_nonself_next_peeler(None, next_peeler, packet.clone())?
+                                send_to_nonself_next_peeler(None, next_peeler, *packet)?
                             }
                         } else {
-                            send_to_nonself_next_peeler(None, next_peeler, packet.clone())?
+                            send_to_nonself_next_peeler(None, next_peeler, *packet)?
                         }
                     }
                     LinkMessage::ToClient { body, rb_id } => {
@@ -509,7 +491,7 @@ async fn link_loop(
     match in_task
         .race(out_task)
         .race(peel_loop)
-        .race(db_sync_loop)
+        .race(save_relay_graph_loop)
         .race(identity_refresh_loop)
         .await
     {
@@ -696,38 +678,7 @@ pub struct LinkConfig {
     pub in_routes: BTreeMap<String, InRouteConfig>,
     pub out_routes: BTreeMap<String, OutRouteConfig>,
     pub my_idsk: Option<RelayIdentitySecret>,
-    pub cache_path: Option<PathBuf>,
-}
-
-pub async fn db_write(
-    pool: &Option<Pool<Sqlite>>,
-    key: &str,
-    value: Vec<u8>,
-) -> Result<(), sqlx::Error> {
-    if let Some(pool) = pool {
-        sqlx::query("INSERT INTO misc (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-        .bind(key)
-        .bind(value)
-        .execute(pool)
-        .await?;
-    }
-    Ok(())
-}
-
-pub async fn db_read(
-    pool: &Option<Pool<Sqlite>>,
-    key: &str,
-) -> Result<Option<Vec<u8>>, sqlx::Error> {
-    if let Some(pool) = pool {
-        let result = sqlx::query("SELECT value FROM misc WHERE key = ?")
-            .bind(key)
-            .fetch_optional(pool)
-            .await?
-            .map(|row| row.get("value"));
-        Ok(result)
-    } else {
-        Ok(None)
-    }
+    pub db_path: PathBuf,
 }
 
 pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
@@ -764,14 +715,22 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
         in_routes: in_1,
         out_routes: BTreeMap::new(),
         my_idsk: Some(idsk1),
-        cache_path: None,
+        db_path: {
+            let mut path = tempfile::tempdir().unwrap().into_path();
+            path.push(idsk1.public().fingerprint().to_string());
+            path
+        },
     });
 
     let node2 = LinkNode::new(LinkConfig {
         in_routes: in_2,
         out_routes: out_2,
         my_idsk: Some(idsk2),
-        cache_path: None,
+        db_path: {
+            let mut path = tempfile::tempdir().unwrap().into_path();
+            path.push(idsk2.public().fingerprint().to_string());
+            path
+        },
     });
 
     (node1, node2)
@@ -800,14 +759,7 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
         },
     );
 
-    let mut in_2 = BTreeMap::new();
-    in_2.insert(
-        "2".to_owned(),
-        InRouteConfig {
-            listen: "127.0.0.1:30001".parse().unwrap(),
-            obfs: ObfsConfig::None,
-        },
-    );
+    let in_2 = BTreeMap::new();
     let mut out_2 = BTreeMap::new();
     out_2.insert(
         "1".to_owned(),
@@ -818,21 +770,34 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
         },
     );
 
-    let node1 = LinkNode::new(LinkConfig {
+    let relay = LinkNode::new(LinkConfig {
         in_routes: in_1,
         out_routes: BTreeMap::new(),
         my_idsk: Some(idsk1),
-        cache_path: None,
+        db_path: {
+            let mut path = tempfile::tempdir().unwrap().into_path();
+            path.push(idsk1.public().fingerprint().to_string());
+            path
+        },
     });
 
-    let node2 = LinkNode::new(LinkConfig {
+    let client = LinkNode::new(LinkConfig {
         in_routes: in_2,
         out_routes: out_2,
         my_idsk: None,
-        cache_path: None,
+        db_path: {
+            let mut path = tempfile::tempdir().unwrap().into_path();
+            path.push(
+                RelayIdentitySecret::generate()
+                    .public()
+                    .fingerprint()
+                    .to_string(),
+            );
+            path
+        },
     });
 
-    (node1, node2)
+    (relay, client)
 }
 
 pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
@@ -906,25 +871,41 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
         in_routes: in_1,
         out_routes: BTreeMap::new(),
         my_idsk: Some(idsk1),
-        cache_path: None,
+        db_path: {
+            let mut path = tempfile::tempdir().unwrap().into_path();
+            path.push(idsk1.public().fingerprint().to_string());
+            path
+        },
     });
     let node2 = LinkNode::new(LinkConfig {
         in_routes: in_2,
         out_routes: out_2,
         my_idsk: Some(idsk2),
-        cache_path: None,
+        db_path: {
+            let mut path = tempfile::tempdir().unwrap().into_path();
+            path.push(idsk2.public().fingerprint().to_string());
+            path
+        },
     });
     let node3 = LinkNode::new(LinkConfig {
         in_routes: in_3,
         out_routes: out_3,
         my_idsk: Some(idsk3),
-        cache_path: None,
+        db_path: {
+            let mut path = tempfile::tempdir().unwrap().into_path();
+            path.push(idsk3.public().fingerprint().to_string());
+            path
+        },
     });
     let node4 = LinkNode::new(LinkConfig {
         in_routes: in_4,
         out_routes: out_4,
         my_idsk: Some(idsk4),
-        cache_path: None,
+        db_path: {
+            let mut path = tempfile::tempdir().unwrap().into_path();
+            path.push(idsk4.public().fingerprint().to_string());
+            path
+        },
     });
 
     (node1, node2, node3, node4)
