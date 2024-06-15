@@ -32,6 +32,7 @@ impl Node {
         let link = LinkNode::new(LinkConfig {
             in_routes: config.in_routes.clone(),
             out_routes: config.out_routes.clone(),
+            payment_methods: config.payment_methods.clone(),
             my_idsk: if let Some(id) = config.identity {
                 Some(id.actualize_relay()?)
             } else {

@@ -30,7 +30,7 @@ stdcode = "0.1.14"
 log = "0.4.20"
 
 nanorpc = "0.1.12"
-async-trait = "0.1.73"
+async-trait = "0.1.80"
 bytes = "1.5.0"
 blake3 = "1.5.0"
  

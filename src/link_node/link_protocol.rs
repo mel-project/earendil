@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use super::settlement::{Seed, SettlementRequest, SettlementResponse};
+use super::payment_dest::PaymentMethod;
 
 #[nanorpc_derive]
 #[async_trait]
@@ -28,14 +28,22 @@ pub trait LinkProtocol {
     /// Gets all the adjacency-descriptors adjacent to the given fingerprints. This is called repeatedly to eventually discover the entire graph.
     async fn adjacencies(&self, fps: Vec<RelayFingerprint>) -> Vec<AdjacencyDescriptor>;
 
-    /// Sends a settlement request and waits until a response is received or the call times out.
-    async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse>;
-
     /// Send a chat message to the other end of the link.
     async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr>;
 
-    /// Request a MelPoW seed (used to create an automatic payment proof).
-    async fn request_seed(&self) -> Option<Seed>;
+    /// Sends a price update to the other end of the link.
+    async fn push_price(
+        &self,
+        price: u64,
+        debt_limit: u64,
+        method: Vec<PaymentMethod>,
+    ) -> Result<(), LinkRpcErr>;
+
+    // /// Sends a settlement request and waits until a response is received or the call times out.
+    // async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse>;
+
+    // /// Request a MelPoW seed (used to create an automatic payment proof).
+    // async fn request_seed(&self) -> Option<Seed>;
 }
 
 /// Response to an authentication challenge.
@@ -59,4 +67,10 @@ pub struct InfoResponse {
 pub enum LinkRpcErr {
     #[error("push chat failed")]
     PushChatFailed,
+    #[error("out_route side cannot push price to in_route side!")]
+    PushPriceInvalidDirection,
+    #[error("price is too high")]
+    PriceTooHigh,
+    #[error("no supported payment method")]
+    NoSupportedPaymentMethod,
 }

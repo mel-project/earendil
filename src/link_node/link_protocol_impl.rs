@@ -12,16 +12,16 @@ use crate::ChatEntry;
 
 use super::{
     link_protocol::{InfoResponse, LinkProtocol, LinkRpcErr},
-    settlement::{Seed, SettlementRequest, SettlementResponse},
+    payment_dest::{DummyPayDest, PaymentMethod},
     types::NeighborId,
-    LinkNodeCtx,
+    LinkNodeCtx, RouteConfig,
 };
 
 pub struct LinkProtocolImpl {
     pub ctx: LinkNodeCtx,
-
     pub remote_client_id: ClientId,
     pub remote_relay_fp: Option<RelayFingerprint>,
+    pub route_config: RouteConfig,
 }
 
 #[async_trait]
@@ -79,11 +79,6 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn start_settlement(&self, _req: SettlementRequest) -> Option<SettlementResponse> {
-        todo!()
-    }
-
-    #[tracing::instrument(skip(self))]
     async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr> {
         let neigh = match self.remote_relay_fp {
             Some(remote_relay_fp) => NeighborId::Relay(remote_relay_fp),
@@ -104,8 +99,50 @@ impl LinkProtocol for LinkProtocolImpl {
             .map_err(|_| LinkRpcErr::PushChatFailed)
     }
 
-    #[tracing::instrument(skip(self))]
-    async fn request_seed(&self) -> Option<Seed> {
-        todo!()
+    async fn push_price(
+        &self,
+        price: u64,
+        debt_limit: u64,
+        methods: Vec<PaymentMethod>,
+    ) -> Result<(), LinkRpcErr> {
+        match self.route_config.clone() {
+            RouteConfig::Out(config) => {
+                // check if price < our max_price
+                if price < config.max_price {
+                    // check if any of our pay_methods ∈ their supported methods
+                    let my_pay_methods = self.ctx.cfg.payment_methods.clone();
+                    for my_pay_method in my_pay_methods.get_available() {
+                        if methods.contains(&my_pay_method) {
+                            // construct impl PaymentDestination & save to link
+                            match my_pay_method {
+                                PaymentMethod::Dummy => {
+                                    let secret = my_pay_methods.dummy.unwrap(); // we're sure it's available
+                                    let pay_dest = Box::new(DummyPayDest { secret });
+                                    self.ctx.pay_dest_table.insert(
+                                        self.remote_relay_fp.unwrap(), // remote of outgoing link is always a relay
+                                        (debt_limit, pay_dest),
+                                    );
+                                }
+                            }
+                            return Ok(());
+                        }
+                    }
+                    return Err(LinkRpcErr::NoSupportedPaymentMethod);
+                } else {
+                    return Err(LinkRpcErr::PriceTooHigh);
+                }
+            }
+            RouteConfig::In(_) => return Err(LinkRpcErr::PushPriceInvalidDirection),
+        }
     }
+
+    // #[tracing::instrument(skip(self))]
+    // async fn request_seed(&self) -> Option<Seed> {
+    //     todo!()
+    // }
+
+    // #[tracing::instrument(skip(self))]
+    // async fn start_settlement(&self, _req: SettlementRequest) -> Option<SettlementResponse> {
+    //     todo!()
+    // }
 }

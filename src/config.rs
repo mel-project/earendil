@@ -8,6 +8,8 @@ use serde_with::serde_as;
 use std::fs::OpenOptions;
 use tracing::instrument;
 
+use crate::PaymentMethods;
+
 /// A YAML-serializable configuration file
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -32,8 +34,7 @@ pub struct ConfigFile {
     #[serde(default)]
     pub out_routes: BTreeMap<String, OutRouteConfig>,
 
-    /// Contains the automatic settlement difficulty if accepted
-    pub auto_settle: Option<AutoSettle>,
+    pub payment_methods: PaymentMethods,
 
     /// List of all client configs for udp forwarding
     #[serde(default)]
@@ -62,6 +63,10 @@ fn default_control_listen() -> SocketAddr {
 pub struct InRouteConfig {
     pub listen: SocketAddr,
     pub obfs: ObfsConfig,
+    /// price, in micromel
+    pub price: u64,
+    /// debt limit, in micromel
+    pub debt_limit: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -78,6 +83,13 @@ pub struct OutRouteConfig {
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub fingerprint: RelayFingerprint,
     pub obfs: ObfsConfig,
+    /// max accepted price, in micromel
+    pub max_price: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum AcceptPaymentMethod {
+    Dummy(String),
 }
 
 #[serde_as]
@@ -217,18 +229,4 @@ impl Identity {
             }
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
-pub struct LinkPrice {
-    /// in micromel
-    pub max_outgoing_price: u64,
-    pub incoming_price: u64,
-    pub incoming_debt_limit: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy)]
-pub struct AutoSettle {
-    /// number of seconds in between settlements
-    pub interval: u64,
 }
