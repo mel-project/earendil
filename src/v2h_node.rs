@@ -22,6 +22,7 @@ use stdcode::StdcodeSerializeExt;
 use crate::{
     n2r_node::N2rNode,
     v2h_node::vrh::{H2rMessage, R2hMessage},
+    LinkNode,
 };
 
 pub use self::packet_conn::HavenListener;
@@ -100,6 +101,10 @@ impl V2hNode {
         Ok(PooledListener::new(
             self.packet_listen(identity, port, rendezvous).await?,
         ))
+    }
+
+    pub fn link_node(&self) -> &LinkNode {
+        &self.ctx.n2r.link_node()
     }
 }
 
