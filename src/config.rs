@@ -64,9 +64,9 @@ pub struct InRouteConfig {
     pub listen: SocketAddr,
     pub obfs: ObfsConfig,
     /// price, in micromel
-    pub price: u64,
+    pub price: i64,
     /// debt limit, in micromel
-    pub debt_limit: u64,
+    pub debt_limit: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -84,7 +84,7 @@ pub struct OutRouteConfig {
     pub fingerprint: RelayFingerprint,
     pub obfs: ObfsConfig,
     /// max accepted price, in micromel
-    pub max_price: u64,
+    pub max_price: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

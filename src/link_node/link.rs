@@ -2,7 +2,7 @@ use std::{ops::DerefMut, sync::Arc};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use earendil_crypt::RelayFingerprint;
+use earendil_crypt::{RelayFingerprint};
 use futures::{
     io::{ReadHalf, WriteHalf},
     AsyncBufReadExt,
@@ -15,24 +15,41 @@ use serde::{Deserialize, Serialize};
 use smol::io::{AsyncWriteExt, BufReader};
 use stdcode::StdcodeSerializeExt;
 
-use crate::pascal::{read_pascal, write_pascal};
+use crate::{
+    config::{InRouteConfig, OutRouteConfig},
+    pascal::{read_pascal, write_pascal},
+    LinkStore, PaymentMethods,
+};
 
 const LABEL_RPC: &[u8] = b"!rpc";
 
 /// Link represents a link to a neighbor, either client or relay.
 ///
 /// This presents a self-contained abstraction that does not depend on anything "global" in the context
-#[derive(Clone)]
+
 pub struct Link {
     mux: Arc<PicoMux>,
     read: Arc<smol::lock::Mutex<ReadHalf<picomux::Stream>>>,
     write: Arc<smol::lock::Mutex<WriteHalf<picomux::Stream>>>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct LinkPaymentInfo {
+    price: i64,
+    debt_limit: i64,
+    accepted_payment_methods: PaymentMethods,
+}
+
 impl Link {
     /// Constructs a link, given a picomux multiplex. We initialize the message stream.
-    pub async fn new_dial(mux: PicoMux) -> anyhow::Result<Self> {
-        let msg_stream = mux.open(b"").await?;
+    pub async fn new_dial(
+        mux: PicoMux,
+        outroute_config: OutRouteConfig,
+        store: Arc<LinkStore>,
+        payment_methods: PaymentMethods,
+    ) -> anyhow::Result<Self> {
+        let msg_stream = mux.accept().await?;
+
         let (read, write) = msg_stream.split();
         Ok(Link {
             mux: mux.into(),
@@ -42,8 +59,18 @@ impl Link {
     }
 
     /// Constructs a link, given a picomux multiplex. The other side initializes the message stream.
-    pub async fn new_listen(mux: PicoMux) -> anyhow::Result<Self> {
-        let msg_stream = mux.accept().await?;
+    pub async fn new_listen(
+        mux: PicoMux,
+        inroute_config: InRouteConfig,
+        store: Arc<LinkStore>,
+        payment_methods: PaymentMethods,
+    ) -> anyhow::Result<Self> {
+        let payment_info = LinkPaymentInfo {
+            price: inroute_config.price,
+            debt_limit: inroute_config.debt_limit,
+            accepted_payment_methods: payment_methods,
+        };
+        let msg_stream = mux.open(&serde_json::to_vec(&payment_info)?).await?;
         let (read, write) = msg_stream.split();
         Ok(Link {
             mux: mux.into(),

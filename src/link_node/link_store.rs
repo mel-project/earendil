@@ -134,4 +134,13 @@ impl LinkStore {
             .await?;
         Ok(result.map(|(val,)| val))
     }
+
+    pub async fn get_or_insert_misc(&self, key: &str, value: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+        if let Some(val) = self.get_misc(key).await? {
+            Ok(val)
+        } else {
+            self.insert_misc(key.to_string(), value.clone()).await?;
+            Ok(value)
+        }
+    }
 }

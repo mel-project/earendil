@@ -8,3 +8,5 @@ pub enum NeighborId {
     Relay(RelayFingerprint),
     Client(ClientId),
 }
+
+// TODO: impl Display for NeighborId

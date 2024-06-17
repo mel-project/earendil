@@ -8,8 +8,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use super::payment_dest::PaymentMethod;
-
 #[nanorpc_derive]
 #[async_trait]
 pub trait LinkProtocol {
@@ -30,14 +28,6 @@ pub trait LinkProtocol {
 
     /// Send a chat message to the other end of the link.
     async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr>;
-
-    /// Sends a price update to the other end of the link.
-    async fn push_price(
-        &self,
-        price: u64,
-        debt_limit: u64,
-        method: Vec<PaymentMethod>,
-    ) -> Result<(), LinkRpcErr>;
 
     // /// Sends a settlement request and waits until a response is received or the call times out.
     // async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse>;

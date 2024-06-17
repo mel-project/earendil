@@ -2,7 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 
-use earendil_crypt::{ClientId, RelayFingerprint};
+use earendil_crypt::RelayFingerprint;
 
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 
@@ -12,15 +12,13 @@ use crate::ChatEntry;
 
 use super::{
     link_protocol::{InfoResponse, LinkProtocol, LinkRpcErr},
-    payment_dest::{DummyPayDest, PaymentMethod},
     types::NeighborId,
     LinkNodeCtx, RouteConfig,
 };
 
 pub struct LinkProtocolImpl {
     pub ctx: LinkNodeCtx,
-    pub remote_client_id: ClientId,
-    pub remote_relay_fp: Option<RelayFingerprint>,
+    pub remote_id: NeighborId,
     pub route_config: RouteConfig,
 }
 
@@ -80,10 +78,6 @@ impl LinkProtocol for LinkProtocolImpl {
 
     #[tracing::instrument(skip(self))]
     async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr> {
-        let neigh = match self.remote_relay_fp {
-            Some(remote_relay_fp) => NeighborId::Relay(remote_relay_fp),
-            None => NeighborId::Client(self.remote_client_id),
-        };
         let chat_entry = ChatEntry {
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -94,46 +88,9 @@ impl LinkProtocol for LinkProtocolImpl {
         };
         self.ctx
             .store
-            .insert_chat_entry(neigh, chat_entry)
+            .insert_chat_entry(self.remote_id, chat_entry)
             .await
             .map_err(|_| LinkRpcErr::PushChatFailed)
-    }
-
-    async fn push_price(
-        &self,
-        price: u64,
-        debt_limit: u64,
-        methods: Vec<PaymentMethod>,
-    ) -> Result<(), LinkRpcErr> {
-        match self.route_config.clone() {
-            RouteConfig::Out(config) => {
-                // check if price < our max_price
-                if price < config.max_price {
-                    // check if any of our pay_methods ∈ their supported methods
-                    let my_pay_methods = self.ctx.cfg.payment_methods.clone();
-                    for my_pay_method in my_pay_methods.get_available() {
-                        if methods.contains(&my_pay_method) {
-                            // construct impl PaymentDestination & save to link
-                            match my_pay_method {
-                                PaymentMethod::Dummy => {
-                                    let secret = my_pay_methods.dummy.unwrap(); // we're sure it's available
-                                    let pay_dest = Box::new(DummyPayDest { secret });
-                                    self.ctx.pay_dest_table.insert(
-                                        self.remote_relay_fp.unwrap(), // remote of outgoing link is always a relay
-                                        (debt_limit, pay_dest),
-                                    );
-                                }
-                            }
-                            return Ok(());
-                        }
-                    }
-                    return Err(LinkRpcErr::NoSupportedPaymentMethod);
-                } else {
-                    return Err(LinkRpcErr::PriceTooHigh);
-                }
-            }
-            RouteConfig::In(_) => return Err(LinkRpcErr::PushPriceInvalidDirection),
-        }
     }
 
     // #[tracing::instrument(skip(self))]

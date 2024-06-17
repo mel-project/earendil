@@ -34,17 +34,15 @@ impl PaymentMethods {
     }
 }
 
-pub struct DummyPayDest {
-    pub secret: String,
-}
+pub struct DummyPayDest;
 
 #[async_trait]
 impl PaymentDestination for DummyPayDest {
     async fn pay(&self, amount: u64) -> anyhow::Result<Proof> {
-        Ok(self.secret.clone())
+        Ok("dummy".to_string())
     }
 
     async fn verify_proof(&self, proof: Proof) -> anyhow::Result<bool> {
-        Ok(self.secret == proof)
+        Ok(proof == *"dummy")
     }
 }
