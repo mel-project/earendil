@@ -21,7 +21,7 @@ pub enum PaymentMethod {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PaymentMethods {
-    pub dummy: Option<String>,
+    pub dummy: Option<()>,
 }
 
 impl PaymentMethods {

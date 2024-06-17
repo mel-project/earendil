@@ -14,11 +14,7 @@ use crate::PaymentMethods;
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigFile {
-    /// Seed of the long-term identity. Must be long and difficult to guess!
-    ///
-    /// If this is not provided, then we default to randomly creating an identity.
-    #[serde(flatten)]
-    pub identity: Option<Identity>,
+    pub relay_config: Option<RelayConfig>,
 
     /// Path to database file.
     pub db_path: Option<PathBuf>,
@@ -27,9 +23,6 @@ pub struct ConfigFile {
     #[serde(default = "default_control_listen")]
     pub control_listen: SocketAddr,
 
-    /// List of all listeners for incoming connections
-    #[serde(default)]
-    pub in_routes: BTreeMap<String, InRouteConfig>,
     /// List of all outgoing connections
     #[serde(default)]
     pub out_routes: BTreeMap<String, OutRouteConfig>,
@@ -51,7 +44,7 @@ pub struct ConfigFile {
 
 impl ConfigFile {
     pub fn is_client(&self) -> bool {
-        self.identity.is_none()
+        self.relay_config.is_none()
     }
 }
 
@@ -60,13 +53,21 @@ fn default_control_listen() -> SocketAddr {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RelayConfig {
+    /// Seed of the long-term identity. Must be long and difficult to guess!
+    #[serde(flatten)]
+    pub identity: Identity,
+
+    /// List of all listeners for incoming connections
+    #[serde(default)]
+    pub in_routes: BTreeMap<String, InRouteConfig>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InRouteConfig {
     pub listen: SocketAddr,
     pub obfs: ObfsConfig,
-    /// price, in micromel
-    pub price: i64,
-    /// debt limit, in micromel
-    pub debt_limit: i64,
+    pub price_config: PriceConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -83,8 +84,18 @@ pub struct OutRouteConfig {
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub fingerprint: RelayFingerprint,
     pub obfs: ObfsConfig,
+    pub price_config: PriceConfig,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PriceConfig {
+    /// price, in micromel
+    pub inbound_price: i64,
+    /// debt limit, in micromel
+    pub inbound_debt_limit: i64,
     /// max accepted price, in micromel
-    pub max_price: i64,
+    pub outbound_max_price: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

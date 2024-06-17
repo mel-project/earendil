@@ -40,28 +40,37 @@ const HAVEN_FORWARD_DOCK: u32 = 100002;
 pub struct V2hNode {
     ctx: V2hNodeCtx,
 
-    _rpc_server: Immortal,
-    _rendezvous_forward: Immortal,
+    _rpc_server: Option<Immortal>,
+    _rendezvous_forward: Option<Immortal>,
 }
 
 impl V2hNode {
-    pub fn new(n2r: N2rNode, _cfg: V2hConfig) -> Self {
+    pub fn new(n2r: N2rNode, cfg: V2hConfig) -> Self {
         let ctx = V2hNodeCtx {
             n2r: n2r.into(),
             registered_havens: Bicache::new(1000).into(),
         };
-        let rpc_server = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || serve_rpc(ctx.clone()).inspect_err(
-                |e| tracing::error!(err = debug(e), "GlobalRPC serving restarted")
-            )),
-        );
-        let rendezvous_forward = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || rendezvous_forward(ctx.clone()).inspect_err(
-                |e| tracing::error!(err = debug(e), "rendezvous forwarding restarted")
-            )),
-        );
+
+        let rpc_server = if cfg.is_relay {
+            Some(Immortal::respawn(
+                RespawnStrategy::Immediate,
+                clone!([ctx], move || serve_rpc(ctx.clone()).inspect_err(
+                    |e| tracing::error!(err = debug(e), "GlobalRPC serving restarted")
+                )),
+            ))
+        } else {
+            None
+        };
+        let rendezvous_forward = if cfg.is_relay {
+            Some(Immortal::respawn(
+                RespawnStrategy::Immediate,
+                clone!([ctx], move || rendezvous_forward(ctx.clone()).inspect_err(
+                    |e| tracing::error!(err = debug(e), "rendezvous forwarding restarted")
+                )),
+            ))
+        } else {
+            None
+        };
         Self {
             ctx,
             _rpc_server: rpc_server,
@@ -192,4 +201,6 @@ struct V2hNodeCtx {
     registered_havens: Arc<Bicache<AnonEndpoint, HavenFingerprint>>,
 }
 
-pub struct V2hConfig {}
+pub struct V2hConfig {
+    pub is_relay: bool,
+}

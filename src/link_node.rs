@@ -48,7 +48,7 @@ use stdcode::StdcodeSerializeExt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::{
-    config::{InRouteConfig, ObfsConfig, OutRouteConfig},
+    config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
     link_node::route_util::{forward_route_to, one_hop_closer, route_to_instructs},
     pascal::{read_pascal, write_pascal},
 };
@@ -85,7 +85,7 @@ impl LinkNode {
             Some(graph) => graph,
             None => RelayGraph::new(),
         };
-        let my_id = if let Some(idsk) = cfg.my_idsk {
+        let my_id = if let Some((idsk, _)) = cfg.relay_config.clone() {
             LinkNodeId::Relay(idsk)
         } else {
             // I am a client with a persistent ClientId
@@ -166,20 +166,17 @@ impl LinkNode {
 
     /// Sends a "backwards" packet, which consumes a reply block.
     pub async fn send_backwards(&self, reply_block: Surb, message: Message) -> anyhow::Result<()> {
-        let packet = RawPacket::new_reply(
-            &reply_block,
-            InnerPacket::Message(message.clone()),
-            &RemoteId::Relay(
-                self.ctx
-                    .cfg
-                    .my_idsk
-                    .context("we must be a relay to send backwards packets")?
-                    .public()
-                    .fingerprint(),
-            ),
-        )?;
-        self.send_raw(packet, reply_block.first_peeler).await;
-        Ok(())
+        if let LinkNodeId::Relay(my_idsk) = self.ctx.my_id {
+            let packet = RawPacket::new_reply(
+                &reply_block,
+                InnerPacket::Message(message.clone()),
+                &RemoteId::Relay(my_idsk.public().fingerprint()),
+            )?;
+            self.send_raw(packet, reply_block.first_peeler).await;
+            Ok(())
+        } else {
+            anyhow::bail!("we must be a relay to send backwards packets")
+        }
     }
 
     /// Constructs a reply block back from the given relay.
@@ -188,8 +185,8 @@ impl LinkNode {
         my_anon_id: AnonEndpoint,
         _remote: RelayFingerprint, // will use in the future for finding more efficient routes
     ) -> anyhow::Result<(Surb, u64, ReplyDegarbler)> {
-        let destination = if let Some(my_relay) = self.ctx.cfg.my_idsk {
-            my_relay.public().fingerprint()
+        let destination = if let LinkNodeId::Relay(my_idsk) = self.ctx.my_id {
+            my_idsk.public().fingerprint()
         } else {
             let mut lala = self.ctx.cfg.out_routes.values().collect_vec();
             lala.shuffle(&mut rand::thread_rng());
@@ -293,7 +290,7 @@ struct LinkNodeCtx {
     my_id: LinkNodeId,
     my_onion_sk: DhSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
-    link_table: Arc<DashMap<NeighborId, Arc<Link>>>,
+    link_table: Arc<DashMap<NeighborId, Arc<Link>>>, // put PaymentDestination + price info into this table
     pay_dest_table:
         Arc<DashMap<RelayFingerprint, (i64, Box<dyn PaymentDestination + Send + Sync>)>>,
     store: Arc<LinkStore>,
@@ -307,11 +304,12 @@ async fn link_node_loop(
     send_incoming: Sender<IncomingMsg>,
 ) -> anyhow::Result<()> {
     // ----------------------- helper closures ------------------------
+    let link_node_ctx_clone = link_node_ctx.clone();
     let send_to_nonself_next_peeler =
         |emit_time: Option<Instant>, next_peeler: RelayFingerprint, pkt: RawPacket| {
             let closer_hop = {
-                let graph = link_node_ctx.relay_graph.read();
-                let my_neighs = link_node_ctx
+                let graph = link_node_ctx_clone.relay_graph.read();
+                let my_neighs = link_node_ctx_clone
                     .link_table
                     .iter()
                     .map(|p| *p.key())
@@ -323,7 +321,7 @@ async fn link_node_loop(
                 one_hop_closer(&my_neighs, &graph, next_peeler)?
             };
             tracing::trace!("sending peeled packet to nonself next_peeler = {next_peeler}");
-            let link = link_node_ctx
+            let link = link_node_ctx_clone
                 .link_table
                 .get(&NeighborId::Relay(closer_hop))
                 .context("cannot find closer hop")?
@@ -374,8 +372,8 @@ async fn link_node_loop(
     let save_relay_graph_loop = async {
         loop {
             // println!("syncing DB...");
-            let relay_graph = link_node_ctx.relay_graph.read().stdcode();
-            match link_node_ctx
+            let relay_graph = link_node_ctx_clone.relay_graph.read().stdcode();
+            match link_node_ctx_clone
                 .store
                 .insert_misc("relay_graph".to_string(), relay_graph)
                 .await
@@ -388,12 +386,17 @@ async fn link_node_loop(
     };
 
     let out_task = async {
-        if link_node_ctx.cfg.out_routes.is_empty() {
+        if link_node_ctx_clone.cfg.out_routes.is_empty() {
             smol::future::pending().await
         } else {
-            futures_util::future::try_join_all(link_node_ctx.cfg.out_routes.iter().map(
+            futures_util::future::try_join_all(link_node_ctx_clone.cfg.out_routes.iter().map(
                 |(name, out_route)| {
-                    process_out_route(link_node_ctx.clone(), name, out_route, send_raw.clone())
+                    process_out_route(
+                        link_node_ctx_clone.clone(),
+                        name,
+                        out_route,
+                        send_raw.clone(),
+                    )
                 },
             ))
             .await
@@ -402,35 +405,39 @@ async fn link_node_loop(
 
     // ----------------------- relay-only loops ------------------------
     let relay_or_client_task = async {
-        if let Some(my_idsk) = link_node_ctx.cfg.my_idsk {
+        if let LinkNodeId::Relay(my_idsk) = link_node_ctx.my_id {
             let identity_refresh_loop = async {
-                if let Some(my_idsk) = link_node_ctx.cfg.my_idsk {
-                    loop {
-                        // println!("WE ARE INSERTING OURSELVES");
-                        let myself = IdentityDescriptor::new(&my_idsk, &link_node_ctx.my_onion_sk);
-                        link_node_ctx.relay_graph.write().insert_identity(myself)?;
-                        smol::Timer::after(Duration::from_secs(1)).await;
-                    }
-                } else {
-                    smol::future::pending().await
+                loop {
+                    // println!("WE ARE INSERTING OURSELVES");
+                    let myself =
+                        IdentityDescriptor::new(&my_idsk, &link_node_ctx_clone.my_onion_sk);
+                    link_node_ctx_clone
+                        .relay_graph
+                        .write()
+                        .insert_identity(myself)?;
+                    smol::Timer::after(Duration::from_secs(1)).await;
                 }
             };
 
             let in_task = async {
-                if link_node_ctx.cfg.in_routes.is_empty() {
-                    smol::future::pending().await
+                if let Some((_, in_routes)) = link_node_ctx.cfg.relay_config.clone() {
+                    if !in_routes.is_empty() {
+                        futures_util::future::try_join_all(in_routes.iter().map(
+                            |(name, in_route)| {
+                                process_in_route(
+                                    link_node_ctx.clone(),
+                                    name,
+                                    in_route,
+                                    send_raw.clone(),
+                                )
+                            },
+                        ))
+                        .await
+                    } else {
+                        smol::future::pending().await
+                    }
                 } else {
-                    futures_util::future::try_join_all(link_node_ctx.cfg.in_routes.iter().map(
-                        |(name, in_route)| {
-                            process_in_route(
-                                link_node_ctx.clone(),
-                                name,
-                                in_route,
-                                send_raw.clone(),
-                            )
-                        },
-                    ))
-                    .await
+                    smol::future::pending().await
                 }
             };
 
@@ -444,7 +451,7 @@ async fn link_node_loop(
                             } => {
                                 tracing::trace!(
                                     "{:?} received incoming linkmsg ToRelay. next_peeler = {next_peeler}",
-                                    link_node_ctx.cfg.my_idsk.map(|idsk| idsk.public().fingerprint())
+                                    my_idsk.public().fingerprint()
                                 );
                                 let packet: &RawPacket = bytemuck::try_from_bytes(&packet)
                                     .ok()
@@ -746,24 +753,8 @@ async fn handle_pipe(
 ) -> anyhow::Result<()> {
     let (mux, their_descr) = pipe_to_mux(&link_node_ctx, pipe).await?;
     let link = Arc::new(match route_config.clone() {
-        RouteConfig::Out(config) => {
-            Link::new_dial(
-                mux,
-                config,
-                link_node_ctx.store.clone(),
-                link_node_ctx.cfg.payment_methods.clone(),
-            )
-            .await?
-        }
-        RouteConfig::In(config) => {
-            Link::new_listen(
-                mux,
-                config,
-                link_node_ctx.store.clone(),
-                link_node_ctx.cfg.payment_methods.clone(),
-            )
-            .await?
-        }
+        RouteConfig::Out(config) => Link::new_dial(mux).await?,
+        RouteConfig::In(config) => Link::new_listen(mux).await?,
     });
 
     // insert as either client or relay
@@ -799,7 +790,6 @@ async fn handle_pipe(
     let rpc_serve_loop = link.rpc_serve(LinkService(LinkProtocolImpl {
         ctx: link_node_ctx.clone(),
         remote_id: their_id,
-        route_config: route_config.clone(),
     }));
 
     // let route_config_clone = route_config.clone();
@@ -893,10 +883,9 @@ async fn pipe_to_mux(
 
 #[derive(Clone, Debug)]
 pub struct LinkConfig {
-    pub in_routes: BTreeMap<String, InRouteConfig>,
+    pub relay_config: Option<(RelayIdentitySecret, BTreeMap<String, InRouteConfig>)>,
     pub out_routes: BTreeMap<String, OutRouteConfig>,
     pub payment_methods: PaymentMethods,
-    pub my_idsk: Option<RelayIdentitySecret>,
     pub db_path: PathBuf,
 }
 
@@ -908,8 +897,11 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
         InRouteConfig {
             listen: "127.0.0.1:30000".parse().unwrap(),
             obfs: ObfsConfig::None,
-            price: 5,
-            debt_limit: 500,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
 
@@ -920,8 +912,11 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
         InRouteConfig {
             listen: "127.0.0.1:30001".parse().unwrap(),
             obfs: ObfsConfig::None,
-            price: 5,
-            debt_limit: 500,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
     let mut out_2 = BTreeMap::new();
@@ -931,36 +926,34 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
             connect: "127.0.0.1:30000".parse().unwrap(),
             fingerprint: idsk1.public().fingerprint(),
             obfs: ObfsConfig::None,
-            max_price: 10,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
 
     let node1 = LinkNode::new(LinkConfig {
-        in_routes: in_1,
+        relay_config: Some((idsk1, in_1)),
         out_routes: BTreeMap::new(),
-        my_idsk: Some(idsk1),
         db_path: {
             let mut path = tempfile::tempdir().unwrap().into_path();
             path.push(idsk1.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods {
-            dummy: Some("dummy".to_string()),
-        },
+        payment_methods: PaymentMethods { dummy: Some(()) },
     });
 
     let node2 = LinkNode::new(LinkConfig {
-        in_routes: in_2,
+        relay_config: Some((idsk2, in_2)),
         out_routes: out_2,
-        my_idsk: Some(idsk2),
         db_path: {
             let mut path = tempfile::tempdir().unwrap().into_path();
             path.push(idsk2.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods {
-            dummy: Some("dummy".to_string()),
-        },
+        payment_methods: PaymentMethods { dummy: Some(()) },
     });
 
     (node1, node2)
@@ -986,8 +979,11 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
         InRouteConfig {
             listen: "127.0.0.1:30000".parse().unwrap(),
             obfs: ObfsConfig::None,
-            price: 5,
-            debt_limit: 500,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
 
@@ -998,28 +994,28 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
             connect: "127.0.0.1:30000".parse().unwrap(),
             fingerprint: idsk1.public().fingerprint(),
             obfs: ObfsConfig::None,
-            max_price: 10,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
 
     let relay = LinkNode::new(LinkConfig {
-        in_routes: in_1,
+        relay_config: Some((idsk1, in_1)),
         out_routes: BTreeMap::new(),
-        my_idsk: Some(idsk1),
         db_path: {
             let mut path = tempfile::tempdir().unwrap().into_path();
             path.push(idsk1.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods {
-            dummy: Some("dummy".to_string()),
-        },
+        payment_methods: PaymentMethods { dummy: Some(()) },
     });
 
     let client = LinkNode::new(LinkConfig {
-        in_routes: BTreeMap::new(),
+        relay_config: None,
         out_routes: out_2,
-        my_idsk: None,
         db_path: {
             let mut path = tempfile::tempdir().unwrap().into_path();
             path.push(
@@ -1030,9 +1026,7 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
             );
             path
         },
-        payment_methods: PaymentMethods {
-            dummy: Some("dummy".to_string()),
-        },
+        payment_methods: PaymentMethods { dummy: Some(()) },
     });
 
     (relay, client)
@@ -1046,8 +1040,11 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
         InRouteConfig {
             listen: "127.0.0.1:30000".parse().unwrap(),
             obfs: ObfsConfig::None,
-            price: 5,
-            debt_limit: 500,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
 
@@ -1058,8 +1055,11 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
         InRouteConfig {
             listen: "127.0.0.1:30001".parse().unwrap(),
             obfs: ObfsConfig::None,
-            price: 5,
-            debt_limit: 500,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
     let mut out_2 = BTreeMap::new();
@@ -1069,7 +1069,11 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
             connect: "127.0.0.1:30000".parse().unwrap(),
             fingerprint: idsk1.public().fingerprint(),
             obfs: ObfsConfig::None,
-            max_price: 10,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
 
@@ -1080,8 +1084,11 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
         InRouteConfig {
             listen: "127.0.0.1:30002".parse().unwrap(),
             obfs: ObfsConfig::None,
-            price: 5,
-            debt_limit: 500,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
     let mut out_3 = BTreeMap::new();
@@ -1091,7 +1098,11 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
             connect: "127.0.0.1:30001".parse().unwrap(),
             fingerprint: idsk1.public().fingerprint(),
             obfs: ObfsConfig::None,
-            max_price: 10,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
     let idsk4 = RelayIdentitySecret::generate();
@@ -1101,8 +1112,11 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
         InRouteConfig {
             listen: "127.0.0.1:30003".parse().unwrap(),
             obfs: ObfsConfig::None,
-            price: 5,
-            debt_limit: 500,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
     let mut out_4 = BTreeMap::new();
@@ -1112,61 +1126,53 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
             connect: "127.0.0.1:30002".parse().unwrap(),
             fingerprint: idsk1.public().fingerprint(),
             obfs: ObfsConfig::None,
-            max_price: 10,
+            price_config: PriceConfig {
+                inbound_price: 5,
+                inbound_debt_limit: 500,
+                outbound_max_price: 10,
+            },
         },
     );
 
     let node1 = LinkNode::new(LinkConfig {
-        in_routes: in_1,
+        relay_config: Some((idsk1, in_1)),
         out_routes: BTreeMap::new(),
-        my_idsk: Some(idsk1),
         db_path: {
             let mut path = tempfile::tempdir().unwrap().into_path();
             path.push(idsk1.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods {
-            dummy: Some("dummy".to_string()),
-        },
+        payment_methods: PaymentMethods { dummy: Some(()) },
     });
     let node2 = LinkNode::new(LinkConfig {
-        in_routes: in_2,
+        relay_config: Some((idsk2, in_2)),
         out_routes: out_2,
-        my_idsk: Some(idsk2),
         db_path: {
             let mut path = tempfile::tempdir().unwrap().into_path();
             path.push(idsk2.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods {
-            dummy: Some("dummy".to_string()),
-        },
+        payment_methods: PaymentMethods { dummy: Some(()) },
     });
     let node3 = LinkNode::new(LinkConfig {
-        in_routes: in_3,
+        relay_config: Some((idsk3, in_3)),
         out_routes: out_3,
-        my_idsk: Some(idsk3),
         db_path: {
             let mut path = tempfile::tempdir().unwrap().into_path();
             path.push(idsk3.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods {
-            dummy: Some("dummy".to_string()),
-        },
+        payment_methods: PaymentMethods { dummy: Some(()) },
     });
     let node4 = LinkNode::new(LinkConfig {
-        in_routes: in_4,
+        relay_config: Some((idsk4, in_4)),
         out_routes: out_4,
-        my_idsk: Some(idsk4),
         db_path: {
             let mut path = tempfile::tempdir().unwrap().into_path();
             path.push(idsk4.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods {
-            dummy: Some("dummy".to_string()),
-        },
+        payment_methods: PaymentMethods { dummy: Some(()) },
     });
 
     (node1, node2, node3, node4)
@@ -1179,7 +1185,7 @@ mod tests {
 
     #[test]
     fn two_relays_one_forward_pkt() {
-        init_tracing().unwrap();
+        let _ = init_tracing();
 
         let (node1, node2) = get_two_connected_relays();
         let pkt = InnerPacket::Message(Message {
@@ -1192,7 +1198,15 @@ mod tests {
                 .send_forward(
                     pkt.clone(),
                     AnonEndpoint::random(),
-                    node1.ctx.cfg.my_idsk.unwrap().public().fingerprint(), // we know node1 is a relay
+                    node1
+                        .ctx
+                        .cfg
+                        .relay_config
+                        .as_ref()
+                        .unwrap()
+                        .0
+                        .public()
+                        .fingerprint(), // we know node1 is a relay
                 )
                 .await
                 .unwrap();
@@ -1207,23 +1221,23 @@ mod tests {
 
     #[test]
     fn two_relays_one_backward_pkt() {
-        init_tracing().unwrap();
+        let _ = init_tracing();
 
         let (node1, node2) = get_two_connected_relays();
-        println!(
-            "node1 fp = {}",
-            node1.ctx.cfg.my_idsk.unwrap().public().fingerprint()
-        );
-        println!(
-            "node2 fp = {}",
-            node2.ctx.cfg.my_idsk.unwrap().public().fingerprint()
-        );
         smol::block_on(async {
             smol::Timer::after(Duration::from_secs(3)).await;
             let (surb_1to2, surb_id, degarbler) = node2
                 .surb_from(
                     AnonEndpoint::random(),
-                    node1.ctx.cfg.my_idsk.unwrap().public().fingerprint(),
+                    node1
+                        .ctx
+                        .cfg
+                        .relay_config
+                        .clone()
+                        .unwrap()
+                        .0
+                        .public()
+                        .fingerprint(),
                 )
                 .unwrap(); // we know that node1 is a relay
             println!("got surb");
@@ -1261,7 +1275,7 @@ mod tests {
 
     #[test]
     fn client_relay_one_forward_pkt() {
-        init_tracing().unwrap();
+        let _ = init_tracing();
 
         let (relay_node, client_node) = get_connected_relay_client();
         let pkt = InnerPacket::Message(Message {
@@ -1274,7 +1288,15 @@ mod tests {
                 .send_forward(
                     pkt.clone(),
                     AnonEndpoint::random(),
-                    relay_node.ctx.cfg.my_idsk.unwrap().public().fingerprint(), // we know node1 is a relay
+                    relay_node
+                        .ctx
+                        .cfg
+                        .relay_config
+                        .clone()
+                        .unwrap()
+                        .0
+                        .public()
+                        .fingerprint(), // we know node1 is a relay
                 )
                 .await
             {
@@ -1292,19 +1314,35 @@ mod tests {
 
     #[test]
     fn client_relay_one_backward_pkt() {
-        init_tracing().unwrap();
+        let _ = init_tracing();
 
         let (relay_node, client_node) = get_connected_relay_client();
         println!(
-            "node1 fp = {}",
-            relay_node.ctx.cfg.my_idsk.unwrap().public().fingerprint()
+            "relay_node fp = {}",
+            relay_node
+                .ctx
+                .cfg
+                .relay_config
+                .clone()
+                .unwrap()
+                .0
+                .public()
+                .fingerprint(),
         );
         smol::block_on(async {
             smol::Timer::after(Duration::from_secs(3)).await;
             let (surb_1to2, surb_id, degarbler) = client_node
                 .surb_from(
                     AnonEndpoint::random(),
-                    relay_node.ctx.cfg.my_idsk.unwrap().public().fingerprint(),
+                    relay_node
+                        .ctx
+                        .cfg
+                        .relay_config
+                        .clone()
+                        .unwrap()
+                        .0
+                        .public()
+                        .fingerprint(),
                 )
                 .unwrap(); // we know that node1 is a relay
             println!("got surb");
@@ -1342,7 +1380,7 @@ mod tests {
 
     #[test]
     fn four_relays_forward_pkt() {
-        init_tracing().unwrap();
+        let _ = init_tracing();
 
         let (node1, _node2, _node3, node4) = get_four_connected_relays();
         let pkt = InnerPacket::Message(Message {
@@ -1355,7 +1393,15 @@ mod tests {
                 .send_forward(
                     pkt.clone(),
                     AnonEndpoint::random(),
-                    node1.ctx.cfg.my_idsk.unwrap().public().fingerprint(), // we know node1 is a relay
+                    node1
+                        .ctx
+                        .cfg
+                        .relay_config
+                        .clone()
+                        .unwrap()
+                        .0
+                        .public()
+                        .fingerprint(), // we know node1 is a relay
                 )
                 .await
                 .unwrap();
@@ -1370,7 +1416,7 @@ mod tests {
 
     #[test]
     fn two_relays_one_chat() {
-        init_tracing().unwrap();
+        let _ = init_tracing();
 
         let (node1, node2) = get_two_connected_relays();
         smol::block_on(async {
@@ -1378,7 +1424,17 @@ mod tests {
             let chat_msg = "hi test".to_string();
             node2
                 .send_chat(
-                    NeighborId::Relay(node1.ctx.cfg.my_idsk.unwrap().public().fingerprint()), // we know node1 is a relay
+                    NeighborId::Relay(
+                        node1
+                            .ctx
+                            .cfg
+                            .relay_config
+                            .clone()
+                            .unwrap()
+                            .0
+                            .public()
+                            .fingerprint(),
+                    ), // we know node1 is a relay
                     chat_msg.clone(),
                 )
                 .await
@@ -1388,7 +1444,15 @@ mod tests {
 
             let node1_chat_hist = node1
                 .get_chat_history(NeighborId::Relay(
-                    node2.ctx.cfg.my_idsk.unwrap().public().fingerprint(),
+                    node2
+                        .ctx
+                        .cfg
+                        .relay_config
+                        .clone()
+                        .unwrap()
+                        .0
+                        .public()
+                        .fingerprint(),
                 ))
                 .await
                 .unwrap();

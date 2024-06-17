@@ -15,7 +15,7 @@ use socksv5::v5::{
 };
 
 use crate::{
-    config::{ConfigFile, HavenConfig, HavenHandler, Socks5Config, Socks5Fallback},
+    config::{ConfigFile, HavenConfig, HavenHandler, RelayConfig, Socks5Config, Socks5Fallback},
     link_node::{LinkConfig, LinkNode},
     n2r_node::{N2rConfig, N2rNode},
     v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, V2hConfig, V2hNode},
@@ -30,14 +30,14 @@ pub struct Node {
 impl Node {
     pub fn new(config: ConfigFile) -> anyhow::Result<Self> {
         let link = LinkNode::new(LinkConfig {
-            in_routes: config.in_routes.clone(),
+            relay_config: config.relay_config.clone().map(
+                |RelayConfig {
+                     identity,
+                     in_routes,
+                 }| (identity.actualize_relay().unwrap(), in_routes),
+            ),
             out_routes: config.out_routes.clone(),
             payment_methods: config.payment_methods.clone(),
-            my_idsk: if let Some(id) = config.identity {
-                Some(id.actualize_relay()?)
-            } else {
-                None
-            },
             db_path: config.db_path.unwrap_or_else(|| {
                 let mut data_dir = dirs::data_dir().unwrap();
                 data_dir.push("earendil-link-store.db");
@@ -45,7 +45,12 @@ impl Node {
             }),
         });
         let n2r = N2rNode::new(link, N2rConfig {});
-        let v2h = Arc::new(V2hNode::new(n2r, V2hConfig {}));
+        let v2h = Arc::new(V2hNode::new(
+            n2r,
+            V2hConfig {
+                is_relay: config.relay_config.is_some(),
+            },
+        ));
 
         // start loops for handling socks5, etc, etc
         let v2h_clone = v2h.clone();

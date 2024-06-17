@@ -13,13 +13,12 @@ use crate::ChatEntry;
 use super::{
     link_protocol::{InfoResponse, LinkProtocol, LinkRpcErr},
     types::NeighborId,
-    LinkNodeCtx, RouteConfig,
+    LinkNodeCtx,
 };
 
 pub struct LinkProtocolImpl {
     pub ctx: LinkNodeCtx,
     pub remote_id: NeighborId,
-    pub route_config: RouteConfig,
 }
 
 #[async_trait]
@@ -38,8 +37,10 @@ impl LinkProtocol for LinkProtocolImpl {
         let my_sk = self
             .ctx
             .cfg
-            .my_idsk
-            .expect("only relays have global identities");
+            .relay_config
+            .as_ref()
+            .expect("only relays have global identities")
+            .0;
         let my_fp = my_sk.public().fingerprint();
         // This must be a neighbor that is "left" of us
         let valid = left_incomplete.left < left_incomplete.right && left_incomplete.right == my_fp;

@@ -11,7 +11,7 @@ use rand::thread_rng;
 
 use crate::link_node::link_protocol::LinkClient;
 
-use super::{link::Link, LinkNodeCtx};
+use super::{link::Link, LinkNodeCtx, LinkNodeId};
 
 #[tracing::instrument(skip_all)]
 pub async fn gossip_once(
@@ -51,7 +51,7 @@ async fn sign_adjacency(
     link: &Link,
     remote_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
-    if let Some(my_sk) = ctx.cfg.my_idsk.as_ref() {
+    if let LinkNodeId::Relay(my_sk) = ctx.my_id {
         // tracing::trace!("signing adjacency...");
         let my_fp = my_sk.public().fingerprint();
         if my_fp < remote_fp {
@@ -92,8 +92,9 @@ async fn gossip_graph(ctx: &LinkNodeCtx, link: &Link) -> anyhow::Result<()> {
         let left_fp = adjacency.left;
         let right_fp = adjacency.right;
 
-        let ourselves = ctx.cfg.my_idsk;
-        let left_id = if ourselves.is_some() && ourselves.unwrap().public().fingerprint() == left_fp
+        let ourselves = ctx.cfg.relay_config.clone();
+        let left_id = if ourselves.is_some()
+            && ourselves.as_ref().unwrap().0.public().fingerprint() == left_fp
         {
             None
         } else {
@@ -101,7 +102,7 @@ async fn gossip_graph(ctx: &LinkNodeCtx, link: &Link) -> anyhow::Result<()> {
         };
 
         let right_id =
-            if ourselves.is_some() && ourselves.unwrap().public().fingerprint() == right_fp {
+            if ourselves.is_some() && ourselves.unwrap().0.public().fingerprint() == right_fp {
                 None
             } else {
                 LinkClient(link.rpc_transport()).identity(right_fp).await?
