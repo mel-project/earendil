@@ -33,7 +33,7 @@ impl N2rNode {
             relay_queues: Arc::new(DashMap::new()),
             rb_store: Arc::new(Mutex::new(ReplyBlockStore::new())),
             degarblers: Cache::builder()
-                .time_to_live(Duration::from_secs(60))
+                .time_to_live(Duration::from_secs(120))
                 .build(),
         };
         let task = Immortal::respawn(
@@ -121,6 +121,7 @@ impl N2rAnonSocket {
     pub async fn replenish_surb(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
         while *self.surb_counts.entry(fingerprint).or_insert(0) < 100 {
             *self.surb_counts.entry(fingerprint).or_insert(0) += 2;
+            *self.surb_counts.entry(fingerprint).or_insert(0) += 5;
             let surbs = (0..10)
                 .map(|_| {
                     let (rb, id, degarble) = self
