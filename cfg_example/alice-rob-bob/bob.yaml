@@ -13,6 +13,7 @@ relay_config:
         inbound_debt_limit: 0
         outbound_max_price: 10
 
+db_path: ./bob.db
 control_listen: 127.0.0.1:22222
 
 out_routes:
@@ -33,5 +34,5 @@ havens:
     listen_port: 29421
     rendezvous: 04c48b49e5ba915e2f47655011a3aed75b3ac7e3b468bbc84b23884546312046
     handler:
-      type: tcp_service 
+      type: tcp_service
       upstream: 127.0.0.1:42424

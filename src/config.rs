@@ -8,7 +8,7 @@ use serde_with::serde_as;
 use std::fs::OpenOptions;
 use tracing::instrument;
 
-use crate::PaymentMethods;
+use crate::SupportedPaymentSystems;
 
 /// A YAML-serializable configuration file
 #[derive(Serialize, Deserialize, Clone)]
@@ -27,7 +27,7 @@ pub struct ConfigFile {
     #[serde(default)]
     pub out_routes: BTreeMap<String, OutRouteConfig>,
 
-    pub payment_methods: PaymentMethods,
+    pub payment_methods: SupportedPaymentSystems,
 
     /// List of all client configs for udp forwarding
     #[serde(default)]
@@ -100,7 +100,7 @@ pub struct PriceConfig {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum AcceptPaymentMethod {
-    Dummy(String),
+    Dummy,
 }
 
 #[serde_as]

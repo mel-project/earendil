@@ -3,14 +3,14 @@ mod link;
 mod link_protocol;
 mod link_protocol_impl;
 mod link_store;
-mod payment_dest;
+mod payment_system;
 mod route_util;
 mod settlement;
 mod types;
 
 use link_protocol::LinkClient;
 pub use link_store::*;
-use payment_dest::PaymentDestination;
+use payment_system::{PaymentSystem, PaymentSystemSelector};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -60,7 +60,7 @@ use self::{
     link_protocol_impl::LinkProtocolImpl,
     types::{ClientId, NeighborId},
 };
-pub use payment_dest::PaymentMethods;
+pub use payment_system::{Dummy, SupportedPaymentSystems};
 use rand::prelude::*;
 
 /// An implementation of the link-level interface.
@@ -73,7 +73,7 @@ pub struct LinkNode {
 
 impl LinkNode {
     /// Creates a new link node.
-    pub fn new(cfg: LinkConfig) -> Self {
+    pub fn new(mut cfg: LinkConfig) -> Self {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
         let store = smolscale::block_on(LinkStore::new(cfg.db_path.clone())).unwrap();
@@ -101,14 +101,18 @@ impl LinkNode {
             .unwrap();
             LinkNodeId::Client(client_id)
         };
+        let mut payment_systems = PaymentSystemSelector::new();
+        for payment_system in cfg.payment_systems.drain(..) {
+            payment_systems.insert(payment_system);
+        }
         let ctx = LinkNodeCtx {
-            cfg,
+            cfg: Arc::new(cfg),
             my_id,
             relay_graph: Arc::new(RwLock::new(relay_graph)),
             my_onion_sk: DhSecret::generate(),
             link_table: Arc::new(DashMap::new()),
             store: Arc::new(store),
-            pay_dest_table: Arc::new(DashMap::new()),
+            payment_systems: Arc::new(payment_systems),
         };
         let _task = Immortal::respawn(
             RespawnStrategy::Immediate,
@@ -238,12 +242,12 @@ impl LinkNode {
     }
 
     pub async fn send_chat(&self, neighbor: NeighborId, text: String) -> anyhow::Result<()> {
-        let link = self
+        let link_entry = self
             .ctx
             .link_table
             .get(&neighbor)
             .context(format!("not connected to neighbor {:?}", neighbor))?;
-        LinkClient(link.rpc_transport())
+        LinkClient(link_entry.0.rpc_transport())
             .push_chat(text.clone())
             .await??;
         self.ctx
@@ -284,15 +288,21 @@ enum LinkNodeId {
     Client(ClientId),
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+struct LinkPaymentInfo {
+    price: i64,
+    debt_limit: i64,
+    paysystem_name_addrs: Vec<(String, String)>,
+}
+
 #[derive(Clone)]
 struct LinkNodeCtx {
-    cfg: LinkConfig,
+    cfg: Arc<LinkConfig>,
     my_id: LinkNodeId,
     my_onion_sk: DhSecret,
     relay_graph: Arc<RwLock<RelayGraph>>,
-    link_table: Arc<DashMap<NeighborId, Arc<Link>>>, // put PaymentDestination + price info into this table
-    pay_dest_table:
-        Arc<DashMap<RelayFingerprint, (i64, Box<dyn PaymentDestination + Send + Sync>)>>,
+    link_table: Arc<DashMap<NeighborId, (Arc<Link>, LinkPaymentInfo)>>,
+    payment_systems: Arc<PaymentSystemSelector>,
     store: Arc<LinkStore>,
 }
 
@@ -331,11 +341,12 @@ async fn link_node_loop(
                 if let Some(emit_time) = emit_time {
                     smol::Timer::at(emit_time).await;
                 }
-                link.send_msg(LinkMessage::ToRelay {
-                    packet: bytemuck::bytes_of(&pkt).to_vec().into(),
-                    next_peeler,
-                })
-                .await?;
+                link.0
+                    .send_msg(LinkMessage::ToRelay {
+                        packet: bytemuck::bytes_of(&pkt).to_vec().into(),
+                        next_peeler,
+                    })
+                    .await?;
                 anyhow::Ok(())
             })
             .detach();
@@ -525,6 +536,7 @@ async fn link_node_loop(
                                                     table
                                                         .get(&NeighborId::Client(client_id))
                                                         .context("no such client")?
+                                                        .0
                                                         .send_msg(LinkMessage::ToClient {
                                                             body: pkt.to_vec().into(),
                                                             rb_id,
@@ -751,21 +763,36 @@ async fn handle_pipe(
     send_raw: Sender<LinkMessage>,
     route_config: RouteConfig,
 ) -> anyhow::Result<()> {
-    let (mux, their_descr) = pipe_to_mux(&link_node_ctx, pipe).await?;
-    let link = Arc::new(match route_config.clone() {
-        RouteConfig::Out(config) => Link::new_dial(mux).await?,
-        RouteConfig::In(config) => Link::new_listen(mux).await?,
-    });
+    let (link, their_descr, payment_info) = match route_config.clone() {
+        RouteConfig::Out(config) => {
+            let (mux, their_descr, payment_info) =
+                pipe_to_mux(&link_node_ctx, pipe, config.price_config).await?;
+            (
+                Arc::new(Link::new_dial(mux).await?),
+                their_descr,
+                payment_info,
+            )
+        }
+        RouteConfig::In(config) => {
+            let (mux, their_descr, payment_info) =
+                pipe_to_mux(&link_node_ctx, pipe, config.price_config).await?;
+            (
+                Arc::new(Link::new_listen(mux).await?),
+                their_descr,
+                payment_info,
+            )
+        }
+    };
 
     // insert as either client or relay
     match their_descr.clone() {
         LinkNodeDescr::Relay(descr) => link_node_ctx.link_table.insert(
             NeighborId::Relay(descr.identity_pk.fingerprint()),
-            link.clone(),
+            (link.clone(), payment_info),
         ),
         LinkNodeDescr::Client(id) => link_node_ctx
             .link_table
-            .insert(NeighborId::Client(id), link.clone()),
+            .insert(NeighborId::Client(id), (link.clone(), payment_info)),
     };
 
     let their_relay_fp = match their_descr.clone() {
@@ -853,9 +880,9 @@ enum LinkNodeDescr {
 async fn pipe_to_mux(
     link_node_ctx: &LinkNodeCtx,
     pipe: impl Pipe,
-) -> anyhow::Result<(PicoMux, LinkNodeDescr)> {
+    price_config: PriceConfig,
+) -> anyhow::Result<(PicoMux, LinkNodeDescr, LinkPaymentInfo)> {
     let (mut read, mut write) = pipe.split();
-
     let send_auth = async {
         let my_descr = match link_node_ctx.my_id {
             LinkNodeId::Relay(id) => {
@@ -863,29 +890,51 @@ async fn pipe_to_mux(
             }
             LinkNodeId::Client(id) => LinkNodeDescr::Client(id),
         };
-        let auth_msg = my_descr.stdcode(); // TODO: add price info here
+        let my_payment_info = LinkPaymentInfo {
+            price: price_config.inbound_price,
+            debt_limit: price_config.inbound_debt_limit,
+            paysystem_name_addrs: link_node_ctx.payment_systems.get_available(),
+        };
+        let auth_msg = (my_descr, my_payment_info).stdcode();
         write_pascal(&auth_msg, &mut write).await?;
         anyhow::Ok(())
     };
 
     let recv_auth = async {
         let bts = read_pascal(&mut read).await?;
-        let their_descr: LinkNodeDescr = stdcode::deserialize(&bts)?;
-        anyhow::Ok(their_descr)
+        let (their_descr, their_payinfo): (LinkNodeDescr, LinkPaymentInfo) =
+            stdcode::deserialize(&bts)?;
+        tracing::debug!(
+            "their_price: {}; our_max_price: {}",
+            their_payinfo.price,
+            price_config.outbound_max_price
+        );
+        if their_payinfo.price < price_config.outbound_max_price {
+            if link_node_ctx
+                .payment_systems
+                .select(&their_payinfo.paysystem_name_addrs)
+                .is_some()
+            {
+                anyhow::Ok((their_descr, their_payinfo))
+            } else {
+                anyhow::bail!("{:?} no supported payment methods", their_descr)
+            }
+        } else {
+            anyhow::bail!("{:?} price too high!", their_descr)
+        }
     };
 
     let (a, b) = futures::join!(send_auth, recv_auth);
     a?;
-    let their_descr = b?;
+    let (their_descr, their_payinfo) = b?;
     let mux = PicoMux::new(read, write);
-    Ok((mux, their_descr))
+    Ok((mux, their_descr, their_payinfo))
 }
 
-#[derive(Clone, Debug)]
 pub struct LinkConfig {
     pub relay_config: Option<(RelayIdentitySecret, BTreeMap<String, InRouteConfig>)>,
     pub out_routes: BTreeMap<String, OutRouteConfig>,
-    pub payment_methods: PaymentMethods,
+    pub payment_systems: Vec<Box<dyn PaymentSystem>>,
     pub db_path: PathBuf,
 }
 
@@ -942,7 +991,7 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
             path.push(idsk1.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods { dummy: Some(()) },
+        payment_systems: vec![Box::new(Dummy::new())],
     });
 
     let node2 = LinkNode::new(LinkConfig {
@@ -953,7 +1002,7 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
             path.push(idsk2.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods { dummy: Some(()) },
+        payment_systems: vec![Box::new(Dummy::new())],
     });
 
     (node1, node2)
@@ -1010,7 +1059,7 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
             path.push(idsk1.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods { dummy: Some(()) },
+        payment_systems: vec![Box::new(Dummy::new())],
     });
 
     let client = LinkNode::new(LinkConfig {
@@ -1026,7 +1075,7 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
             );
             path
         },
-        payment_methods: PaymentMethods { dummy: Some(()) },
+        payment_systems: vec![Box::new(Dummy::new())],
     });
 
     (relay, client)
@@ -1142,7 +1191,7 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
             path.push(idsk1.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods { dummy: Some(()) },
+        payment_systems: vec![Box::new(Dummy::new())],
     });
     let node2 = LinkNode::new(LinkConfig {
         relay_config: Some((idsk2, in_2)),
@@ -1152,7 +1201,7 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
             path.push(idsk2.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods { dummy: Some(()) },
+        payment_systems: vec![Box::new(Dummy::new())],
     });
     let node3 = LinkNode::new(LinkConfig {
         relay_config: Some((idsk3, in_3)),
@@ -1162,7 +1211,7 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
             path.push(idsk3.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods { dummy: Some(()) },
+        payment_systems: vec![Box::new(Dummy::new())],
     });
     let node4 = LinkNode::new(LinkConfig {
         relay_config: Some((idsk4, in_4)),
@@ -1172,7 +1221,7 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
             path.push(idsk4.public().fingerprint().to_string());
             path
         },
-        payment_methods: PaymentMethods { dummy: Some(()) },
+        payment_systems: vec![Box::new(Dummy::new())],
     });
 
     (node1, node2, node3, node4)
@@ -1282,8 +1331,11 @@ mod tests {
             relay_dock: 123,
             body: Bytes::from_static(b"lol"),
         });
+
         smol::block_on(async {
             smol::Timer::after(Duration::from_secs(3)).await;
+            // for i in 0..100 {
+            //     println!("i = {i}");
             match client_node
                 .send_forward(
                     pkt.clone(),
@@ -1309,6 +1361,7 @@ mod tests {
                 }
                 IncomingMsg::Backward { rb_id: _, body: _ } => panic!("not supposed to happen"),
             }
+            // }
         });
     }
 

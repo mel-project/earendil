@@ -19,6 +19,7 @@ use crate::{
     link_node::{LinkConfig, LinkNode},
     n2r_node::{N2rConfig, N2rNode},
     v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, V2hConfig, V2hNode},
+    Dummy,
 };
 
 /// The public interface to the whole Earendil system.
@@ -37,7 +38,7 @@ impl Node {
                  }| (identity.actualize_relay().unwrap(), in_routes),
             ),
             out_routes: config.out_routes.clone(),
-            payment_methods: config.payment_methods.clone(),
+            payment_systems: vec![Box::new(Dummy::new())],
             db_path: config.db_path.unwrap_or_else(|| {
                 let mut data_dir = dirs::data_dir().unwrap();
                 data_dir.push("earendil-link-store.db");

@@ -1,5 +1,6 @@
 # client
 
+db_path: ./alice.db
 control_listen: 127.0.0.1:11111
 
 out_routes:

@@ -50,7 +50,7 @@ impl PooledVisitor {
                 .try_get_with(dest, async {
                     tracing::debug!("pool cache MISS destination={}", dest);
                     let pkt_conn = HavenPacketConn::connect(&self.ctx, dest).await?;
-                    tracing::warn!("got HavenPacketConn");
+                    tracing::debug!("got HavenPacketConn");
                     let stream = HeavyStream::new(pkt_conn);
                     let (read, write) = stream.split();
                     anyhow::Ok(Arc::new(PicoMux::new(read, write)))

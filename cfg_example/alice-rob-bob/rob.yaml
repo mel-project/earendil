@@ -11,6 +11,7 @@ relay_config:
         inbound_debt_limit: 0
         outbound_max_price: 10
 
+db_path: ./rob.db
 payment_methods:
   dummy:
 
