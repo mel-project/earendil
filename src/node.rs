@@ -3,6 +3,7 @@ use std::{net::Ipv4Addr, str::FromStr, sync::Arc};
 use anyhow::Context;
 use earendil_crypt::{HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
 use futures::{future::Shared, stream::FuturesUnordered, AsyncReadExt, TryFutureExt};
+use melstructs::NetID;
 use nursery_macro::nursery;
 use smol::{
     future::FutureExt,
@@ -29,22 +30,32 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(config: ConfigFile) -> anyhow::Result<Self> {
-        let link = LinkNode::new(LinkConfig {
-            relay_config: config.relay_config.clone().map(
-                |RelayConfig {
-                     identity,
-                     in_routes,
-                 }| (identity.actualize_relay().unwrap(), in_routes),
-            ),
-            out_routes: config.out_routes.clone(),
-            payment_systems: vec![Box::new(Dummy::new())],
-            db_path: config.db_path.unwrap_or_else(|| {
-                let mut data_dir = dirs::data_dir().unwrap();
-                data_dir.push("earendil-link-store.db");
-                data_dir
-            }),
-        });
+    pub async fn new(config: ConfigFile) -> anyhow::Result<Self> {
+        let mel_client = melprot::Client::connect_with_proxy(
+            NetID::Mainnet,
+            config.socks5.listen,
+            config.mel_bootstrap,
+        )
+        .await?;
+        let link = LinkNode::new(
+            LinkConfig {
+                relay_config: config.relay_config.clone().map(
+                    |RelayConfig {
+                         identity,
+                         in_routes,
+                     }| (identity.actualize_relay().unwrap(), in_routes),
+                ),
+                out_routes: config.out_routes.clone(),
+                payment_systems: vec![Box::new(Dummy::new())],
+                db_path: config.db_path.unwrap_or_else(|| {
+                    let mut data_dir = dirs::data_dir().unwrap();
+                    data_dir.push("earendil-link-store.db");
+                    data_dir
+                }),
+            },
+            mel_client,
+        );
+
         let n2r = N2rNode::new(link, N2rConfig {});
         let v2h = Arc::new(V2hNode::new(
             n2r,
@@ -56,7 +67,7 @@ impl Node {
         // start loops for handling socks5, etc, etc
         let v2h_clone = v2h.clone();
         let daemon_loop = async move {
-            if config.havens.is_empty() && config.socks5.is_none() {
+            if config.havens.is_empty() {
                 smol::future::pending().await
             } else {
                 nursery!({
@@ -65,10 +76,10 @@ impl Node {
                     for haven_cfg in config.havens {
                         fallible_tasks.push(spawn!(serve_haven(v2h_clone.clone(), haven_cfg)))
                     }
-                    // serve socks5 if config has it
-                    if let Some(socks5_cfg) = config.socks5 {
-                        fallible_tasks.push(spawn!(socks5_loop(v2h_clone.clone(), socks5_cfg)))
-                    }
+
+                    // serve socks5
+                    fallible_tasks.push(spawn!(socks5_loop(v2h_clone.clone(), config.socks5)));
+
                     // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
                     while let Some(next) = fallible_tasks.next().await {
                         next?;

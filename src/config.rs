@@ -36,10 +36,16 @@ pub struct ConfigFile {
     #[serde(default)]
     pub tcp_forwards: Vec<TcpForwardConfig>,
     /// where and how to start a socks5 proxy
-    pub socks5: Option<Socks5Config>,
+    #[serde(default = "default_socks5")]
+    pub socks5: Socks5Config,
     /// List of all haven configs
     #[serde(default)]
     pub havens: Vec<HavenConfig>,
+
+    /// the haven address for our melprot::Client to bootstrap on
+    /// e.g. http://<haven_addr>.haven:<port>
+    #[serde(default = "default_mel_bootstrap")]
+    pub mel_bootstrap: String,
 }
 
 impl ConfigFile {
@@ -48,8 +54,20 @@ impl ConfigFile {
     }
 }
 
+fn default_mel_bootstrap() -> String {
+    // TODO: haven address for mel bootstrap node
+    todo!()
+}
+
 fn default_control_listen() -> SocketAddr {
     "127.0.0.1:18964".parse().unwrap()
+}
+
+fn default_socks5() -> Socks5Config {
+    Socks5Config {
+        listen: "127.0.0.1:30003".parse().unwrap(),
+        fallback: Socks5Fallback::PassThrough,
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

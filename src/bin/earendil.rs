@@ -63,11 +63,18 @@ fn main() -> anyhow::Result<()> {
                 serde_json::to_string_pretty(&config_parsed)?
             );
             tracing::info!("about to init daemon!");
-            let node = Node::new(config_parsed)?;
-            match smol::future::block_on(node.wait_until_dead()) {
-                Ok(_) => anyhow::bail!("daemon is dead, with no error msg"),
-                Err(err) => anyhow::bail!(err),
-            }
+
+            let node = smol::block_on(async move {
+                let node = Node::new(config_parsed).await?;
+                anyhow::Ok(node)
+            })?;
+
+            smol::future::block_on(async {
+                match node.wait_until_dead().await {
+                    Ok(_) => anyhow::bail!("daemon is dead, with no error msg"),
+                    Err(err) => anyhow::bail!(err),
+                }
+            })
         }
         Commands::GenerateSeed => {
             let seed_phrase = gen_seed()?;
