@@ -10,6 +10,7 @@ mod types;
 
 use link_protocol::LinkClient;
 pub use link_store::*;
+use melstructs::NetID;
 use payment_system::{PaymentSystem, PaymentSystemSelector};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -73,7 +74,7 @@ pub struct LinkNode {
 
 impl LinkNode {
     /// Creates a new link node.
-    pub fn new(mut cfg: LinkConfig) -> Self {
+    pub fn new(mut cfg: LinkConfig, mel_client: melprot::Client) -> Self {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
         let store = smolscale::block_on(LinkStore::new(cfg.db_path.clone())).unwrap();
@@ -113,6 +114,7 @@ impl LinkNode {
             link_table: Arc::new(DashMap::new()),
             store: Arc::new(store),
             payment_systems: Arc::new(payment_systems),
+            mel_client,
         };
         let _task = Immortal::respawn(
             RespawnStrategy::Immediate,
@@ -304,6 +306,86 @@ struct LinkNodeCtx {
     link_table: Arc<DashMap<NeighborId, (Arc<Link>, LinkPaymentInfo)>>,
     payment_systems: Arc<PaymentSystemSelector>,
     store: Arc<LinkStore>,
+    mel_client: melprot::Client,
+}
+
+// async fn send_payment(link_node_ctx: &LinkNodeCtx, to: NeighborId) -> anyhow::Result<()> {}
+
+async fn send_msg(
+    link_node_ctx: &LinkNodeCtx,
+    to: NeighborId,
+    msg: LinkMessage,
+) -> anyhow::Result<()> {
+    let link_w_payinfo = link_node_ctx
+        .link_table
+        .get(&to)
+        .context("no link to this NeighborId")?;
+    // check debt & send payment if we are close to the debt limit
+    let curr_debt = link_node_ctx.store.get_debt(to).await?;
+    tracing::debug!("CURR_DEBT: {curr_debt}");
+
+    if curr_debt as f64 / link_w_payinfo.1.debt_limit as f64 > 0.8 {
+        tracing::debug!(
+            "almost at debt limit! curr_debt={curr_debt}; debt_limit={}. SENDING PAYMENT!",
+            link_w_payinfo.1.debt_limit
+        );
+        // let task = smolscale::spawn();
+        let (paysystem, to_payaddr) = link_node_ctx
+            .payment_systems
+            .select(&link_w_payinfo.1.paysystem_name_addrs)
+            .context("no supported payment system")?;
+        let my_id = match link_node_ctx.my_id {
+            LinkNodeId::Relay(idsk) => NeighborId::Relay(idsk.public().fingerprint()),
+            LinkNodeId::Client(id) => NeighborId::Client(id),
+        };
+        loop {
+            match paysystem.pay(my_id, &to_payaddr, curr_debt as _).await {
+                Ok(proof) => {
+                    // send payment proof to remote
+                    LinkClient(link_w_payinfo.0.rpc_transport())
+                        .send_payment_proof(curr_debt as _, paysystem.name(), proof.clone())
+                        .await??;
+                    // decrement our debt to them
+                    link_node_ctx
+                        .store
+                        .insert_debt_entry(
+                            to,
+                            DebtEntry {
+                                delta: -curr_debt,
+                                timestamp: SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .expect("time went backwards")
+                                    .as_secs(),
+                                proof: Some(proof),
+                            },
+                        )
+                        .await?;
+                    tracing::debug!("SUCCESSFULLY SENT PAYMENT!");
+                    break;
+                }
+                Err(e) => tracing::warn!("sending payment to {:?} failed with ERR: {e}", to),
+            }
+        }
+    };
+    // increment our debt to them
+    if link_w_payinfo.1.price > 0 {
+        link_node_ctx
+            .store
+            .insert_debt_entry(
+                to,
+                DebtEntry {
+                    delta: link_w_payinfo.1.price,
+                    timestamp: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("time went backwards")
+                        .as_secs(),
+                    proof: None,
+                },
+            )
+            .await?;
+    }
+    link_w_payinfo.0.send_msg(msg).await?;
+    Ok(())
 }
 
 // async fn send_payment(link_node_ctx: &LinkNodeCtx, to: NeighborId) -> anyhow::Result<()> {}
@@ -944,7 +1026,7 @@ pub struct LinkConfig {
     pub db_path: PathBuf,
 }
 
-pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
+pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
     let mut in_1 = BTreeMap::new();
     in_1.insert(
@@ -989,27 +1071,33 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
         },
     );
 
-    let node1 = LinkNode::new(LinkConfig {
-        relay_config: Some((idsk1, in_1)),
-        out_routes: BTreeMap::new(),
-        db_path: {
-            let mut path = tempfile::tempdir().unwrap().into_path();
-            path.push(idsk1.public().fingerprint().to_string());
-            path
+    let node1 = LinkNode::new(
+        LinkConfig {
+            relay_config: Some((idsk1, in_1)),
+            out_routes: BTreeMap::new(),
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk1.public().fingerprint().to_string());
+                path
+            },
+            payment_systems: vec![Box::new(Dummy::new())],
         },
-        payment_systems: vec![Box::new(Dummy::new())],
-    });
+        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+    );
 
-    let node2 = LinkNode::new(LinkConfig {
-        relay_config: Some((idsk2, in_2)),
-        out_routes: out_2,
-        db_path: {
-            let mut path = tempfile::tempdir().unwrap().into_path();
-            path.push(idsk2.public().fingerprint().to_string());
-            path
+    let node2 = LinkNode::new(
+        LinkConfig {
+            relay_config: Some((idsk2, in_2)),
+            out_routes: out_2,
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk2.public().fingerprint().to_string());
+                path
+            },
+            payment_systems: vec![Box::new(Dummy::new())],
         },
-        payment_systems: vec![Box::new(Dummy::new())],
-    });
+        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+    );
 
     (node1, node2)
 }
@@ -1026,7 +1114,7 @@ pub fn init_tracing() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
+pub async fn get_connected_relay_client() -> (LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
     let mut in_1 = BTreeMap::new();
     in_1.insert(
@@ -1057,37 +1145,43 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
         },
     );
 
-    let relay = LinkNode::new(LinkConfig {
-        relay_config: Some((idsk1, in_1)),
-        out_routes: BTreeMap::new(),
-        db_path: {
-            let mut path = tempfile::tempdir().unwrap().into_path();
-            path.push(idsk1.public().fingerprint().to_string());
-            path
+    let relay = LinkNode::new(
+        LinkConfig {
+            relay_config: Some((idsk1, in_1)),
+            out_routes: BTreeMap::new(),
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk1.public().fingerprint().to_string());
+                path
+            },
+            payment_systems: vec![Box::new(Dummy::new())],
         },
-        payment_systems: vec![Box::new(Dummy::new())],
-    });
+        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+    );
 
-    let client = LinkNode::new(LinkConfig {
-        relay_config: None,
-        out_routes: out_2,
-        db_path: {
-            let mut path = tempfile::tempdir().unwrap().into_path();
-            path.push(
-                RelayIdentitySecret::generate()
-                    .public()
-                    .fingerprint()
-                    .to_string(),
-            );
-            path
+    let client = LinkNode::new(
+        LinkConfig {
+            relay_config: None,
+            out_routes: out_2,
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(
+                    RelayIdentitySecret::generate()
+                        .public()
+                        .fingerprint()
+                        .to_string(),
+                );
+                path
+            },
+            payment_systems: vec![Box::new(Dummy::new())],
         },
-        payment_systems: vec![Box::new(Dummy::new())],
-    });
+        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+    );
 
     (relay, client)
 }
 
-pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
+pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
     let mut in_1 = BTreeMap::new();
     in_1.insert(
@@ -1189,46 +1283,58 @@ pub fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
         },
     );
 
-    let node1 = LinkNode::new(LinkConfig {
-        relay_config: Some((idsk1, in_1)),
-        out_routes: BTreeMap::new(),
-        db_path: {
-            let mut path = tempfile::tempdir().unwrap().into_path();
-            path.push(idsk1.public().fingerprint().to_string());
-            path
+    let node1 = LinkNode::new(
+        LinkConfig {
+            relay_config: Some((idsk1, in_1)),
+            out_routes: BTreeMap::new(),
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk1.public().fingerprint().to_string());
+                path
+            },
+            payment_systems: vec![Box::new(Dummy::new())],
         },
-        payment_systems: vec![Box::new(Dummy::new())],
-    });
-    let node2 = LinkNode::new(LinkConfig {
-        relay_config: Some((idsk2, in_2)),
-        out_routes: out_2,
-        db_path: {
-            let mut path = tempfile::tempdir().unwrap().into_path();
-            path.push(idsk2.public().fingerprint().to_string());
-            path
+        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+    );
+    let node2 = LinkNode::new(
+        LinkConfig {
+            relay_config: Some((idsk2, in_2)),
+            out_routes: out_2,
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk2.public().fingerprint().to_string());
+                path
+            },
+            payment_systems: vec![Box::new(Dummy::new())],
         },
-        payment_systems: vec![Box::new(Dummy::new())],
-    });
-    let node3 = LinkNode::new(LinkConfig {
-        relay_config: Some((idsk3, in_3)),
-        out_routes: out_3,
-        db_path: {
-            let mut path = tempfile::tempdir().unwrap().into_path();
-            path.push(idsk3.public().fingerprint().to_string());
-            path
+        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+    );
+    let node3 = LinkNode::new(
+        LinkConfig {
+            relay_config: Some((idsk3, in_3)),
+            out_routes: out_3,
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk3.public().fingerprint().to_string());
+                path
+            },
+            payment_systems: vec![Box::new(Dummy::new())],
         },
-        payment_systems: vec![Box::new(Dummy::new())],
-    });
-    let node4 = LinkNode::new(LinkConfig {
-        relay_config: Some((idsk4, in_4)),
-        out_routes: out_4,
-        db_path: {
-            let mut path = tempfile::tempdir().unwrap().into_path();
-            path.push(idsk4.public().fingerprint().to_string());
-            path
+        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+    );
+    let node4 = LinkNode::new(
+        LinkConfig {
+            relay_config: Some((idsk4, in_4)),
+            out_routes: out_4,
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk4.public().fingerprint().to_string());
+                path
+            },
+            payment_systems: vec![Box::new(Dummy::new())],
         },
-        payment_systems: vec![Box::new(Dummy::new())],
-    });
+        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+    );
 
     (node1, node2, node3, node4)
 }
@@ -1242,13 +1348,13 @@ mod tests {
     fn two_relays_one_forward_pkt() {
         let _ = init_tracing();
 
-        let (node1, node2) = get_two_connected_relays();
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
             body: Bytes::from_static(b"lol"),
         });
         smol::block_on(async {
             smol::Timer::after(Duration::from_secs(3)).await;
+            let (node1, node2) = get_two_connected_relays().await;
             node2
                 .send_forward(
                     pkt.clone(),
@@ -1278,9 +1384,9 @@ mod tests {
     fn two_relays_one_backward_pkt() {
         let _ = init_tracing();
 
-        let (node1, node2) = get_two_connected_relays();
         smol::block_on(async {
             smol::Timer::after(Duration::from_secs(3)).await;
+            let (node1, node2) = get_two_connected_relays().await;
             let (surb_1to2, surb_id, degarbler) = node2
                 .surb_from(
                     AnonEndpoint::random(),
@@ -1332,7 +1438,6 @@ mod tests {
     fn client_relay_one_forward_pkt() {
         let _ = init_tracing();
 
-        let (relay_node, client_node) = get_connected_relay_client();
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
             body: Bytes::from_static(b"lol"),
@@ -1375,21 +1480,21 @@ mod tests {
     fn client_relay_one_backward_pkt() {
         let _ = init_tracing();
 
-        let (relay_node, client_node) = get_connected_relay_client();
-        println!(
-            "relay_node fp = {}",
-            relay_node
-                .ctx
-                .cfg
-                .relay_config
-                .clone()
-                .unwrap()
-                .0
-                .public()
-                .fingerprint(),
-        );
         smol::block_on(async {
             smol::Timer::after(Duration::from_secs(3)).await;
+            let (relay_node, client_node) = get_connected_relay_client().await;
+            println!(
+                "relay_node fp = {}",
+                relay_node
+                    .ctx
+                    .cfg
+                    .relay_config
+                    .clone()
+                    .unwrap()
+                    .0
+                    .public()
+                    .fingerprint(),
+            );
             let (surb_1to2, surb_id, degarbler) = client_node
                 .surb_from(
                     AnonEndpoint::random(),
@@ -1441,13 +1546,13 @@ mod tests {
     fn four_relays_forward_pkt() {
         let _ = init_tracing();
 
-        let (node1, _node2, _node3, node4) = get_four_connected_relays();
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
             body: Bytes::from_static(b"lol"),
         });
         smol::block_on(async {
             smol::Timer::after(Duration::from_secs(5)).await;
+            let (node1, _node2, _node3, node4) = get_four_connected_relays().await;
             node4
                 .send_forward(
                     pkt.clone(),
@@ -1477,9 +1582,9 @@ mod tests {
     fn two_relays_one_chat() {
         let _ = init_tracing();
 
-        let (node1, node2) = get_two_connected_relays();
         smol::block_on(async {
             smol::Timer::after(Duration::from_secs(3)).await;
+            let (node1, node2) = get_two_connected_relays().await;
             let chat_msg = "hi test".to_string();
             node2
                 .send_chat(
