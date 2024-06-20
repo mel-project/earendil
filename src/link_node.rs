@@ -306,6 +306,85 @@ struct LinkNodeCtx {
     store: Arc<LinkStore>,
 }
 
+// async fn send_payment(link_node_ctx: &LinkNodeCtx, to: NeighborId) -> anyhow::Result<()> {}
+
+async fn send_msg(
+    link_node_ctx: &LinkNodeCtx,
+    to: NeighborId,
+    msg: LinkMessage,
+) -> anyhow::Result<()> {
+    let link_w_payinfo = link_node_ctx
+        .link_table
+        .get(&to)
+        .context("no link to this NeighborId")?;
+    // check debt & send payment if we are close to the debt limit
+    let curr_debt = link_node_ctx.store.get_debt(to).await?;
+    tracing::debug!("CURR_DEBT: {curr_debt}");
+
+    if curr_debt as f64 / link_w_payinfo.1.debt_limit as f64 > 0.8 {
+        tracing::debug!(
+            "almost at debt limit! curr_debt={curr_debt}; debt_limit={}. SENDING PAYMENT!",
+            link_w_payinfo.1.debt_limit
+        );
+        // let task = smolscale::spawn();
+        let (paysystem, to_payaddr) = link_node_ctx
+            .payment_systems
+            .select(&link_w_payinfo.1.paysystem_name_addrs)
+            .context("no supported payment system")?;
+        let my_id = match link_node_ctx.my_id {
+            LinkNodeId::Relay(idsk) => NeighborId::Relay(idsk.public().fingerprint()),
+            LinkNodeId::Client(id) => NeighborId::Client(id),
+        };
+        loop {
+            match paysystem.pay(my_id, &to_payaddr, curr_debt as _).await {
+                Ok(proof) => {
+                    // send payment proof to remote
+                    LinkClient(link_w_payinfo.0.rpc_transport())
+                        .send_payment_proof(curr_debt as _, paysystem.name(), proof.clone())
+                        .await??;
+                    // decrement our debt to them
+                    link_node_ctx
+                        .store
+                        .insert_debt_entry(
+                            to,
+                            DebtEntry {
+                                delta: -curr_debt,
+                                timestamp: SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .expect("time went backwards")
+                                    .as_secs(),
+                                proof: Some(proof),
+                            },
+                        )
+                        .await?;
+                    tracing::debug!("SUCCESSFULLY SENT PAYMENT!");
+                    break;
+                }
+                Err(e) => tracing::warn!("sending payment to {:?} failed with ERR: {e}", to),
+            }
+        }
+    };
+    // increment our debt to them
+    if link_w_payinfo.1.price > 0 {
+        link_node_ctx
+            .store
+            .insert_debt_entry(
+                to,
+                DebtEntry {
+                    delta: link_w_payinfo.1.price,
+                    timestamp: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("time went backwards")
+                        .as_secs(),
+                    proof: None,
+                },
+            )
+            .await?;
+    }
+    link_w_payinfo.0.send_msg(msg).await?;
+    Ok(())
+}
+
 #[tracing::instrument(skip_all)]
 async fn link_node_loop(
     link_node_ctx: LinkNodeCtx,
@@ -337,16 +416,20 @@ async fn link_node_loop(
                 .context("cannot find closer hop")?
                 .clone();
             // TODO delay queue here rather than this inefficient approach
+            let link_node_ctx = link_node_ctx.clone();
             smolscale::spawn(async move {
                 if let Some(emit_time) = emit_time {
                     smol::Timer::at(emit_time).await;
                 }
-                link.0
-                    .send_msg(LinkMessage::ToRelay {
+                send_msg(
+                    &link_node_ctx,
+                    NeighborId::Relay(closer_hop),
+                    LinkMessage::ToRelay {
                         packet: bytemuck::bytes_of(&pkt).to_vec().into(),
                         next_peeler,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
                 anyhow::Ok(())
             })
             .detach();
@@ -416,7 +499,7 @@ async fn link_node_loop(
 
     // ----------------------- relay-only loops ------------------------
     let relay_or_client_task = async {
-        if let LinkNodeId::Relay(my_idsk) = link_node_ctx.my_id {
+        if let LinkNodeId::Relay(my_idsk) = &link_node_ctx.my_id {
             let identity_refresh_loop = async {
                 loop {
                     // println!("WE ARE INSERTING OURSELVES");
@@ -531,17 +614,17 @@ async fn link_node_loop(
                                                     "received a PeeledPacket::GarbledReply for a CLIENT"
                                                 );
                                                 let table = link_node_ctx.link_table.clone();
+                                                let link_node_ctx = link_node_ctx.clone();
                                                 smolscale::spawn(async move {
-                                                    // I send pkt to downstream client; charge money
-                                                    table
-                                                        .get(&NeighborId::Client(client_id))
-                                                        .context("no such client")?
-                                                        .0
-                                                        .send_msg(LinkMessage::ToClient {
+                                                    send_msg(
+                                                        &link_node_ctx,
+                                                        NeighborId::Client(client_id),
+                                                        LinkMessage::ToClient {
                                                             body: pkt.to_vec().into(),
                                                             rb_id,
-                                                        })
-                                                        .await?;
+                                                        },
+                                                    )
+                                                    .await?;
                                                     anyhow::Ok(())
                                                 })
                                                 .detach();
@@ -607,69 +690,6 @@ async fn link_node_loop(
     }
     Ok(())
 }
-
-// let LinkPaymentInfo {
-//     price,
-//     debt_limit,
-//     accepted_payment_methods,
-// } = serde_json::from_slice(msg_stream.metadata())?;
-// // check if price < our max_price
-// let pay_dest;
-// if price < outroute_config.max_price {
-//     // check if any of our pay_methods ∈ their supported methods
-//     for pay_method in payment_methods.get_available() {
-//         if accepted_payment_methods
-//             .get_available()
-//             .contains(&pay_method)
-//         {
-//             // construct impl PaymentDestination & save to link
-//             match pay_method {
-//                 PaymentMethod::Dummy => {
-//                     pay_dest = Box::new(DummyPayDest);
-//                     break;
-//                 }
-//             }
-//         }
-//     }
-//     anyhow::bail!("no supported payment method")
-// } else {
-//     anyhow::bail!("price too high")
-// };
-// // fns for when I'm upstream
-// async fn incr_debt(&self) -> anyhow::Result<()> {
-//     let (neighbor, delta) = match &self.payment_info {
-//         PaymentInfo::InRoute(info) => (
-//             NeighborId::Client(info.their_client_id),
-//             -info.inroute_config.price,
-//         ),
-//         PaymentInfo::OutRoute(info) => (
-//             NeighborId::Relay(info.outroute_config.fingerprint),
-//             info.price,
-//         ),
-//     };
-//     let debt_entry = DebtEntry {
-//         delta,
-//         timestamp: SystemTime::now()
-//             .duration_since(UNIX_EPOCH)
-//             .expect("Time went backwards")
-//             .as_secs(),
-//         proof: None,
-//     };
-//     self.store.insert_debt_entry(neighbor, debt_entry).await?;
-//     Ok(())
-// }
-
-// async fn is_within_debt_limit(&self) -> anyhow::Result<bool> {
-//     todo!()
-// }
-
-// async fn decr_debt(&self, proof: Proof) -> anyhow::Result<()> {
-//     todo!()
-// }
-
-// async fn pay_debt(&self) -> anyhow::Result<()> {
-//     todo!()
-// }
 
 async fn process_in_route(
     link_node_ctx: LinkNodeCtx,
@@ -763,23 +783,25 @@ async fn handle_pipe(
     send_raw: Sender<LinkMessage>,
     route_config: RouteConfig,
 ) -> anyhow::Result<()> {
-    let (link, their_descr, payment_info) = match route_config.clone() {
+    let (link, their_descr, payment_info, price_config) = match route_config.clone() {
         RouteConfig::Out(config) => {
             let (mux, their_descr, payment_info) =
-                pipe_to_mux(&link_node_ctx, pipe, config.price_config).await?;
+                pipe_to_mux(&link_node_ctx, pipe, config.price_config.clone()).await?;
             (
                 Arc::new(Link::new_dial(mux).await?),
                 their_descr,
                 payment_info,
+                config.price_config,
             )
         }
         RouteConfig::In(config) => {
             let (mux, their_descr, payment_info) =
-                pipe_to_mux(&link_node_ctx, pipe, config.price_config).await?;
+                pipe_to_mux(&link_node_ctx, pipe, config.price_config.clone()).await?;
             (
                 Arc::new(Link::new_listen(mux).await?),
                 their_descr,
                 payment_info,
+                config.price_config,
             )
         }
     };
@@ -819,56 +841,40 @@ async fn handle_pipe(
         remote_id: their_id,
     }));
 
-    // let route_config_clone = route_config.clone();
+    let pkt_fwd_loop = async {
+        // pull messages from the link & forward into LinkNode
+        loop {
+            let msg = link.recv_msg().await?;
+            tracing::trace!("received LinkMessage from {:?}", their_id);
+            let debt = link_node_ctx.store.get_debt(their_id).await?;
+            if debt > price_config.inbound_debt_limit {
+                tracing::warn!(
+                    "DROPPING PACKET: {:?} is over their debt limit! debt={debt}; debt_limit={}",
+                    their_id,
+                    price_config.inbound_debt_limit
+                );
+                continue;
+            };
+            // increment remote's debt
+            link_node_ctx
+                .store
+                .insert_debt_entry(
+                    their_id,
+                    DebtEntry {
+                        delta: -price_config.inbound_price,
+                        timestamp: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .expect("Time went backwards")
+                            .as_secs(),
+                        proof: None,
+                    },
+                )
+                .await?;
+            send_raw.send(msg).await?;
+        }
+    };
 
-    gossip_loop
-        .race(rpc_serve_loop)
-        .race(
-            // pull messages from the link
-            async {
-                loop {
-                    let msg = link.recv_msg().await?;
-                    tracing::trace!("received LinkMessage from {:?}", their_id);
-                    // match route_config {
-                    //     RouteConfig::Out(_) => {
-                    //         // I receive pkt from my upstream
-                    //         todo!()
-                    //     },
-                    //     RouteConfig::In(config) => {
-                    //         // I receive pkt from my downstream
-                    //         let neigh = NeighborId::Relay(their_relay_fp.unwrap());
-                    //         // drop msg if debt > debt_limit
-                    //         let debt = link_node_ctx.store.get_debt(neigh).await?;
-                    //         if debt > config.debt_limit {
-                    //             tracing::warn!(
-                    //                 "DROPPING PACKET: {:?} is over their debt limit! debt={debt}; debt_limit={}",
-                    //                 neigh,
-                    //                 config.debt_limit
-                    //             );
-                    //             continue;
-                    //         }
-                    //         // increment remote's debt
-                    //         link_node_ctx
-                    //             .store
-                    //             .insert_debt_entry(
-                    //                 neigh,
-                    //                 DebtEntry {
-                    //                     delta: config.price as _,
-                    //                     timestamp: SystemTime::now()
-                    //                         .duration_since(UNIX_EPOCH)
-                    //                         .expect("Time went backwards")
-                    //                         .as_secs(),
-                    //                     proof: None,
-                    //                 },
-                    //             )
-                    //             .await?;
-                    //     }
-                    // }
-                    send_raw.send(msg).await?;
-                }
-            },
-        )
-        .await
+    gossip_loop.race(rpc_serve_loop).race(pkt_fwd_loop).await
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -963,7 +969,7 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
             obfs: ObfsConfig::None,
             price_config: PriceConfig {
                 inbound_price: 5,
-                inbound_debt_limit: 500,
+                inbound_debt_limit: 20,
                 outbound_max_price: 10,
             },
         },
@@ -977,7 +983,7 @@ pub fn get_two_connected_relays() -> (LinkNode, LinkNode) {
             obfs: ObfsConfig::None,
             price_config: PriceConfig {
                 inbound_price: 5,
-                inbound_debt_limit: 500,
+                inbound_debt_limit: 20,
                 outbound_max_price: 10,
             },
         },
@@ -1030,7 +1036,7 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
             obfs: ObfsConfig::None,
             price_config: PriceConfig {
                 inbound_price: 5,
-                inbound_debt_limit: 500,
+                inbound_debt_limit: 20,
                 outbound_max_price: 10,
             },
         },
@@ -1045,7 +1051,7 @@ pub fn get_connected_relay_client() -> (LinkNode, LinkNode) {
             obfs: ObfsConfig::None,
             price_config: PriceConfig {
                 inbound_price: 5,
-                inbound_debt_limit: 500,
+                inbound_debt_limit: 20,
                 outbound_max_price: 10,
             },
         },
@@ -1334,34 +1340,34 @@ mod tests {
 
         smol::block_on(async {
             smol::Timer::after(Duration::from_secs(3)).await;
-            // for i in 0..100 {
-            //     println!("i = {i}");
-            match client_node
-                .send_forward(
-                    pkt.clone(),
-                    AnonEndpoint::random(),
-                    relay_node
-                        .ctx
-                        .cfg
-                        .relay_config
-                        .clone()
-                        .unwrap()
-                        .0
-                        .public()
-                        .fingerprint(), // we know node1 is a relay
-                )
-                .await
-            {
-                Ok(_) => println!("client --> relay LinkMsg sent"),
-                Err(e) => println!("ERR sending client --> relay LinkMsfg: {e}"),
-            }
-            match relay_node.recv().await {
-                IncomingMsg::Forward { from: _, body } => {
-                    assert_eq!(body, pkt);
+            for i in 0..10 {
+                println!("i = {i}");
+                match client_node
+                    .send_forward(
+                        pkt.clone(),
+                        AnonEndpoint::random(),
+                        relay_node
+                            .ctx
+                            .cfg
+                            .relay_config
+                            .clone()
+                            .unwrap()
+                            .0
+                            .public()
+                            .fingerprint(), // we know node1 is a relay
+                    )
+                    .await
+                {
+                    Ok(_) => println!("client --> relay LinkMsg sent"),
+                    Err(e) => println!("ERR sending client --> relay LinkMsfg: {e}"),
                 }
-                IncomingMsg::Backward { rb_id: _, body: _ } => panic!("not supposed to happen"),
+                match relay_node.recv().await {
+                    IncomingMsg::Forward { from: _, body } => {
+                        assert_eq!(body, pkt);
+                    }
+                    IncomingMsg::Backward { rb_id: _, body: _ } => panic!("not supposed to happen"),
+                }
             }
-            // }
         });
     }
 

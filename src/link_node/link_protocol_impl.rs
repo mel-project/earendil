@@ -82,7 +82,7 @@ impl LinkProtocol for LinkProtocolImpl {
         let chat_entry = ChatEntry {
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_err(|_| LinkRpcErr::PushChatFailed)?
+                .expect("Time went backwards")
                 .as_secs(),
             text: msg,
             is_outgoing: false,
@@ -92,6 +92,54 @@ impl LinkProtocol for LinkProtocolImpl {
             .insert_chat_entry(self.remote_id, chat_entry)
             .await
             .map_err(|_| LinkRpcErr::PushChatFailed)
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn send_payment_proof(
+        &self,
+        amount: u64,
+        paysystem_name: String,
+        proof: String,
+    ) -> Result<(), LinkRpcErr> {
+        let neigh = self.remote_id;
+        if let Some(paysystem) = self.ctx.payment_systems.get(&paysystem_name) {
+            if paysystem
+                .verify_payment(neigh, amount, &proof)
+                .await
+                .map_err(|e| {
+                    tracing::warn!("payment verification failed: {:?}", e);
+                    LinkRpcErr::PaymentVerificationFailed(e.to_string())
+                })?
+            {
+                self.ctx
+                    .store
+                    .insert_debt_entry(
+                        neigh,
+                        crate::DebtEntry {
+                            delta: amount as _,
+                            timestamp: SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .expect("Time went backwards")
+                                .as_secs(),
+                            proof: Some(proof),
+                        },
+                    )
+                    .await
+                    .map_err(|e| {
+                        tracing::warn!("could not insert debt entry: {:?}", e);
+                        LinkRpcErr::InternalServerError
+                    })?;
+                tracing::debug!(
+                    "successly received payment proof from {:?} for {amount}",
+                    neigh
+                );
+                return Ok(());
+            } else {
+                return Err(LinkRpcErr::InvalidPaymentProof);
+            }
+        } else {
+            return Err(LinkRpcErr::UnacceptedPaysystem);
+        }
     }
 
     // #[tracing::instrument(skip(self))]

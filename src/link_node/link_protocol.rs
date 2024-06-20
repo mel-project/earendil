@@ -29,6 +29,12 @@ pub trait LinkProtocol {
     /// Send a chat message to the other end of the link.
     async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr>;
 
+    async fn send_payment_proof(
+        &self,
+        amount: u64,
+        paysystem_name: String,
+        proof: String,
+    ) -> Result<(), LinkRpcErr>;
     // /// Sends a settlement request and waits until a response is received or the call times out.
     // async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse>;
 
@@ -57,10 +63,12 @@ pub struct InfoResponse {
 pub enum LinkRpcErr {
     #[error("push chat failed")]
     PushChatFailed,
-    #[error("out_route side cannot push price to in_route side!")]
-    PushPriceInvalidDirection,
-    #[error("price is too high")]
-    PriceTooHigh,
-    #[error("no supported payment method")]
-    NoSupportedPaymentMethod,
+    #[error("invalid payment proof")]
+    InvalidPaymentProof,
+    #[error("unaccepted payment system")]
+    UnacceptedPaysystem,
+    #[error("payment verification failed")]
+    PaymentVerificationFailed(String),
+    #[error("internal server error")]
+    InternalServerError,
 }
