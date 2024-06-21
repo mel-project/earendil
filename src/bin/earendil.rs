@@ -65,7 +65,7 @@ fn main() -> anyhow::Result<()> {
             tracing::info!("about to init daemon!");
 
             let node = smol::block_on(async move {
-                let node = Node::new(config_parsed).await?;
+                let node = Node::start(config_parsed).await?;
                 anyhow::Ok(node)
             })?;
 

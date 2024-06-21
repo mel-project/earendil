@@ -30,7 +30,7 @@ pub struct Node {
 }
 
 impl Node {
-    pub async fn new(config: ConfigFile) -> anyhow::Result<Self> {
+    pub async fn start(config: ConfigFile) -> anyhow::Result<Self> {
         let mel_client = melprot::Client::connect_with_proxy(
             NetID::Mainnet,
             config.socks5.listen,
