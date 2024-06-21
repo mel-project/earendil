@@ -39,10 +39,8 @@ const HAVEN_FORWARD_DOCK: u32 = 100002;
 
 pub struct V2hNode {
     ctx: V2hNodeCtx,
-    _rpc_server: Immortal,
-    _rendezvous_forward: Immortal,
-    // _rpc_server: Option<Immortal>,
-    // _rendezvous_forward: Option<Immortal>,
+    _rpc_server: Option<Immortal>,
+    _rendezvous_forward: Option<Immortal>,
 }
 
 impl V2hNode {
@@ -52,38 +50,26 @@ impl V2hNode {
             registered_havens: Bicache::new(1000).into(),
         };
 
-        let rpc_server = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || serve_rpc(ctx.clone()).inspect_err(
-                |e| tracing::error!(err = debug(e), "GlobalRPC serving restarted")
-            )),
-        );
-        // if cfg.is_relay {
-        //     Some(Immortal::respawn(
-        //         RespawnStrategy::Immediate,
-        //         clone!([ctx], move || serve_rpc(ctx.clone()).inspect_err(
-        //             |e| tracing::error!(err = debug(e), "GlobalRPC serving restarted")
-        //         )),
-        //     ))
-        // } else {
-        //     None
-        // };
-        let rendezvous_forward = Immortal::respawn(
-            RespawnStrategy::Immediate,
-            clone!([ctx], move || rendezvous_forward(ctx.clone()).inspect_err(
-                |e| tracing::error!(err = debug(e), "rendezvous forwarding restarted")
-            )),
-        );
-        // if cfg.is_relay {
-        //     Some(Immortal::respawn(
-        //         RespawnStrategy::Immediate,
-        //         clone!([ctx], move || rendezvous_forward(ctx.clone()).inspect_err(
-        //             |e| tracing::error!(err = debug(e), "rendezvous forwarding restarted")
-        //         )),
-        //     ))
-        // } else {
-        //     None
-        // };
+        let rpc_server = if cfg.is_relay {
+            Some(Immortal::respawn(
+                RespawnStrategy::Immediate,
+                clone!([ctx], move || serve_rpc(ctx.clone()).inspect_err(
+                    |e| tracing::error!(err = debug(e), "GlobalRPC serving restarted")
+                )),
+            ))
+        } else {
+            None
+        };
+        let rendezvous_forward = if cfg.is_relay {
+            Some(Immortal::respawn(
+                RespawnStrategy::Immediate,
+                clone!([ctx], move || rendezvous_forward(ctx.clone()).inspect_err(
+                    |e| tracing::error!(err = debug(e), "rendezvous forwarding restarted")
+                )),
+            ))
+        } else {
+            None
+        };
         Self {
             ctx,
             _rpc_server: rpc_server,

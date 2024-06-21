@@ -33,7 +33,7 @@ impl N2rNode {
             relay_queues: Arc::new(DashMap::new()),
             rb_store: Arc::new(Mutex::new(ReplyBlockStore::new())),
             degarblers: Cache::builder()
-                .time_to_live(Duration::from_secs(120))
+                .time_to_live(Duration::from_secs(3600))
                 .build(),
         };
         let task = Immortal::respawn(

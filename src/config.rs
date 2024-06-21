@@ -114,6 +114,8 @@ pub struct PriceConfig {
     pub inbound_debt_limit: i64,
     /// max accepted price, in micromel
     pub outbound_max_price: i64,
+    /// min accepted debt limit, in micromel = how much you're willing to pre-pay
+    pub outbound_min_debt_limit: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

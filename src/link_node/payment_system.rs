@@ -89,6 +89,12 @@ pub struct Dummy {
     my_addr: u64,
 }
 
+impl Default for Dummy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Dummy {
     pub fn new() -> Self {
         Self {

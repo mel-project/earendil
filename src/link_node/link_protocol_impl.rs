@@ -103,6 +103,7 @@ impl LinkProtocol for LinkProtocolImpl {
     ) -> Result<(), LinkRpcErr> {
         let neigh = self.remote_id;
         if let Some(paysystem) = self.ctx.payment_systems.get(&paysystem_name) {
+            tracing::debug!("got paysystem");
             if paysystem
                 .verify_payment(neigh, amount, &proof)
                 .await
@@ -111,6 +112,7 @@ impl LinkProtocol for LinkProtocolImpl {
                     LinkRpcErr::PaymentVerificationFailed(e.to_string())
                 })?
             {
+                tracing::debug!("verified proof!");
                 self.ctx
                     .store
                     .insert_debt_entry(
@@ -135,6 +137,7 @@ impl LinkProtocol for LinkProtocolImpl {
                 );
                 return Ok(());
             } else {
+                tracing::debug!("invalid payment proof");
                 return Err(LinkRpcErr::InvalidPaymentProof);
             }
         } else {

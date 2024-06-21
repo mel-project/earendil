@@ -12,6 +12,7 @@ relay_config:
         inbound_price: 0
         inbound_debt_limit: 0
         outbound_max_price: 10
+        outbound_min_debt_limit: -10
 
 db_path: ./bob.db
 control_listen: 127.0.0.1:22222
@@ -25,6 +26,7 @@ out_routes:
       inbound_price: 0
       inbound_debt_limit: 0
       outbound_max_price: 10
+      outbound_min_debt_limit: -10
 
 payment_methods:
   dummy:

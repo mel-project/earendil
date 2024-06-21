@@ -21,6 +21,7 @@ pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
                 inbound_price: 5,
                 inbound_debt_limit: 500,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -20,
             },
         },
     );
@@ -36,6 +37,7 @@ pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
                 inbound_price: 5,
                 inbound_debt_limit: 20,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -20,
             },
         },
     );
@@ -50,6 +52,7 @@ pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
                 inbound_price: 5,
                 inbound_debt_limit: 20,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -20,
             },
         },
     );
@@ -107,8 +110,9 @@ pub async fn get_connected_relay_client() -> (LinkNode, LinkNode) {
             obfs: ObfsConfig::None,
             price_config: PriceConfig {
                 inbound_price: 5,
-                inbound_debt_limit: 20,
+                inbound_debt_limit: 0,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -400,
             },
         },
     );
@@ -122,8 +126,9 @@ pub async fn get_connected_relay_client() -> (LinkNode, LinkNode) {
             obfs: ObfsConfig::None,
             price_config: PriceConfig {
                 inbound_price: 5,
-                inbound_debt_limit: 20,
+                inbound_debt_limit: 0,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -400,
             },
         },
     );
@@ -176,6 +181,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
                 inbound_price: 5,
                 inbound_debt_limit: 500,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -20,
             },
         },
     );
@@ -191,6 +197,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
                 inbound_price: 5,
                 inbound_debt_limit: 500,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -20,
             },
         },
     );
@@ -205,6 +212,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
                 inbound_price: 5,
                 inbound_debt_limit: 500,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -20,
             },
         },
     );
@@ -220,6 +228,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
                 inbound_price: 5,
                 inbound_debt_limit: 500,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -20,
             },
         },
     );
@@ -234,6 +243,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
                 inbound_price: 5,
                 inbound_debt_limit: 500,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -20,
             },
         },
     );
@@ -248,6 +258,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
                 inbound_price: 5,
                 inbound_debt_limit: 500,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -20,
             },
         },
     );
@@ -262,6 +273,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
                 inbound_price: 5,
                 inbound_debt_limit: 500,
                 outbound_max_price: 10,
+                outbound_min_debt_limit: -20,
             },
         },
     );
@@ -424,7 +436,7 @@ mod tests {
     }
 
     #[test]
-    fn client_relay_one_forward_pkt() {
+    fn client_relay_ten_forward_pkts() {
         let _ = init_tracing();
 
         let pkt = InnerPacket::Message(Message {
