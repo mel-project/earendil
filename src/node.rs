@@ -25,15 +25,14 @@ use socksv5::v5::{
 };
 use tracing::instrument;
 
-use crate::NodeId;
 use crate::{
     config::{ConfigFile, HavenConfig, HavenHandler, RelayConfig, Socks5Config, Socks5Fallback},
     control_protocol::{ControlClient, ControlService},
     link_node::{LinkConfig, LinkNode},
     n2r_node::{N2rConfig, N2rNode},
     v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, V2hConfig, V2hNode},
-    Dummy,
 };
+use crate::{Dummy, NodeId, PaymentSystem, PoW};
 
 /// The public interface to the whole Earendil system.
 pub struct Node {
@@ -50,7 +49,7 @@ pub struct NodeCtx {
 impl Node {
     pub async fn start(config: ConfigFile) -> anyhow::Result<Self> {
         let config_clone = config.clone();
-        let mel_client = if let Some(bootstrap_route) = config.mel_bootstrap {
+        let mel_client = Arc::new(if let Some(bootstrap_route) = config.mel_bootstrap {
             melprot::Client::connect_with_proxy(
                 NetID::Mainnet,
                 config.socks5.listen,
@@ -59,7 +58,16 @@ impl Node {
             .await?
         } else {
             melprot::Client::autoconnect(NetID::Mainnet).await?
-        };
+        });
+
+        // construct payment systems based on our config
+        let mut payment_systems: Vec<Box<dyn PaymentSystem>> = vec![];
+        if config.payment_methods.dummy.is_some() {
+            payment_systems.push(Box::new(Dummy::new()));
+        }
+        if config.payment_methods.pow.is_some() {
+            payment_systems.push(Box::new(PoW::new(mel_client.clone())));
+        }
 
         let link = LinkNode::new(
             LinkConfig {
@@ -70,7 +78,7 @@ impl Node {
                      }| (identity.actualize_relay().unwrap(), in_routes),
                 ),
                 out_routes: config.out_routes.clone(),
-                payment_systems: vec![Box::new(Dummy::new())],
+                payment_systems,
                 db_path: config.db_path.unwrap_or_else(|| {
                     let mut data_dir = dirs::data_dir().unwrap();
                     data_dir.push("earendil-link-store.db");

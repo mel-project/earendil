@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use earendil_crypt::RelayIdentitySecret;
 use melstructs::NetID;
@@ -6,8 +6,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 use crate::{
     config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
-    Dummy, LinkConfig, LinkNode,
+    LinkConfig, LinkNode, PoW,
 };
+
+use super::payment_system::Dummy;
 
 pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
     let idsk1 = RelayIdentitySecret::generate();
@@ -68,7 +70,7 @@ pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
             },
             payment_systems: vec![Box::new(Dummy::new())],
         },
-        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
     );
 
     let node2 = LinkNode::new(
@@ -82,7 +84,7 @@ pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
             },
             payment_systems: vec![Box::new(Dummy::new())],
         },
-        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
     );
 
     (node1, node2)
@@ -133,6 +135,8 @@ pub async fn get_connected_relay_client() -> (LinkNode, LinkNode) {
         },
     );
 
+    let mel_client_1 = Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap());
+
     let relay = LinkNode::new(
         LinkConfig {
             relay_config: Some((idsk1, in_1)),
@@ -142,11 +146,12 @@ pub async fn get_connected_relay_client() -> (LinkNode, LinkNode) {
                 path.push(idsk1.public().fingerprint().to_string());
                 path
             },
-            payment_systems: vec![Box::new(Dummy::new())],
+            payment_systems: vec![Box::new(PoW::new(mel_client_1.clone()))],
         },
-        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+        mel_client_1,
     );
 
+    let mel_client_2 = Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap());
     let client = LinkNode::new(
         LinkConfig {
             relay_config: None,
@@ -161,9 +166,9 @@ pub async fn get_connected_relay_client() -> (LinkNode, LinkNode) {
                 );
                 path
             },
-            payment_systems: vec![Box::new(Dummy::new())],
+            payment_systems: vec![Box::new(PoW::new(mel_client_2.clone()))],
         },
-        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+        mel_client_2,
     );
 
     (relay, client)
@@ -289,7 +294,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
             },
             payment_systems: vec![Box::new(Dummy::new())],
         },
-        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
     );
     let node2 = LinkNode::new(
         LinkConfig {
@@ -302,7 +307,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
             },
             payment_systems: vec![Box::new(Dummy::new())],
         },
-        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
     );
     let node3 = LinkNode::new(
         LinkConfig {
@@ -315,7 +320,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
             },
             payment_systems: vec![Box::new(Dummy::new())],
         },
-        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
     );
     let node4 = LinkNode::new(
         LinkConfig {
@@ -328,7 +333,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
             },
             payment_systems: vec![Box::new(Dummy::new())],
         },
-        melprot::Client::autoconnect(NetID::Mainnet).await.unwrap(),
+        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
     );
 
     (node1, node2, node3, node4)

@@ -87,5 +87,5 @@ pub(super) struct LinkNodeCtx {
     pub link_table: Arc<DashMap<NodeId, (Arc<Link>, LinkPaymentInfo)>>,
     pub payment_systems: Arc<PaymentSystemSelector>,
     pub store: Arc<LinkStore>,
-    pub mel_client: melprot::Client,
+    pub mel_client: Arc<melprot::Client>,
 }

@@ -1,5 +1,5 @@
 use anyhow::Context;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime};
 use colored::{ColoredString, Colorize};
 use earendil_crypt::HavenIdentitySecret;
 use earendil_packet::crypt::DhPublic;

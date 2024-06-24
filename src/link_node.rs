@@ -43,7 +43,7 @@ use stdcode::StdcodeSerializeExt;
 use crate::link_node::route_util::{forward_route_to, route_to_instructs};
 
 use self::link::LinkMessage;
-pub use payment_system::{Dummy, SupportedPaymentSystems};
+pub use payment_system::{Dummy, PaymentSystem, PoW, SupportedPaymentSystems};
 use rand::prelude::*;
 pub use types::{IncomingMsg, LinkConfig, NodeId, NodeIdSecret};
 /// An implementation of the link-level interface.
@@ -56,7 +56,7 @@ pub struct LinkNode {
 
 impl LinkNode {
     /// Creates a new link node.
-    pub fn new(mut cfg: LinkConfig, mel_client: melprot::Client) -> Self {
+    pub fn new(mut cfg: LinkConfig, mel_client: Arc<melprot::Client>) -> Self {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
         let store = smolscale::block_on(LinkStore::new(cfg.db_path.clone())).unwrap();

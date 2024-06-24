@@ -7,7 +7,7 @@ use itertools::Itertools;
 use smol::channel::Sender;
 
 use crate::{
-    link_node::{link_protocol::LinkClient, route_util::one_hop_closer, types::NodeIdSecret},
+    link_node::{link_protocol::LinkClient, route_util::one_hop_closer},
     DebtEntry,
 };
 
