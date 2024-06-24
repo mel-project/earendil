@@ -96,6 +96,7 @@ impl LinkNode {
             link_table: Arc::new(DashMap::new()),
             store: Arc::new(store),
             payment_systems: Arc::new(payment_systems),
+            payments: Arc::new(DashMap::new()),
             mel_client,
         };
         let _task = Immortal::respawn(
@@ -448,7 +449,7 @@ async fn link_node_loop(
                                                 let link_node_ctx = link_node_ctx.clone();
                                                 smolscale::spawn(async move {
                                                     if let Err(e) = send_msg::send_msg(
-                                                        &link_node_ctx,
+                                                        Arc::new(link_node_ctx),
                                                         NodeId::Client(client_id),
                                                         LinkMessage::ToClient {
                                                             body: pkt.to_vec().into(),

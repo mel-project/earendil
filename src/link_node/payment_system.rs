@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use super::types::NodeId;
 
 pub struct PaymentSystemSelector {
-    inner: HashMap<String, Box<dyn PaymentSystem>>,
+    inner: HashMap<String, Arc<Box<dyn PaymentSystem>>>,
 }
 
 impl PaymentSystemSelector {
@@ -16,12 +16,13 @@ impl PaymentSystemSelector {
         }
     }
 
-    pub fn get(&self, payment_system: &str) -> Option<&Box<dyn PaymentSystem>> {
+    pub fn get(&self, payment_system: &str) -> Option<&Arc<Box<dyn PaymentSystem>>> {
         self.inner.get(payment_system)
     }
 
     pub fn insert(&mut self, payment_system: Box<dyn PaymentSystem>) {
-        self.inner.insert(payment_system.name(), payment_system);
+        self.inner
+            .insert(payment_system.name(), Arc::new(payment_system));
     }
 
     pub fn get_available(&self) -> Vec<(String, String)> {
@@ -34,10 +35,10 @@ impl PaymentSystemSelector {
     pub fn select(
         &self,
         name_addrs: &[(String, String)],
-    ) -> Option<(&Box<dyn PaymentSystem>, String)> {
+    ) -> Option<(Arc<Box<dyn PaymentSystem>>, String)> {
         for (name, addr) in name_addrs {
             if let Some(ret) = self.get(name) {
-                return Some((ret, addr.to_string()));
+                return Some((ret.clone(), addr.to_string()));
             }
         }
         None
@@ -66,6 +67,8 @@ pub trait PaymentSystem: Send + Sync + 'static {
     fn my_addr(&self) -> String;
 
     fn name(&self) -> String;
+
+    fn clone_box(&self) -> Box<dyn PaymentSystem>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -139,8 +142,13 @@ impl PaymentSystem for Dummy {
     fn name(&self) -> String {
         "dummy".to_string()
     }
+
+    fn clone_box(&self) -> Box<dyn PaymentSystem> {
+        Box::new(self.clone())
+    }
 }
 
+#[derive(Clone)]
 pub struct PoW;
 
 #[async_trait]
@@ -167,5 +175,9 @@ impl PaymentSystem for PoW {
 
     fn name(&self) -> String {
         "pow".to_string()
+    }
+
+    fn clone_box(&self) -> Box<dyn PaymentSystem> {
+        Box::new(self.clone())
     }
 }

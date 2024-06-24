@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Display,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -86,6 +91,7 @@ pub(super) struct LinkNodeCtx {
     pub relay_graph: Arc<RwLock<RelayGraph>>,
     pub link_table: Arc<DashMap<NodeId, (Arc<Link>, LinkPaymentInfo)>>,
     pub payment_systems: Arc<PaymentSystemSelector>,
+    pub payments: Arc<DashMap<NodeId, smol::lock::RwLock<smol::Task<anyhow::Result<String>>>>>,
     pub store: Arc<LinkStore>,
     pub mel_client: melprot::Client,
 }
