@@ -103,6 +103,8 @@ pub(super) async fn send_msg(
 
     // pay if we're within 1 MEL of the debt limit
     if link_w_payinfo.1.debt_limit - curr_debt <= 1_000_000 {
+        let link_client = LinkClient(link_w_payinfo.0.rpc_transport());
+        let ott = link_client.get_ott().await??;
         let pay_amt = (link_w_payinfo.1.debt_limit - curr_debt).abs() + 1_000_000;
         tracing::debug!(
             "within 1 MEL of debt limit! curr_debt={curr_debt}; debt_limit={}. SENDING PAYMENT with amt={pay_amt}!",
@@ -113,15 +115,13 @@ pub(super) async fn send_msg(
             .payment_systems
             .select(&link_w_payinfo.1.paysystem_name_addrs)
             .context("no supported payment system")?;
-        let my_id = match link_node_ctx.my_id {
-            NodeIdSecret::Relay(idsk) => NodeId::Relay(idsk.public().fingerprint()),
-            NodeIdSecret::Client(id) => NodeId::Client(id),
-        };
+        let my_id = link_node_ctx.my_id.public();
+
         loop {
-            match paysystem.pay(my_id, &to_payaddr, pay_amt as _).await {
+            match paysystem.pay(my_id, &to_payaddr, pay_amt as _, &ott).await {
                 Ok(proof) => {
                     // send payment proof to remote
-                    LinkClient(link_w_payinfo.0.rpc_transport())
+                    link_client
                         .send_payment_proof(pay_amt as _, paysystem.name(), proof.clone())
                         .await??;
                     tracing::debug!("sent payment proof to remote!");

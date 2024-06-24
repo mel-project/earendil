@@ -107,14 +107,23 @@ impl LinkProtocol for LinkProtocolImpl {
     ) -> Result<(), LinkRpcErr> {
         let neigh = self.remote_id;
         if let Some(paysystem) = self.ctx.payment_systems.get(&paysystem_name) {
-            if paysystem
+            if let Some(payment_id) = paysystem
                 .verify_payment(neigh, amount, &proof)
                 .await
-                .map_err(|e| {
-                    tracing::warn!("payment verification failed: {:?}", e);
-                    LinkRpcErr::PaymentVerificationFailed(e.to_string())
-                })?
+                .map_err(|e| LinkRpcErr::PaymentVerificationFailed(e.to_string()))?
             {
+                // prevent double-spending
+                if self
+                    .ctx
+                    .store
+                    .check_and_consume_ott(&payment_id)
+                    .await
+                    .map_err(|e| LinkRpcErr::InternalServerError(e.to_string()))?
+                    .is_none()
+                {
+                    return Err(LinkRpcErr::InvalidPaymentId);
+                }
+                // log payment
                 self.ctx
                     .store
                     .insert_debt_entry(
@@ -143,14 +152,4 @@ impl LinkProtocol for LinkProtocolImpl {
             return Err(LinkRpcErr::UnacceptedPaysystem);
         }
     }
-
-    // #[tracing::instrument(skip(self))]
-    // async fn request_seed(&self) -> Option<Seed> {
-    //     todo!()
-    // }
-
-    // #[tracing::instrument(skip(self))]
-    // async fn start_settlement(&self, _req: SettlementRequest) -> Option<SettlementResponse> {
-    //     todo!()
-    // }
 }

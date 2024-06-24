@@ -196,11 +196,20 @@ impl LinkStore {
         Ok(ott)
     }
 
-    pub async fn remove_ott(&self, ott: String) -> anyhow::Result<()> {
-        sqlx::query("DELETE FROM otts where ott=$1")
+    /// returns Some(timestamp) = when the ott was created if was valid, None otherwise
+    pub async fn check_and_consume_ott(&self, ott: &str) -> anyhow::Result<Option<i64>> {
+        let res: Option<(i64,)> = sqlx::query_as("SELECT timestamp FROM otts WHERE ott=$1")
             .bind(ott)
-            .execute(&self.pool)
+            .fetch_optional(&self.pool)
             .await?;
-        Ok(())
+        if let Some((timestamp,)) = res {
+            sqlx::query("DELETE FROM otts where ott=$1")
+                .bind(ott)
+                .execute(&self.pool)
+                .await?;
+            Ok(Some(timestamp))
+        } else {
+            Ok(None)
+        }
     }
 }

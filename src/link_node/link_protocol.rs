@@ -38,11 +38,6 @@ pub trait LinkProtocol {
         paysystem_name: String,
         proof: String,
     ) -> Result<(), LinkRpcErr>;
-    // /// Sends a settlement request and waits until a response is received or the call times out.
-    // async fn start_settlement(&self, req: SettlementRequest) -> Option<SettlementResponse>;
-
-    // /// Request a MelPoW seed (used to create an automatic payment proof).
-    // async fn request_seed(&self) -> Option<Seed>;
 }
 
 /// Response to an authentication challenge.
@@ -72,6 +67,8 @@ pub enum LinkRpcErr {
     UnacceptedPaysystem,
     #[error("payment verification failed")]
     PaymentVerificationFailed(String),
+    #[error("invalid payment_id")]
+    InvalidPaymentId,
     #[error("internal server error: {0}")]
     InternalServerError(String),
 }

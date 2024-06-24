@@ -47,14 +47,21 @@ impl PaymentSystemSelector {
 #[async_trait]
 pub trait PaymentSystem: Send + Sync + 'static {
     /// `amount` is in micromel. Returns proof of payment
-    async fn pay(&self, my_id: NodeId, to: &str, amount: u64) -> anyhow::Result<String>;
+    async fn pay(
+        &self,
+        my_id: NodeId,
+        to: &str,
+        amount: u64,
+        payment_id: &str,
+    ) -> anyhow::Result<String>;
 
+    /// returns Some(payment_id) if payment is valid, None otherwise
     async fn verify_payment(
         &self,
         from: NodeId,
         amount: u64,
         proof: &str,
-    ) -> anyhow::Result<bool>;
+    ) -> anyhow::Result<Option<String>>;
 
     fn my_addr(&self) -> String;
 
@@ -89,12 +96,6 @@ pub struct Dummy {
     my_addr: u64,
 }
 
-impl Default for Dummy {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Dummy {
     pub fn new() -> Self {
         Self {
@@ -105,8 +106,16 @@ impl Dummy {
 
 #[async_trait]
 impl PaymentSystem for Dummy {
-    async fn pay(&self, my_id: NodeId, to: &str, amount: u64) -> anyhow::Result<String> {
-        Ok(format!("{:?},{to},{amount}", my_id))
+    async fn pay(
+        &self,
+        my_id: NodeId,
+        to: &str,
+        amount: u64,
+        payment_id: &str,
+    ) -> anyhow::Result<String> {
+        let proof =
+            serde_json::to_string(&(format!("{my_id},{to},{amount}"), payment_id.to_string()))?;
+        Ok(proof)
     }
 
     async fn verify_payment(
@@ -114,8 +123,13 @@ impl PaymentSystem for Dummy {
         from: NodeId,
         amount: u64,
         proof: &str,
-    ) -> anyhow::Result<bool> {
-        Ok(proof == format!("{:?},{},{amount}", from, self.my_addr))
+    ) -> anyhow::Result<Option<String>> {
+        let (proof, payment_id): (String, String) = serde_json::from_str(proof)?;
+        if proof == format!("{from},{},{amount}", self.my_addr) {
+            Ok(Some(payment_id))
+        } else {
+            Ok(None)
+        }
     }
 
     fn my_addr(&self) -> String {
@@ -124,5 +138,34 @@ impl PaymentSystem for Dummy {
 
     fn name(&self) -> String {
         "dummy".to_string()
+    }
+}
+
+pub struct PoW;
+
+#[async_trait]
+impl PaymentSystem for PoW {
+    async fn pay(&self, my_id: NodeId, to: &str, amount: u64, ott: &str) -> anyhow::Result<String> {
+        // return (ott, difficulty, proof).serialize() as proof
+        todo!()
+    }
+
+    async fn verify_payment(
+        &self,
+        from: NodeId,
+        amount: u64,
+        proof: &str,
+    ) -> anyhow::Result<Option<String>> {
+        // deserialize proof
+        // verify proof with melpow & return payment_id
+        todo!()
+    }
+
+    fn my_addr(&self) -> String {
+        String::new()
+    }
+
+    fn name(&self) -> String {
+        "pow".to_string()
     }
 }
