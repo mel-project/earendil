@@ -195,4 +195,12 @@ impl LinkStore {
             .await?;
         Ok(ott)
     }
+
+    pub async fn remove_ott(&self, ott: String) -> anyhow::Result<()> {
+        sqlx::query("DELETE FROM otts where ott=$1")
+            .bind(ott)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
 }
