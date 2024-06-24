@@ -10,11 +10,11 @@ pub struct LinkStore {
     pool: SqlitePool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ChatEntry {
     pub text: String,
     /// unix timestamp
-    pub timestamp: u64,
+    pub timestamp: i64,
     pub is_outgoing: bool,
 }
 
@@ -23,7 +23,7 @@ pub struct DebtEntry {
     /// micromels
     pub delta: i64,
     /// unix timestamp
-    pub timestamp: u64,
+    pub timestamp: i64,
     pub proof: Option<String>,
 }
 
@@ -68,7 +68,7 @@ impl LinkStore {
             "INSERT INTO chats (neighbor, timestamp, text, is_outgoing) VALUES ($1, $2, $3, $4)",
         )
         .bind(serde_json::to_string(&neighbor)?)
-        .bind(chat_entry.timestamp as i64)
+        .bind(chat_entry.timestamp)
         .bind(chat_entry.text)
         .bind(chat_entry.is_outgoing)
         .execute(&self.pool)
@@ -86,8 +86,45 @@ impl LinkStore {
             .into_iter()
             .map(|(timestamp, text, is_outgoing)| ChatEntry {
                 text,
-                timestamp: timestamp as u64,
+                timestamp,
                 is_outgoing,
+            })
+            .collect())
+    }
+
+    pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NeighborId, ChatEntry, u32)>> {
+        let res: Vec<(String, i64, String, bool, i32)> = sqlx::query_as(
+            r#"
+            SELECT 
+                c.neighbor, 
+                c.timestamp, 
+                c.text, 
+                c.is_outgoing, 
+                count_subquery.count
+            FROM 
+                chats c
+            JOIN 
+                (SELECT neighbor, MAX(id) as max_id, COUNT(*) as count
+                FROM chats
+                GROUP BY neighbor) count_subquery
+            ON 
+                c.neighbor = count_subquery.neighbor AND c.id = count_subquery.max_id;
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(res
+            .into_iter()
+            .map(|(neighbor, timestamp, text, is_outgoing, count)| {
+                (
+                    serde_json::from_str(&neighbor).unwrap(),
+                    ChatEntry {
+                        text: text.clone(),
+                        timestamp,
+                        is_outgoing,
+                    },
+                    count as _,
+                )
             })
             .collect())
     }
@@ -101,7 +138,7 @@ impl LinkStore {
             "INSERT INTO debts (neighbor, timestamp, delta, proof) VALUES ($1, $2, $3, $4)",
         )
         .bind(serde_json::to_string(&neighbor)?)
-        .bind(debt_entry.timestamp as i64)
+        .bind(debt_entry.timestamp)
         .bind(debt_entry.delta)
         .bind(debt_entry.proof)
         .execute(&self.pool)

@@ -1,4 +1,3 @@
-use anyhow::Context;
 use bytes::Bytes;
 use earendil_crypt::{
     HavenFingerprint, HavenIdentityPublic, HavenIdentitySecret, RelayFingerprint,
@@ -70,12 +69,7 @@ pub async fn dht_insert(ctx: &V2hNodeCtx, locator: HavenLocator) {
         let gclient = GlobalRpcClient(GlobalRpcTransport::new(replica, ctx.n2r.bind_anon()));
         gatherer.push(async move {
             tracing::trace!("key {key} inserting into remote replica {replica}");
-            anyhow::Ok(
-                gclient
-                    .dht_insert(locator.clone())
-                    .await
-                    .context("DHT insert failed")?,
-            )
+            anyhow::Ok(gclient.dht_insert(locator.clone()).await?)
         })
     }
     while let Some(res) = gatherer.next().await {

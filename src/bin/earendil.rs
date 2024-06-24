@@ -1,10 +1,9 @@
-use std::path::PathBuf;
-
 use anyhow::Context;
 use bip39::Mnemonic;
 use clap::Parser;
-use clap::Subcommand;
 use earendil::config::ConfigFile;
+use earendil::main_control;
+use earendil::Commands;
 use earendil::Node;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -15,24 +14,6 @@ use tracing_subscriber::EnvFilter;
 struct Args {
     #[command(subcommand)]
     command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Runs an Earendil daemon.
-    Daemon {
-        #[arg(short, long)]
-        config: PathBuf,
-    },
-
-    /// Runs a control-protocol verb.
-    // Control {
-    //     #[arg(short, long, default_value = "127.0.0.1:18964")]
-    //     connect: SocketAddr,
-    //     #[command(subcommand)]
-    //     control_command: ControlCommand,
-    // },
-    GenerateSeed,
 }
 
 pub fn init_tracing() -> anyhow::Result<()> {
@@ -76,6 +57,10 @@ fn main() -> anyhow::Result<()> {
                 }
             })
         }
+        Commands::Control {
+            connect,
+            control_command,
+        } => smolscale::block_on(main_control(control_command, connect)),
         Commands::GenerateSeed => {
             let seed_phrase = gen_seed()?;
             println!("{}", seed_phrase);

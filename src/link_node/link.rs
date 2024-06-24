@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use smol::io::{AsyncWriteExt, BufReader};
 use stdcode::StdcodeSerializeExt;
 
-use crate::pascal::{read_pascal, write_pascal};
+use super::pascal::{read_pascal, write_pascal};
 
 const LABEL_RPC: &[u8] = b"!rpc";
 

@@ -15,7 +15,7 @@ use thiserror::Error;
 /// A full, indexed representation of the Earendil relay graph. Includes info about:
 /// - Which fingerprints are adjacent to which fingerprints
 /// - What signing keys and midterm keys do each fingerprint have
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Clone)]
 pub struct RelayGraph {
     unalloc_id: u64,
     fp_to_id: HashMap<RelayFingerprint, u64>,

@@ -1,22 +1,32 @@
-use std::{net::Ipv4Addr, str::FromStr, sync::Arc};
+mod control_protocol_impl;
+
+use std::{convert::Infallible, net::Ipv4Addr, str::FromStr, sync::Arc};
 
 use anyhow::Context;
+use async_trait::async_trait;
+use clone_macro::clone;
+use control_protocol_impl::ControlProtocolImpl;
 use earendil_crypt::{HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
 use futures::{future::Shared, stream::FuturesUnordered, AsyncReadExt, TryFutureExt};
 use melstructs::NetID;
+use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
+use nanorpc_http::server::HttpRpcServer;
 use nursery_macro::nursery;
 use smol::{
     future::FutureExt,
     net::{TcpListener, TcpStream},
     stream::StreamExt,
 };
+use smolscale::immortal::{Immortal, RespawnStrategy};
 use socksv5::v5::{
     read_handshake, read_request, write_auth_method, write_request_status, SocksV5AuthMethod,
     SocksV5Host, SocksV5RequestStatus,
 };
+use tracing::instrument;
 
 use crate::{
     config::{ConfigFile, HavenConfig, HavenHandler, RelayConfig, Socks5Config, Socks5Fallback},
+    control_protocol::{ControlClient, ControlService},
     link_node::{LinkConfig, LinkNode},
     n2r_node::{N2rConfig, N2rNode},
     v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, V2hConfig, V2hNode},
@@ -25,18 +35,26 @@ use crate::{
 
 /// The public interface to the whole Earendil system.
 pub struct Node {
-    v2h: Arc<V2hNode>,
+    ctx: NodeCtx,
     task: Shared<smol::Task<Result<(), Arc<anyhow::Error>>>>,
+}
+
+#[derive(Clone)]
+pub struct NodeCtx {
+    v2h: Arc<V2hNode>,
+    config: ConfigFile,
 }
 
 impl Node {
     pub async fn start(config: ConfigFile) -> anyhow::Result<Self> {
-        let mel_client = melprot::Client::connect_with_proxy(
-            NetID::Mainnet,
-            config.socks5.listen,
-            config.mel_bootstrap,
-        )
-        .await?;
+        let config_clone = config.clone();
+        let mel_client = melprot::Client::autoconnect(NetID::Mainnet).await?;
+        // let mel_client = melprot::Client::connect_with_proxy(
+        //     NetID::Mainnet,
+        //     config.socks5.listen,
+        //     config.mel_bootstrap,
+        // )
+        // .await?;
         let link = LinkNode::new(
             LinkConfig {
                 relay_config: config.relay_config.clone().map(
@@ -66,7 +84,21 @@ impl Node {
 
         // start loops for handling socks5, etc, etc
         let v2h_clone = v2h.clone();
+        let ctx = NodeCtx {
+            v2h,
+            config: config_clone,
+        };
+
+        let ctx_clone = ctx.clone();
         let daemon_loop = async move {
+            let _control_protocol = Immortal::respawn(
+                RespawnStrategy::Immediate,
+                clone!([ctx_clone], move || control_protocol_loop(
+                    ctx_clone.clone()
+                )
+                .map_err(|e| tracing::warn!("control_protocol_loop restart: {e}"))),
+            );
+
             if config.havens.is_empty() {
                 smol::future::pending().await
             } else {
@@ -91,7 +123,7 @@ impl Node {
         let task = smolscale::spawn(daemon_loop.map_err(Arc::new));
 
         Ok(Self {
-            v2h,
+            ctx,
             task: futures::FutureExt::shared(task),
         })
     }
@@ -102,7 +134,7 @@ impl Node {
 
     /// Creates a low-level, unreliable packet connection.
     pub async fn packet_connect(&self, dest: HavenEndpoint) -> anyhow::Result<HavenPacketConn> {
-        self.v2h.packet_connect(dest).await
+        self.ctx.v2h.packet_connect(dest).await
     }
 
     /// Creates a low-level, unreliable packet listener.
@@ -112,12 +144,12 @@ impl Node {
         port: u16,
         rendezvous: RelayFingerprint,
     ) -> anyhow::Result<HavenListener> {
-        self.v2h.packet_listen(identity, port, rendezvous).await
+        self.ctx.v2h.packet_listen(identity, port, rendezvous).await
     }
 
     /// Creates a new pooled visitor. Under Earendil's anonymity model, each visitor should be unlinkable to any other visitor, but streams created within each visitor are linkable to the same haven each other by the haven (though not by the network).
     pub async fn pooled_visitor(&self) -> PooledVisitor {
-        self.v2h.pooled_visitor().await
+        self.ctx.v2h.pooled_visitor().await
     }
 
     /// Creates a new pooled listener.
@@ -127,8 +159,35 @@ impl Node {
         port: u16,
         rendezvous: RelayFingerprint,
     ) -> anyhow::Result<PooledListener> {
-        self.v2h.pooled_listen(identity, port, rendezvous).await
+        self.ctx.v2h.pooled_listen(identity, port, rendezvous).await
     }
+
+    pub fn control_client(&self) -> ControlClient {
+        ControlClient::from(DummyControlProtocolTransport {
+            inner: ControlService(ControlProtocolImpl::new(self.ctx.clone())),
+        })
+    }
+}
+struct DummyControlProtocolTransport {
+    inner: ControlService<ControlProtocolImpl>,
+}
+
+#[async_trait]
+impl RpcTransport for DummyControlProtocolTransport {
+    type Error = Infallible;
+
+    async fn call_raw(&self, req: JrpcRequest) -> Result<JrpcResponse, Self::Error> {
+        Ok(self.inner.respond_raw(req).await)
+    }
+}
+
+#[instrument(skip(ctx))]
+/// Loop that handles the control protocol
+async fn control_protocol_loop(ctx: NodeCtx) -> anyhow::Result<()> {
+    let http = HttpRpcServer::bind(ctx.config.control_listen).await?;
+    let service = ControlService(ControlProtocolImpl::new(ctx));
+    http.run(service).await?;
+    Ok(())
 }
 
 async fn serve_haven(v2h: Arc<V2hNode>, cfg: HavenConfig) -> anyhow::Result<()> {

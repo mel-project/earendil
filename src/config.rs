@@ -55,8 +55,7 @@ impl ConfigFile {
 }
 
 fn default_mel_bootstrap() -> String {
-    // TODO: haven address for mel bootstrap node
-    todo!()
+    "todo".to_string()
 }
 
 fn default_control_listen() -> SocketAddr {

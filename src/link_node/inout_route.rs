@@ -1,7 +1,7 @@
 use std::{
     net::{SocketAddr, ToSocketAddrs},
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -21,7 +21,7 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::{
     config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
-    pascal::{read_pascal, write_pascal},
+    link_node::pascal::read_pascal,
     DebtEntry,
 };
 
@@ -30,6 +30,7 @@ use super::{
     link::{Link, LinkMessage},
     link_protocol::LinkService,
     link_protocol_impl::LinkProtocolImpl,
+    pascal::write_pascal,
     types::{ClientId, LinkNodeCtx, LinkNodeId, LinkPaymentInfo, NeighborId},
 };
 
@@ -207,10 +208,7 @@ async fn handle_pipe(
                     their_id,
                     DebtEntry {
                         delta: -price_config.inbound_price,
-                        timestamp: SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .expect("Time went backwards")
-                            .as_secs(),
+                        timestamp: chrono::offset::Utc::now().timestamp(),
                         proof: None,
                     },
                 )

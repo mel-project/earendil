@@ -1,4 +1,4 @@
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::Instant;
 
 use anyhow::Context;
 use earendil_crypt::RelayFingerprint;
@@ -133,10 +133,7 @@ pub(super) async fn send_msg(
                             to,
                             DebtEntry {
                                 delta: -curr_debt,
-                                timestamp: SystemTime::now()
-                                    .duration_since(UNIX_EPOCH)
-                                    .expect("time went backwards")
-                                    .as_secs(),
+                                timestamp: chrono::offset::Utc::now().timestamp(),
                                 proof: Some(proof),
                             },
                         )
@@ -156,10 +153,7 @@ pub(super) async fn send_msg(
                 to,
                 DebtEntry {
                     delta: link_w_payinfo.1.price,
-                    timestamp: SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("time went backwards")
-                        .as_secs(),
+                    timestamp: chrono::offset::Utc::now().timestamp(),
                     proof: None,
                 },
             )

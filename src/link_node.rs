@@ -4,6 +4,7 @@ mod link;
 mod link_protocol;
 mod link_protocol_impl;
 mod link_store;
+mod pascal;
 mod payment_system;
 mod route_util;
 mod send_msg;
@@ -18,9 +19,9 @@ use payment_system::PaymentSystemSelector;
 use send_msg::{send_to_next_peeler, send_to_nonself_next_peeler};
 use std::{
     sync::Arc,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
-use types::{LinkNodeCtx, LinkNodeId};
+use types::LinkNodeCtx;
 
 use anyhow::Context as _;
 use clone_macro::clone;
@@ -39,13 +40,12 @@ use smol::{
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use stdcode::StdcodeSerializeExt;
 
-use crate::link_node::route_util::{forward_route_to, one_hop_closer, route_to_instructs};
+use crate::link_node::route_util::{forward_route_to, route_to_instructs};
 
-use self::{link::LinkMessage, types::NeighborId};
+use self::link::LinkMessage;
 pub use payment_system::{Dummy, SupportedPaymentSystems};
 use rand::prelude::*;
-pub use types::{IncomingMsg, LinkConfig};
-
+pub use types::{IncomingMsg, LinkConfig, LinkNodeId, NeighborId};
 /// An implementation of the link-level interface.
 pub struct LinkNode {
     ctx: LinkNodeCtx,
@@ -225,6 +225,26 @@ impl LinkNode {
         self.ctx.relay_graph.read().all_nodes().collect_vec()
     }
 
+    /// Gets the current relay graph.
+    pub fn relay_graph(&self) -> RelayGraph {
+        self.ctx.relay_graph.read().clone()
+    }
+
+    /// Gets my identity.
+    pub fn my_id(&self) -> LinkNodeId {
+        self.ctx.my_id.clone()
+    }
+
+    /// Gets all our currently connected neighbors.
+    pub fn all_neighs(&self) -> Vec<NeighborId> {
+        self.ctx
+            .link_table
+            .iter()
+            .map(|entry| *entry.key())
+            .collect_vec()
+    }
+
+    /// Sends a chat message to a neighbor.
     pub async fn send_chat(&self, neighbor: NeighborId, text: String) -> anyhow::Result<()> {
         let link_entry = self
             .ctx
@@ -240,7 +260,7 @@ impl LinkNode {
                 neighbor,
                 ChatEntry {
                     text,
-                    timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+                    timestamp: chrono::offset::Utc::now().timestamp(),
                     is_outgoing: true,
                 },
             )
@@ -248,8 +268,13 @@ impl LinkNode {
         Ok(())
     }
 
+    /// Gets the entire chat history with a neighbor.
     pub async fn get_chat_history(&self, neighbor: NeighborId) -> anyhow::Result<Vec<ChatEntry>> {
         self.ctx.store.get_chat_history(neighbor).await
+    }
+
+    pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NeighborId, ChatEntry, u32)>> {
+        self.ctx.store.get_chat_summary().await
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -25,10 +25,19 @@ pub enum NeighborId {
     Relay(RelayFingerprint),
     Client(ClientId),
 }
-// TODO: impl Display for NeighborId
+
+impl Display for NeighborId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let displayable = match self {
+            NeighborId::Relay(relay_id) => relay_id.to_string(),
+            NeighborId::Client(client_id) => client_id.to_string(),
+        };
+        write!(f, "{}", displayable)
+    }
+}
 
 #[derive(Clone)]
-pub(super) enum LinkNodeId {
+pub enum LinkNodeId {
     Relay(RelayIdentitySecret),
     Client(ClientId),
 }

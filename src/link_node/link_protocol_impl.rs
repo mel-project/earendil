@@ -1,5 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use async_trait::async_trait;
 
 use earendil_crypt::RelayFingerprint;
@@ -80,10 +78,7 @@ impl LinkProtocol for LinkProtocolImpl {
     #[tracing::instrument(skip(self))]
     async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr> {
         let chat_entry = ChatEntry {
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards")
-                .as_secs(),
+            timestamp: chrono::offset::Utc::now().timestamp(),
             text: msg,
             is_outgoing: false,
         };
@@ -119,10 +114,7 @@ impl LinkProtocol for LinkProtocolImpl {
                         neigh,
                         crate::DebtEntry {
                             delta: amount as _,
-                            timestamp: SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .expect("Time went backwards")
-                                .as_secs(),
+                            timestamp: chrono::offset::Utc::now().timestamp(),
                             proof: Some(proof),
                         },
                     )

@@ -10,11 +10,13 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use clone_macro::clone;
+use dht::{dht_get, dht_insert};
 use earendil_crypt::{
     AnonEndpoint, HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint,
 };
 
 use futures::TryFutureExt;
+use global_rpc::{GlobalRpcTransport};
 use nanorpc::{JrpcRequest, RpcService};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use stdcode::StdcodeSerializeExt;
@@ -34,6 +36,7 @@ use self::{
     global_rpc::{GlobalRpcImpl, GlobalRpcService, GLOBAL_RPC_DOCK},
     vrh::V2rMessage,
 };
+pub use dht::HavenLocator;
 
 const HAVEN_FORWARD_DOCK: u32 = 100002;
 
@@ -111,8 +114,27 @@ impl V2hNode {
         ))
     }
 
+    pub fn n2r_node(&self) -> &N2rNode {
+        &self.ctx.n2r
+    }
+
     pub fn link_node(&self) -> &LinkNode {
         self.ctx.n2r.link_node()
+    }
+
+    pub fn grpc_transport(&self, dest: RelayFingerprint) -> GlobalRpcTransport {
+        GlobalRpcTransport::new(dest, self.ctx.n2r.bind_anon())
+    }
+
+    pub async fn dht_get(
+        &self,
+        fingerprint: HavenFingerprint,
+    ) -> anyhow::Result<Option<HavenLocator>> {
+        dht_get(&self.ctx, fingerprint).await
+    }
+
+    pub async fn dht_insert(&self, locator: HavenLocator) {
+        dht_insert(&self.ctx, locator).await
     }
 }
 
