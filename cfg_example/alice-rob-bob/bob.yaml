@@ -17,10 +17,15 @@ relay_config:
 db_path: ./bob.db
 control_listen: 127.0.0.1:22222
 
+socks5:
+  listen: 127.0.0.1:12121
+  fallback: pass_through
+
 out_routes:
   rob:
     connect: 127.0.0.1:34567
-    obfs: none
+    obfs:
+      sosistab3: "some-cookie"
     fingerprint: 04c48b49e5ba915e2f47655011a3aed75b3ac7e3b468bbc84b23884546312046
     price_config:
       inbound_price: 0
