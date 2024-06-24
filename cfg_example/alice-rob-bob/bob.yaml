@@ -9,7 +9,7 @@ relay_config:
         # sosistab3: "some-cookie-lala-doodoo"
       listen: 0.0.0.0:12345
       price_config:
-        inbound_price: 0
+        inbound_price: 1
         inbound_debt_limit: 0
         outbound_max_price: 10
         outbound_min_debt_limit: -10
@@ -28,7 +28,7 @@ out_routes:
       sosistab3: "some-cookie"
     fingerprint: 04c48b49e5ba915e2f47655011a3aed75b3ac7e3b468bbc84b23884546312046
     price_config:
-      inbound_price: 0
+      inbound_price: 1
       inbound_debt_limit: 0
       outbound_max_price: 10
       outbound_min_debt_limit: -10

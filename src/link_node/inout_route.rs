@@ -220,8 +220,9 @@ async fn handle_pipe(
             tracing::trace!("received LinkMessage from {:?}", their_id);
             let debt = link_node_ctx.store.get_debt(their_id).await?;
             tracing::debug!(
-                "downstream's CURR_DEBT = {debt}, debt_limit={}",
-                price_config.inbound_debt_limit
+                "downstream's CURR_DEBT = {debt}, debt_limit={}, delta = {}",
+                price_config.inbound_debt_limit,
+                -price_config.inbound_price
             );
             if debt < -price_config.inbound_debt_limit {
                 tracing::warn!(

@@ -100,7 +100,6 @@ pub(super) async fn send_msg(
         .context("no link to this NeighborId")?;
     // check debt & send payment if we are close to the debt limit
     let curr_debt = link_node_ctx.store.get_debt(to).await?;
-    tracing::debug!("CURR_DEBT: {curr_debt}");
 
     // pay if we're within 1 MEL of the debt limit
     if link_w_payinfo.1.debt_limit - curr_debt <= 1_000_000 {
@@ -125,20 +124,20 @@ pub(super) async fn send_msg(
                     LinkClient(link_w_payinfo.0.rpc_transport())
                         .send_payment_proof(pay_amt as _, paysystem.name(), proof.clone())
                         .await??;
-                    println!("sent payment!");
+                    tracing::debug!("sent payment proof to remote!");
                     // decrement our debt to them
                     link_node_ctx
                         .store
                         .insert_debt_entry(
                             to,
                             DebtEntry {
-                                delta: -curr_debt,
+                                delta: -pay_amt,
                                 timestamp: chrono::offset::Utc::now().timestamp(),
                                 proof: Some(proof),
                             },
                         )
                         .await?;
-                    tracing::debug!("SUCCESSFULLY SENT PAYMENT!");
+                    tracing::debug!("logged payment!");
                     break;
                 }
                 Err(e) => tracing::warn!("sending payment to {:?} failed with ERR: {e}", to),
