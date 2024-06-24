@@ -5,7 +5,8 @@ relay_config:
   in_routes:
     main_udp:
       listen: 0.0.0.0:34567
-      obfs: none
+      obfs:
+        sosistab3: "some-cookie"
       price_config:
         inbound_price: 0
         inbound_debt_limit: 0

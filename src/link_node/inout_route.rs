@@ -16,6 +16,7 @@ use sillad::{
     Pipe,
 };
 
+use sillad_sosistab3::{dialer::SosistabDialer, Cookie};
 use smol::{channel::Sender, future::FutureExt};
 use stdcode::StdcodeSerializeExt;
 
@@ -57,7 +58,24 @@ pub(super) async fn process_in_route(
             ))
             .detach();
         },
-        ObfsConfig::Sosistab3(_) => todo!(),
+        ObfsConfig::Sosistab3(cookie) => {
+            let mut sosistab_listener =
+                sillad_sosistab3::listener::SosistabListener::new(listener, Cookie::new(cookie));
+            loop {
+                let sosistab_pipe = sosistab_listener.accept().await?;
+                tracing::debug!(
+                    remote_addr = debug(sosistab_pipe.remote_addr()),
+                    "accepted a SOSISTAB connection"
+                );
+                smolscale::spawn(handle_pipe(
+                    link_node_ctx.clone(),
+                    sosistab_pipe,
+                    send_raw.clone(),
+                    RouteConfig::In(in_route.clone()),
+                ))
+                .detach();
+            }
+        }
     }
 }
 
@@ -97,8 +115,20 @@ pub(super) async fn process_out_route(
                     )
                     .await
                 }
-                ObfsConfig::Sosistab3(_cookie) => {
-                    todo!()
+                ObfsConfig::Sosistab3(cookie) => {
+                    let sosistab_dialer = SosistabDialer {
+                        inner: tcp_dialer,
+                        cookie: Cookie::new(cookie),
+                    };
+                    let sosistab_pipe = sosistab_dialer.dial().await?;
+                    tracing::debug!("SOSISTAB connected to other side");
+                    handle_pipe(
+                        link_node_ctx.clone(),
+                        sosistab_pipe,
+                        send_raw.clone(),
+                        RouteConfig::Out(out_route.clone()),
+                    )
+                    .await
                 }
             }
         };
