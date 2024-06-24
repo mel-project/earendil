@@ -29,6 +29,9 @@ pub trait LinkProtocol {
     /// Send a chat message to the other end of the link.
     async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr>;
 
+    /// Gets a one-time token to use in payment proofs for anti-double-spending
+    async fn get_ott(&self) -> Result<String, LinkRpcErr>;
+
     async fn send_payment_proof(
         &self,
         amount: u64,
@@ -69,6 +72,6 @@ pub enum LinkRpcErr {
     UnacceptedPaysystem,
     #[error("payment verification failed")]
     PaymentVerificationFailed(String),
-    #[error("internal server error")]
-    InternalServerError,
+    #[error("internal server error: {0}")]
+    InternalServerError(String),
 }

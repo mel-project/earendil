@@ -90,6 +90,15 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     #[tracing::instrument(skip(self))]
+    async fn get_ott(&self) -> Result<String, LinkRpcErr> {
+        self.ctx
+            .store
+            .get_ott()
+            .await
+            .map_err(|e| LinkRpcErr::InternalServerError(e.to_string()))
+    }
+
+    #[tracing::instrument(skip(self))]
     async fn send_payment_proof(
         &self,
         amount: u64,
@@ -119,7 +128,7 @@ impl LinkProtocol for LinkProtocolImpl {
                     .await
                     .map_err(|e| {
                         tracing::warn!("could not insert debt entry: {:?}", e);
-                        LinkRpcErr::InternalServerError
+                        LinkRpcErr::InternalServerError(e.to_string())
                     })?;
                 tracing::debug!(
                     "successly received payment proof from {:?} for {amount}",

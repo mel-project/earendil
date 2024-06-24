@@ -1,6 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use anyhow::Context;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 
@@ -49,6 +50,10 @@ impl LinkStore {
                     timestamp INTEGER NOT NULL,
                     delta INTEGER NOT NULL,
                     proof TEXT NULL);
+
+                CREATE TABLE IF NOT EXISTS otts (
+                    ott TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL);
             
                 CREATE TABLE IF NOT EXISTS misc (
                     key TEXT PRIMARY KEY,
@@ -179,5 +184,15 @@ impl LinkStore {
             self.insert_misc(key.to_string(), value.clone()).await?;
             Ok(value)
         }
+    }
+
+    pub async fn get_ott(&self) -> anyhow::Result<String> {
+        let ott = rand::random::<u128>().to_string();
+        sqlx::query("INSERT INTO otts (ott, timestamp) VALUES ($1, $2)")
+            .bind(ott.clone())
+            .bind(Utc::now().timestamp())
+            .execute(&self.pool)
+            .await?;
+        Ok(ott)
     }
 }
