@@ -6,7 +6,7 @@ use itertools::Itertools;
 use nanorpc::RpcTransport;
 use serde_json::json;
 
-use crate::{config::InRouteConfig, v2h_node::HavenLocator, ChatEntry, LinkNodeId, NeighborId};
+use crate::{config::InRouteConfig, v2h_node::HavenLocator, ChatEntry, NodeIdSecret, NodeId};
 
 use super::NodeCtx;
 use crate::control_protocol::{
@@ -82,8 +82,8 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn relay_graphviz(&self) -> String {
         let (my_id, my_shape) = match self.ctx.v2h.link_node().my_id() {
-            LinkNodeId::Client(id) => (id.to_string() + "\n[client]", "rect"),
-            LinkNodeId::Relay(id) => (
+            NodeIdSecret::Client(id) => (id.to_string() + "\n[client]", "rect"),
+            NodeIdSecret::Relay(id) => (
                 get_node_label(&id.public().fingerprint()) + "\n[relay]",
                 "oval",
             ),
@@ -120,7 +120,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .all_neighs()
             .iter()
             .filter_map(|neigh| {
-                if let NeighborId::Relay(id) = neigh {
+                if let NodeId::Relay(id) = neigh {
                     Some(id)
                 } else {
                     None
@@ -174,7 +174,7 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     // ---------------- chat-related functionality -----------------
-    async fn list_neighbors(&self) -> Vec<NeighborId> {
+    async fn list_neighbors(&self) -> Vec<NodeId> {
         self.ctx.v2h.link_node().all_neighs()
     }
 
@@ -227,12 +227,12 @@ fn get_node_label(fp: &RelayFingerprint) -> String {
     format!("{}..{}", &node[..4], &node[node.len() - 4..node.len()])
 }
 
-fn neigh_by_prefix(all_neighs: Vec<NeighborId>, prefix: &str) -> anyhow::Result<NeighborId> {
-    let valid_neighs: Vec<NeighborId> = all_neighs
+fn neigh_by_prefix(all_neighs: Vec<NodeId>, prefix: &str) -> anyhow::Result<NodeId> {
+    let valid_neighs: Vec<NodeId> = all_neighs
         .into_iter()
         .filter(|id| match id {
-            NeighborId::Client(id) => id.to_string().starts_with(prefix),
-            NeighborId::Relay(id) => id.to_string().starts_with(prefix),
+            NodeId::Client(id) => id.to_string().starts_with(prefix),
+            NodeId::Relay(id) => id.to_string().starts_with(prefix),
         })
         .collect();
 

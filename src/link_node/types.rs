@@ -21,25 +21,34 @@ use super::{
 pub type ClientId = u64;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash, Serialize, Deserialize)]
-pub enum NeighborId {
+pub enum NodeId {
     Relay(RelayFingerprint),
     Client(ClientId),
 }
 
-impl Display for NeighborId {
+impl Display for NodeId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let displayable = match self {
-            NeighborId::Relay(relay_id) => relay_id.to_string(),
-            NeighborId::Client(client_id) => client_id.to_string(),
+            NodeId::Relay(relay_id) => relay_id.to_string(),
+            NodeId::Client(client_id) => client_id.to_string(),
         };
         write!(f, "{}", displayable)
     }
 }
 
 #[derive(Clone)]
-pub enum LinkNodeId {
+pub enum NodeIdSecret {
     Relay(RelayIdentitySecret),
     Client(ClientId),
+}
+
+impl NodeIdSecret {
+    pub fn public(&self) -> NodeId {
+        match self {
+            NodeIdSecret::Relay(relay_id) => NodeId::Relay(relay_id.public().fingerprint()),
+            NodeIdSecret::Client(client_id) => NodeId::Client(*client_id),
+        }
+    }
 }
 
 /// Incoming messages from the link layer that are addressed to "us".
@@ -72,10 +81,10 @@ pub struct LinkConfig {
 #[derive(Clone)]
 pub(super) struct LinkNodeCtx {
     pub cfg: Arc<LinkConfig>,
-    pub my_id: LinkNodeId,
+    pub my_id: NodeIdSecret,
     pub my_onion_sk: DhSecret,
     pub relay_graph: Arc<RwLock<RelayGraph>>,
-    pub link_table: Arc<DashMap<NeighborId, (Arc<Link>, LinkPaymentInfo)>>,
+    pub link_table: Arc<DashMap<NodeId, (Arc<Link>, LinkPaymentInfo)>>,
     pub payment_systems: Arc<PaymentSystemSelector>,
     pub store: Arc<LinkStore>,
     pub mel_client: melprot::Client,

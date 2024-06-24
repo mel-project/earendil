@@ -1,7 +1,8 @@
 [workspace]
 members = [
   "libraries/*",
-  #  "utilities/*", "infra/spawn-network"
+  "utilities/*", 
+  # "infra/spawn-network"
 ]
 
 [package]

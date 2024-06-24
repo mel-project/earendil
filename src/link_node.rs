@@ -45,7 +45,7 @@ use crate::link_node::route_util::{forward_route_to, route_to_instructs};
 use self::link::LinkMessage;
 pub use payment_system::{Dummy, SupportedPaymentSystems};
 use rand::prelude::*;
-pub use types::{IncomingMsg, LinkConfig, LinkNodeId, NeighborId};
+pub use types::{IncomingMsg, LinkConfig, NodeId, NodeIdSecret};
 /// An implementation of the link-level interface.
 pub struct LinkNode {
     ctx: LinkNodeCtx,
@@ -69,7 +69,7 @@ impl LinkNode {
             None => RelayGraph::new(),
         };
         let my_id = if let Some((idsk, _)) = cfg.relay_config.clone() {
-            LinkNodeId::Relay(idsk)
+            NodeIdSecret::Relay(idsk)
         } else {
             // I am a client with a persistent ClientId
             let mut rng = rand::thread_rng();
@@ -82,7 +82,7 @@ impl LinkNode {
                 u64::from_le_bytes(arr)
             })
             .unwrap();
-            LinkNodeId::Client(client_id)
+            NodeIdSecret::Client(client_id)
         };
         let mut payment_systems = PaymentSystemSelector::new();
         for payment_system in cfg.payment_systems.drain(..) {
@@ -154,7 +154,7 @@ impl LinkNode {
 
     /// Sends a "backwards" packet, which consumes a reply block.
     pub async fn send_backwards(&self, reply_block: Surb, message: Message) -> anyhow::Result<()> {
-        if let LinkNodeId::Relay(my_idsk) = self.ctx.my_id {
+        if let NodeIdSecret::Relay(my_idsk) = self.ctx.my_id {
             let packet = RawPacket::new_reply(
                 &reply_block,
                 InnerPacket::Message(message.clone()),
@@ -173,7 +173,7 @@ impl LinkNode {
         my_anon_id: AnonEndpoint,
         _remote: RelayFingerprint, // will use in the future for finding more efficient routes
     ) -> anyhow::Result<(Surb, u64, ReplyDegarbler)> {
-        let destination = if let LinkNodeId::Relay(my_idsk) = self.ctx.my_id {
+        let destination = if let NodeIdSecret::Relay(my_idsk) = self.ctx.my_id {
             my_idsk.public().fingerprint()
         } else {
             let mut lala = self.ctx.cfg.out_routes.values().collect_vec();
@@ -190,8 +190,8 @@ impl LinkNode {
         let reverse_route = forward_route_to(&graph, destination)?;
         let reverse_instructs = route_to_instructs(&graph, &reverse_route)?;
         let my_client_id = match self.ctx.my_id {
-            LinkNodeId::Relay(_) => 0, // special ClientId for relays
-            LinkNodeId::Client(id) => id,
+            NodeIdSecret::Relay(_) => 0, // special ClientId for relays
+            NodeIdSecret::Client(id) => id,
         };
         let (surb, (id, degarbler)) = Surb::new(
             &reverse_instructs,
@@ -231,12 +231,12 @@ impl LinkNode {
     }
 
     /// Gets my identity.
-    pub fn my_id(&self) -> LinkNodeId {
+    pub fn my_id(&self) -> NodeIdSecret {
         self.ctx.my_id.clone()
     }
 
     /// Gets all our currently connected neighbors.
-    pub fn all_neighs(&self) -> Vec<NeighborId> {
+    pub fn all_neighs(&self) -> Vec<NodeId> {
         self.ctx
             .link_table
             .iter()
@@ -245,7 +245,7 @@ impl LinkNode {
     }
 
     /// Sends a chat message to a neighbor.
-    pub async fn send_chat(&self, neighbor: NeighborId, text: String) -> anyhow::Result<()> {
+    pub async fn send_chat(&self, neighbor: NodeId, text: String) -> anyhow::Result<()> {
         let link_entry = self
             .ctx
             .link_table
@@ -269,11 +269,11 @@ impl LinkNode {
     }
 
     /// Gets the entire chat history with a neighbor.
-    pub async fn get_chat_history(&self, neighbor: NeighborId) -> anyhow::Result<Vec<ChatEntry>> {
+    pub async fn get_chat_history(&self, neighbor: NodeId) -> anyhow::Result<Vec<ChatEntry>> {
         self.ctx.store.get_chat_history(neighbor).await
     }
 
-    pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NeighborId, ChatEntry, u32)>> {
+    pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NodeId, ChatEntry, u32)>> {
         self.ctx.store.get_chat_summary().await
     }
 }
@@ -324,7 +324,7 @@ async fn link_node_loop(
 
     // ----------------------- relay-only loops ------------------------
     let relay_or_client_task = async {
-        if let LinkNodeId::Relay(my_idsk) = &link_node_ctx.my_id {
+        if let NodeIdSecret::Relay(my_idsk) = &link_node_ctx.my_id {
             let identity_refresh_loop = async {
                 loop {
                     // println!("WE ARE INSERTING OURSELVES");
@@ -449,7 +449,7 @@ async fn link_node_loop(
                                                 smolscale::spawn(async move {
                                                     if let Err(e) = send_msg::send_msg(
                                                         &link_node_ctx,
-                                                        NeighborId::Client(client_id),
+                                                        NodeId::Client(client_id),
                                                         LinkMessage::ToClient {
                                                             body: pkt.to_vec().into(),
                                                             rb_id,

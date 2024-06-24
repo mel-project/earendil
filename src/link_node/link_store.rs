@@ -4,7 +4,7 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 
-use super::types::NeighborId;
+use super::types::NodeId;
 
 pub struct LinkStore {
     pool: SqlitePool,
@@ -61,7 +61,7 @@ impl LinkStore {
 
     pub async fn insert_chat_entry(
         &self,
-        neighbor: NeighborId,
+        neighbor: NodeId,
         chat_entry: ChatEntry,
     ) -> anyhow::Result<()> {
         sqlx::query(
@@ -76,7 +76,7 @@ impl LinkStore {
         Ok(())
     }
 
-    pub async fn get_chat_history(&self, neighbor: NeighborId) -> anyhow::Result<Vec<ChatEntry>> {
+    pub async fn get_chat_history(&self, neighbor: NodeId) -> anyhow::Result<Vec<ChatEntry>> {
         let res: Vec<(i64, String, bool)> =
             sqlx::query_as("SELECT  timestamp, text, is_outgoing FROM chats WHERE neighbor = $1")
                 .bind(serde_json::to_string(&neighbor)?)
@@ -92,7 +92,7 @@ impl LinkStore {
             .collect())
     }
 
-    pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NeighborId, ChatEntry, u32)>> {
+    pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NodeId, ChatEntry, u32)>> {
         let res: Vec<(String, i64, String, bool, i32)> = sqlx::query_as(
             r#"
             SELECT 
@@ -131,7 +131,7 @@ impl LinkStore {
 
     pub async fn insert_debt_entry(
         &self,
-        neighbor: NeighborId,
+        neighbor: NodeId,
         debt_entry: DebtEntry,
     ) -> anyhow::Result<()> {
         sqlx::query(
@@ -146,7 +146,7 @@ impl LinkStore {
         Ok(())
     }
 
-    pub async fn get_debt(&self, neighbor: NeighborId) -> anyhow::Result<i64> {
+    pub async fn get_debt(&self, neighbor: NodeId) -> anyhow::Result<i64> {
         let res: Option<(i64,)> =
             sqlx::query_as("SELECT SUM(delta) FROM debts WHERE neighbor = $1")
                 .bind(serde_json::to_string(&neighbor)?)

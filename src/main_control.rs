@@ -1,5 +1,5 @@
 use anyhow::Context;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use colored::{ColoredString, Colorize};
 use earendil_crypt::HavenIdentitySecret;
 use earendil_packet::crypt::DhPublic;
@@ -187,7 +187,9 @@ fn right_arrow() -> ColoredString {
 }
 
 fn pretty_entry(entry: &ChatEntry) -> String {
-    let date_time = DateTime::from_timestamp(entry.timestamp, 0).unwrap();
+    let date_time = DateTime::from_timestamp(entry.timestamp, 0)
+        .unwrap()
+        .naive_local();
     let arrow = if entry.is_outgoing {
         right_arrow()
     } else {
@@ -197,11 +199,13 @@ fn pretty_entry(entry: &ChatEntry) -> String {
     format!("{} {} {}", arrow, entry.text, pretty_time(date_time))
 }
 
-fn pretty_time(date_time: DateTime<Utc>) -> ColoredString {
+fn pretty_time(date_time: NaiveDateTime) -> ColoredString {
     format!("[{}]", date_time.format("%Y-%m-%d %H:%M:%S")).bright_yellow()
 }
 
 fn format_timestamp(timestamp: i64) -> String {
-    let date_time = DateTime::from_timestamp(timestamp, 0).unwrap();
+    let date_time = DateTime::from_timestamp(timestamp, 0)
+        .unwrap()
+        .naive_local();
     format!("[{}]", date_time.format("%Y-%m-%d %H:%M:%S"))
 }

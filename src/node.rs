@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use clone_macro::clone;
 use control_protocol_impl::ControlProtocolImpl;
 use earendil_crypt::{HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
+use futures::task::noop_waker;
 use futures::{future::Shared, stream::FuturesUnordered, AsyncReadExt, TryFutureExt};
 use melstructs::NetID;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
@@ -24,6 +25,7 @@ use socksv5::v5::{
 };
 use tracing::instrument;
 
+use crate::NodeId;
 use crate::{
     config::{ConfigFile, HavenConfig, HavenHandler, RelayConfig, Socks5Config, Socks5Fallback},
     control_protocol::{ControlClient, ControlService},
@@ -136,6 +138,17 @@ impl Node {
         self.task.await.map_err(|e| anyhow::anyhow!(e))
     }
 
+    pub fn check_dead(&self) -> anyhow::Result<()> {
+        match smol::future::FutureExt::poll(
+            &mut self.task.clone(),
+            &mut core::task::Context::from_waker(&noop_waker()),
+        ) {
+            std::task::Poll::Ready(val) => val.map_err(|e| anyhow::anyhow!(e))?,
+            std::task::Poll::Pending => {}
+        }
+        Ok(())
+    }
+
     /// Creates a low-level, unreliable packet connection.
     pub async fn packet_connect(&self, dest: HavenEndpoint) -> anyhow::Result<HavenPacketConn> {
         self.ctx.v2h.packet_connect(dest).await
@@ -170,6 +183,10 @@ impl Node {
         ControlClient::from(DummyControlProtocolTransport {
             inner: ControlService(ControlProtocolImpl::new(self.ctx.clone())),
         })
+    }
+
+    pub fn identity(&self) -> NodeId {
+        self.ctx.v2h.link_node().my_id().public()
     }
 }
 struct DummyControlProtocolTransport {

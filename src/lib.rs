@@ -1,6 +1,6 @@
 mod commands;
 pub mod config;
-mod control_protocol;
+pub mod control_protocol;
 mod link_node;
 mod main_control;
 mod n2r_node;

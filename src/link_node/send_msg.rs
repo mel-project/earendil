@@ -7,13 +7,13 @@ use itertools::Itertools;
 use smol::channel::Sender;
 
 use crate::{
-    link_node::{link_protocol::LinkClient, route_util::one_hop_closer, types::LinkNodeId},
+    link_node::{link_protocol::LinkClient, route_util::one_hop_closer, types::NodeIdSecret},
     DebtEntry,
 };
 
 use super::{
     link::LinkMessage,
-    types::{LinkNodeCtx, NeighborId},
+    types::{LinkNodeCtx, NodeId},
 };
 
 pub(super) async fn send_to_next_peeler(
@@ -58,8 +58,8 @@ pub(super) async fn send_to_nonself_next_peeler(
             .iter()
             .map(|p| *p.key())
             .filter_map(|p| match p {
-                NeighborId::Relay(r) => Some(r),
-                NeighborId::Client(_) => None,
+                NodeId::Relay(r) => Some(r),
+                NodeId::Client(_) => None,
             })
             .collect_vec();
         one_hop_closer(&my_neighs, &graph, next_peeler)?
@@ -73,7 +73,7 @@ pub(super) async fn send_to_nonself_next_peeler(
         }
         if let Err(e) = send_msg(
             &link_node_ctx,
-            NeighborId::Relay(closer_hop),
+            NodeId::Relay(closer_hop),
             LinkMessage::ToRelay {
                 packet: bytemuck::bytes_of(&pkt).to_vec().into(),
                 next_peeler,
@@ -91,7 +91,7 @@ pub(super) async fn send_to_nonself_next_peeler(
 
 pub(super) async fn send_msg(
     link_node_ctx: &LinkNodeCtx,
-    to: NeighborId,
+    to: NodeId,
     msg: LinkMessage,
 ) -> anyhow::Result<()> {
     let link_w_payinfo = link_node_ctx
@@ -114,8 +114,8 @@ pub(super) async fn send_msg(
             .select(&link_w_payinfo.1.paysystem_name_addrs)
             .context("no supported payment system")?;
         let my_id = match link_node_ctx.my_id {
-            LinkNodeId::Relay(idsk) => NeighborId::Relay(idsk.public().fingerprint()),
-            LinkNodeId::Client(id) => NeighborId::Client(id),
+            NodeIdSecret::Relay(idsk) => NodeId::Relay(idsk.public().fingerprint()),
+            NodeIdSecret::Client(id) => NodeId::Client(id),
         };
         loop {
             match paysystem.pay(my_id, &to_payaddr, pay_amt as _).await {

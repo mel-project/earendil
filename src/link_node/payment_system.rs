@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use super::types::NeighborId;
+use super::types::NodeId;
 
 pub struct PaymentSystemSelector {
     inner: HashMap<String, Box<dyn PaymentSystem>>,
@@ -47,11 +47,11 @@ impl PaymentSystemSelector {
 #[async_trait]
 pub trait PaymentSystem: Send + Sync + 'static {
     /// `amount` is in micromel. Returns proof of payment
-    async fn pay(&self, my_id: NeighborId, to: &str, amount: u64) -> anyhow::Result<String>;
+    async fn pay(&self, my_id: NodeId, to: &str, amount: u64) -> anyhow::Result<String>;
 
     async fn verify_payment(
         &self,
-        from: NeighborId,
+        from: NodeId,
         amount: u64,
         proof: &str,
     ) -> anyhow::Result<bool>;
@@ -105,13 +105,13 @@ impl Dummy {
 
 #[async_trait]
 impl PaymentSystem for Dummy {
-    async fn pay(&self, my_id: NeighborId, to: &str, amount: u64) -> anyhow::Result<String> {
+    async fn pay(&self, my_id: NodeId, to: &str, amount: u64) -> anyhow::Result<String> {
         Ok(format!("{:?},{to},{amount}", my_id))
     }
 
     async fn verify_payment(
         &self,
-        from: NeighborId,
+        from: NodeId,
         amount: u64,
         proof: &str,
     ) -> anyhow::Result<bool> {

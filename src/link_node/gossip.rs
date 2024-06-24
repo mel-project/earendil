@@ -11,7 +11,7 @@ use rand::thread_rng;
 
 use crate::link_node::link_protocol::LinkClient;
 
-use super::{link::Link, LinkNodeCtx, LinkNodeId};
+use super::{link::Link, LinkNodeCtx, NodeIdSecret};
 
 #[tracing::instrument(skip_all)]
 pub async fn gossip_once(
@@ -51,7 +51,7 @@ async fn sign_adjacency(
     link: &Link,
     remote_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
-    if let LinkNodeId::Relay(my_sk) = ctx.my_id {
+    if let NodeIdSecret::Relay(my_sk) = ctx.my_id {
         // tracing::trace!("signing adjacency...");
         let my_fp = my_sk.public().fingerprint();
         if my_fp < remote_fp {

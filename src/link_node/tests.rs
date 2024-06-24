@@ -338,7 +338,7 @@ pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkN
 mod tests {
     use std::time::Duration;
 
-    use crate::{link_node::types::NeighborId, IncomingMsg};
+    use crate::{link_node::types::NodeId, IncomingMsg};
 
     use super::*;
     use bytes::Bytes;
@@ -590,7 +590,7 @@ mod tests {
             let chat_msg = "hi test".to_string();
             node2
                 .send_chat(
-                    NeighborId::Relay(
+                    NodeId::Relay(
                         node1
                             .ctx
                             .cfg
@@ -609,7 +609,7 @@ mod tests {
             smol::Timer::after(Duration::from_secs(1)).await;
 
             let node1_chat_hist = node1
-                .get_chat_history(NeighborId::Relay(
+                .get_chat_history(NodeId::Relay(
                     node2
                         .ctx
                         .cfg

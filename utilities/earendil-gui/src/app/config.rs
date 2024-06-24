@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
-use earendil::config::ConfigFile;
-use earendil_crypt::{ClientId, RelayFingerprint};
-use either::Either;
+use earendil::{config::ConfigFile, NodeId};
 use serde::{Deserialize, Serialize};
 use tap::Tap;
 
@@ -16,7 +14,7 @@ pub struct ConfigState {
 
 pub struct Prefs {
     pub daemon_mode: DaemonMode,
-    pub chatting_with: Option<Either<ClientId, RelayFingerprint>>,
+    pub chatting_with: Option<NodeId>,
     pub chat_msg: String,
 }
 
