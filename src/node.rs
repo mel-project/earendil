@@ -48,13 +48,17 @@ pub struct NodeCtx {
 impl Node {
     pub async fn start(config: ConfigFile) -> anyhow::Result<Self> {
         let config_clone = config.clone();
-        let mel_client = melprot::Client::autoconnect(NetID::Mainnet).await?;
-        // let mel_client = melprot::Client::connect_with_proxy(
-        //     NetID::Mainnet,
-        //     config.socks5.listen,
-        //     config.mel_bootstrap,
-        // )
-        // .await?;
+        let mel_client = if let Some(bootstrap_route) = config.mel_bootstrap {
+            melprot::Client::connect_with_proxy(
+                NetID::Mainnet,
+                config.socks5.listen,
+                bootstrap_route,
+            )
+            .await?
+        } else {
+            melprot::Client::autoconnect(NetID::Mainnet).await?
+        };
+
         let link = LinkNode::new(
             LinkConfig {
                 relay_config: config.relay_config.clone().map(

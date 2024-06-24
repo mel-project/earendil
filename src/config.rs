@@ -44,18 +44,13 @@ pub struct ConfigFile {
 
     /// the haven address for our melprot::Client to bootstrap on
     /// e.g. http://<haven_addr>.haven:<port>
-    #[serde(default = "default_mel_bootstrap")]
-    pub mel_bootstrap: String,
+    pub mel_bootstrap: Option<String>,
 }
 
 impl ConfigFile {
     pub fn is_client(&self) -> bool {
         self.relay_config.is_none()
     }
-}
-
-fn default_mel_bootstrap() -> String {
-    "todo".to_string()
 }
 
 fn default_control_listen() -> SocketAddr {
