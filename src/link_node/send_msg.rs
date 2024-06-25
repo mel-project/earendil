@@ -1,25 +1,19 @@
-use std::{
-    sync::Arc,
-    time::{Instant, SystemTime, UNIX_EPOCH},
-};
+use std::time::Instant;
 
 use anyhow::Context;
 use earendil_crypt::RelayFingerprint;
 use earendil_packet::RawPacket;
 use itertools::Itertools;
-use smol::{channel::Sender, lock::RwLock};
+use smol::channel::Sender;
 
 use crate::{
     link_node::{link_protocol::LinkClient, route_util::one_hop_closer, types::NodeIdSecret},
-    DebtEntry, LinkStore,
+    DebtEntry,
 };
 
 use super::{
-    link::Link,
     link::LinkMessage,
-    payment_system::PaymentSystem,
-    types::NodeId,
-    types::{LinkNodeCtx, LinkPaymentInfo},
+    types::{LinkNodeCtx, NodeId},
 };
 
 pub(super) async fn send_to_next_peeler(
@@ -78,7 +72,7 @@ pub(super) async fn send_to_nonself_next_peeler(
             smol::Timer::at(emit_time).await;
         }
         if let Err(e) = send_msg(
-            Arc::new(link_node_ctx),
+            &link_node_ctx,
             NodeId::Relay(closer_hop),
             LinkMessage::ToRelay {
                 packet: bytemuck::bytes_of(&pkt).to_vec().into(),
@@ -95,61 +89,19 @@ pub(super) async fn send_to_nonself_next_peeler(
     anyhow::Ok(())
 }
 
-async fn perform_payment(
-    store: Arc<LinkStore>,
+pub(super) async fn send_msg(
+    link_node_ctx: &LinkNodeCtx,
     to: NodeId,
-    pay_amt: u64,
-    payment_id: &str,
-    curr_debt: i64,
-    paysystem: Arc<Box<dyn PaymentSystem>>,
-    to_payaddr: String,
-    my_id: NodeId,
-    link_w_payinfo: Arc<(Arc<Link>, LinkPaymentInfo)>,
-) -> anyhow::Result<String> {
-    loop {
-        match paysystem
-            .pay(my_id, &to_payaddr, pay_amt as _, payment_id)
-            .await
-        {
-            Ok(proof) => {
-                // send payment proof to remote
-                LinkClient(link_w_payinfo.0.rpc_transport())
-                    .send_payment_proof(pay_amt as _, paysystem.name(), proof.clone())
-                    .await??;
-                println!("sent payment!");
-                // decrement our debt to them
-                store
-                    .insert_debt_entry(
-                        to,
-                        DebtEntry {
-                            delta: -curr_debt,
-                            timestamp: SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .expect("time went backwards")
-                                .as_secs() as i64,
-                            proof: Some(proof.clone()),
-                        },
-                    )
-                    .await?;
-                tracing::debug!("SUCCESSFULLY SENT PAYMENT!");
-                return Ok(proof);
-            }
-            Err(e) => tracing::warn!("sending payment to {:?} failed with ERR: {e}", to),
-        }
-    }
-}
-
-pub(super) async fn initiate_payment_if_needed(
-    link_node_ctx: Arc<LinkNodeCtx>,
-    to: NodeId,
+    msg: LinkMessage,
 ) -> anyhow::Result<()> {
     let link_w_payinfo = link_node_ctx
         .link_table
         .get(&to)
-        .context("no link to this NeighborId")?
-        .clone();
+        .context("no link to this NeighborId")?;
+    // check debt & send payment if we are close to the debt limit
     let curr_debt = link_node_ctx.store.get_debt(to).await?;
 
+    // pay if we're within 1 MEL of the debt limit
     if link_w_payinfo.1.debt_limit - curr_debt <= 1_000_000 {
         let link_client = LinkClient(link_w_payinfo.0.rpc_transport());
         let ott = link_client.get_ott().await??;
@@ -158,53 +110,41 @@ pub(super) async fn initiate_payment_if_needed(
             "within 1 MEL of debt limit! curr_debt={curr_debt}; debt_limit={}. SENDING PAYMENT with amt={pay_amt}!",
             link_w_payinfo.1.debt_limit
         );
-
+        // let task = smolscale::spawn();
         let (paysystem, to_payaddr) = link_node_ctx
             .payment_systems
             .select(&link_w_payinfo.1.paysystem_name_addrs)
             .context("no supported payment system")?;
-        let my_id = match &link_node_ctx.my_id {
-            NodeIdSecret::Relay(idsk) => NodeId::Relay(idsk.public().fingerprint()),
-            NodeIdSecret::Client(id) => NodeId::Client(*id),
-        };
+        let my_id = link_node_ctx.my_id.public();
 
-        let link_store = link_node_ctx.store.clone();
-        let payment_task = smolscale::spawn(async move {
-            perform_payment(
-                link_store,
-                to,
-                pay_amt as u64,
-                &ott,
-                curr_debt,
-                paysystem,
-                to_payaddr,
-                my_id,
-                Arc::new(link_w_payinfo),
-            )
-            .await
-        });
-
-        link_node_ctx
-            .payments
-            .entry(to)
-            .or_insert_with(|| smol::lock::RwLock::new(payment_task));
-    }
-
-    Ok(())
-}
-
-pub(super) async fn send_msg(
-    link_node_ctx: Arc<LinkNodeCtx>,
-    to: NodeId,
-    msg: LinkMessage,
-) -> anyhow::Result<()> {
-    initiate_payment_if_needed(link_node_ctx.clone(), to).await?;
-
-    let link_w_payinfo = link_node_ctx
-        .link_table
-        .get(&to)
-        .context("no link to this NeighborId")?;
-
+        loop {
+            match paysystem.pay(my_id, &to_payaddr, pay_amt as _, &ott).await {
+                Ok(proof) => {
+                    // send payment proof to remote
+                    link_client
+                        .send_payment_proof(pay_amt as _, paysystem.name(), proof.clone())
+                        .await??;
+                    tracing::debug!("sent payment proof to remote!");
+                    // decrement our debt to them
+                    link_node_ctx
+                        .store
+                        .insert_debt_entry(
+                            to,
+                            DebtEntry {
+                                delta: -pay_amt,
+                                timestamp: chrono::offset::Utc::now().timestamp(),
+                                proof: Some(proof),
+                            },
+                        )
+                        .await?;
+                    tracing::debug!("logged payment!");
+                    break;
+                }
+                Err(e) => tracing::warn!("sending payment to {:?} failed with ERR: {e}", to),
+            }
+        }
+    };
+    // increment our debt to them
     if link_w_payinfo.1.price > 0 {
         link_node_ctx
             .store
@@ -218,7 +158,6 @@ pub(super) async fn send_msg(
             )
             .await?;
     }
-
     link_w_payinfo.0.send_msg(msg).await?;
     Ok(())
 }
