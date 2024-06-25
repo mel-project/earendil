@@ -1,358 +1,368 @@
-use std::{collections::BTreeMap, sync::Arc};
-
-use earendil_crypt::RelayIdentitySecret;
-use melstructs::NetID;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-use crate::{
-    config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
-    LinkConfig, LinkNode, PoW,
-};
-
-use super::payment_system::Dummy;
-
-pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
-    let idsk1 = RelayIdentitySecret::generate();
-    let mut in_1 = BTreeMap::new();
-    in_1.insert(
-        "1".to_owned(),
-        InRouteConfig {
-            listen: "127.0.0.1:30000".parse().unwrap(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 0,
-                inbound_debt_limit: 500,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -20,
-            },
-        },
-    );
-
-    let idsk2 = RelayIdentitySecret::generate();
-    let mut in_2 = BTreeMap::new();
-    in_2.insert(
-        "2".to_owned(),
-        InRouteConfig {
-            listen: "127.0.0.1:30001".parse().unwrap(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 0,
-                inbound_debt_limit: 20,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -20,
-            },
-        },
-    );
-    let mut out_2 = BTreeMap::new();
-    out_2.insert(
-        "1".to_owned(),
-        OutRouteConfig {
-            connect: "127.0.0.1:30000".parse().unwrap(),
-            fingerprint: idsk1.public().fingerprint(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 0,
-                inbound_debt_limit: 20,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -20,
-            },
-        },
-    );
-
-    let node1 = LinkNode::new(
-        LinkConfig {
-            relay_config: Some((idsk1, in_1)),
-            out_routes: BTreeMap::new(),
-            db_path: {
-                let mut path = tempfile::tempdir().unwrap().into_path();
-                path.push(idsk1.public().fingerprint().to_string());
-                path
-            },
-            payment_systems: vec![Box::new(Dummy::new())],
-        },
-        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-    );
-
-    let node2 = LinkNode::new(
-        LinkConfig {
-            relay_config: Some((idsk2, in_2)),
-            out_routes: out_2,
-            db_path: {
-                let mut path = tempfile::tempdir().unwrap().into_path();
-                path.push(idsk2.public().fingerprint().to_string());
-                path
-            },
-            payment_systems: vec![Box::new(Dummy::new())],
-        },
-        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-    );
-
-    (node1, node2)
-}
-
-pub fn init_tracing() -> anyhow::Result<()> {
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().compact())
-        .with(
-            EnvFilter::builder()
-                .with_default_directive("earendil=debug".parse()?)
-                .from_env_lossy(),
-        )
-        .init();
-    Ok(())
-}
-
-pub async fn get_connected_relay_client() -> (LinkNode, LinkNode) {
-    let idsk1 = RelayIdentitySecret::generate();
-    let mut in_1 = BTreeMap::new();
-    in_1.insert(
-        "1".to_owned(),
-        InRouteConfig {
-            listen: "127.0.0.1:30000".parse().unwrap(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 5,
-                inbound_debt_limit: 0,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -400,
-            },
-        },
-    );
-
-    let mut out_2 = BTreeMap::new();
-    out_2.insert(
-        "1".to_owned(),
-        OutRouteConfig {
-            connect: "127.0.0.1:30000".parse().unwrap(),
-            fingerprint: idsk1.public().fingerprint(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 5,
-                inbound_debt_limit: 0,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -400,
-            },
-        },
-    );
-
-    let mel_client_1 = Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap());
-
-    let relay = LinkNode::new(
-        LinkConfig {
-            relay_config: Some((idsk1, in_1)),
-            out_routes: BTreeMap::new(),
-            db_path: {
-                let mut path = tempfile::tempdir().unwrap().into_path();
-                path.push(idsk1.public().fingerprint().to_string());
-                path
-            },
-            payment_systems: vec![Box::new(PoW::new(mel_client_1.clone()))],
-        },
-        mel_client_1,
-    );
-
-    let mel_client_2 = Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap());
-    let client = LinkNode::new(
-        LinkConfig {
-            relay_config: None,
-            out_routes: out_2,
-            db_path: {
-                let mut path = tempfile::tempdir().unwrap().into_path();
-                path.push(
-                    RelayIdentitySecret::generate()
-                        .public()
-                        .fingerprint()
-                        .to_string(),
-                );
-                path
-            },
-            payment_systems: vec![Box::new(PoW::new(mel_client_2.clone()))],
-        },
-        mel_client_2,
-    );
-
-    (relay, client)
-}
-
-pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
-    let idsk1 = RelayIdentitySecret::generate();
-    let mut in_1 = BTreeMap::new();
-    in_1.insert(
-        "1".to_owned(),
-        InRouteConfig {
-            listen: "127.0.0.1:30000".parse().unwrap(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 5,
-                inbound_debt_limit: 500,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -20,
-            },
-        },
-    );
-
-    let idsk2 = RelayIdentitySecret::generate();
-    let mut in_2 = BTreeMap::new();
-    in_2.insert(
-        "2".to_owned(),
-        InRouteConfig {
-            listen: "127.0.0.1:30001".parse().unwrap(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 5,
-                inbound_debt_limit: 500,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -20,
-            },
-        },
-    );
-    let mut out_2 = BTreeMap::new();
-    out_2.insert(
-        "1".to_owned(),
-        OutRouteConfig {
-            connect: "127.0.0.1:30000".parse().unwrap(),
-            fingerprint: idsk1.public().fingerprint(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 5,
-                inbound_debt_limit: 500,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -20,
-            },
-        },
-    );
-
-    let idsk3 = RelayIdentitySecret::generate();
-    let mut in_3 = BTreeMap::new();
-    in_3.insert(
-        "1".to_owned(),
-        InRouteConfig {
-            listen: "127.0.0.1:30002".parse().unwrap(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 5,
-                inbound_debt_limit: 500,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -20,
-            },
-        },
-    );
-    let mut out_3 = BTreeMap::new();
-    out_3.insert(
-        "1".to_owned(),
-        OutRouteConfig {
-            connect: "127.0.0.1:30001".parse().unwrap(),
-            fingerprint: idsk1.public().fingerprint(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 5,
-                inbound_debt_limit: 500,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -20,
-            },
-        },
-    );
-    let idsk4 = RelayIdentitySecret::generate();
-    let mut in_4 = BTreeMap::new();
-    in_4.insert(
-        "2".to_owned(),
-        InRouteConfig {
-            listen: "127.0.0.1:30003".parse().unwrap(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 5,
-                inbound_debt_limit: 500,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -20,
-            },
-        },
-    );
-    let mut out_4 = BTreeMap::new();
-    out_4.insert(
-        "1".to_owned(),
-        OutRouteConfig {
-            connect: "127.0.0.1:30002".parse().unwrap(),
-            fingerprint: idsk1.public().fingerprint(),
-            obfs: ObfsConfig::None,
-            price_config: PriceConfig {
-                inbound_price: 5,
-                inbound_debt_limit: 500,
-                outbound_max_price: 10,
-                outbound_min_debt_limit: -20,
-            },
-        },
-    );
-
-    let node1 = LinkNode::new(
-        LinkConfig {
-            relay_config: Some((idsk1, in_1)),
-            out_routes: BTreeMap::new(),
-            db_path: {
-                let mut path = tempfile::tempdir().unwrap().into_path();
-                path.push(idsk1.public().fingerprint().to_string());
-                path
-            },
-            payment_systems: vec![Box::new(Dummy::new())],
-        },
-        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-    );
-    let node2 = LinkNode::new(
-        LinkConfig {
-            relay_config: Some((idsk2, in_2)),
-            out_routes: out_2,
-            db_path: {
-                let mut path = tempfile::tempdir().unwrap().into_path();
-                path.push(idsk2.public().fingerprint().to_string());
-                path
-            },
-            payment_systems: vec![Box::new(Dummy::new())],
-        },
-        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-    );
-    let node3 = LinkNode::new(
-        LinkConfig {
-            relay_config: Some((idsk3, in_3)),
-            out_routes: out_3,
-            db_path: {
-                let mut path = tempfile::tempdir().unwrap().into_path();
-                path.push(idsk3.public().fingerprint().to_string());
-                path
-            },
-            payment_systems: vec![Box::new(Dummy::new())],
-        },
-        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-    );
-    let node4 = LinkNode::new(
-        LinkConfig {
-            relay_config: Some((idsk4, in_4)),
-            out_routes: out_4,
-            db_path: {
-                let mut path = tempfile::tempdir().unwrap().into_path();
-                path.push(idsk4.public().fingerprint().to_string());
-                path
-            },
-            payment_systems: vec![Box::new(Dummy::new())],
-        },
-        Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-    );
-
-    (node1, node2, node3, node4)
-}
-
 #[cfg(test)]
-mod tests {
+mod link_node_tests {
     use std::time::Duration;
 
+    use crate::Dummy;
     use crate::{link_node::types::NodeId, IncomingMsg};
 
-    use super::*;
     use bytes::Bytes;
     use earendil_crypt::AnonEndpoint;
     use earendil_packet::{InnerPacket, Message, RawBody};
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
+    use std::{collections::BTreeMap, sync::Arc};
 
+    use earendil_crypt::RelayIdentitySecret;
+    use melstructs::NetID;
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+    use crate::{
+        config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
+        LinkConfig, LinkNode, PoW,
+    };
+
+    static TEST_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+    // Helper function to acquire the lock for each test
+    fn acquire_test_lock() -> std::sync::MutexGuard<'static, ()> {
+        TEST_MUTEX.lock().unwrap()
+    }
+
+    // ------- Helpers to create different LinkNode configurations -------
+
+    pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
+        let idsk1 = RelayIdentitySecret::generate();
+        let mut in_1 = BTreeMap::new();
+        in_1.insert(
+            "1".to_owned(),
+            InRouteConfig {
+                listen: "127.0.0.1:30000".parse().unwrap(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 0,
+                    inbound_debt_limit: 500,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -20,
+                },
+            },
+        );
+
+        let idsk2 = RelayIdentitySecret::generate();
+        let mut in_2 = BTreeMap::new();
+        in_2.insert(
+            "2".to_owned(),
+            InRouteConfig {
+                listen: "127.0.0.1:30001".parse().unwrap(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 0,
+                    inbound_debt_limit: 20,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -20,
+                },
+            },
+        );
+        let mut out_2 = BTreeMap::new();
+        out_2.insert(
+            "1".to_owned(),
+            OutRouteConfig {
+                connect: "127.0.0.1:30000".parse().unwrap(),
+                fingerprint: idsk1.public().fingerprint(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 0,
+                    inbound_debt_limit: 20,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -20,
+                },
+            },
+        );
+
+        let node1 = LinkNode::new(
+            LinkConfig {
+                relay_config: Some((idsk1, in_1)),
+                out_routes: BTreeMap::new(),
+                db_path: {
+                    let mut path = tempfile::tempdir().unwrap().into_path();
+                    path.push(idsk1.public().fingerprint().to_string());
+                    path
+                },
+                payment_systems: vec![Box::new(Dummy::new())],
+            },
+            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
+        );
+
+        let node2 = LinkNode::new(
+            LinkConfig {
+                relay_config: Some((idsk2, in_2)),
+                out_routes: out_2,
+                db_path: {
+                    let mut path = tempfile::tempdir().unwrap().into_path();
+                    path.push(idsk2.public().fingerprint().to_string());
+                    path
+                },
+                payment_systems: vec![Box::new(Dummy::new())],
+            },
+            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
+        );
+
+        (node1, node2)
+    }
+
+    pub fn init_tracing() -> anyhow::Result<()> {
+        let _ = tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().compact())
+            .with(
+                EnvFilter::builder()
+                    .with_default_directive("earendil=debug".parse()?)
+                    .from_env_lossy(),
+            )
+            .try_init();
+        Ok(())
+    }
+
+    pub async fn get_connected_relay_client() -> (LinkNode, LinkNode) {
+        let idsk1 = RelayIdentitySecret::generate();
+        let mut in_1 = BTreeMap::new();
+        in_1.insert(
+            "1".to_owned(),
+            InRouteConfig {
+                listen: "127.0.0.1:30000".parse().unwrap(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 5,
+                    inbound_debt_limit: 0,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -400,
+                },
+            },
+        );
+
+        let mut out_2 = BTreeMap::new();
+        out_2.insert(
+            "1".to_owned(),
+            OutRouteConfig {
+                connect: "127.0.0.1:30000".parse().unwrap(),
+                fingerprint: idsk1.public().fingerprint(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 5,
+                    inbound_debt_limit: 0,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -400,
+                },
+            },
+        );
+
+        let mel_client_1 = Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap());
+
+        let relay = LinkNode::new(
+            LinkConfig {
+                relay_config: Some((idsk1, in_1)),
+                out_routes: BTreeMap::new(),
+                db_path: {
+                    let mut path = tempfile::tempdir().unwrap().into_path();
+                    path.push(idsk1.public().fingerprint().to_string());
+                    path
+                },
+                payment_systems: vec![Box::new(PoW::new(mel_client_1.clone()))],
+            },
+            mel_client_1,
+        );
+
+        let mel_client_2 = Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap());
+        let client = LinkNode::new(
+            LinkConfig {
+                relay_config: None,
+                out_routes: out_2,
+                db_path: {
+                    let mut path = tempfile::tempdir().unwrap().into_path();
+                    path.push(
+                        RelayIdentitySecret::generate()
+                            .public()
+                            .fingerprint()
+                            .to_string(),
+                    );
+                    path
+                },
+                payment_systems: vec![Box::new(PoW::new(mel_client_2.clone()))],
+            },
+            mel_client_2,
+        );
+
+        (relay, client)
+    }
+
+    pub async fn get_four_connected_relays() -> (LinkNode, LinkNode, LinkNode, LinkNode) {
+        let idsk1 = RelayIdentitySecret::generate();
+        let mut in_1 = BTreeMap::new();
+        in_1.insert(
+            "1".to_owned(),
+            InRouteConfig {
+                listen: "127.0.0.1:30000".parse().unwrap(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 5,
+                    inbound_debt_limit: 500,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -20,
+                },
+            },
+        );
+
+        let idsk2 = RelayIdentitySecret::generate();
+        let mut in_2 = BTreeMap::new();
+        in_2.insert(
+            "2".to_owned(),
+            InRouteConfig {
+                listen: "127.0.0.1:30001".parse().unwrap(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 5,
+                    inbound_debt_limit: 500,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -20,
+                },
+            },
+        );
+        let mut out_2 = BTreeMap::new();
+        out_2.insert(
+            "1".to_owned(),
+            OutRouteConfig {
+                connect: "127.0.0.1:30000".parse().unwrap(),
+                fingerprint: idsk1.public().fingerprint(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 5,
+                    inbound_debt_limit: 500,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -20,
+                },
+            },
+        );
+
+        let idsk3 = RelayIdentitySecret::generate();
+        let mut in_3 = BTreeMap::new();
+        in_3.insert(
+            "1".to_owned(),
+            InRouteConfig {
+                listen: "127.0.0.1:30002".parse().unwrap(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 5,
+                    inbound_debt_limit: 500,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -20,
+                },
+            },
+        );
+        let mut out_3 = BTreeMap::new();
+        out_3.insert(
+            "1".to_owned(),
+            OutRouteConfig {
+                connect: "127.0.0.1:30001".parse().unwrap(),
+                fingerprint: idsk1.public().fingerprint(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 5,
+                    inbound_debt_limit: 500,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -20,
+                },
+            },
+        );
+        let idsk4 = RelayIdentitySecret::generate();
+        let mut in_4 = BTreeMap::new();
+        in_4.insert(
+            "2".to_owned(),
+            InRouteConfig {
+                listen: "127.0.0.1:30003".parse().unwrap(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 5,
+                    inbound_debt_limit: 500,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -20,
+                },
+            },
+        );
+        let mut out_4 = BTreeMap::new();
+        out_4.insert(
+            "1".to_owned(),
+            OutRouteConfig {
+                connect: "127.0.0.1:30002".parse().unwrap(),
+                fingerprint: idsk1.public().fingerprint(),
+                obfs: ObfsConfig::None,
+                price_config: PriceConfig {
+                    inbound_price: 5,
+                    inbound_debt_limit: 500,
+                    outbound_max_price: 10,
+                    outbound_min_debt_limit: -20,
+                },
+            },
+        );
+
+        let node1 = LinkNode::new(
+            LinkConfig {
+                relay_config: Some((idsk1, in_1)),
+                out_routes: BTreeMap::new(),
+                db_path: {
+                    let mut path = tempfile::tempdir().unwrap().into_path();
+                    path.push(idsk1.public().fingerprint().to_string());
+                    path
+                },
+                payment_systems: vec![Box::new(Dummy::new())],
+            },
+            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
+        );
+        let node2 = LinkNode::new(
+            LinkConfig {
+                relay_config: Some((idsk2, in_2)),
+                out_routes: out_2,
+                db_path: {
+                    let mut path = tempfile::tempdir().unwrap().into_path();
+                    path.push(idsk2.public().fingerprint().to_string());
+                    path
+                },
+                payment_systems: vec![Box::new(Dummy::new())],
+            },
+            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
+        );
+        let node3 = LinkNode::new(
+            LinkConfig {
+                relay_config: Some((idsk3, in_3)),
+                out_routes: out_3,
+                db_path: {
+                    let mut path = tempfile::tempdir().unwrap().into_path();
+                    path.push(idsk3.public().fingerprint().to_string());
+                    path
+                },
+                payment_systems: vec![Box::new(Dummy::new())],
+            },
+            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
+        );
+        let node4 = LinkNode::new(
+            LinkConfig {
+                relay_config: Some((idsk4, in_4)),
+                out_routes: out_4,
+                db_path: {
+                    let mut path = tempfile::tempdir().unwrap().into_path();
+                    path.push(idsk4.public().fingerprint().to_string());
+                    path
+                },
+                payment_systems: vec![Box::new(Dummy::new())],
+            },
+            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
+        );
+
+        (node1, node2, node3, node4)
+    }
+
+    // ---------------------------------- tests -----------------------------------
     #[test]
     fn two_relays_one_forward_pkt() {
         let _ = init_tracing();
+        let _lock = acquire_test_lock();
 
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
@@ -389,6 +399,7 @@ mod tests {
     #[test]
     fn two_relays_one_backward_pkt() {
         let _ = init_tracing();
+        let _lock = acquire_test_lock();
 
         smol::block_on(async {
             let (node1, node2) = get_two_connected_relays().await;
@@ -443,6 +454,7 @@ mod tests {
     #[test]
     fn client_relay_ten_forward_pkts() {
         let _ = init_tracing();
+        let _lock = acquire_test_lock();
 
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
@@ -486,6 +498,7 @@ mod tests {
     #[test]
     fn client_relay_one_backward_pkt() {
         let _ = init_tracing();
+        let _lock = acquire_test_lock();
 
         smol::block_on(async {
             let (relay_node, client_node) = get_connected_relay_client().await;
@@ -552,6 +565,7 @@ mod tests {
     #[test]
     fn four_relays_forward_pkt() {
         let _ = init_tracing();
+        let _lock = acquire_test_lock();
 
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
@@ -588,6 +602,7 @@ mod tests {
     #[test]
     fn two_relays_one_chat() {
         let _ = init_tracing();
+        let _lock = acquire_test_lock();
 
         smol::block_on(async {
             let (node1, node2) = get_two_connected_relays().await;
