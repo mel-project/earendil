@@ -110,7 +110,6 @@ pub(super) async fn send_msg(
             "within 1 MEL of debt limit! curr_debt={curr_debt}; debt_limit={}. SENDING PAYMENT with amt={pay_amt}!",
             link_w_payinfo.1.debt_limit
         );
-        // let task = smolscale::spawn();
         let (paysystem, to_payaddr) = link_node_ctx
             .payment_systems
             .select(&link_w_payinfo.1.paysystem_name_addrs)
