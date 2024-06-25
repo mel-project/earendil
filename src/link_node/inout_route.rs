@@ -32,7 +32,7 @@ use super::{
     link_protocol::LinkService,
     link_protocol_impl::LinkProtocolImpl,
     pascal::write_pascal,
-    types::{ClientId, LinkNodeCtx, NodeIdSecret, LinkPaymentInfo, NodeId},
+    types::{ClientId, LinkNodeCtx, LinkPaymentInfo, NodeId, NodeIdSecret},
 };
 
 pub(super) async fn process_in_route(
@@ -218,32 +218,34 @@ async fn handle_pipe(
         loop {
             let msg = link.recv_msg().await?;
             tracing::trace!("received LinkMessage from {:?}", their_id);
-            let debt = link_node_ctx.store.get_debt(their_id).await?;
-            tracing::debug!(
-                "downstream's CURR_DEBT = {debt}, debt_limit={}, delta = {}",
-                price_config.inbound_debt_limit,
-                -price_config.inbound_price
-            );
-            if debt < -price_config.inbound_debt_limit {
-                tracing::warn!(
+            if price_config.inbound_price != 0 {
+                let debt = link_node_ctx.store.get_debt(their_id).await?;
+                tracing::debug!(
+                    "downstream's CURR_DEBT = {debt}, debt_limit={}, delta = {}",
+                    price_config.inbound_debt_limit,
+                    -price_config.inbound_price
+                );
+                if debt < -price_config.inbound_debt_limit {
+                    tracing::warn!(
                     "DROPPING PACKET: {:?} is over their debt limit! debt={debt}; debt_limit={}",
                     their_id,
                     price_config.inbound_debt_limit
                 );
-                continue;
-            };
-            // increment remote's debt
-            link_node_ctx
-                .store
-                .insert_debt_entry(
-                    their_id,
-                    DebtEntry {
-                        delta: -price_config.inbound_price,
-                        timestamp: chrono::offset::Utc::now().timestamp(),
-                        proof: None,
-                    },
-                )
-                .await?;
+                    continue;
+                };
+                // increment remote's debt
+                link_node_ctx
+                    .store
+                    .insert_debt_entry(
+                        their_id,
+                        DebtEntry {
+                            delta: -price_config.inbound_price,
+                            timestamp: chrono::offset::Utc::now().timestamp(),
+                            proof: None,
+                        },
+                    )
+                    .await?;
+            }
             send_raw.send(msg).await?;
         }
     };
@@ -289,22 +291,25 @@ async fn pipe_to_mux(
             their_payinfo.price,
             price_config.outbound_max_price
         );
-        if their_payinfo.price > price_config.outbound_max_price {
-            anyhow::bail!("{:?} price too high!", their_descr)
-        };
-        if their_payinfo.debt_limit < price_config.outbound_min_debt_limit {
-            anyhow::bail!(
-                "{:?} debt limit too low = asking for too much prepayment!",
-                their_descr
-            )
-        };
-        if link_node_ctx
-            .payment_systems
-            .select(&their_payinfo.paysystem_name_addrs)
-            .is_none()
-        {
-            anyhow::bail!("{:?} no supported payment methods", their_descr)
-        };
+        if their_payinfo.price != 0 {
+            if their_payinfo.price > price_config.outbound_max_price {
+                anyhow::bail!("{:?} price too high!", their_descr)
+            };
+            if their_payinfo.debt_limit < price_config.outbound_min_debt_limit {
+                anyhow::bail!(
+                    "{:?} debt limit too low = asking for too much prepayment!",
+                    their_descr
+                )
+            };
+            if link_node_ctx
+                .payment_systems
+                .select(&their_payinfo.paysystem_name_addrs)
+                .is_none()
+            {
+                anyhow::bail!("{:?} no supported payment methods", their_descr)
+            };
+        }
+
         anyhow::Ok((their_descr, their_payinfo))
     };
 

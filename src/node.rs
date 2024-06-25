@@ -113,26 +113,22 @@ impl Node {
                 .map_err(|e| tracing::warn!("control_protocol_loop restart: {e}"))),
             );
 
-            if config.havens.is_empty() {
-                smol::future::pending().await
-            } else {
-                nursery!({
-                    let mut fallible_tasks = FuturesUnordered::new();
-                    // for every haven, serve the haven
-                    for haven_cfg in config.havens {
-                        fallible_tasks.push(spawn!(serve_haven(v2h_clone.clone(), haven_cfg)))
-                    }
+            nursery!({
+                let mut fallible_tasks = FuturesUnordered::new();
+                // for every haven, serve the haven
+                for haven_cfg in config.havens {
+                    fallible_tasks.push(spawn!(serve_haven(v2h_clone.clone(), haven_cfg)))
+                }
 
-                    // serve socks5
-                    fallible_tasks.push(spawn!(socks5_loop(v2h_clone.clone(), config.socks5)));
+                // serve socks5
+                fallible_tasks.push(spawn!(socks5_loop(v2h_clone.clone(), config.socks5)));
 
-                    // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
-                    while let Some(next) = fallible_tasks.next().await {
-                        next?;
-                    }
-                    anyhow::Ok(())
-                })
-            }
+                // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
+                while let Some(next) = fallible_tasks.next().await {
+                    next?;
+                }
+                anyhow::Ok(())
+            })
         };
         let task = smolscale::spawn(daemon_loop.map_err(Arc::new));
 
