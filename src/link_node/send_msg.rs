@@ -1,13 +1,11 @@
 use std::{
-    sync::Arc,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    sync::Arc, time::{Instant, SystemTime, UNIX_EPOCH}
 };
-
 use anyhow::Context;
 use earendil_crypt::RelayFingerprint;
 use earendil_packet::RawPacket;
 use itertools::Itertools;
-use smol::{channel::Sender, lock::RwLock};
+use smol::channel::Sender;
 
 use crate::{
     link_node::{link_protocol::LinkClient, route_util::one_hop_closer, types::NodeIdSecret},
@@ -167,9 +165,8 @@ pub(super) async fn initiate_payment_if_needed(
             NodeIdSecret::Relay(idsk) => NodeId::Relay(idsk.public().fingerprint()),
             NodeIdSecret::Client(id) => NodeId::Client(*id),
         };
-
         let link_store = link_node_ctx.store.clone();
-        let payment_task = smolscale::spawn(async move {
+        let payment_task = move || async move {
             perform_payment(
                 link_store,
                 to,
@@ -182,12 +179,17 @@ pub(super) async fn initiate_payment_if_needed(
                 Arc::new(link_w_payinfo),
             )
             .await
-        });
-
-        link_node_ctx
+        };
+        let current_task = link_node_ctx
             .payments
             .entry(to)
-            .or_insert_with(|| smol::lock::RwLock::new(payment_task));
+            .or_insert(smol::lock::RwLock::new(smolscale::spawn(payment_task.clone()())));
+
+        if let Some(guard) = current_task.downgrade().try_read() {
+            if guard.is_finished() {
+                link_node_ctx.payments.insert(to, smol::lock::RwLock::new(smolscale::spawn(payment_task())));
+            }
+        }
     }
 
     Ok(())
