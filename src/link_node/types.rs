@@ -7,6 +7,7 @@ use earendil_packet::{crypt::DhSecret, InnerPacket};
 use earendil_topology::RelayGraph;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use smol::lock::Semaphore;
 
 use crate::{
     config::{InRouteConfig, OutRouteConfig},
@@ -88,4 +89,6 @@ pub(super) struct LinkNodeCtx {
     pub payment_systems: Arc<PaymentSystemSelector>,
     pub store: Arc<LinkStore>,
     pub mel_client: melprot::Client,
+
+    pub send_task_semaphores: Arc<DashMap<NodeId, Arc<Semaphore>>>,
 }
