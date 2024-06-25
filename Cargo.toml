@@ -85,6 +85,8 @@ dirs = "5.0.1"
 tempfile = "3.10.1"
 melprot = { git = "https://github.com/mel-project/melprot", branch = "new-with-proxy" }
 melstructs = "0.3.3"
+melwallet = "0.1.2"
+tmelcrypt = "0.2.7"
 
 [profile.dev]
 panic = 'abort'

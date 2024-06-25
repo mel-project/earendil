@@ -1,4 +1,5 @@
 mod dummy;
+mod onchain;
 mod pow;
 
 use std::collections::HashMap;
