@@ -793,6 +793,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23ce669cd6c8588f79e15cf450314f9638f967fc5770ff1c7c1deb0925ea7cfa"
 
 [[package]]
+name = "base32"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1ce0365f4d5fb6646220bb52fe547afd51796d90f914d4063cb0b032ebee088"
+
+[[package]]
 name = "base64"
 version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1981,6 +1987,7 @@ dependencies = [
  "async-event 0.1.0",
  "async-recursion",
  "async-trait",
+ "base32 0.5.0",
  "base64 0.21.7",
  "bip39",
  "blake3",
@@ -2082,7 +2089,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "arrayref",
- "base32",
+ "base32 0.4.0",
  "base64 0.21.7",
  "blake3",
  "bytemuck",
@@ -6526,7 +6533,7 @@ checksum = "fc7f6a14c9dc3042c5944b50665e8b25bc6f4a1d49b29016f2a4a156d8fc1bf3"
 dependencies = [
  "arbitrary",
  "arrayref",
- "base32",
+ "base32 0.4.0",
  "blake3",
  "ed25519-consensus 1.2.1",
  "hex",

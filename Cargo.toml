@@ -87,6 +87,7 @@ melprot = { git = "https://github.com/mel-project/melprot", branch = "new-with-p
 melstructs = "0.3.3"
 melwallet = "0.1.2"
 tmelcrypt = "0.2.7"
+base32 = "0.5.0"
 
 [profile.dev]
 panic = 'abort'
