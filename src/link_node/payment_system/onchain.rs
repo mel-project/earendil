@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use melstructs::{Address, CoinData, CoinID, CoinValue, Denom};
 use melwallet::{PrepareTxArgs, StdEd25519Signer};
-use std::{str::FromStr, sync::Arc};
+use smol::Timer;
+use std::{str::FromStr, sync::Arc, time::Duration};
 use stdcode::StdcodeSerializeExt;
 use tmelcrypt::Ed25519SK;
 
@@ -77,6 +78,7 @@ impl PaymentSystem for OnChain {
                 // return payment coin ID as proof
                 return Ok(coin_id.to_string());
             }
+            Timer::after(Duration::from_secs(5)).await;
         }
     }
 
@@ -87,7 +89,7 @@ impl PaymentSystem for OnChain {
         if let Some(coin) = coin_data {
             let (id, ott): (NodeId, String) = stdcode::deserialize(&coin.coin_data.additional_data)?;
             if id == from && coin.coin_data.value == CoinValue(amount.into()) && self.store.check_and_consume_ott(&ott).await?.is_some() {
-                return Ok(Some(ott.to_string()));
+                return Ok(Some(ott));
             }
         }
         Ok(None)
