@@ -20,7 +20,7 @@ pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
             listen: "127.0.0.1:30000".parse().unwrap(),
             obfs: ObfsConfig::None,
             price_config: PriceConfig {
-                inbound_price: 5,
+                inbound_price: 0,
                 inbound_debt_limit: 500,
                 outbound_max_price: 10,
                 outbound_min_debt_limit: -20,
@@ -36,7 +36,7 @@ pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
             listen: "127.0.0.1:30001".parse().unwrap(),
             obfs: ObfsConfig::None,
             price_config: PriceConfig {
-                inbound_price: 5,
+                inbound_price: 0,
                 inbound_debt_limit: 20,
                 outbound_max_price: 10,
                 outbound_min_debt_limit: -20,
@@ -51,7 +51,7 @@ pub async fn get_two_connected_relays() -> (LinkNode, LinkNode) {
             fingerprint: idsk1.public().fingerprint(),
             obfs: ObfsConfig::None,
             price_config: PriceConfig {
-                inbound_price: 5,
+                inbound_price: 0,
                 inbound_debt_limit: 20,
                 outbound_max_price: 10,
                 outbound_min_debt_limit: -20,

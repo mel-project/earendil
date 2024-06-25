@@ -99,78 +99,86 @@ pub(super) async fn send_msg(
         .get(&to)
         .context("no link to this NeighborId")?
         .clone();
-    // check debt & send payment if we are close to the debt limit
-    let curr_debt = link_node_ctx.store.get_debt(to).await?;
 
-    // pay if we're within 1 MEL of the debt limit
-    if link_w_payinfo.1.debt_limit - curr_debt <= 1_000_000 {
-        let link_client = LinkClient(link_w_payinfo.0.rpc_transport());
-        let ott = link_client.get_ott().await??;
-        let pay_amt = (link_w_payinfo.1.debt_limit - curr_debt).abs() + 1_000_000;
-        tracing::debug!(
+    // disable payments if price == 0
+    if link_w_payinfo.1.price != 0 {
+        // check debt & send payment if we are close to the debt limit
+        let curr_debt = link_node_ctx.store.get_debt(to).await?;
+
+        // pay if we're within 1 MEL of the debt limit
+        if link_w_payinfo.1.debt_limit - curr_debt <= 1_000_000 {
+            let link_client = LinkClient(link_w_payinfo.0.rpc_transport());
+            let ott = link_client.get_ott().await??;
+            let pay_amt = (link_w_payinfo.1.debt_limit - curr_debt).abs() + 1_000_000;
+            tracing::debug!(
             "within 1 MEL of debt limit! curr_debt={curr_debt}; debt_limit={}. SENDING PAYMENT with amt={pay_amt}!",
             link_w_payinfo.1.debt_limit
         );
-        let link_node_ctx = link_node_ctx.clone();
-        let _guard = link_node_ctx
-            .send_task_semaphores
-            .entry(to)
-            .or_insert_with(|| Arc::new(Semaphore::new(1)))
-            .try_acquire_arc();
-        if let Some(_guard) = _guard {
-            smolscale::spawn(async move {
-                let _guard = _guard;
-                let (paysystem, to_payaddr) = link_node_ctx
-                    .payment_systems
-                    .select(&link_w_payinfo.1.paysystem_name_addrs)
-                    .context("no supported payment system")?;
-                let my_id = link_node_ctx.my_id.public();
+            let link_node_ctx = link_node_ctx.clone();
+            let _guard = link_node_ctx
+                .send_task_semaphores
+                .entry(to)
+                .or_insert_with(|| Arc::new(Semaphore::new(1)))
+                .try_acquire_arc();
+            if let Some(_guard) = _guard {
+                smolscale::spawn(async move {
+                    let _guard = _guard;
+                    let (paysystem, to_payaddr) = link_node_ctx
+                        .payment_systems
+                        .select(&link_w_payinfo.1.paysystem_name_addrs)
+                        .context("no supported payment system")?;
+                    let my_id = link_node_ctx.my_id.public();
 
-                loop {
-                    match paysystem.pay(my_id, &to_payaddr, pay_amt as _, &ott).await {
-                        Ok(proof) => {
-                            // send payment proof to remote
-                            link_client
-                                .send_payment_proof(pay_amt as _, paysystem.name(), proof.clone())
-                                .await??;
-                            tracing::debug!("sent payment proof to remote!");
-                            // decrement our debt to them
-                            link_node_ctx
-                                .store
-                                .insert_debt_entry(
-                                    to,
-                                    DebtEntry {
-                                        delta: -pay_amt,
-                                        timestamp: chrono::offset::Utc::now().timestamp(),
-                                        proof: Some(proof),
-                                    },
-                                )
-                                .await?;
-                            tracing::debug!("logged payment!");
-                            break anyhow::Ok(());
-                        }
-                        Err(e) => {
-                            tracing::warn!("sending payment to {:?} failed with ERR: {e}", to)
+                    loop {
+                        match paysystem.pay(my_id, &to_payaddr, pay_amt as _, &ott).await {
+                            Ok(proof) => {
+                                // send payment proof to remote
+                                link_client
+                                    .send_payment_proof(
+                                        pay_amt as _,
+                                        paysystem.name(),
+                                        proof.clone(),
+                                    )
+                                    .await??;
+                                tracing::debug!("sent payment proof to remote!");
+                                // decrement our debt to them
+                                link_node_ctx
+                                    .store
+                                    .insert_debt_entry(
+                                        to,
+                                        DebtEntry {
+                                            delta: -pay_amt,
+                                            timestamp: chrono::offset::Utc::now().timestamp(),
+                                            proof: Some(proof),
+                                        },
+                                    )
+                                    .await?;
+                                tracing::debug!("logged payment!");
+                                break anyhow::Ok(());
+                            }
+                            Err(e) => {
+                                tracing::warn!("sending payment to {:?} failed with ERR: {e}", to)
+                            }
                         }
                     }
-                }
-            })
-            .detach();
+                })
+                .detach();
+            }
+        };
+        // increment our debt to them
+        if link_w_payinfo.1.price > 0 {
+            link_node_ctx
+                .store
+                .insert_debt_entry(
+                    to,
+                    DebtEntry {
+                        delta: link_w_payinfo.1.price,
+                        timestamp: chrono::offset::Utc::now().timestamp(),
+                        proof: None,
+                    },
+                )
+                .await?;
         }
-    };
-    // increment our debt to them
-    if link_w_payinfo.1.price > 0 {
-        link_node_ctx
-            .store
-            .insert_debt_entry(
-                to,
-                DebtEntry {
-                    delta: link_w_payinfo.1.price,
-                    timestamp: chrono::offset::Utc::now().timestamp(),
-                    proof: None,
-                },
-            )
-            .await?;
     }
     link_w_payinfo.0.send_msg(msg).await?;
     Ok(())

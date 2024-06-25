@@ -76,9 +76,7 @@ impl PaymentSystem for PoW {
                 .dosc_speed,
         );
         println!("MICROMEL from DIFFICULTY = {micromel}");
-        if proof.verify(&puzzle, difficulty as _, BigHasher)
-        // && micromel > 4 * amount
-        {
+        if proof.verify(&puzzle, difficulty as _, BigHasher) && micromel > 4 * amount {
             let (payment_id, sender_id): (String, NodeId) = stdcode::deserialize(&puzzle)?;
             if sender_id == from {
                 return Ok(Some(payment_id));
