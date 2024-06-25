@@ -97,6 +97,7 @@ impl LinkNode {
             store: Arc::new(store),
             payment_systems: Arc::new(payment_systems),
             mel_client,
+            send_task_semaphores: Default::default(),
         };
         let _task = Immortal::respawn(
             RespawnStrategy::Immediate,
