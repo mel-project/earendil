@@ -2,9 +2,6 @@
 mod link_node_tests {
     use std::time::Duration;
 
-    use crate::Dummy;
-    use crate::{link_node::types::NodeId, IncomingMsg};
-
     use bytes::Bytes;
     use earendil_crypt::AnonEndpoint;
     use earendil_packet::{InnerPacket, Message, RawBody};
@@ -17,8 +14,9 @@ mod link_node_tests {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
     use crate::{
+        link_node::types::NodeId, IncomingMsg,
         config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
-        LinkConfig, LinkNode, PoW,
+        Dummy, LinkConfig, LinkNode, OnChain, PoW,
     };
 
     static TEST_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));

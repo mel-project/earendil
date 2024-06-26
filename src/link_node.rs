@@ -43,7 +43,7 @@ use stdcode::StdcodeSerializeExt;
 use crate::link_node::route_util::{forward_route_to, route_to_instructs};
 
 use self::link::LinkMessage;
-pub use payment_system::{Dummy, PaymentSystem, PoW, SupportedPaymentSystems};
+pub use payment_system::{Dummy, OnChain, PaymentSystem, PoW, SupportedPaymentSystems};
 use rand::prelude::*;
 pub use types::{IncomingMsg, LinkConfig, NodeId, NodeIdSecret};
 /// An implementation of the link-level interface.

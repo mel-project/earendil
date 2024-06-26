@@ -4,11 +4,15 @@ mod pow;
 
 use std::collections::HashMap;
 
+use anyhow::Context;
 use async_trait::async_trait;
+use base32::Alphabet;
 use serde::{Deserialize, Serialize};
+use tmelcrypt::Ed25519SK;
 
 use super::types::NodeId;
 pub use dummy::Dummy;
+pub use onchain::OnChain;
 pub use pow::PoW;
 
 #[async_trait]
@@ -78,7 +82,7 @@ impl PaymentSystemSelector {
 pub enum PaymentSystemKind {
     Dummy,
     PoW,
-    // OnChain,
+    OnChain(Ed25519SK),
     // Astrape,
 }
 
@@ -86,10 +90,11 @@ pub enum PaymentSystemKind {
 pub struct SupportedPaymentSystems {
     pub dummy: Option<()>,
     pub pow: Option<()>,
+    pub onchain: Option<String>,
 }
 
 impl SupportedPaymentSystems {
-    pub fn get_available(&self) -> Vec<PaymentSystemKind> {
+    pub fn get_available(&self) -> anyhow::Result<Vec<PaymentSystemKind>> {
         let mut available = vec![];
         if self.dummy.is_some() {
             available.push(PaymentSystemKind::Dummy);
@@ -97,6 +102,12 @@ impl SupportedPaymentSystems {
         if self.pow.is_some() {
             available.push(PaymentSystemKind::PoW);
         }
-        available
+        if let Some(secret) = &self.onchain {
+            let secret = base32::decode(Alphabet::Crockford, &secret)
+                .context("Failed to decode secret key")?;
+            let sk = Ed25519SK::from_bytes(&secret).unwrap();
+            available.push(PaymentSystemKind::OnChain(sk))
+        }
+        Ok(available)
     }
 }

@@ -7,13 +7,12 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 use stdcode::StdcodeSerializeExt;
 use tmelcrypt::Ed25519SK;
 
-use crate::{LinkStore, NodeId, PaymentSystem};
+use crate::{NodeId, PaymentSystem};
 
 pub struct OnChain {
     wallet: melwallet::Wallet,
     signer: StdEd25519Signer,
     mel_client: Arc<melprot::Client>,
-    store: Arc<LinkStore>,
 }
 
 impl OnChain {
@@ -21,14 +20,12 @@ impl OnChain {
         wallet: melwallet::Wallet,
         sk: Ed25519SK,
         mel_client: Arc<melprot::Client>,
-        store: Arc<LinkStore>,
     ) -> anyhow::Result<Self> {
         let signer = StdEd25519Signer(sk);
         Ok(Self {
             wallet,
             signer,
             mel_client,
-            store,
         })
     }
 }
@@ -88,7 +85,7 @@ impl PaymentSystem for OnChain {
         let coin_data = snapshot.get_coin(coin_id).await?;
         if let Some(coin) = coin_data {
             let (id, ott): (NodeId, String) = stdcode::deserialize(&coin.coin_data.additional_data)?;
-            if id == from && coin.coin_data.value == CoinValue(amount.into()) && self.store.check_and_consume_ott(&ott).await?.is_some() {
+            if id == from && coin.coin_data.value == CoinValue(amount.into()) {
                 return Ok(Some(ott));
             }
         }

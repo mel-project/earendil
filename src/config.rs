@@ -1,11 +1,9 @@
 use std::{collections::BTreeMap, io::Write, net::SocketAddr, path::PathBuf};
 
 use anyhow::Context;
-use base32::Alphabet;
 use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use tmelcrypt::Ed25519SK;
 use std::fs::OpenOptions;
 use tracing::instrument;
 
@@ -46,21 +44,11 @@ pub struct ConfigFile {
     /// the haven address for our melprot::Client to bootstrap on
     /// e.g. http://<haven_addr>.haven:<port>
     pub mel_bootstrap: Option<String>,
-
-    // Crockford-encoded ED25519 secret key
-    pub mel_secret: String,
 }
 
 impl ConfigFile {
     pub fn is_client(&self) -> bool {
         self.relay_config.is_none()
-    }
-
-    pub fn mel_secret(&self) -> anyhow::Result<Ed25519SK> {
-        let secret = base32::decode(Alphabet::Crockford, &self.mel_secret)
-            .context("Failed to decode secret key")?;
-        let sk = Ed25519SK::from_bytes(&secret).unwrap();
-        Ok(sk)
     }
 }
 
