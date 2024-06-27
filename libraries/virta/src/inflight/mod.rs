@@ -146,7 +146,6 @@ impl Inflight {
                 (entry.payload.clone(), old_retrans, entry.retrans_time)
             })?
         };
-        // eprintln!("retransmit {}", seqno);
         self.remove_rto(old_retrans, seqno);
         self.rtos.entry(new_retrans).or_default().push(seqno);
         self.sent += 1;

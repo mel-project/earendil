@@ -44,6 +44,7 @@ mod tests {
         let msg = Message {
             relay_dock: 0u32,
             body: Bytes::copy_from_slice(&[0u8; 100]),
+            remaining_surbs: 0,
         };
 
         let forward_instructions: Vec<ForwardInstruction> =
@@ -149,6 +150,7 @@ mod tests {
         let message = Message {
             relay_dock: 0u32,
             body: Bytes::copy_from_slice(body.as_bytes()),
+            remaining_surbs: 0,
         };
         let packet = RawPacket::new_reply(
             &reply_block,

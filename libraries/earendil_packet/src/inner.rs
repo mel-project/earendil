@@ -21,6 +21,7 @@ pub enum InnerPacket {
 pub struct Message {
     pub relay_dock: Dock,
     pub body: Bytes,
+    pub remaining_surbs: usize,
 }
 
 pub type Dock = u32;
@@ -100,8 +101,12 @@ impl InnerPacket {
 }
 
 impl Message {
-    pub fn new(relay_dock: Dock, body: Bytes) -> Self {
-        Message { relay_dock, body }
+    pub fn new(relay_dock: Dock, body: Bytes, remaining_surbs: usize) -> Self {
+        Message {
+            relay_dock,
+            body,
+            remaining_surbs,
+        }
     }
 }
 
@@ -119,7 +124,8 @@ mod tests {
         let identity_secret = RelayIdentitySecret::generate();
 
         // Step 2: Create an InnerPacket
-        let inner_packet = InnerPacket::Message(Message::new(200u32, Bytes::from("Hello, World!")));
+        let inner_packet =
+            InnerPacket::Message(Message::new(200u32, Bytes::from("Hello, World!"), 0));
 
         // Step 3: Encode the InnerPacket
         let encrypted_packet = inner_packet

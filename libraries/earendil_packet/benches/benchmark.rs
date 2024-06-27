@@ -39,6 +39,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let payload = InnerPacket::Message(Message {
             relay_dock: 0u32,
             body: Bytes::from_static(b"hello world"),
+            remaining_surbs: 0,
         });
         let my_anon_id = AnonEndpoint::random();
         let my_osk = DhSecret::generate();
