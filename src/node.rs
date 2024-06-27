@@ -32,7 +32,7 @@ use crate::{
     n2r_node::{N2rConfig, N2rNode},
     v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, V2hConfig, V2hNode},
 };
-use crate::{Dummy, NodeId, PaymentSystem, PoW};
+use crate::{Dummy, NodeId, OnChain, PaymentSystem, PoW};
 
 /// The public interface to the whole Earendil system.
 pub struct Node {
@@ -67,6 +67,9 @@ impl Node {
         }
         if config.payment_methods.pow.is_some() {
             payment_systems.push(Box::new(PoW::new(mel_client.clone())));
+        }
+        if let Some(secret) = config.payment_methods.onchain {
+            payment_systems.push(Box::new(OnChain::new(&secret, mel_client.clone())?))
         }
 
         let link = LinkNode::new(

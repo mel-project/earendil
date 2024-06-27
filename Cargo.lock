@@ -2017,6 +2017,7 @@ dependencies = [
  "melpow",
  "melprot",
  "melstructs",
+ "melvm",
  "melwallet",
  "moka 0.12.7",
  "moro",

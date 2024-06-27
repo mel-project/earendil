@@ -4,11 +4,8 @@ mod pow;
 
 use std::collections::HashMap;
 
-use anyhow::Context;
 use async_trait::async_trait;
-use base32::Alphabet;
 use serde::{Deserialize, Serialize};
-use tmelcrypt::Ed25519SK;
 
 use super::types::NodeId;
 pub use dummy::Dummy;
@@ -82,7 +79,7 @@ impl PaymentSystemSelector {
 pub enum PaymentSystemKind {
     Dummy,
     PoW,
-    OnChain(Ed25519SK),
+    OnChain(String),
     // Astrape,
 }
 
@@ -103,15 +100,7 @@ impl SupportedPaymentSystems {
             available.push(PaymentSystemKind::PoW);
         }
         if let Some(secret) = &self.onchain {
-            let secret = base32::decode(Alphabet::Crockford, &secret)
-                .context("Failed to decode secret key")?;
-            let sk = ed25519_dalek::SigningKey::from_bytes(secret.as_slice().try_into()?);
-            let pk = sk.verifying_key();
-            let mut vv = [0u8; 64];
-            vv[0..32].copy_from_slice(&sk.to_bytes());
-            vv[32..].copy_from_slice(&pk.to_bytes());
-            let sk = Ed25519SK::from_bytes(&vv).unwrap();
-            available.push(PaymentSystemKind::OnChain(sk))
+            available.push(PaymentSystemKind::OnChain(secret.to_string()))
         }
         Ok(available)
     }
