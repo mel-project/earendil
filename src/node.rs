@@ -68,7 +68,7 @@ impl Node {
         if config.payment_methods.pow.is_some() {
             payment_systems.push(Box::new(PoW::new(mel_client.clone())));
         }
-        if let Some(secret) = config.payment_methods.onchain {
+        if let Some(crate::config::OnChain { secret }) = config.payment_methods.onchain {
             payment_systems.push(Box::new(OnChain::new(&secret, mel_client.clone())?))
         }
 

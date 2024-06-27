@@ -74,34 +74,3 @@ impl PaymentSystemSelector {
         None
     }
 }
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum PaymentSystemKind {
-    Dummy,
-    PoW,
-    OnChain(String),
-    // Astrape,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SupportedPaymentSystems {
-    pub dummy: Option<()>,
-    pub pow: Option<()>,
-    pub onchain: Option<String>,
-}
-
-impl SupportedPaymentSystems {
-    pub fn get_available(&self) -> anyhow::Result<Vec<PaymentSystemKind>> {
-        let mut available = vec![];
-        if self.dummy.is_some() {
-            available.push(PaymentSystemKind::Dummy);
-        }
-        if self.pow.is_some() {
-            available.push(PaymentSystemKind::PoW);
-        }
-        if let Some(secret) = &self.onchain {
-            available.push(PaymentSystemKind::OnChain(secret.to_string()))
-        }
-        Ok(available)
-    }
-}

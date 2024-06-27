@@ -35,6 +35,7 @@ out_routes:
 
 payment_methods:
   dummy:
+  pow:
 
 havens:
   - identity_seed: i-am-a-haven-pls-no-eat-me
