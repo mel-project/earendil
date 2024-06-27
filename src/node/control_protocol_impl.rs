@@ -6,7 +6,11 @@ use itertools::Itertools;
 use nanorpc::RpcTransport;
 use serde_json::json;
 
-use crate::{config::InRouteConfig, v2h_node::HavenLocator, ChatEntry, NodeIdSecret, NodeId};
+use crate::{
+    config::{InRouteConfig, PriceConfig},
+    v2h_node::HavenLocator,
+    ChatEntry, NodeId, NodeIdSecret,
+};
 
 use super::NodeCtx;
 use crate::control_protocol::{
@@ -62,13 +66,14 @@ impl ControlProtocol for ControlProtocolImpl {
                             price_config,
                         },
                     )| {
+                        let client_price_config = PriceConfig { inbound_price: price_config.outbound_max_price, inbound_debt_limit: price_config.outbound_min_debt_limit, outbound_max_price: price_config.inbound_price, outbound_min_debt_limit: price_config.inbound_debt_limit };
                         (
                             k.clone(),
                             json!({
                                 "connect": format!("<YOUR_IP>:{}", listen.port()),
                                 "fingerprint": format!("{}", relay_config.identity.actualize_relay().expect("wrong relay identity format").public().fingerprint()),
                                 "obfs": serde_json::to_value(obfs).unwrap(),
-                                "price_config": serde_json::to_value(price_config).unwrap(),
+                                "price_config": serde_json::to_value(client_price_config).unwrap(),
                             }),
                         )
                     },
