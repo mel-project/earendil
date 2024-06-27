@@ -101,28 +101,28 @@ pub(super) async fn send_msg(
         .clone();
 
     // disable payments if price == 0
-    if link_w_payinfo.1.price != 0 {
+    if link_w_payinfo.1.price != 0.0 {
         // check debt & send payment if we are close to the debt limit
         let curr_debt = link_node_ctx.store.get_debt(to).await?;
 
-        // pay if we're within 1 MEL of the debt limit
-        if link_w_payinfo.1.debt_limit - curr_debt <= 1_000_000 {
-            let link_client = LinkClient(link_w_payinfo.0.rpc_transport());
-            let ott = link_client.get_ott().await??;
-            let pay_amt = (link_w_payinfo.1.debt_limit - curr_debt).abs() + 1_000_000;
-            tracing::debug!(
-            "within 1 MEL of debt limit! curr_debt={curr_debt}; debt_limit={}. SENDING PAYMENT with amt={pay_amt}!",
-            link_w_payinfo.1.debt_limit
-        );
-            let link_node_ctx = link_node_ctx.clone();
+        // pay if we're within 100 µMEL of the debt limit
+        if link_w_payinfo.1.debt_limit - curr_debt <= 100.0 {
             let _guard = link_node_ctx
                 .send_task_semaphores
                 .entry(to)
                 .or_insert_with(|| Arc::new(Semaphore::new(1)))
                 .try_acquire_arc();
+            let link_node_ctx = link_node_ctx.clone();
+            let link_client = LinkClient(link_w_payinfo.0.rpc_transport());
             if let Some(_guard) = _guard {
                 smolscale::spawn(async move {
                     let _guard = _guard;
+                    let ott = link_client.get_ott().await??;
+                    let pay_amt = (link_w_payinfo.1.debt_limit - curr_debt).abs() + 100.0;
+                    tracing::debug!(
+                    "within 100 µMEL of debt limit! curr_debt={curr_debt}; debt_limit={}. SENDING PAYMENT with amt={pay_amt}!",
+                    link_w_payinfo.1.debt_limit
+                );
                     let (paysystem, to_payaddr) = link_node_ctx
                         .payment_systems
                         .select(&link_w_payinfo.1.paysystem_name_addrs)
@@ -166,7 +166,7 @@ pub(super) async fn send_msg(
             }
         };
         // increment our debt to them
-        if link_w_payinfo.1.price > 0 {
+        if link_w_payinfo.1.price > 0.0 {
             link_node_ctx
                 .store
                 .insert_debt_entry(

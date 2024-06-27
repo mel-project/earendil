@@ -218,7 +218,7 @@ async fn handle_pipe(
         loop {
             let msg = link.recv_msg().await?;
             tracing::trace!("received LinkMessage from {:?}", their_id);
-            if price_config.inbound_price != 0 {
+            if price_config.inbound_price != 0.0 {
                 let debt = link_node_ctx.store.get_debt(their_id).await?;
                 tracing::debug!(
                     "downstream's CURR_DEBT = {debt}, debt_limit={}, delta = {}",
@@ -291,7 +291,7 @@ async fn pipe_to_mux(
             their_payinfo.price,
             price_config.outbound_max_price
         );
-        if their_payinfo.price != 0 {
+        if their_payinfo.price != 0.0 {
             if their_payinfo.price > price_config.outbound_max_price {
                 anyhow::bail!("{:?} price too high!", their_descr)
             };

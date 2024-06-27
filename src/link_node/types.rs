@@ -67,8 +67,8 @@ pub enum IncomingMsg {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct LinkPaymentInfo {
-    pub price: i64,
-    pub debt_limit: i64,
+    pub price: f64,
+    pub debt_limit: f64,
     pub paysystem_name_addrs: Vec<(String, String)>,
 }
 

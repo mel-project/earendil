@@ -102,13 +102,13 @@ pub struct OutRouteConfig {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PriceConfig {
     /// price, in micromel
-    pub inbound_price: i64,
+    pub inbound_price: f64,
     /// debt limit, in micromel
-    pub inbound_debt_limit: i64,
+    pub inbound_debt_limit: f64,
     /// max accepted price, in micromel
-    pub outbound_max_price: i64,
+    pub outbound_max_price: f64,
     /// min accepted debt limit, in micromel = how much you're willing to pre-pay
-    pub outbound_min_debt_limit: i64,
+    pub outbound_min_debt_limit: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

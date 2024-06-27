@@ -14,9 +14,9 @@ mod link_node_tests {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
     use crate::{
-        link_node::types::NodeId, IncomingMsg,
         config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
-        Dummy, LinkConfig, LinkNode, OnChain, PoW,
+        link_node::types::NodeId,
+        Dummy, IncomingMsg, LinkConfig, LinkNode, OnChain, PoW,
     };
 
     static TEST_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -37,10 +37,10 @@ mod link_node_tests {
                 listen: "127.0.0.1:30000".parse().unwrap(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 0,
-                    inbound_debt_limit: 500,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -20,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 500.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -53,10 +53,10 @@ mod link_node_tests {
                 listen: "127.0.0.1:30001".parse().unwrap(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 0,
-                    inbound_debt_limit: 20,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -20,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 500.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -68,10 +68,10 @@ mod link_node_tests {
                 fingerprint: idsk1.public().fingerprint(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 0,
-                    inbound_debt_limit: 20,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -20,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 500.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -128,10 +128,10 @@ mod link_node_tests {
                 listen: "127.0.0.1:30000".parse().unwrap(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 5,
-                    inbound_debt_limit: 0,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -400,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 100.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -144,10 +144,10 @@ mod link_node_tests {
                 fingerprint: idsk1.public().fingerprint(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 5,
-                    inbound_debt_limit: 0,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -400,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 100.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -163,7 +163,13 @@ mod link_node_tests {
                     path.push(idsk1.public().fingerprint().to_string());
                     path
                 },
-                payment_systems: vec![Box::new(PoW::new(mel_client_1.clone()))],
+                payment_systems: vec![Box::new(
+                    Dummy::new(), // OnChain::new(
+                                  //     "NKWCC6XHVS3RFMP5NMN8Z931D0K27RN7M22AFGRSZBWFE4N83760",
+                                  //     mel_client_1.clone(),
+                                  // )
+                                  // .unwrap(),
+                )],
             },
             mel_client_1,
         );
@@ -183,7 +189,13 @@ mod link_node_tests {
                     );
                     path
                 },
-                payment_systems: vec![Box::new(PoW::new(mel_client_2.clone()))],
+                payment_systems: vec![Box::new(
+                    Dummy::new(), // OnChain::new(
+                                  //     "0BVY4PMM69Q7P5VC0SPV900EGH8VFMCV5A2645YAPR6NGD7PJKTG",
+                                  //     mel_client_2.clone(),
+                                  // )
+                                  // .unwrap(),
+                )],
             },
             mel_client_2,
         );
@@ -200,10 +212,10 @@ mod link_node_tests {
                 listen: "127.0.0.1:30000".parse().unwrap(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 5,
-                    inbound_debt_limit: 500,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -20,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 500.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -216,10 +228,10 @@ mod link_node_tests {
                 listen: "127.0.0.1:30001".parse().unwrap(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 5,
-                    inbound_debt_limit: 500,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -20,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 500.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -231,10 +243,10 @@ mod link_node_tests {
                 fingerprint: idsk1.public().fingerprint(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 5,
-                    inbound_debt_limit: 500,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -20,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 500.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -247,10 +259,10 @@ mod link_node_tests {
                 listen: "127.0.0.1:30002".parse().unwrap(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 5,
-                    inbound_debt_limit: 500,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -20,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 500.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -262,10 +274,10 @@ mod link_node_tests {
                 fingerprint: idsk1.public().fingerprint(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 5,
-                    inbound_debt_limit: 500,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -20,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 500.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -277,10 +289,10 @@ mod link_node_tests {
                 listen: "127.0.0.1:30003".parse().unwrap(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 5,
-                    inbound_debt_limit: 500,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -20,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 500.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );
@@ -292,10 +304,10 @@ mod link_node_tests {
                 fingerprint: idsk1.public().fingerprint(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 5,
-                    inbound_debt_limit: 500,
-                    outbound_max_price: 10,
-                    outbound_min_debt_limit: -20,
+                    inbound_price: 1.0,
+                    inbound_debt_limit: 500.0,
+                    outbound_max_price: 10.0,
+                    outbound_min_debt_limit: -400.0,
                 },
             },
         );

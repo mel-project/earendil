@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 
 use crate::NodeId;
@@ -28,6 +30,7 @@ impl PaymentSystem for Dummy {
     ) -> anyhow::Result<String> {
         let proof =
             serde_json::to_string(&(format!("{my_id},{to},{amount}"), payment_id.to_string()))?;
+        println!("lol");
         Ok(proof)
     }
 

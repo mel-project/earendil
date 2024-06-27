@@ -24,8 +24,8 @@ out_routes:
   #   fingerprint: 4b7a641b77c2d6ceb8b3fecec2b2978dfe81ae045ed9a25ed78b828009c4967a
   #   obfs: none
 
-payment_methods:
-  dummy:
+# payment_methods:
+#   dummy:
 
 socks5:
   listen: 127.0.0.1:23456

@@ -22,7 +22,7 @@ pub struct ChatEntry {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DebtEntry {
     /// micromels
-    pub delta: i64,
+    pub delta: f64,
     /// unix timestamp
     pub timestamp: i64,
     pub proof: Option<String>,
@@ -48,7 +48,7 @@ impl LinkStore {
                     id INTEGER PRIMARY KEY,
                     neighbor TEXT NOT NULL,
                     timestamp INTEGER NOT NULL,
-                    delta INTEGER NOT NULL,
+                    delta REAL NOT NULL,
                     proof TEXT NULL);
 
                 CREATE TABLE IF NOT EXISTS otts (
@@ -151,13 +151,13 @@ impl LinkStore {
         Ok(())
     }
 
-    pub async fn get_debt(&self, neighbor: NodeId) -> anyhow::Result<i64> {
-        let res: Option<(i64,)> =
+    pub async fn get_debt(&self, neighbor: NodeId) -> anyhow::Result<f64> {
+        let res: Option<(f64,)> =
             sqlx::query_as("SELECT SUM(delta) FROM debts WHERE neighbor = $1")
                 .bind(serde_json::to_string(&neighbor)?)
                 .fetch_optional(&self.pool)
                 .await?;
-        Ok(res.map(|(sum,)| sum).unwrap_or(0))
+        Ok(res.map(|(sum,)| sum).unwrap_or(0.0))
     }
 
     pub async fn insert_misc(&self, key: String, value: Vec<u8>) -> anyhow::Result<()> {
