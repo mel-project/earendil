@@ -104,7 +104,7 @@ mod link_node_tests {
             Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
         );
 
-        (node1, node2)
+        (node1.unwrap(), node2.unwrap())
     }
 
     pub fn init_tracing() -> anyhow::Result<()> {
@@ -129,9 +129,9 @@ mod link_node_tests {
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
                     inbound_price: 1.0,
-                    inbound_debt_limit: 100.0,
-                    outbound_max_price: 10.0,
-                    outbound_min_debt_limit: -400.0,
+                    inbound_debt_limit: 50.0,
+                    outbound_max_price: 0.0,
+                    outbound_min_debt_limit: 0.0,
                 },
             },
         );
@@ -144,8 +144,8 @@ mod link_node_tests {
                 fingerprint: idsk1.public().fingerprint(),
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
-                    inbound_price: 1.0,
-                    inbound_debt_limit: 100.0,
+                    inbound_price: 0.0,
+                    inbound_debt_limit: 0.0,
                     outbound_max_price: 10.0,
                     outbound_min_debt_limit: -400.0,
                 },
@@ -173,7 +173,8 @@ mod link_node_tests {
                 )],
             },
             mel_client_1,
-        );
+        )
+        .unwrap();
 
         let mel_client_2 = Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap());
         let client = LinkNode::new(
@@ -200,7 +201,8 @@ mod link_node_tests {
                 )],
             },
             mel_client_2,
-        );
+        )
+        .unwrap();
 
         (relay, client)
     }
@@ -367,7 +369,12 @@ mod link_node_tests {
             Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
         );
 
-        (node1, node2, node3, node4)
+        (
+            node1.unwrap(),
+            node2.unwrap(),
+            node3.unwrap(),
+            node4.unwrap(),
+        )
     }
 
     // ---------------------------------- tests -----------------------------------

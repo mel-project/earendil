@@ -98,7 +98,7 @@ impl LinkProtocol for LinkProtocolImpl {
             .map_err(|e| LinkRpcErr::InternalServerError(e.to_string()))
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, proof))]
     async fn send_payment_proof(
         &self,
         amount: u64,

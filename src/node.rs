@@ -89,7 +89,7 @@ impl Node {
                 }),
             },
             mel_client,
-        );
+        )?;
 
         let n2r = N2rNode::new(link, N2rConfig {});
         let v2h = Arc::new(V2hNode::new(

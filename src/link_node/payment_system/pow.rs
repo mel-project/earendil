@@ -50,10 +50,11 @@ impl PaymentSystem for PoW {
             .dosc_speed;
         let difficulty = micromel_to_difficulty(5 * amount, dosc_speed);
         tracing::debug!(
-            "PoW.pay! difficulty = {difficulty}, equivalent to {} mel",
+            "PoW.pay() with difficulty = {difficulty}, equivalent to {} mel",
             difficulty_to_micromel(difficulty, dosc_speed) as f64 / 1_000_000.0
         );
         let proof = melpow::Proof::generate(&puzzle, difficulty as _, BigHasher).to_bytes();
+        tracing::debug!("generated PoW proof!");
         let ret = serde_json::to_string(&(puzzle, difficulty, proof))?;
         Ok(ret)
     }

@@ -5,7 +5,6 @@ mod pow;
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 
 use super::types::NodeId;
 pub use dummy::Dummy;

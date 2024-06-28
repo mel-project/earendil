@@ -56,10 +56,10 @@ pub struct LinkNode {
 
 impl LinkNode {
     /// Creates a new link node.
-    pub fn new(mut cfg: LinkConfig, mel_client: Arc<melprot::Client>) -> Self {
+    pub fn new(mut cfg: LinkConfig, mel_client: Arc<melprot::Client>) -> anyhow::Result<Self> {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
-        let store = smolscale::block_on(LinkStore::new(cfg.db_path.clone())).unwrap();
+        let store = smolscale::block_on(LinkStore::new(cfg.db_path.clone()))?;
         let relay_graph = match smol::future::block_on(store.get_misc("relay-graph"))
             .ok()
             .flatten()
@@ -108,12 +108,12 @@ impl LinkNode {
                 send_incoming.clone(),
             )),
         );
-        Self {
+        Ok(Self {
             ctx,
             send_raw,
             recv_incoming,
             _task,
-        }
+        })
     }
 
     /// Sends a "forward" packet, which could be either a message or a batch of reply blocks.
