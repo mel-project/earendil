@@ -1,0 +1,21 @@
+# connects to the earendil-testing network parallel to the documentation's official nodes
+
+db_path: ./testing.db
+
+out_routes:
+  example-relay-testing:
+    connect: 45.33.109.28:12346
+    fingerprint: 4b7a641b77c2d6ceb8b3fecec2b2978dfe81ae045ed9a25ed78b828009c4967a
+    obfs:
+      sosistab3: randomly-generated-cookie-lala-doodoo
+    price_config:
+      inbound_debt_limit: 0.0
+      inbound_price: 0.0
+      outbound_max_price: 0.0
+      outbound_min_debt_limit: 0.0
+
+socks5:
+  listen: 127.0.0.1:23456 # localhost port where the proxy server listens
+  fallback:
+    simple_proxy: # proxy server for all clearnet traffic
+      remote: v5k6rydpg9yh9hft6c7qwz9sm3z99ytt:23456
