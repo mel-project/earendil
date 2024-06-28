@@ -24,6 +24,7 @@ pub struct ConfigFile {
     #[serde(default)]
     pub out_routes: BTreeMap<String, OutRouteConfig>,
 
+    #[serde(default)]
     pub payment_methods: SupportedPaymentSystems,
 
     /// List of all client configs for udp forwarding
@@ -274,6 +275,16 @@ pub struct SupportedPaymentSystems {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OnChain {
     pub secret: String,
+}
+
+impl Default for SupportedPaymentSystems {
+    fn default() -> Self {
+        Self {
+            dummy: Default::default(),
+            pow: Default::default(),
+            onchain: Default::default(),
+        }
+    }
 }
 
 impl SupportedPaymentSystems {
