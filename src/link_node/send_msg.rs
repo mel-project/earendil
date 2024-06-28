@@ -165,6 +165,12 @@ pub(super) async fn send_msg(
                 .detach();
             }
         };
+        // if we are at debt limit, drop packet here since the other side would drop it anyways
+        if link_w_payinfo.1.debt_limit - curr_debt <= 0.0 {
+            anyhow::bail!(format!( "AT debt limit with {to}! curr_debt={curr_debt}; debt_limit={} DROPPING outgoing pkt",
+            link_w_payinfo.1.debt_limit))
+        }
+
         // increment our debt to them
         if link_w_payinfo.1.price > 0.0 {
             link_node_ctx

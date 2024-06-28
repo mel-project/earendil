@@ -221,16 +221,18 @@ async fn handle_pipe(
             if price_config.inbound_price != 0.0 {
                 let debt = link_node_ctx.store.get_debt(their_id).await?;
                 tracing::debug!(
-                    "downstream's CURR_DEBT = {debt}, debt_limit={}, delta = {}",
+                    "downstream's CURR_DEBT = {}, debt_limit={}, delta = {}",
+                    debt,
                     price_config.inbound_debt_limit,
                     -price_config.inbound_price
                 );
-                if debt < -price_config.inbound_debt_limit {
+                if price_config.inbound_debt_limit + debt <= 0.0 {
                     tracing::warn!(
-                    "DROPPING PACKET: {:?} is over their debt limit! debt={debt}; debt_limit={}",
-                    their_id,
-                    price_config.inbound_debt_limit
-                );
+                        "DROPPING PACKET: {:?} is over their debt limit! debt={}; debt_limit={}",
+                        their_id,
+                        debt,
+                        price_config.inbound_debt_limit
+                    );
                     continue;
                 };
                 // increment remote's debt

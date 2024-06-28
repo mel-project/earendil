@@ -164,11 +164,12 @@ mod link_node_tests {
                     path
                 },
                 payment_systems: vec![Box::new(
-                    Dummy::new(), // OnChain::new(
-                                  //     "NKWCC6XHVS3RFMP5NMN8Z931D0K27RN7M22AFGRSZBWFE4N83760",
-                                  //     mel_client_1.clone(),
-                                  // )
-                                  // .unwrap(),
+                    PoW::new(mel_client_1.clone()), // Dummy::new(),
+                                                    // OnChain::new(
+                                                    //     "NKWCC6XHVS3RFMP5NMN8Z931D0K27RN7M22AFGRSZBWFE4N83760",
+                                                    //     mel_client_1.clone(),
+                                                    // )
+                                                    // .unwrap(),
                 )],
             },
             mel_client_1,
@@ -190,11 +191,12 @@ mod link_node_tests {
                     path
                 },
                 payment_systems: vec![Box::new(
-                    Dummy::new(), // OnChain::new(
-                                  //     "0BVY4PMM69Q7P5VC0SPV900EGH8VFMCV5A2645YAPR6NGD7PJKTG",
-                                  //     mel_client_2.clone(),
-                                  // )
-                                  // .unwrap(),
+                    PoW::new(mel_client_2.clone()), // Dummy::new(),
+                                                    // OnChain::new(
+                                                    //     "0BVY4PMM69Q7P5VC0SPV900EGH8VFMCV5A2645YAPR6NGD7PJKTG",
+                                                    //     mel_client_2.clone(),
+                                                    // )
+                                                    // .unwrap(),
                 )],
             },
             mel_client_2,

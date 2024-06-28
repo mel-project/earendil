@@ -32,8 +32,7 @@ impl LinkStore {
     pub async fn new(path: PathBuf) -> anyhow::Result<Self> {
         tracing::debug!("INITIALIZING DATABASE");
         let options =
-            SqliteConnectOptions::from_str(path.to_str().context("db-path is not valid unicode")?)
-                .unwrap()
+            SqliteConnectOptions::from_str(path.to_str().context("db-path is not valid unicode")?)?
                 .create_if_missing(true);
         let pool = SqlitePool::connect_with(options).await?;
         sqlx::query(
