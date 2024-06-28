@@ -69,7 +69,7 @@ impl N2rNode {
             my_endpoint,
             queue: receiver,
 
-            surb_counts: DashMap::new(),
+            remote_surb_counts: DashMap::new(),
         }
     }
 
@@ -82,9 +82,9 @@ impl N2rNode {
 pub struct N2rAnonSocket {
     ctx: N2rNodeCtx,
     my_endpoint: AnonEndpoint,
-    queue: Receiver<(Bytes, RelayEndpoint)>,
+    queue: Receiver<(Bytes, RelayEndpoint, usize)>,
 
-    surb_counts: DashMap<RelayFingerprint, i64>,
+    remote_surb_counts: DashMap<RelayFingerprint, usize>,
 }
 
 impl Drop for N2rAnonSocket {
@@ -101,7 +101,7 @@ impl N2rAnonSocket {
         self.ctx
             .link_node
             .send_forward(
-                InnerPacket::Message(Message::new(dest.dock, body)),
+                InnerPacket::Message(Message::new(dest.dock, body, 0)),
                 self.my_endpoint,
                 dest.fingerprint,
             )
@@ -111,17 +111,21 @@ impl N2rAnonSocket {
 
     /// Receives an incoming packet.
     pub async fn recv_from(&self) -> anyhow::Result<(Bytes, RelayEndpoint)> {
-        let (message, source) = self.queue.recv().await?;
-        *self.surb_counts.entry(source.fingerprint).or_insert(0) -= 1;
+        let (message, source, surb_count) = self.queue.recv().await?;
+        tracing::debug!(surb_count, source = debug(source), "surb count gotten");
+        self.remote_surb_counts
+            .insert(source.fingerprint, surb_count);
         self.replenish_surb(source.fingerprint).await?;
         Ok((message, source))
     }
 
     /// Replenishes missing SURBs for the given destination.
     pub async fn replenish_surb(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
-        while *self.surb_counts.entry(fingerprint).or_insert(0) < 100 {
-            *self.surb_counts.entry(fingerprint).or_insert(0) += 2;
-            *self.surb_counts.entry(fingerprint).or_insert(0) += 5;
+        // send a batch of 10 surbs
+        if (rand::random::<f64>() < 0.1
+            || *self.remote_surb_counts.entry(fingerprint).or_insert(0) < 50)
+            && *self.remote_surb_counts.entry(fingerprint).or_insert(0) < 500
+        {
             let surbs = (0..10)
                 .map(|_| {
                     let (rb, id, degarble) = self
@@ -149,7 +153,7 @@ impl N2rAnonSocket {
 struct N2rNodeCtx {
     cfg: N2rConfig,
     link_node: Arc<LinkNode>,
-    anon_queues: Arc<DashMap<AnonEndpoint, Sender<(Bytes, RelayEndpoint)>>>,
+    anon_queues: Arc<DashMap<AnonEndpoint, Sender<(Bytes, RelayEndpoint, usize)>>>,
     relay_queues: Arc<DashMap<Dock, Sender<(Bytes, AnonEndpoint)>>>,
     rb_store: Arc<Mutex<ReplyBlockStore>>,
     degarblers: Cache<u64, ReplyDegarbler>,
@@ -197,7 +201,11 @@ async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
                         ctx.anon_queues
                             .get(&degarbler.my_anon_id())
                             .context(format!("no queue for anon id {}", degarbler.my_anon_id()))?
-                            .try_send((msg.body, RelayEndpoint::new(source, msg.relay_dock)))?;
+                            .try_send((
+                                msg.body,
+                                RelayEndpoint::new(source, msg.relay_dock),
+                                msg.remaining_surbs,
+                            ))?;
                     }
                 }
             }
@@ -224,15 +232,15 @@ impl Drop for N2rRelaySocket {
 impl N2rRelaySocket {
     /// Sends a packet to a particular anonymous endpoint.
     pub async fn send_to(&self, body: Bytes, anon_endpoint: AnonEndpoint) -> anyhow::Result<()> {
-        let rb = self
+        let (rb, remaining) = self
             .ctx
             .rb_store
             .lock()
-            .pop(anon_endpoint)
+            .pop_and_count(anon_endpoint)
             .context(format!("no surb for anon endpoint: {:?}", anon_endpoint))?;
         self.ctx
             .link_node
-            .send_backwards(rb, Message::new(self.dock, body))
+            .send_backwards(rb, Message::new(self.dock, body, remaining))
             .await?;
         Ok(())
     }

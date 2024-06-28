@@ -39,6 +39,7 @@ impl Surb {
             InnerPacket::Message(Message {
                 relay_dock: 0u32,
                 body: Bytes::new(),
+                remaining_surbs: 0,
             }),
             &metadata,
             RemoteId::Anon(my_anon_id),

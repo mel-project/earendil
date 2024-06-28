@@ -28,9 +28,9 @@ impl ReplyBlockStore {
         deque.insert(rb);
     }
 
-    pub fn pop(&mut self, anon_dest: AnonEndpoint) -> Option<Surb> {
+    pub fn pop_and_count(&mut self, anon_dest: AnonEndpoint) -> Option<(Surb, usize)> {
         match self.items.get_mut(&anon_dest) {
-            Some(deque) => deque.pop(),
+            Some(deque) => Some((deque.pop()?, deque.deque.len())),
             None => None,
         }
     }

@@ -377,6 +377,7 @@ mod link_node_tests {
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
             body: Bytes::from_static(b"lol"),
+            remaining_surbs: 0,
         });
         smol::block_on(async {
             let (node1, node2) = get_two_connected_relays().await;
@@ -437,6 +438,7 @@ mod link_node_tests {
                     Message {
                         relay_dock: msg_relay_dock,
                         body: msg_body.clone(),
+                        remaining_surbs: 0,
                     },
                 )
                 .await
@@ -449,7 +451,11 @@ mod link_node_tests {
                     let mut body: RawBody = *bytemuck::try_from_bytes(&body).unwrap();
                     let (inner_pkt, _) = degarbler.degarble(&mut body).unwrap();
                     match inner_pkt {
-                        InnerPacket::Message(Message { relay_dock, body }) => {
+                        InnerPacket::Message(Message {
+                            relay_dock,
+                            body,
+                            remaining_surbs: _,
+                        }) => {
                             assert_eq!(msg_body, body);
                             assert_eq!(msg_relay_dock, relay_dock);
                             println!("YAY SUCCESS")
@@ -469,6 +475,7 @@ mod link_node_tests {
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
             body: Bytes::from_static(b"lol"),
+            remaining_surbs: 0,
         });
 
         smol::block_on(async {
@@ -548,6 +555,7 @@ mod link_node_tests {
                     Message {
                         relay_dock: msg_relay_dock,
                         body: msg_body.clone(),
+                        remaining_surbs: 0,
                     },
                 )
                 .await
@@ -560,7 +568,11 @@ mod link_node_tests {
                     let mut body: RawBody = *bytemuck::try_from_bytes(&body).unwrap();
                     let (inner_pkt, _) = degarbler.degarble(&mut body).unwrap();
                     match inner_pkt {
-                        InnerPacket::Message(Message { relay_dock, body }) => {
+                        InnerPacket::Message(Message {
+                            relay_dock,
+                            body,
+                            remaining_surbs: _,
+                        }) => {
                             assert_eq!(msg_body, body);
                             assert_eq!(msg_relay_dock, relay_dock);
                             println!("YAY SUCCESS")
@@ -580,6 +592,7 @@ mod link_node_tests {
         let pkt = InnerPacket::Message(Message {
             relay_dock: 123,
             body: Bytes::from_static(b"lol"),
+            remaining_surbs: 0,
         });
         smol::block_on(async {
             let (node1, _node2, _node3, node4) = get_four_connected_relays().await;
