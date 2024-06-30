@@ -106,8 +106,7 @@ fn micromel_to_difficulty(micromel: u64, dosc_speed: u128) -> u32 {
     let amt_mel = micromel as f64 / 1_000_000.0;
     let num_hashes = amt_mel * bighashes_per_mel;
     // println!("micromel = {micromel}, dosc_speed = {dosc_speed}, num_hashes = {num_hashes}");
-    let difficulty = num_hashes.log2().ceil() as u32;
-    difficulty
+    num_hashes.log2().ceil() as u32
 }
 
 fn difficulty_to_micromel(difficulty: u32, dosc_speed: u128) -> u64 {

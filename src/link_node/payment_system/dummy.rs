@@ -19,6 +19,12 @@ impl Dummy {
     }
 }
 
+impl Default for Dummy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl PaymentSystem for Dummy {
     async fn pay(

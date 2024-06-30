@@ -262,7 +262,7 @@ pub enum PaymentSystemKind {
     // Astrape,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct SupportedPaymentSystems {
     #[serde(flatten)]
     pub dummy: Option<()>,
@@ -275,16 +275,6 @@ pub struct SupportedPaymentSystems {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OnChain {
     pub secret: String,
-}
-
-impl Default for SupportedPaymentSystems {
-    fn default() -> Self {
-        Self {
-            dummy: Default::default(),
-            pow: Default::default(),
-            onchain: Default::default(),
-        }
-    }
 }
 
 impl SupportedPaymentSystems {
