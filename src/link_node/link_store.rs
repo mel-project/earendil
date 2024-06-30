@@ -7,6 +7,7 @@ use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 
 use super::types::NodeId;
 
+/// Persistent storage for links, containing debts and chats.
 pub struct LinkStore {
     pool: SqlitePool,
 }
@@ -33,7 +34,10 @@ impl LinkStore {
         tracing::debug!("INITIALIZING DATABASE");
         let options =
             SqliteConnectOptions::from_str(path.to_str().context("db-path is not valid unicode")?)?
-                .create_if_missing(true);
+                .create_if_missing(true)
+                .foreign_keys(true)
+                .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+                .synchronous(sqlx::sqlite::SqliteSynchronous::Normal);
         let pool = SqlitePool::connect_with(options).await?;
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS chats (
