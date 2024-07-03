@@ -25,7 +25,7 @@ pub struct ConfigFile {
     pub out_routes: BTreeMap<String, OutRouteConfig>,
 
     #[serde(default)]
-    pub payment_methods: SupportedPaymentSystems,
+    pub payment_methods: Vec<PaymentSystemKind>,
 
     /// List of all client configs for udp forwarding
     #[serde(default)]
@@ -294,9 +294,10 @@ where
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum PaymentSystemKind {
     Dummy,
-    PoW,
+    Pow,
     OnChain(String),
     // Astrape,
 }
@@ -320,7 +321,7 @@ impl SupportedPaymentSystems {
             available.push(PaymentSystemKind::Dummy);
         }
         if self.pow.is_some() {
-            available.push(PaymentSystemKind::PoW);
+            available.push(PaymentSystemKind::Pow);
         }
         if let Some(OnChain { secret }) = &self.on_chain {
             available.push(PaymentSystemKind::OnChain(secret.to_string()))
