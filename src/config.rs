@@ -313,16 +313,6 @@ pub struct OnChain {
     pub secret: String,
 }
 
-impl Default for SupportedPaymentSystems {
-    fn default() -> Self {
-        Self {
-            dummy: None,
-            pow: None,
-            on_chain: None,
-        }
-    }
-}
-
 impl SupportedPaymentSystems {
     pub fn get_available(&self) -> anyhow::Result<Vec<PaymentSystemKind>> {
         let mut available = vec![];

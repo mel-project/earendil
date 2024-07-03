@@ -29,5 +29,6 @@ havens:
       # upstream: 127.0.0.1:42424
 
 payment_methods:
-  on_chain:
-    secret: 0BVY4PMM69Q7P5VC0SPV900EGH8VFMCV5A2645YAPR6NGD7PJKTG # thisbe.json
+  pow:
+  # on_chain:
+  #   secret: 0BVY4PMM69Q7P5VC0SPV900EGH8VFMCV5A2645YAPR6NGD7PJKTG # thisbe.json

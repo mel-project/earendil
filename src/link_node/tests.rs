@@ -13,6 +13,7 @@ mod link_node_tests {
     use melstructs::NetID;
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+    use crate::OnChain;
     use crate::{
         config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
         link_node::types::NodeId,
