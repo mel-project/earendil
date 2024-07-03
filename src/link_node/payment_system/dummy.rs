@@ -55,4 +55,8 @@ impl PaymentSystem for Dummy {
     fn name(&self) -> String {
         "dummy".to_string()
     }
+
+    fn max_granularity(&self) -> u64 {
+        u64::MAX
+    }
 }

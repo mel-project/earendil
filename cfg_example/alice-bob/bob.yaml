@@ -15,7 +15,7 @@ relay_config:
       listen: 0.0.0.0:12345
       price_config:
         inbound_price: 1
-        inbound_debt_limit: 10
+        inbound_debt_limit: 100
         outbound_max_price: 0
         outbound_min_debt_limit: 0
 
@@ -29,4 +29,5 @@ havens:
       # upstream: 127.0.0.1:42424
 
 payment_methods:
-  dummy:
+  on_chain:
+    secret: 0BVY4PMM69Q7P5VC0SPV900EGH8VFMCV5A2645YAPR6NGD7PJKTG # thisbe.json

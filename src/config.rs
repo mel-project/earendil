@@ -1,8 +1,8 @@
-use std::{collections::BTreeMap, io::Write, net::SocketAddr, path::PathBuf};
+use std::{collections::BTreeMap, fmt, io::Write, net::SocketAddr, path::PathBuf};
 
 use anyhow::Context;
 use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::serde_as;
 use std::fs::OpenOptions;
 use tracing::instrument;
@@ -100,7 +100,8 @@ pub struct OutRouteConfig {
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PriceConfig {
-    /// price, in micromel
+    #[serde(deserialize_with = "deserialize_nonneg_f64")]
+    /// price, in micromel. Must be nonnegative
     pub inbound_price: f64,
     /// debt limit, in micromel
     pub inbound_debt_limit: f64,
@@ -254,6 +255,44 @@ impl Identity {
     }
 }
 
+fn deserialize_nonneg_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct NonNegativeF64Visitor;
+
+    impl<'de> serde::de::Visitor<'de> for NonNegativeF64Visitor {
+        type Value = f64;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a non-negative f64")
+        }
+
+        fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            if value >= 0.0 {
+                Ok(value)
+            } else {
+                Err(E::custom(format!(
+                    "f64 must be non-negative, got {}",
+                    value
+                )))
+            }
+        }
+
+        fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(value as f64)
+        }
+    }
+
+    deserializer.deserialize_any(NonNegativeF64Visitor)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum PaymentSystemKind {
     Dummy,
@@ -264,12 +303,9 @@ pub enum PaymentSystemKind {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SupportedPaymentSystems {
-    #[serde(flatten)]
     pub dummy: Option<()>,
-    #[serde(flatten)]
     pub pow: Option<()>,
-    #[serde(flatten)]
-    pub onchain: Option<OnChain>,
+    pub on_chain: Option<OnChain>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -280,9 +316,9 @@ pub struct OnChain {
 impl Default for SupportedPaymentSystems {
     fn default() -> Self {
         Self {
-            dummy: Default::default(),
-            pow: Default::default(),
-            onchain: Default::default(),
+            dummy: None,
+            pow: None,
+            on_chain: None,
         }
     }
 }
@@ -296,7 +332,7 @@ impl SupportedPaymentSystems {
         if self.pow.is_some() {
             available.push(PaymentSystemKind::PoW);
         }
-        if let Some(OnChain { secret }) = &self.onchain {
+        if let Some(OnChain { secret }) = &self.on_chain {
             available.push(PaymentSystemKind::OnChain(secret.to_string()))
         }
         Ok(available)

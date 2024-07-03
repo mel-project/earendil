@@ -118,48 +118,57 @@ pub(super) async fn send_msg(
                 smolscale::spawn(async move {
                     let _guard = _guard;
                     let ott = link_client.get_ott().await??;
-                    let pay_amt = (link_w_payinfo.1.debt_limit - curr_debt).abs() + 100.0;
-                    tracing::debug!(
-                    "within 100 µMEL of debt limit! curr_debt={curr_debt}; debt_limit={}. SENDING PAYMENT with amt={pay_amt}!",
-                    link_w_payinfo.1.debt_limit
-                );
+                    let mut remaining_pay_amt: u64 = (link_w_payinfo.1.debt_limit - curr_debt).abs().ceil() as u64 + 100;
                     let (paysystem, to_payaddr) = link_node_ctx
                         .payment_systems
                         .select(&link_w_payinfo.1.paysystem_name_addrs)
                         .context("no supported payment system")?;
                     let my_id = link_node_ctx.my_id.public();
-
-                    loop {
-                        match paysystem.pay(my_id, &to_payaddr, pay_amt as _, &ott).await {
+                    let max_granularity = paysystem.max_granularity();
+            
+                    while remaining_pay_amt > 0 {
+                        let current_pay_amt = remaining_pay_amt.min(max_granularity);
+                        tracing::debug!(
+                            "within 100 µMEL of debt limit! curr_debt={curr_debt}; debt_limit={}. SENDING PAYMENT with amt={current_pay_amt}; total_amt={remaining_pay_amt}!",
+                            link_w_payinfo.1.debt_limit
+                        );
+                        match paysystem.pay(my_id, &to_payaddr, current_pay_amt, &ott).await {
                             Ok(proof) => {
                                 // send payment proof to remote
                                 link_client
                                     .send_payment_proof(
-                                        pay_amt as _,
+                                        current_pay_amt,
                                         paysystem.name(),
                                         proof.clone(),
                                     )
                                     .await??;
-                                tracing::debug!("sent payment proof to remote!");
+                                tracing::debug!("sent payment proof to remote for amount: {}", current_pay_amt);
                                 // decrement our debt to them
                                 link_node_ctx
                                     .store
                                     .insert_debt_entry(
                                         to,
                                         DebtEntry {
-                                            delta: -pay_amt,
+                                            delta: -(current_pay_amt as f64),
                                             timestamp: chrono::offset::Utc::now().timestamp(),
                                             proof: Some(proof),
                                         },
                                     )
                                     .await?;
-                                tracing::debug!("logged payment!");
-                                break anyhow::Ok(());
+                                tracing::debug!("logged payment of amount: {}", current_pay_amt);
+                                remaining_pay_amt -= current_pay_amt;
                             }
                             Err(e) => {
-                                tracing::warn!("sending payment to {:?} failed with ERR: {e}", to)
+                                tracing::warn!("sending payment of {} to {:?} failed with ERR: {e}", current_pay_amt, to);
                             }
                         }
+                    }
+                    if remaining_pay_amt <= 0 {
+                        tracing::debug!("Full payment completed successfully!");
+                        anyhow::Ok(())
+                    } else {
+                        tracing::warn!("Payment process incomplete. Remaining amount: {}", remaining_pay_amt);
+                        anyhow::bail!("Payment process incomplete")
                     }
                 })
                 .detach();

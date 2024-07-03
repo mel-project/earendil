@@ -129,7 +129,7 @@ mod link_node_tests {
                 obfs: ObfsConfig::None,
                 price_config: PriceConfig {
                     inbound_price: 1.0,
-                    inbound_debt_limit: 50.0,
+                    inbound_debt_limit: 5.0,
                     outbound_max_price: 0.0,
                     outbound_min_debt_limit: 0.0,
                 },
@@ -164,12 +164,12 @@ mod link_node_tests {
                     path
                 },
                 payment_systems: vec![Box::new(
-                    PoW::new(mel_client_1.clone()), // Dummy::new(),
-                                                    // OnChain::new(
-                                                    //     "NKWCC6XHVS3RFMP5NMN8Z931D0K27RN7M22AFGRSZBWFE4N83760",
-                                                    //     mel_client_1.clone(),
-                                                    // )
-                                                    // .unwrap(),
+                    // PoW::new(mel_client_1.clone()), // Dummy::new(),
+                    OnChain::new(
+                        "NKWCC6XHVS3RFMP5NMN8Z931D0K27RN7M22AFGRSZBWFE4N83760",
+                        mel_client_1.clone(),
+                    )
+                    .unwrap(),
                 )],
             },
             mel_client_1,
@@ -192,12 +192,12 @@ mod link_node_tests {
                     path
                 },
                 payment_systems: vec![Box::new(
-                    PoW::new(mel_client_2.clone()), // Dummy::new(),
-                                                    // OnChain::new(
-                                                    //     "0BVY4PMM69Q7P5VC0SPV900EGH8VFMCV5A2645YAPR6NGD7PJKTG",
-                                                    //     mel_client_2.clone(),
-                                                    // )
-                                                    // .unwrap(),
+                    // PoW::new(mel_client_2.clone()), // Dummy::new(),
+                    OnChain::new(
+                        "0BVY4PMM69Q7P5VC0SPV900EGH8VFMCV5A2645YAPR6NGD7PJKTG",
+                        mel_client_2.clone(),
+                    )
+                    .unwrap(),
                 )],
             },
             mel_client_2,

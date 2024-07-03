@@ -94,6 +94,10 @@ impl PaymentSystem for PoW {
     fn name(&self) -> String {
         "pow".to_string()
     }
+
+    fn max_granularity(&self) -> u64 {
+        10
+    }
 }
 
 fn micromel_to_difficulty(micromel: u64, dosc_speed: u128) -> u32 {

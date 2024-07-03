@@ -63,12 +63,15 @@ impl Node {
         // construct payment systems based on our config
         let mut payment_systems: Vec<Box<dyn PaymentSystem>> = vec![];
         if config.payment_methods.dummy.is_some() {
+            tracing::debug!("DUMMY payments supported!");
             payment_systems.push(Box::new(Dummy::new()));
         }
         if config.payment_methods.pow.is_some() {
+            tracing::debug!("PoW payments supported!");
             payment_systems.push(Box::new(PoW::new(mel_client.clone())));
         }
-        if let Some(crate::config::OnChain { secret }) = config.payment_methods.onchain {
+        if let Some(crate::config::OnChain { secret }) = config.payment_methods.on_chain {
+            tracing::debug!("OnChain payments supported!");
             payment_systems.push(Box::new(OnChain::new(&secret, mel_client.clone())?))
         }
 

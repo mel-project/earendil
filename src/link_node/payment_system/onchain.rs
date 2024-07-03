@@ -164,4 +164,8 @@ impl PaymentSystem for OnChain {
     fn name(&self) -> String {
         "on_chain".to_string()
     }
+
+    fn max_granularity(&self) -> u64 {
+        u64::MAX
+    }
 }

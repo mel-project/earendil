@@ -33,6 +33,9 @@ pub trait PaymentSystem: Send + Sync + 'static {
     fn my_addr(&self) -> String;
 
     fn name(&self) -> String;
+
+    /// max amount a payment can be, in micromels
+    fn max_granularity(&self) -> u64;
 }
 
 pub struct PaymentSystemSelector {
