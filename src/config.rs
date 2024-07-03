@@ -301,7 +301,7 @@ pub enum PaymentSystemKind {
     // Astrape,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct SupportedPaymentSystems {
     pub dummy: Option<()>,
     pub pow: Option<()>,

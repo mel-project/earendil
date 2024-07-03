@@ -49,8 +49,8 @@ impl PaymentSystemSelector {
         }
     }
 
-    pub fn get(&self, payment_system: &str) -> Option<&Box<dyn PaymentSystem>> {
-        self.inner.get(payment_system)
+    pub fn get(&self, payment_system: &str) -> Option<&dyn PaymentSystem> {
+        self.inner.get(payment_system).map(|s| s.as_ref())
     }
 
     pub fn insert(&mut self, payment_system: Box<dyn PaymentSystem>) {
@@ -64,10 +64,7 @@ impl PaymentSystemSelector {
             .collect()
     }
 
-    pub fn select(
-        &self,
-        name_addrs: &[(String, String)],
-    ) -> Option<(&Box<dyn PaymentSystem>, String)> {
+    pub fn select(&self, name_addrs: &[(String, String)]) -> Option<(&dyn PaymentSystem, String)> {
         for (name, addr) in name_addrs {
             if let Some(ret) = self.get(name) {
                 return Some((ret, addr.to_string()));

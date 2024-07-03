@@ -8,7 +8,7 @@ mod pascal;
 mod payment_system;
 mod route_util;
 mod send_msg;
-mod settlement;
+
 mod tests;
 mod types;
 

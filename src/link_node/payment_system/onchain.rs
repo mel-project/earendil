@@ -22,7 +22,7 @@ pub struct OnChain {
 impl OnChain {
     pub fn new(secret: &str, mel_client: Arc<melprot::Client>) -> anyhow::Result<Self> {
         let secret =
-            base32::decode(Alphabet::Crockford, &secret).context("failed to decode mel secret")?;
+            base32::decode(Alphabet::Crockford, secret).context("failed to decode mel secret")?;
         let sk = ed25519_dalek::SigningKey::from_bytes(secret.as_slice().try_into()?);
         let pk = sk.verifying_key();
         let mut vv = [0u8; 64];
