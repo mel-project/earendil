@@ -10,4 +10,4 @@ perf*
 **/generated_earendil_configs/**
 
 *.log
-*.db
+*.db*
