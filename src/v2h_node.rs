@@ -16,7 +16,7 @@ use earendil_crypt::{
 };
 
 use futures::TryFutureExt;
-use global_rpc::{GlobalRpcTransport};
+use global_rpc::GlobalRpcTransport;
 use nanorpc::{JrpcRequest, RpcService};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use stdcode::StdcodeSerializeExt;

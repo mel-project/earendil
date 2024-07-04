@@ -89,6 +89,7 @@ pub(super) async fn send_to_nonself_next_peeler(
     anyhow::Ok(())
 }
 
+const RIBBON: f64 = 100.0;
 pub(super) async fn send_msg(
     link_node_ctx: &LinkNodeCtx,
     to: NodeId,
@@ -104,9 +105,9 @@ pub(super) async fn send_msg(
     if link_w_payinfo.1.price != 0.0 {
         // check debt & send payment if we are close to the debt limit
         let curr_debt = link_node_ctx.store.get_debt(to).await?;
-
+        let micromels_from_limit = link_w_payinfo.1.debt_limit - curr_debt;
         // pay if we're within 100 µMEL of the debt limit
-        if link_w_payinfo.1.debt_limit - curr_debt <= 100.0 {
+        if micromels_from_limit <= RIBBON {
             let _guard = link_node_ctx
                 .send_task_semaphores
                 .entry(to)
@@ -117,15 +118,14 @@ pub(super) async fn send_msg(
             if let Some(_guard) = _guard {
                 smolscale::spawn(async move {
                     let _guard = _guard;
-                    let ott = link_client.get_ott().await??;
+                       let ott = link_client.get_ott().await??;
                     let mut remaining_pay_amt: u64 = (link_w_payinfo.1.debt_limit - curr_debt).abs().ceil() as u64 + 100;
                     let (paysystem, to_payaddr) = link_node_ctx
                         .payment_systems
-                        .select(&link_w_payinfo.1.paysystem_name_addrs)
+                            .select(&link_w_payinfo.1.paysystem_name_addrs)
                         .context("no supported payment system")?;
                     let my_id = link_node_ctx.my_id.public();
                     let max_granularity = paysystem.max_granularity();
-            
                     while remaining_pay_amt > 0 {
                         let current_pay_amt = remaining_pay_amt.min(max_granularity);
                         tracing::debug!(
@@ -175,13 +175,34 @@ pub(super) async fn send_msg(
             }
         };
         // if we are at debt limit, drop packet here since the other side would drop it anyways
-        if link_w_payinfo.1.debt_limit - curr_debt <= 0.0 {
+        if micromels_from_limit <= 0.0 {
             anyhow::bail!(format!( "AT debt limit with {to}! curr_debt={curr_debt}; debt_limit={} DROPPING outgoing pkt",
             link_w_payinfo.1.debt_limit))
         }
-
-        // increment our debt to them
-        if link_w_payinfo.1.price > 0.0 {
+        // if we are quite close to the debt limit, slow down by dropping packets
+        else if micromels_from_limit / RIBBON < 0.7 {
+            let random_number: f64 = rand::random();
+            if random_number < micromels_from_limit / RIBBON {
+                // send message to remote
+                link_w_payinfo.0.send_msg(msg).await?;
+                // increment our debt to them
+                link_node_ctx
+                    .store
+                    .insert_debt_entry(
+                        to,
+                        DebtEntry {
+                            delta: link_w_payinfo.1.price,
+                            timestamp: chrono::offset::Utc::now().timestamp(),
+                            proof: None,
+                        },
+                    )
+                    .await?;
+            }
+        }
+        // otherwise, send the packet
+        else {
+            link_w_payinfo.0.send_msg(msg).await?;
+            // increment our debt to them
             link_node_ctx
                 .store
                 .insert_debt_entry(
@@ -194,7 +215,9 @@ pub(super) async fn send_msg(
                 )
                 .await?;
         }
+    } else {
+        // debt system not in effect; always sending message!
+        link_w_payinfo.0.send_msg(msg).await?;
     }
-    link_w_payinfo.0.send_msg(msg).await?;
     Ok(())
 }

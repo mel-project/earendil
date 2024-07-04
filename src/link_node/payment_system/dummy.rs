@@ -36,7 +36,7 @@ impl PaymentSystem for Dummy {
     ) -> anyhow::Result<String> {
         let proof =
             serde_json::to_string(&(format!("{my_id},{to},{amount}"), payment_id.to_string()))?;
-        smol::Timer::after(Duration::from_secs(1)).await;
+        smol::Timer::after(Duration::from_secs(100)).await;
         Ok(proof)
     }
 

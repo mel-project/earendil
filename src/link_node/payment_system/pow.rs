@@ -76,14 +76,14 @@ impl PaymentSystem for PoW {
                 .current_header()
                 .dosc_speed,
         );
-        println!("MICROMEL from DIFFICULTY = {micromel}");
+        // println!("MICROMEL from DIFFICULTY = {micromel}");
         if proof.verify(&puzzle, difficulty as _, BigHasher) && micromel > 4 * amount {
             let (payment_id, sender_id): (String, NodeId) = stdcode::deserialize(&puzzle)?;
             if sender_id == from {
                 return Ok(Some(payment_id));
             }
         };
-        println!("verify proof FAILED! difficulty = {difficulty}");
+        // println!("verify proof FAILED! difficulty = {difficulty}");
         Ok(None)
     }
 
@@ -96,7 +96,7 @@ impl PaymentSystem for PoW {
     }
 
     fn max_granularity(&self) -> u64 {
-        10
+        5
     }
 }
 
