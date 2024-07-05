@@ -25,6 +25,6 @@ arrayref = "0.3.7"
 rand = "0.8.5"
 indexmap = { version = "1.9.3", features = ["serde"] }
 thiserror = "1.0.49"
-earendil_crypt={ version="0.1", path="../earendil_crypt"}
+earendil_crypt={ version= "0.2", path="../earendil_crypt"}
 tracing = "0.1.40"
 
