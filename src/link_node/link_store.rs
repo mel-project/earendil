@@ -137,7 +137,24 @@ impl LinkStore {
             .collect())
     }
 
-    pub async fn insert_debt_entry(
+    pub async fn delta_debt(
+        &self,
+        neighbor: NodeId,
+        delta: f64,
+        proof: Option<String>,
+    ) -> anyhow::Result<()> {
+        self.insert_debt_entry(
+            neighbor,
+            DebtEntry {
+                delta,
+                timestamp: chrono::Utc::now().timestamp(),
+                proof,
+            },
+        )
+        .await
+    }
+
+    async fn insert_debt_entry(
         &self,
         neighbor: NodeId,
         debt_entry: DebtEntry,

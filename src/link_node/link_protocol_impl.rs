@@ -126,14 +126,7 @@ impl LinkProtocol for LinkProtocolImpl {
                 // log payment
                 self.ctx
                     .store
-                    .insert_debt_entry(
-                        neigh,
-                        crate::DebtEntry {
-                            delta: amount as _,
-                            timestamp: chrono::offset::Utc::now().timestamp(),
-                            proof: Some(proof),
-                        },
-                    )
+                    .delta_debt(neigh, amount as _, Some(proof))
                     .await
                     .map_err(|e| {
                         tracing::warn!("could not insert debt entry: {:?}", e);

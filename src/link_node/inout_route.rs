@@ -238,14 +238,7 @@ async fn handle_pipe(
                 // increment remote's debt
                 link_node_ctx
                     .store
-                    .insert_debt_entry(
-                        their_id,
-                        DebtEntry {
-                            delta: -price_config.inbound_price,
-                            timestamp: chrono::offset::Utc::now().timestamp(),
-                            proof: None,
-                        },
-                    )
+                    .delta_debt(their_id, -price_config.inbound_price, None)
                     .await?;
             }
             send_raw.send(msg).await?;
