@@ -171,14 +171,14 @@ pub(super) async fn send_msg(
                             }
                         }
                     }
-                    if remaining_pay_amt <= 0 {
-                        tracing::debug!("full payment completed successfully!");
+                    if remaining_pay_amt == 0 {
+                        tracing::debug!("Full payment completed successfully!");
                         anyhow::Ok(())
                     } else {
                         tracing::warn!("Payment process incomplete. Remaining amount: {}", remaining_pay_amt);
                         anyhow::bail!("Payment process incomplete")
                     }
-                })
+                }) 
                 .detach();
             }
         }
