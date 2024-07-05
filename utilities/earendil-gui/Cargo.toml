@@ -16,7 +16,7 @@ eframe = "0.27"
 egui = "0.27"
 egui-modal = "0.3.6"
 tap = "1.0.1"
-earendil={version="0.4", path="../../"}
+earendil={version= "0.5", path="../../"}
 nanorpc-http = "0.1.5"
 poll-promise = "0.3.0"
 anyctx = "0.1"
