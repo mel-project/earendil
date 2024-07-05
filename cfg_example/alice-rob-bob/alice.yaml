@@ -12,8 +12,8 @@ out_routes:
     price_config:
       inbound_price: 0
       inbound_debt_limit: 0
-      outbound_max_price: 10
-      outbound_min_debt_limit: -10
+      outbound_max_price: 0
+      outbound_min_debt_limit: 0
   # bob:
   #   fingerprint: 2d2b5429d2c814c05c31bc67b3731817a1b09ba353f8b31b54dce7f149fa16a7
   #   obfs: none
@@ -23,9 +23,6 @@ out_routes:
   #   connect: 45.33.109.28:12345
   #   fingerprint: 4b7a641b77c2d6ceb8b3fecec2b2978dfe81ae045ed9a25ed78b828009c4967a
   #   obfs: none
-
-# payment_methods:
-#   dummy:
 
 socks5:
   listen: 127.0.0.1:23456

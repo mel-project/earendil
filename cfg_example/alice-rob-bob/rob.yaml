@@ -10,12 +10,9 @@ relay_config:
       price_config:
         inbound_price: 0
         inbound_debt_limit: 0
-        outbound_max_price: 10
-        outbound_min_debt_limit: -10
+        outbound_max_price: 0
+        outbound_min_debt_limit: 0
 
 db_path: ./rob.db
-
-payment_methods:
-  dummy:
 
 control_listen: 127.0.0.1:33333

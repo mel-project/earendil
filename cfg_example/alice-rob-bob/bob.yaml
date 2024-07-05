@@ -11,8 +11,8 @@ relay_config:
       price_config:
         inbound_price: 0
         inbound_debt_limit: 0
-        outbound_max_price: 10
-        outbound_min_debt_limit: -10
+        outbound_max_price: 0
+        outbound_min_debt_limit: 0
 
 db_path: ./bob.db
 control_listen: 127.0.0.1:22222
@@ -32,10 +32,6 @@ out_routes:
       inbound_debt_limit: 0
       outbound_max_price: 10
       outbound_min_debt_limit: -10
-
-payment_methods:
-  dummy:
-  pow:
 
 havens:
   - identity_seed: i-am-a-haven-pls-no-eat-me
