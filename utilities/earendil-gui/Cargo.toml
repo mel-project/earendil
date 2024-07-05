@@ -34,3 +34,6 @@ earendil_crypt = { version = "0.1.0", path = "../../libraries/earendil_crypt" }
 async-std = "1.12.0"
 either = "1.10.0"
 blake3 = "1.5.1"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser"] }

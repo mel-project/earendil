@@ -1,13 +1,11 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use earendil::{control_protocol::ControlClient, daemon::Daemon};
-use earendil_crypt::RelayFingerprint;
-use either::Either;
+use earendil::{control_protocol::ControlClient, Node, NodeId};
 
 #[derive(Clone)]
 pub enum DaemonWrap {
     Remote(SocketAddr),
-    Embedded(Arc<Daemon>),
+    Embedded(Arc<Node>),
 }
 
 impl DaemonWrap {
@@ -21,16 +19,10 @@ impl DaemonWrap {
         }
     }
 
-    pub fn identity(&self) -> Either<u64, RelayFingerprint> {
+    pub fn identity(&self) -> NodeId {
         match self {
             DaemonWrap::Remote(_) => todo!(), // todo: add control method?
-            DaemonWrap::Embedded(d) => {
-                if let Some(sk) = d.identity() {
-                    Either::Right(sk.public().fingerprint())
-                } else {
-                    Either::Left(d.client_id())
-                }
-            }
+            DaemonWrap::Embedded(node) => node.identity(),
         }
     }
 

@@ -1,9 +1,7 @@
 use bytes::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
-use earendil_packet::{
-    crypt::DhSecret, ForwardInstruction, InnerPacket, Message, RawPacket, ReplyBlock,
-};
+use earendil_packet::{crypt::DhSecret, ForwardInstruction, InnerPacket, Message, RawPacket, Surb};
 
 fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, DhSecret)> {
     (0..n)
@@ -41,6 +39,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let payload = InnerPacket::Message(Message {
             relay_dock: 0u32,
             body: Bytes::from_static(b"hello world"),
+            remaining_surbs: 0,
         });
         let my_anon_id = AnonEndpoint::random();
         let my_osk = DhSecret::generate();
@@ -62,15 +61,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         c.bench_function(
             &format!("{route_length}-hop ReplyBlock construction"),
             |b| {
-                b.iter(|| {
-                    black_box(ReplyBlock::new(
-                        &route,
-                        first_peeler,
-                        &my_opk,
-                        0,
-                        my_anon_id,
-                    ))
-                });
+                b.iter(|| black_box(Surb::new(&route, first_peeler, &my_opk, 0, my_anon_id)));
             },
         );
     }

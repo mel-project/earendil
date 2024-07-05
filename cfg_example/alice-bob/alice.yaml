@@ -1,0 +1,25 @@
+db_path: ./alice.db
+
+out_routes:
+  bob:
+    fingerprint: 2d2b5429d2c814c05c31bc67b3731817a1b09ba353f8b31b54dce7f149fa16a7
+    obfs:
+      none
+      # sosistab3: "some-cookie-lala-doodoo"
+    connect: 127.0.0.1:12345
+    price_config:
+      inbound_price: 0
+      inbound_debt_limit: 0
+      outbound_max_price: 10
+      outbound_min_debt_limit: 0
+
+socks5:
+  listen: 127.0.0.1:23456
+  fallback:
+    simple_proxy:
+      remote: yqem5bc2m218hqzdk01wbdak42ky715e:29421
+
+payment_methods:
+  # - dummy
+  - pow
+  # - on_chain: NKWCC6XHVS3RFMP5NMN8Z931D0K27RN7M22AFGRSZBWFE4N83760 # money.json

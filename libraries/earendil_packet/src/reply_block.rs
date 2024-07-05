@@ -9,15 +9,15 @@ use crate::{
     ForwardInstruction, InnerPacket, Message, PacketConstructError, RawBody, RawHeader, RawPacket,
 };
 
-/// A reply block. Reply blocks are constructed by endpoints who wish other endpoints to talk to them via an anonymous address, and are single-use, consumed when used to construct a packet going to that anonymous address.
+/// A single-use reply block. Surbs are constructed by endpoints who wish other endpoints to talk to them via an anonymous address, and are single-use, consumed when used to construct a packet going to that anonymous address.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
-pub struct ReplyBlock {
+pub struct Surb {
     pub header: RawHeader,
     pub stream_key: [u8; 32],
     pub first_peeler: RelayFingerprint,
 }
 
-impl ReplyBlock {
+impl Surb {
     pub fn new(
         route: &[ForwardInstruction],
         first_peeler: RelayFingerprint,
@@ -26,6 +26,7 @@ impl ReplyBlock {
         my_anon_id: AnonEndpoint,
     ) -> Result<(Self, (u64, ReplyDegarbler)), PacketConstructError> {
         let rb_id: u64 = rand::random();
+        // println!("made rb with rb_id = {rb_id}");
         let mut metadata = [0; 32];
         // metadata field for reply blocks: 8 bytes of a big-endian encoded unsigned integer, followed by 12 bytes of 0's
         metadata[0..8].copy_from_slice(&my_client_id.to_be_bytes());
@@ -38,6 +39,7 @@ impl ReplyBlock {
             InnerPacket::Message(Message {
                 relay_dock: 0u32,
                 body: Bytes::new(),
+                remaining_surbs: 0,
             }),
             &metadata,
             RemoteId::Anon(my_anon_id),

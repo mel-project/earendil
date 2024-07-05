@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::{
     crypt::{box_decrypt, box_encrypt, stream_dencrypt, DhPublic, DhSecret, BOX_OVERHEAD},
-    InnerPacket, ReplyBlock,
+    InnerPacket, Surb,
 };
 
 pub const RAW_BODY_SIZE: usize = 20000;
@@ -82,7 +82,7 @@ impl RawPacket {
 
     /// Creates a RawPacket for a message to an anonymous identity, using a ReplyBlock
     pub fn new_reply(
-        reply_block: &ReplyBlock,
+        reply_block: &Surb,
         payload: InnerPacket,
         my_id: &RemoteId,
     ) -> Result<Self, PacketConstructError> {

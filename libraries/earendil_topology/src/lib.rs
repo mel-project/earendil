@@ -10,11 +10,12 @@ use indexmap::IndexMap;
 use rand::{seq::IteratorRandom, Rng};
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
+use thiserror::Error;
 
 /// A full, indexed representation of the Earendil relay graph. Includes info about:
 /// - Which fingerprints are adjacent to which fingerprints
 /// - What signing keys and midterm keys do each fingerprint have
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Clone)]
 pub struct RelayGraph {
     unalloc_id: u64,
     fp_to_id: HashMap<RelayFingerprint, u64>,
@@ -48,22 +49,22 @@ impl RelayGraph {
 
     /// Looks up the identity descriptor of a fingerprint.
     pub fn identity(&self, fingerprint: &RelayFingerprint) -> Option<IdentityDescriptor> {
-        tracing::trace!(
-            needle = debug(fingerprint),
-            haystack = debug(self.fp_to_id.iter().collect::<Vec<_>>()),
-            haystack2 = debug(self.id_to_descriptor.keys().collect::<Vec<_>>()),
-            "looking up identity"
-        );
+        // tracing::trace!(
+        //     needle = debug(fingerprint),
+        //     haystack = debug(self.fp_to_id.iter().collect::<Vec<_>>()),
+        //     haystack2 = debug(self.id_to_descriptor.keys().collect::<Vec<_>>()),
+        //     "looking up identity"
+        // );
         let id = self.id(fingerprint)?;
         self.id_to_descriptor.get(&id).cloned()
     }
 
     /// Inserts an identity descriptor. Verifies its self-consistency.
     pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> Result<(), VerifyError> {
-        tracing::trace!(
-            identity = debug(identity.identity_pk.fingerprint()),
-            "inserting an identity into relay graph"
-        );
+        // tracing::trace!(
+        //     identity = debug(identity.identity_pk.fingerprint()),
+        //     "inserting an identity into relay graph"
+        // );
 
         identity
             .identity_pk
@@ -373,4 +374,23 @@ impl IdentityDescriptor {
         this.sig = Bytes::new();
         blake3::keyed_hash(b"identity_descriptor_____________", &this.stdcode())
     }
+
+    /// Verifies the signature of the IdentityDescriptor
+    pub fn verify(&self) -> Result<(), IdentityError> {
+        if self
+            .identity_pk
+            .verify(self.to_sign().as_bytes(), &self.sig)
+            .is_ok()
+        {
+            Ok(())
+        } else {
+            Err(IdentityError::InvalidSignature)
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum IdentityError {
+    #[error("Invalid signature")]
+    InvalidSignature,
 }

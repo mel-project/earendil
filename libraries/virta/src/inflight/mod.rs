@@ -81,26 +81,6 @@ impl Inflight {
 
     /// Marks a particular inflight packet as acknowledged. Returns whether or not there was actually such an inflight packet.
     pub fn mark_acked(&mut self, acked_seqno: u64) -> bool {
-        let mut to_remove = vec![];
-        let now_rto = Instant::now();
-        for (seqno, entry) in self.segments.iter_mut() {
-            if acked_seqno > seqno + 5 && entry.retrans == 0 && entry.retrans_time > now_rto {
-                log::debug!(
-                    "fast retransmit triggered, acked_seqno = {acked_seqno}; seqno = {seqno}"
-                );
-
-                to_remove.push((entry.retrans_time, *seqno));
-                entry.retrans_time = now_rto;
-                self.rtos.entry(now_rto).or_default().push(*seqno);
-            } else {
-                break;
-            }
-        }
-
-        for (a, b) in to_remove {
-            self.remove_rto(a, b)
-        }
-
         let now = Instant::now();
 
         if let Some(acked_seg) = self.segments.remove(&acked_seqno) {
@@ -166,7 +146,6 @@ impl Inflight {
                 (entry.payload.clone(), old_retrans, entry.retrans_time)
             })?
         };
-        // eprintln!("retransmit {}", seqno);
         self.remove_rto(old_retrans, seqno);
         self.rtos.entry(new_retrans).or_default().push(seqno);
         self.sent += 1;
@@ -198,10 +177,5 @@ impl Inflight {
     /// Minimum RTT
     pub fn min_rtt(&self) -> Duration {
         self.rtt.min_rtt()
-    }
-
-    /// The estimated delivery rate of the link
-    pub fn delivery_rate(&self) -> f64 {
-        self.bw.delivery_rate()
     }
 }

@@ -1,5 +1,33 @@
+use std::{net::SocketAddr, path::PathBuf};
+
 use clap::{arg, Subcommand};
 use earendil_crypt::{HavenFingerprint, RelayFingerprint};
+
+#[derive(Subcommand)]
+pub enum Commands {
+    /// Runs an Earendil daemon.
+    Daemon {
+        #[arg(short, long)]
+        config: PathBuf,
+    },
+
+    /// Runs a control-protocol verb.
+    Control {
+        #[arg(short, long, default_value = "127.0.0.1:18964")]
+        connect: SocketAddr,
+        #[command(subcommand)]
+        control_command: ControlCommand,
+    },
+
+    /// Runs a control-protocol verb.
+    // Control {
+    //     #[arg(short, long, default_value = "127.0.0.1:18964")]
+    //     connect: SocketAddr,
+    //     #[command(subcommand)]
+    //     control_command: ControlCommand,
+    // },
+    GenerateSeed,
+}
 
 #[derive(Subcommand)]
 pub enum ControlCommand {

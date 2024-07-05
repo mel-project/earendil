@@ -5,14 +5,13 @@ mod modal_state;
 mod refresh_cell;
 
 use std::{
-    cell::Ref,
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use anyctx::AnyCtx;
 use anyhow::Context;
-use earendil::daemon::Daemon;
+use earendil::Node;
 use egui::{
     mutex::Mutex, Color32, FontData, FontDefinitions, FontFamily, RichText, Shape, Visuals,
 };
@@ -290,10 +289,11 @@ impl App {
                     std::env::set_current_dir(config::earendil_config_dir())?;
                     let config_file =
                         parse_config_yaml(&daemon_cfg).context("could not parse config file")?;
-                    let daemon = Daemon::init(config_file).context("cannot start daemon")?;
-                    smol::future::block_on(daemon.control_client().relay_graphviz())
+                    let node =
+                        smol::block_on(Node::start(config_file)).context("cannot start daemon")?;
+                    smol::future::block_on(node.control_client().relay_graphviz())
                         .context("could not get graph dump")?;
-                    Ok(DaemonWrap::Embedded(daemon.into()))
+                    Ok(DaemonWrap::Embedded(node.into()))
                 }))
             }
 

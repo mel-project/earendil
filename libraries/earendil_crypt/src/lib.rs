@@ -174,6 +174,38 @@ impl HavenFingerprint {
     }
 }
 
+#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct HavenEndpoint {
+    pub fingerprint: HavenFingerprint,
+    pub port: u16,
+}
+
+impl HavenEndpoint {
+    pub fn new(fingerprint: HavenFingerprint, port: u16) -> Self {
+        Self { fingerprint, port }
+    }
+}
+
+impl Display for HavenEndpoint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.fingerprint, self.port)
+    }
+}
+
+impl FromStr for HavenEndpoint {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() != 2 {
+            return Err(anyhow::anyhow!("invalid haven endpoint format"));
+        }
+        let fingerprint = HavenFingerprint::from_str(parts[0])?;
+        let port = u16::from_str(parts[1])?;
+        Ok(HavenEndpoint::new(fingerprint, port))
+    }
+}
+
 /// The public half of a "relay identity" on the network.
 ///
 /// Underlying representation is a Ed25519 public key.
@@ -343,13 +375,39 @@ impl Debug for AnonEndpoint {
     }
 }
 
-pub type ClientId = u64;
-
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash, Serialize, Deserialize)]
-pub enum NeighborId {
-    Relay(RelayFingerprint),
-    Client(ClientId),
+#[derive(Copy, Clone, Deserialize, Serialize, Hash, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct RelayEndpoint {
+    pub fingerprint: RelayFingerprint,
+    pub dock: u32,
 }
+
+impl RelayEndpoint {
+    pub fn new(fingerprint: RelayFingerprint, dock: u32) -> Self {
+        Self { fingerprint, dock }
+    }
+}
+
+impl Display for RelayEndpoint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.fingerprint, self.dock)
+    }
+}
+
+impl FromStr for RelayEndpoint {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() != 2 {
+            return Err(anyhow::anyhow!("invalid relay endpoint format"));
+        }
+        let fingerprint = RelayFingerprint::from_str(parts[0])?;
+        let dock = u32::from_str(parts[1])?;
+        Ok(RelayEndpoint::new(fingerprint, dock))
+    }
+}
+
+pub type ClientId = u64;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
 pub enum RemoteId {

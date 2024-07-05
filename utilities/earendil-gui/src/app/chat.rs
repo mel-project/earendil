@@ -1,10 +1,8 @@
-use std::{
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::{sync::Arc, time::Duration};
 
 use anyctx::AnyCtx;
 use chrono::{DateTime, Local};
+use earendil::{ChatEntry, NodeId};
 use earendil_crypt::{ClientId, RelayFingerprint};
 use egui::{mutex::Mutex, Color32};
 use either::Either;
@@ -33,11 +31,8 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
         let control = Arc::new(async_std::sync::Mutex::new(daemon.control()));
         let control_clone = control.clone();
 
-        static NEIGHBORS: fn(
-            &AnyCtx<()>,
-        ) -> Mutex<
-            RefreshCell<anyhow::Result<Vec<either::Either<ClientId, RelayFingerprint>>>>,
-        > = |_| Mutex::new(RefreshCell::new());
+        static NEIGHBORS: fn(&AnyCtx<()>) -> Mutex<RefreshCell<anyhow::Result<Vec<NodeId>>>> =
+            |_| Mutex::new(RefreshCell::new());
         let mut neighbors = app.state.get(NEIGHBORS).lock();
         let neighbors = neighbors.get_or_refresh(Duration::from_millis(100), || {
             block_on(async move {
@@ -66,10 +61,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
                 }
             }
 
-            static CHAT: fn(
-                &AnyCtx<()>,
-            )
-                -> Mutex<RefreshCell<anyhow::Result<Vec<(bool, String, SystemTime)>>>> =
+            static CHAT: fn(&AnyCtx<()>) -> Mutex<RefreshCell<anyhow::Result<Vec<ChatEntry>>>> =
                 |_| Mutex::new(RefreshCell::new());
             let mut chat = app.state.get(CHAT).lock();
             let chatting_with = daemon_cfg.gui_prefs.chatting_with;
@@ -131,40 +123,42 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
     }
 }
 
-fn render_convo(
-    ui: &mut egui::Ui,
-    tuple_chat: Vec<(bool, String, SystemTime)>,
-    my_fp: Either<ClientId, RelayFingerprint>,
-    their_fp: Either<ClientId, RelayFingerprint>,
-) {
+fn render_convo(ui: &mut egui::Ui, tuple_chat: Vec<ChatEntry>, my_fp: NodeId, their_fp: NodeId) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.set_height(ui.available_height() - 25.0);
 
-        for (is_mine, msg, time) in tuple_chat {
-            let time: DateTime<Local> = time.into();
-            let time_str = format!("{}", time.format("%H:%M:%S"));
+        for ChatEntry {
+            text,
+            timestamp,
+            is_outgoing,
+        } in tuple_chat
+        {
+            let local_date_time = DateTime::from_timestamp(timestamp, 0)
+                .unwrap()
+                .naive_local();
+            let time_str = format!("{}", local_date_time.format("%H:%M:%S"));
 
-            if is_mine {
+            if is_outgoing {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(format!("[{time_str}]"));
                     color_id(ui, my_fp);
-                    ui.add(egui::Label::new(msg));
+                    ui.add(egui::Label::new(text));
                 });
             } else {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(format!("[{time_str}]"));
                     color_id(ui, their_fp);
-                    ui.add(egui::Label::new(msg));
+                    ui.add(egui::Label::new(text));
                 });
             }
         }
     });
 }
 
-fn color_id(ui: &mut egui::Ui, id: Either<ClientId, RelayFingerprint>) {
+fn color_id(ui: &mut egui::Ui, id: NodeId) {
     let (hash, id) = match id {
-        Either::Left(id) => (blake3::hash(&id.to_be_bytes()), id.to_string()),
-        Either::Right(fp) => (blake3::hash(fp.as_bytes()), fp.to_string()),
+        NodeId::Relay(fp) => (blake3::hash(fp.as_bytes()), fp.to_string()),
+        NodeId::Client(id) => (blake3::hash(&id.to_be_bytes()), id.to_string()),
     };
 
     let r: u8 = hash.as_bytes()[0] / 2;
@@ -179,7 +173,7 @@ fn render_input(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
     prefs: &mut Prefs,
-    dest: either::Either<ClientId, RelayFingerprint>,
+    dest: NodeId,
 ) {
     ui.horizontal(|ui| {
         let response = ui.add(

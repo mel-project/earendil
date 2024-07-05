@@ -1,8 +1,7 @@
 name: Build
-
 on:
   push:
-    branches: 
+    branches:
       - "*"
 
 jobs:
@@ -21,6 +20,7 @@ jobs:
 
       - name: Build macOS Binary
         run: |
+          rustup target add x86_64-apple-darwin
           cd utilities/earendil-gui
           cross build --release --target x86_64-apple-darwin --target-dir ./target
 

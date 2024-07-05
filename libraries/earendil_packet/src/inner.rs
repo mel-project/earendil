@@ -5,7 +5,7 @@ use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentityPublic, Remote
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{reply_block::ReplyBlock, RawBody, RAW_BODY_SIZE};
+use crate::{reply_block::Surb, RawBody, RAW_BODY_SIZE};
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 /// Represents the actual end-to-end packet that is carried in the fixed-size payloads. Either an application-level message, or a batch of reply blocks.
@@ -13,7 +13,7 @@ pub enum InnerPacket {
     /// Normal messages
     Message(Message),
     /// Reply blocks, used to construct relay->anon messages
-    ReplyBlocks(Vec<ReplyBlock>),
+    Surbs(Vec<Surb>),
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
@@ -21,6 +21,7 @@ pub enum InnerPacket {
 pub struct Message {
     pub relay_dock: Dock,
     pub body: Bytes,
+    pub remaining_surbs: usize,
 }
 
 pub type Dock = u32;
@@ -100,8 +101,12 @@ impl InnerPacket {
 }
 
 impl Message {
-    pub fn new(relay_dock: Dock, body: Bytes) -> Self {
-        Message { relay_dock, body }
+    pub fn new(relay_dock: Dock, body: Bytes, remaining_surbs: usize) -> Self {
+        Message {
+            relay_dock,
+            body,
+            remaining_surbs,
+        }
     }
 }
 
@@ -119,7 +124,8 @@ mod tests {
         let identity_secret = RelayIdentitySecret::generate();
 
         // Step 2: Create an InnerPacket
-        let inner_packet = InnerPacket::Message(Message::new(200u32, Bytes::from("Hello, World!")));
+        let inner_packet =
+            InnerPacket::Message(Message::new(200u32, Bytes::from("Hello, World!"), 0));
 
         // Step 3: Encode the InnerPacket
         let encrypted_packet = inner_packet
