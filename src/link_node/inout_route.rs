@@ -23,7 +23,6 @@ use stdcode::StdcodeSerializeExt;
 use crate::{
     config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
     link_node::pascal::read_pascal,
-    DebtEntry,
 };
 
 use super::{

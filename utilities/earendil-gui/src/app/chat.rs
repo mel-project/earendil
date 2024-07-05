@@ -1,11 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
 use anyctx::AnyCtx;
-use chrono::{DateTime, Local};
+use chrono::DateTime;
 use earendil::{ChatEntry, NodeId};
-use earendil_crypt::{ClientId, RelayFingerprint};
+
 use egui::{mutex::Mutex, Color32};
-use either::Either;
+
 use smol::block_on;
 
 use crate::app::refresh_cell::RefreshCell;
@@ -50,7 +50,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
                     cols[0].colored_label(Color32::DARK_RED, "Loading peers failed:");
                     cols[0].label(format!("{:?}", err));
                 }
-                Some(Ok((neighs))) => {
+                Some(Ok(neighs)) => {
                     cols[0].vertical(|ui| {
                         for neigh in neighs {
                             if ui.button(neigh.to_string()).clicked() {
@@ -68,7 +68,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
             let chat = chat.get_or_refresh(Duration::from_millis(100), move || {
                 if let Some(neigh) = chatting_with {
                     Ok(block_on(async move {
-                        let chat = control_clone
+                        control_clone
                             .lock()
                             .await
                             .get_chat(neigh.to_string())
@@ -77,8 +77,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
                                 earendil::control_protocol::ChatError::Get(format!(
                                     "error pulling chat with {neigh}: {e}"
                                 ))
-                            })?;
-                        chat
+                            })?
                     })?)
                 } else {
                     Ok(vec![])

@@ -2022,7 +2022,7 @@ dependencies = [
  "moka 0.12.7",
  "moro",
  "nanorpc",
- "nanorpc-http 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nanorpc-http",
  "nursery_macro",
  "once_cell",
  "oneshot",
@@ -2072,7 +2072,7 @@ dependencies = [
  "egui-modal",
  "either",
  "futures-util",
- "nanorpc-http 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nanorpc-http",
  "once_cell",
  "poll-promise",
  "serde",
@@ -3645,8 +3645,9 @@ dependencies = [
 
 [[package]]
 name = "melnet2"
-version = "0.3.1"
-source = "git+https://github.com/mel-project/melnet2?branch=socks5#980010a2ce3a362bfb7e6b63faa89c207d31d341"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b862b6adc9c2db1b1e7cc88f7f3bd37617951edd5e937dbb4e8d3f6d37f043a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3659,7 +3660,7 @@ dependencies = [
  "lz4_flex",
  "moka 0.9.9",
  "nanorpc",
- "nanorpc-http 0.1.3 (git+https://github.com/antidmg/nanorpc-http?branch=new-with-proxy)",
+ "nanorpc-http",
  "pin-project",
  "reusable-box-future",
  "serde",
@@ -3685,8 +3686,9 @@ dependencies = [
 
 [[package]]
 name = "melprot"
-version = "0.13.8"
-source = "git+https://github.com/mel-project/melprot?branch=new-with-proxy#51c9fa654cb11596293fe33f7efbe8942fb3be61"
+version = "0.13.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10aad5ec6f0e9005cc8df6ff6ea8aa2d24ae2df925e0148ea150461fff1c54fe"
 dependencies = [
  "anyhow",
  "arrayref",
@@ -3703,7 +3705,7 @@ dependencies = [
  "melstructs",
  "mini-moka",
  "nanorpc",
- "nanorpc-http 0.1.3 (git+https://github.com/antidmg/nanorpc-http?branch=new-with-proxy)",
+ "nanorpc-http",
  "novasmt",
  "once_cell",
  "parking_lot 0.12.3",
@@ -3981,26 +3983,9 @@ dependencies = [
 
 [[package]]
 name = "nanorpc-http"
-version = "0.1.3"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6079fc9126cc8578a34f8533d5c82024af3218021b5cfb8509fe767ba2af3a95"
-dependencies = [
- "anyhow",
- "async-compat",
- "async-trait",
- "bytes",
- "concurrent-queue 2.5.0",
- "http-body-util",
- "hyper",
- "nanorpc",
- "serde_json",
- "smol 1.3.0",
-]
-
-[[package]]
-name = "nanorpc-http"
-version = "0.1.3"
-source = "git+https://github.com/antidmg/nanorpc-http?branch=new-with-proxy#1e5ac60280779f31abba0dcad5864d8a0bf609e9"
+checksum = "767a4a3fa6ad63b86218954e2f90e33880bfad9886ecbebce950dc6845309c81"
 dependencies = [
  "anyhow",
  "async-compat",

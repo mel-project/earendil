@@ -81,7 +81,7 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(Duration::from_secs(1));
 
         egui::TopBottomPanel::top("top").show(ctx, |ui| {
@@ -133,7 +133,7 @@ impl eframe::App for App {
 }
 
 impl App {
-    fn render_dashboard(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn render_dashboard(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.heading("My Havens");
             if let Some(Ok(daemon)) = self.daemon.as_ref().and_then(|d| d.ready()) {
@@ -198,7 +198,7 @@ impl App {
         });
     }
 
-    fn render_settings(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn render_settings(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         let mut daemon_cfg = self.daemon_cfg.lock();
         // ui.heading("Settings");
         // egui::ComboBox::from_label("Daemon mode")
@@ -233,7 +233,7 @@ impl App {
         });
     }
 
-    fn render_bottom_panel(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn render_bottom_panel(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         // render the bottom panel here
         ui.horizontal_centered(|ui| {
             // render the little circle
@@ -304,7 +304,7 @@ impl App {
         });
     }
 
-    fn render_logs(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn render_logs(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.heading("Logs");
         if ui.button("Clear logs").clicked() {
             LOGS.write().unwrap().clear();

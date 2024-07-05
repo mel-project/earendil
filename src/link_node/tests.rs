@@ -17,7 +17,7 @@ mod link_node_tests {
     use crate::{
         config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
         link_node::types::NodeId,
-        Dummy, IncomingMsg, LinkConfig, LinkNode, PoW,
+        Dummy, IncomingMsg, LinkConfig, LinkNode,
     };
 
     static TEST_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));

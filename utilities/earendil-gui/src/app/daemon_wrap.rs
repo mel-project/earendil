@@ -13,7 +13,10 @@ impl DaemonWrap {
     pub fn control(&self) -> ControlClient {
         match self {
             DaemonWrap::Remote(rem) => {
-                ControlClient::from(nanorpc_http::client::HttpRpcTransport::new(*rem))
+                ControlClient::from(nanorpc_http::client::HttpRpcTransport::new_with_proxy(
+                    rem.to_string(),
+                    nanorpc_http::client::Proxy::Direct,
+                ))
             }
             DaemonWrap::Embedded(emb) => emb.control_client(),
         }

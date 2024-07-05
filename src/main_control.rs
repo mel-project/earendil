@@ -20,7 +20,10 @@ pub async fn main_control(
     control_command: ControlCommand,
     connect: SocketAddr,
 ) -> anyhow::Result<()> {
-    let control = ControlClient::from(HttpRpcTransport::new(connect));
+    let control = ControlClient::from(HttpRpcTransport::new_with_proxy(
+        connect.to_string(),
+        nanorpc_http::client::Proxy::Direct,
+    ));
     match control_command {
         ControlCommand::GlobalRpc {
             id,

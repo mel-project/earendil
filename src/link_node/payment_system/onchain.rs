@@ -96,7 +96,7 @@ impl PaymentSystem for OnChain {
             let latest_height = latest_snapshot.current_header().height;
 
             if current_height < latest_height {
-                if let Some(coin) = latest_snapshot.get_coin(coin_id).await? {
+                if let Some(_coin) = latest_snapshot.get_coin(coin_id).await? {
                     // return payment coin ID as proof
                     tracing::debug!("obtained OnChain proof!");
                     return Ok(coin_id.to_string());
