@@ -14,7 +14,7 @@ relay_config:
         # sosistab3: "some-cookie-lala-doodoo"
       listen: 0.0.0.0:12345
       price_config:
-        inbound_price: 1
+        inbound_price: 0.025 # ~ $4.73 / TB
         inbound_debt_limit: 100000
         outbound_max_price: 0
         outbound_min_debt_limit: 0
