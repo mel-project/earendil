@@ -62,10 +62,12 @@ impl PaymentSystem for OnChain {
 
         // sync wallet before preparing tx
         if let Some(owned_coins) = snapshot.get_coins(wallet.address).await? {
+            // is this check necessary?
             tracing::debug!("syncing wallet...");
             wallet.full_reset(snapshot.current_header().height, owned_coins)?
         }
 
+        // prepare + send tx
         let fee_multiplier = snapshot.current_header().fee_multiplier;
         let tx = wallet.prepare_tx(
             PrepareTxArgs {
@@ -83,7 +85,6 @@ impl PaymentSystem for OnChain {
             txhash: tx.hash_nosigs(),
             index: 0,
         };
-
         snapshot.get_raw().send_tx(tx.clone()).await??;
         tracing::debug!("payment transaction sent");
 
@@ -97,6 +98,7 @@ impl PaymentSystem for OnChain {
             if current_height < latest_height {
                 if let Some(coin) = latest_snapshot.get_coin(coin_id).await? {
                     // return payment coin ID as proof
+                    tracing::debug!("obtained OnChain proof!");
                     return Ok(coin_id.to_string());
                 }
                 current_height = latest_height;
