@@ -56,7 +56,7 @@ impl GlobalRpcProtocol for GlobalRpcImpl {
         self.ctx
             .registered_havens
             .insert(registration.anon_id, registration.identity_pk.fingerprint());
-        tracing::trace!("successfully registered haven");
+        tracing::debug!("successfully registered haven");
         Ok(())
     }
 }

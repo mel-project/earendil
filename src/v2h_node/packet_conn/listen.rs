@@ -100,12 +100,11 @@ async fn haven_demultiplex(
     send_accepted: Sender<HavenPacketConn>,
 ) -> anyhow::Result<()> {
     let n2r_socket = Arc::new(n2r_socket);
-
     let resupply_loop = async {
         loop {
             smol::Timer::after(Duration::from_secs(10)).await;
-            tracing::trace!("resupplying reply blocks for the rendezvous ");
-            n2r_socket.replenish_surb(rendezvous).await?;
+            tracing::trace!("resupplying reply blocks for the rendezvous");
+            n2r_socket.replenish_surbs(rendezvous).await?;
         }
     };
 
