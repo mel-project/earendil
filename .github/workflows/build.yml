@@ -15,14 +15,11 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
 
-      - name: Install Cross
-        run: cargo install cross
-
       - name: Build macOS Binary
         run: |
           rustup target add x86_64-apple-darwin
           cd utilities/earendil-gui
-          cross build --release --target x86_64-apple-darwin --target-dir ./target
+          cargo build --release --target x86_64-apple-darwin --target-dir ./target
 
       - name: Zip macOS Binary
         run: |
