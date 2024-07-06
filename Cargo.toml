@@ -7,7 +7,7 @@ members = [
 
 [package]
 name = "earendil"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2021"
 repository = "https://github.com/mel-project/earendil"
 license = "MPL-2.0"
