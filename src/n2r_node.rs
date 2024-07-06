@@ -96,7 +96,7 @@ impl Drop for N2rAnonSocket {
 impl N2rAnonSocket {
     /// Sends a packet to a particular relay endpoint.
     pub async fn send_to(&self, body: Bytes, dest: RelayEndpoint) -> anyhow::Result<()> {
-        self.replenish_surb(dest.fingerprint).await?;
+        self.auto_replenish_surbs(dest.fingerprint).await?;
 
         self.ctx
             .link_node
@@ -115,32 +115,37 @@ impl N2rAnonSocket {
         tracing::debug!(surb_count, source = debug(source), "surb count gotten");
         self.remote_surb_counts
             .insert(source.fingerprint, surb_count);
-        self.replenish_surb(source.fingerprint).await?;
+        self.auto_replenish_surbs(source.fingerprint).await?;
         Ok((message, source))
     }
 
     /// Replenishes missing SURBs for the given destination.
-    pub async fn replenish_surb(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
-        // send a batch of 10 surbs
+    async fn auto_replenish_surbs(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
         if (rand::random::<f64>() < 0.1
             || *self.remote_surb_counts.entry(fingerprint).or_insert(0) < 50)
             && *self.remote_surb_counts.entry(fingerprint).or_insert(0) < 500
         {
-            let surbs = (0..10)
-                .map(|_| {
-                    let (rb, id, degarble) = self
-                        .ctx
-                        .link_node
-                        .surb_from(self.my_endpoint, fingerprint)?;
-                    self.ctx.degarblers.insert(id, degarble);
-                    anyhow::Ok(rb)
-                })
-                .try_collect()?;
-            self.ctx
-                .link_node
-                .send_forward(InnerPacket::Surbs(surbs), self.my_endpoint, fingerprint)
-                .await?;
+            self.replenish_surbs(fingerprint).await?;
         }
+        Ok(())
+    }
+
+    pub async fn replenish_surbs(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
+        // send a batch of 10 surbs
+        let surbs = (0..10)
+            .map(|_| {
+                let (rb, id, degarble) = self
+                    .ctx
+                    .link_node
+                    .surb_from(self.my_endpoint, fingerprint)?;
+                self.ctx.degarblers.insert(id, degarble);
+                anyhow::Ok(rb)
+            })
+            .try_collect()?;
+        self.ctx
+            .link_node
+            .send_forward(InnerPacket::Surbs(surbs), self.my_endpoint, fingerprint)
+            .await?;
         Ok(())
     }
 

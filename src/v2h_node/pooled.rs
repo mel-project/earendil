@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use earendil_crypt::HavenEndpoint;
 use futures::{future::Shared, AsyncReadExt, FutureExt, TryFutureExt};
 use nursery_macro::nursery;
-use picomux::PicoMux;
+use picomux::{LivenessConfig, PicoMux};
 use smol::{
     channel::{Receiver, Sender},
     future::FutureExt as _,
@@ -53,7 +53,12 @@ impl PooledVisitor {
                     tracing::debug!("got HavenPacketConn");
                     let stream = HeavyStream::new(pkt_conn);
                     let (read, write) = stream.split();
-                    anyhow::Ok(Arc::new(PicoMux::new(read, write)))
+                    let mut mux = PicoMux::new(read, write);
+                    mux.set_liveness(LivenessConfig {
+                        ping_interval: Duration::from_secs(10),
+                        timeout: Duration::from_secs(30),
+                    });
+                    anyhow::Ok(Arc::new(mux))
                 })
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;

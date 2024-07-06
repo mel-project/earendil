@@ -66,6 +66,13 @@ impl RelayGraph {
         //     "inserting an identity into relay graph"
         // );
 
+        // do not insert if we already have a newer copy
+        if let Some(existing) = self.identity(&identity.identity_pk.fingerprint()) {
+            if existing.unix_timestamp > identity.unix_timestamp {
+                return Ok(());
+            }
+        }
+
         identity
             .identity_pk
             .verify(identity.to_sign().as_bytes(), &identity.sig)?;

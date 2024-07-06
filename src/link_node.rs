@@ -141,7 +141,6 @@ impl LinkNode {
                     "couldn't get the identity of the destination fp {dest_relay}"
                 ))?
                 .onion_pk;
-
             (
                 first_peeler,
                 RawPacket::new_normal(&instructs, &dest_opk, packet, RemoteId::Anon(src))?,
