@@ -9,6 +9,7 @@ mod payment_system;
 mod route_util;
 mod send_msg;
 
+pub mod stats;
 mod tests;
 mod types;
 
@@ -42,7 +43,7 @@ use stdcode::StdcodeSerializeExt;
 
 use crate::link_node::route_util::{forward_route_to, route_to_instructs};
 
-use self::link::LinkMessage;
+use self::{link::LinkMessage, stats::StatsGatherer};
 pub use payment_system::{Dummy, OnChain, PaymentSystem, PoW};
 use rand::prelude::*;
 pub use types::{IncomingMsg, LinkConfig, NodeId, NodeIdSecret};
@@ -98,6 +99,7 @@ impl LinkNode {
             payment_systems: Arc::new(payment_systems),
             mel_client,
             send_task_semaphores: Default::default(),
+            stats_gatherer: Arc::new(StatsGatherer::default()),
         };
         let _task = Immortal::respawn(
             RespawnStrategy::Immediate,

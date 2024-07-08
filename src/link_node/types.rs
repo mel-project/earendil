@@ -14,6 +14,8 @@ use crate::{
     LinkStore,
 };
 
+use crate::stats::StatsGatherer;
+
 use super::{
     link::Link,
     payment_system::{PaymentSystem, PaymentSystemSelector},
@@ -90,4 +92,5 @@ pub(super) struct LinkNodeCtx {
     pub store: Arc<LinkStore>,
     pub mel_client: Arc<melprot::Client>,
     pub send_task_semaphores: Arc<DashMap<NodeId, Arc<Semaphore>>>,
+    pub stats_gatherer: Arc<StatsGatherer>,
 }
