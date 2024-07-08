@@ -15,7 +15,7 @@ relay_config:
       listen: 0.0.0.0:12345
       price_config:
         inbound_price: 0.025 # ~ $4.73 / TB. PoW ~ 3.4 Mbps
-        inbound_debt_limit: 10
+        inbound_debt_limit: 100000
         outbound_max_price: 0
         outbound_min_debt_limit: 0
 
