@@ -20,6 +20,6 @@ socks5:
       remote: yqem5bc2m218hqzdk01wbdak42ky715e:29421
 
 payment_methods:
-  - dummy
+  # - dummy
   # - pow
-  # - on_chain: NKWCC6XHVS3RFMP5NMN8Z931D0K27RN7M22AFGRSZBWFE4N83760 # money.json
+  - on_chain: NKWCC6XHVS3RFMP5NMN8Z931D0K27RN7M22AFGRSZBWFE4N83760 # money.json

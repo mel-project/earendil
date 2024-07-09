@@ -56,7 +56,7 @@ impl PaymentSystem for OnChain {
             covhash: Address::from_str(to)?,
             value: CoinValue(amount.into()),
             denom: Denom::Mel,
-            additional_data: (my_id, ott).stdcode().into(),
+            additional_data: serde_json::to_string(&(my_id, ott))?.into_bytes().into(),
         };
         let snapshot = self.mel_client.latest_snapshot().await?;
 
@@ -119,7 +119,7 @@ impl PaymentSystem for OnChain {
         let coin_data = snapshot.get_coin(coin_id).await?;
         if let Some(coin) = coin_data {
             let (id, ott): (NodeId, String) =
-                stdcode::deserialize(&coin.coin_data.additional_data)?;
+                serde_json::from_str(&String::from_utf8(coin.coin_data.additional_data.to_vec())?)?;
             if id == from && coin.coin_data.value == CoinValue(amount.into()) {
                 tracing::debug!("payment verified");
                 return Ok(Some(ott));

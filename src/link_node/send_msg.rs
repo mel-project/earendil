@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant};
+use std::{sync::Arc, time::{Duration, Instant}};
 
 use anyhow::Context;
 use earendil_crypt::RelayFingerprint;
@@ -107,8 +107,8 @@ pub(super) async fn send_msg(
             // we're in the ribbon, so we slow down
             let random_number: f64 = rand::random();
             let drop_prob = (1.0 - (info.debt_limit - curr_debt) / RIBBON).powi(2);
-            if random_number < dbg!(drop_prob) {
-                tracing::debug!("CLOSE to debt limit; dropped packet probabilistically!");
+            if random_number < drop_prob {
+                tracing::trace!("CLOSE to debt limit; dropped packet probabilistically!");
             } else {
                 // send message to remote
                 link.send_msg(msg).await?;
@@ -145,13 +145,20 @@ pub(super) async fn send_msg(
                         match paysystem.pay(my_id, &to_payaddr, current_pay_amt, &ott).await {
                             Ok(proof) => {
                                 // send payment proof to remote
-                                link_client
+                                loop {
+                                    match link_client
                                     .send_payment_proof(
                                         current_pay_amt,
                                         paysystem.name(),
                                         proof.clone(),
                                     )
-                                    .await??;
+                                    .await {
+                                        Ok(Ok(_)) => break,
+                                        Ok(Err(e)) => tracing::warn!("send_payment_proof() LinkRpcError: {e}"),
+                                        Err(e) => tracing::warn!("send_payment_proof() LinkError: {e}"),
+                                    }
+                                    smol::Timer::after(Duration::from_secs(1)).await;
+                                }
                                 tracing::debug!("sent payment proof to remote for amount: {}", current_pay_amt);
                                 // decrement our debt to them
                                 link_node_ctx

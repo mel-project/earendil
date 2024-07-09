@@ -219,7 +219,7 @@ async fn handle_pipe(
             tracing::trace!("received LinkMessage from {:?}", their_id);
             if price_config.inbound_price != 0.0 {
                 let debt = link_node_ctx.store.get_debt(their_id).await?;
-                tracing::debug!(
+                tracing::trace!(
                     "downstream's CURR_DEBT = {}, debt_limit={}, delta = {}",
                     debt,
                     price_config.inbound_debt_limit,
