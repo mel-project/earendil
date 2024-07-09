@@ -225,6 +225,14 @@ impl ControlProtocol for ControlProtocolImpl {
             .await
             .map_err(|e| ChatError::Send(e.to_string()))
     }
+
+    async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
+        self.ctx
+            .v2h
+            .link_node()
+            .timeseries_stats(key, start, end)
+            .await
+    }
 }
 
 fn get_node_label(fp: &RelayFingerprint) -> String {

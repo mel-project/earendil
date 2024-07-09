@@ -278,6 +278,10 @@ impl LinkNode {
     pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NodeId, ChatEntry, u32)>> {
         self.ctx.store.get_chat_summary().await
     }
+
+    pub async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
+        self.ctx.stats_gatherer.get(&key, start..end)
+    }
 }
 
 #[tracing::instrument(skip_all)]

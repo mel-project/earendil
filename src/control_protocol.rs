@@ -41,6 +41,8 @@ pub trait ControlProtocol {
     async fn get_chat(&self, neighbor: String) -> Result<Vec<ChatEntry>, ChatError>;
 
     async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError>;
+
+    async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)>;
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
