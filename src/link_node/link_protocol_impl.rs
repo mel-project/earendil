@@ -112,6 +112,7 @@ impl LinkProtocol for LinkProtocolImpl {
                 .await
                 .map_err(|e| LinkRpcErr::PaymentVerificationFailed(e.to_string()))?
             {
+                tracing::debug!("received payment proof! verifying...");
                 // prevent double-spending
                 if self
                     .ctx

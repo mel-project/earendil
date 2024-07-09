@@ -112,7 +112,7 @@ impl N2rAnonSocket {
     /// Receives an incoming packet.
     pub async fn recv_from(&self) -> anyhow::Result<(Bytes, RelayEndpoint)> {
         let (message, source, surb_count) = self.queue.recv().await?;
-        tracing::debug!(surb_count, source = debug(source), "surb count gotten");
+        tracing::trace!(surb_count, source = debug(source), "surb count gotten");
         self.remote_surb_counts
             .insert(source.fingerprint, surb_count);
         self.auto_replenish_surbs(source.fingerprint).await?;

@@ -65,7 +65,7 @@ pub enum LinkRpcErr {
     InvalidPaymentProof,
     #[error("unaccepted payment system")]
     UnacceptedPaysystem,
-    #[error("payment verification failed")]
+    #[error("payment verification failed: {0}")]
     PaymentVerificationFailed(String),
     #[error("invalid payment_id")]
     InvalidPaymentId,
