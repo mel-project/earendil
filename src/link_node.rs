@@ -30,6 +30,7 @@ use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{
     crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, ReplyDegarbler, Surb,
+    RAW_BODY_SIZE,
 };
 use earendil_topology::{IdentityDescriptor, RelayGraph};
 use itertools::Itertools;
@@ -151,6 +152,11 @@ impl LinkNode {
 
         // send the raw packet
         self.send_raw(wrapped_onion, first_peeler).await;
+
+        let stats_key = format!("{}|up", first_peeler.to_string());
+        self.ctx
+            .stats_gatherer
+            .insert(&stats_key, RAW_BODY_SIZE as f64);
         Ok(())
     }
 
@@ -163,6 +169,11 @@ impl LinkNode {
                 &RemoteId::Relay(my_idsk.public().fingerprint()),
             )?;
             self.send_raw(packet, reply_block.first_peeler).await;
+
+            let stats_key = format!("{}|down", reply_block.first_peeler.to_string());
+            self.ctx
+                .stats_gatherer
+                .insert(&stats_key, RAW_BODY_SIZE as f64);
             Ok(())
         } else {
             anyhow::bail!("we must be a relay to send backwards packets")
