@@ -23,32 +23,32 @@ pub type ClientId = u64;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum NodeId {
+pub enum NeighborId {
     Relay(RelayFingerprint),
     Client(ClientId),
 }
 
-impl Display for NodeId {
+impl Display for NeighborId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let displayable = match self {
-            NodeId::Relay(relay_id) => relay_id.to_string(),
-            NodeId::Client(client_id) => client_id.to_string(),
+            NeighborId::Relay(relay_id) => relay_id.to_string(),
+            NeighborId::Client(client_id) => client_id.to_string(),
         };
         write!(f, "{}", displayable)
     }
 }
 
 #[derive(Clone)]
-pub enum NodeIdSecret {
+pub enum NeighborIdSecret {
     Relay(RelayIdentitySecret),
     Client(ClientId),
 }
 
-impl NodeIdSecret {
-    pub fn public(&self) -> NodeId {
+impl NeighborIdSecret {
+    pub fn public(&self) -> NeighborId {
         match self {
-            NodeIdSecret::Relay(relay_id) => NodeId::Relay(relay_id.public().fingerprint()),
-            NodeIdSecret::Client(client_id) => NodeId::Client(*client_id),
+            NeighborIdSecret::Relay(relay_id) => NeighborId::Relay(relay_id.public().fingerprint()),
+            NeighborIdSecret::Client(client_id) => NeighborId::Client(*client_id),
         }
     }
 }
@@ -83,12 +83,12 @@ pub struct LinkConfig {
 #[derive(Clone)]
 pub(super) struct LinkNodeCtx {
     pub cfg: Arc<LinkConfig>,
-    pub my_id: NodeIdSecret,
+    pub my_id: NeighborIdSecret,
     pub my_onion_sk: DhSecret,
     pub relay_graph: Arc<RwLock<RelayGraph>>,
-    pub link_table: Arc<DashMap<NodeId, (Arc<Link>, LinkPaymentInfo)>>,
+    pub link_table: Arc<DashMap<NeighborId, (Arc<Link>, LinkPaymentInfo)>>,
     pub payment_systems: Arc<PaymentSystemSelector>,
     pub store: Arc<LinkStore>,
     pub mel_client: Arc<melprot::Client>,
-    pub send_task_semaphores: Arc<DashMap<NodeId, Arc<Semaphore>>>,
+    pub send_task_semaphores: Arc<DashMap<NeighborId, Arc<Semaphore>>>,
 }

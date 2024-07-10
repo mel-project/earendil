@@ -10,7 +10,7 @@ use crate::link_node::{link_protocol::LinkClient, route_util::one_hop_closer};
 
 use super::{
     link::LinkMessage,
-    types::{LinkNodeCtx, NodeId},
+    types::{LinkNodeCtx, NeighborId},
 };
 
 pub(super) async fn send_to_next_peeler(
@@ -55,8 +55,8 @@ pub(super) async fn send_to_nonself_next_peeler(
             .iter()
             .map(|p| *p.key())
             .filter_map(|p| match p {
-                NodeId::Relay(r) => Some(r),
-                NodeId::Client(_) => None,
+                NeighborId::Relay(r) => Some(r),
+                NeighborId::Client(_) => None,
             })
             .collect_vec();
         one_hop_closer(&my_neighs, &graph, next_peeler)?
@@ -70,7 +70,7 @@ pub(super) async fn send_to_nonself_next_peeler(
         }
         if let Err(e) = send_msg(
             &link_node_ctx,
-            NodeId::Relay(closer_hop),
+            NeighborId::Relay(closer_hop),
             LinkMessage::ToRelay {
                 packet: bytemuck::bytes_of(&pkt).to_vec().into(),
                 next_peeler,
@@ -89,7 +89,7 @@ pub(super) async fn send_to_nonself_next_peeler(
 const RIBBON: f64 = 100_000.0;
 pub(super) async fn send_msg(
     link_node_ctx: &LinkNodeCtx,
-    neighbor: NodeId,
+    neighbor: NeighborId,
     msg: LinkMessage,
 ) -> anyhow::Result<()> {
     let (link, info) = link_node_ctx

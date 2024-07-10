@@ -10,13 +10,13 @@ use crate::ChatEntry;
 
 use super::{
     link_protocol::{InfoResponse, LinkProtocol, LinkRpcErr},
-    types::NodeId,
+    types::NeighborId,
     LinkNodeCtx,
 };
 
 pub struct LinkProtocolImpl {
     pub ctx: LinkNodeCtx,
-    pub remote_id: NodeId,
+    pub remote_id: NeighborId,
 }
 
 #[async_trait]

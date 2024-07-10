@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use crate::NodeId;
+use crate::NeighborId;
 
 use super::PaymentSystem;
 
@@ -29,7 +29,7 @@ impl Default for Dummy {
 impl PaymentSystem for Dummy {
     async fn pay(
         &self,
-        my_id: NodeId,
+        my_id: NeighborId,
         to: &str,
         amount: u64,
         payment_id: &str,
@@ -42,7 +42,7 @@ impl PaymentSystem for Dummy {
 
     async fn verify_payment(
         &self,
-        from: NodeId,
+        from: NeighborId,
         amount: u64,
         proof: &str,
     ) -> anyhow::Result<Option<String>> {

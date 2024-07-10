@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, str::FromStr, sync::Arc, time::Duration};
 use stdcode::StdcodeSerializeExt;
 use tmelcrypt::Ed25519SK;
 
-use crate::{NodeId, PaymentSystem};
+use crate::{NeighborId, PaymentSystem};
 
 pub struct OnChain {
     wallet: melwallet::Wallet,
@@ -48,7 +48,7 @@ impl OnChain {
 
 #[async_trait]
 impl PaymentSystem for OnChain {
-    async fn pay(&self, my_id: NodeId, to: &str, amount: u64, ott: &str) -> anyhow::Result<String> {
+    async fn pay(&self, my_id: NeighborId, to: &str, amount: u64, ott: &str) -> anyhow::Result<String> {
         tracing::debug!("initiating on-chain payment of {amount} micromel to {to} with code {ott}");
         let mut wallet = self.wallet.clone();
         // we place (my_id, ott) into `additional_data` so payee can identify our payment
@@ -110,7 +110,7 @@ impl PaymentSystem for OnChain {
 
     async fn verify_payment(
         &self,
-        from: NodeId,
+        from: NeighborId,
         amount: u64,
         proof: &str,
     ) -> anyhow::Result<Option<String>> {
@@ -118,7 +118,7 @@ impl PaymentSystem for OnChain {
         let snapshot = self.mel_client.latest_snapshot().await?;
         let coin_data = snapshot.get_coin(coin_id).await?;
         if let Some(coin) = coin_data {
-            let (id, ott): (NodeId, String) =
+            let (id, ott): (NeighborId, String) =
                 serde_json::from_str(&String::from_utf8(coin.coin_data.additional_data.to_vec())?)?;
             if id == from && coin.coin_data.value == CoinValue(amount.into()) {
                 tracing::debug!("payment verified");

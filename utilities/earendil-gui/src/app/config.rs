@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use earendil::{config::ConfigFile, NodeId};
+use earendil::{config::ConfigFile, NeighborId};
 use serde::{Deserialize, Serialize};
 use tap::Tap;
 
@@ -14,7 +14,7 @@ pub struct ConfigState {
 
 pub struct Prefs {
     pub daemon_mode: DaemonMode,
-    pub chatting_with: Option<NodeId>,
+    pub chatting_with: Option<NeighborId>,
     pub chat_msg: String,
 }
 
