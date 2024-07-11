@@ -54,15 +54,13 @@ impl StatsGatherer {
             .map(|deque| {
                 deque
                     .iter()
-                    .filter(|(timestamp, _)| range.contains(timestamp))
+                    .filter(|(timestamp, _)| {
+                        tracing::debug!("[stats] checking {timestamp} in range");
+                        range.contains(timestamp)
+                    })
                     .cloned()
                     .collect()
             })
             .unwrap_or_default()
-    }
-
-    // get the current size of a specific key's data
-    pub fn get_size(&self, key: &str) -> usize {
-        self.inner.get(key).map(|deque| deque.len()).unwrap_or(0)
     }
 }

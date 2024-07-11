@@ -43,6 +43,10 @@ pub trait ControlProtocol {
     async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError>;
 
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)>;
+
+    async fn get_debt_summary(&self) -> Result<HashMap<String, f64>, DebtError>;
+
+    async fn get_debt(&self, neighbor: String) -> Result<f64, DebtError>;
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
@@ -99,6 +103,14 @@ pub enum ChatError {
     Send(String),
     #[error("database error: {0}")]
     Db(String),
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum DebtError {
+    #[error("error getting debt summary")]
+    Summary,
+    #[error("error getting debt for neighbor {0}")]
+    Get(String),
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]

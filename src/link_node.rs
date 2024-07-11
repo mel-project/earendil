@@ -19,6 +19,7 @@ pub use link_store::*;
 use payment_system::PaymentSystemSelector;
 use send_msg::{send_to_next_peeler, send_to_nonself_next_peeler};
 use std::{
+    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -153,10 +154,11 @@ impl LinkNode {
         // send the raw packet
         self.send_raw(wrapped_onion, first_peeler).await;
 
-        let stats_key = format!("{}|up", first_peeler.to_string());
+        let stats_key = format!("{}|up", first_peeler);
         self.ctx
             .stats_gatherer
             .insert(&stats_key, RAW_BODY_SIZE as f64);
+        tracing::debug!("[stats]: inserted up metric for {first_peeler}");
         Ok(())
     }
 
@@ -170,10 +172,14 @@ impl LinkNode {
             )?;
             self.send_raw(packet, reply_block.first_peeler).await;
 
-            let stats_key = format!("{}|down", reply_block.first_peeler.to_string());
+            let stats_key = format!("{}|down", reply_block.first_peeler);
             self.ctx
                 .stats_gatherer
                 .insert(&stats_key, RAW_BODY_SIZE as f64);
+            tracing::debug!(
+                "[stats]: inserted down metric for {}",
+                reply_block.first_peeler
+            );
             Ok(())
         } else {
             anyhow::bail!("we must be a relay to send backwards packets")
@@ -288,6 +294,14 @@ impl LinkNode {
 
     pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NodeId, ChatEntry, u32)>> {
         self.ctx.store.get_chat_summary().await
+    }
+
+    pub async fn get_debt_summary(&self) -> anyhow::Result<HashMap<String, f64>> {
+        self.ctx.store.get_debt_summary().await
+    }
+
+    pub async fn get_debt(&self, neighbor: NodeId) -> anyhow::Result<f64> {
+        self.ctx.store.get_debt(neighbor).await
     }
 
     pub async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {

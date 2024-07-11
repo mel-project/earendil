@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use anyhow::Context;
 use chrono::Utc;
@@ -47,17 +47,17 @@ impl LinkStore {
                     text TEXT NOT NULL,
                     is_outgoing BOOL NOT NULL);
 
-                CREATE TABLE IF NOT EXISTS debts (
-                    id INTEGER PRIMARY KEY,
-                    neighbor TEXT NOT NULL,
-                    timestamp INTEGER NOT NULL,
-                    delta REAL NOT NULL,
-                    proof TEXT NULL);
+                    CREATE TABLE IF NOT EXISTS debts (
+                        id INTEGER PRIMARY KEY,
+                        neighbor TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        delta REAL NOT NULL,
+                        proof TEXT NULL);
 
                 CREATE TABLE IF NOT EXISTS otts (
                     ott TEXT NOT NULL,
                     timestamp INTEGER NOT NULL);
-            
+
                 CREATE TABLE IF NOT EXISTS misc (
                     key TEXT PRIMARY KEY,
                     value BLOB NOT NULL);",
@@ -103,19 +103,19 @@ impl LinkStore {
     pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NodeId, ChatEntry, u32)>> {
         let res: Vec<(String, i64, String, bool, i32)> = sqlx::query_as(
             r#"
-            SELECT 
-                c.neighbor, 
-                c.timestamp, 
-                c.text, 
-                c.is_outgoing, 
+            SELECT
+                c.neighbor,
+                c.timestamp,
+                c.text,
+                c.is_outgoing,
                 count_subquery.count
-            FROM 
+            FROM
                 chats c
-            JOIN 
+            JOIN
                 (SELECT neighbor, MAX(id) as max_id, COUNT(*) as count
                 FROM chats
                 GROUP BY neighbor) count_subquery
-            ON 
+            ON
                 c.neighbor = count_subquery.neighbor AND c.id = count_subquery.max_id;
             "#,
         )
@@ -178,6 +178,17 @@ impl LinkStore {
                 .fetch_optional(&self.pool)
                 .await?;
         Ok(res.map(|(sum,)| sum).unwrap_or(0.0))
+    }
+
+    pub async fn get_debt_summary(&self) -> anyhow::Result<HashMap<String, f64>> {
+        let res: Vec<(String, f64)> = sqlx::query_as(
+            "SELECT neighbor, SUM(delta) as total_delta FROM debts GROUP BY neighbor",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let summary = res.into_iter().collect::<HashMap<String, f64>>();
+        Ok(summary)
     }
 
     pub async fn insert_misc(&self, key: String, value: Vec<u8>) -> anyhow::Result<()> {

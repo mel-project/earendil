@@ -8,6 +8,7 @@ use serde_json::json;
 
 use crate::{
     config::{InRouteConfig, PriceConfig},
+    control_protocol::DebtError,
     v2h_node::HavenLocator,
     ChatEntry, NodeId, NodeIdSecret,
 };
@@ -227,11 +228,38 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
+        let timeseries = self
+            .ctx
+            .v2h
+            .link_node()
+            .timeseries_stats(key.clone(), start, end)
+            .await;
+        tracing::debug!("num stats for {key}: {}", timeseries.len());
+
+        timeseries
+    }
+
+    async fn get_debt_summary(&self) -> Result<HashMap<String, f64>, DebtError> {
         self.ctx
             .v2h
             .link_node()
-            .timeseries_stats(key, start, end)
+            .get_debt_summary()
             .await
+            .map_err(|e| {
+                tracing::debug!("get_debt_summary failed with : {e}");
+                DebtError::Get(e.to_string())
+            })
+    }
+
+    async fn get_debt(&self, neighbor_prefix: String) -> Result<f64, DebtError> {
+        let neighbor = neigh_by_prefix(self.list_neighbors().await, &neighbor_prefix)
+            .map_err(|e| DebtError::Get(e.to_string()))?;
+        self.ctx
+            .v2h
+            .link_node()
+            .get_debt(neighbor)
+            .await
+            .map_err(|e| DebtError::Get(e.to_string()))
     }
 }
 
