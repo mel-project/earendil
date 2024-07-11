@@ -1,14 +1,14 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use async_trait::async_trait;
 use earendil_crypt::{HavenFingerprint, RelayFingerprint};
-use itertools::Itertools;
+use itertools::{Itertools, TakeWhileRef};
 use nanorpc::RpcTransport;
 use serde_json::json;
 
 use crate::{
     config::{InRouteConfig, PriceConfig},
-    control_protocol::DebtError,
+    control_protocol::{DebtError, RelayGraphInfo},
     v2h_node::HavenLocator,
     ChatEntry, NodeId, NodeIdSecret,
 };
@@ -140,6 +140,28 @@ impl ControlProtocol for ControlProtocolImpl {
                 "graph G {{\n    rankdir=\"LR\"\n    # my ID\n    {:?} [shape={},color=lightblue,style=filled]\n\n    # all relays\n{}\n    # all relay connections\n{}\n    # all my connections\n{}\n}}",
                 my_id, my_shape, all_relays, all_relay_adjs, all_my_adjs
             )
+    }
+
+    async fn relay_graph_info(&self) -> RelayGraphInfo {
+        let my_fingerprint = match self.ctx.v2h.link_node().my_id() {
+            NodeIdSecret::Client(_) => None,
+            NodeIdSecret::Relay(id) => Some(id.public().fingerprint()),
+        };
+
+        let relay_graph = self.ctx.v2h.link_node().relay_graph();
+        let relays: Vec<RelayFingerprint> = relay_graph.all_nodes().collect();
+        let adjacencies: Vec<(RelayFingerprint, RelayFingerprint)> = relay_graph
+            .all_adjacencies()
+            .map(|adj| (adj.left, adj.right))
+            .collect();
+        let neighbors: Vec<NodeId> = self.ctx.v2h.link_node().all_neighs().clone();
+
+        RelayGraphInfo {
+            my_fingerprint,
+            relays,
+            adjacencies,
+            neighbors,
+        }
     }
 
     // ------------- functionality to test GlobalRpc --------------

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
 use earendil_crypt::{AnonEndpoint, HavenFingerprint, RelayFingerprint};
@@ -18,6 +18,8 @@ pub trait ControlProtocol {
     async fn my_routes(&self) -> serde_json::Value;
 
     async fn relay_graphviz(&self) -> String; // graphviz
+
+    async fn relay_graph_info(&self) -> RelayGraphInfo;
 
     // ------------- functionality to test GlobalRpc --------------
     async fn send_global_rpc(
@@ -47,6 +49,14 @@ pub trait ControlProtocol {
     async fn get_debt_summary(&self) -> Result<HashMap<String, f64>, DebtError>;
 
     async fn get_debt(&self, neighbor: String) -> Result<f64, DebtError>;
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RelayGraphInfo {
+    pub my_fingerprint: Option<RelayFingerprint>,
+    pub relays: Vec<RelayFingerprint>,
+    pub adjacencies: Vec<(RelayFingerprint, RelayFingerprint)>,
+    pub neighbors: Vec<NodeId>,
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
