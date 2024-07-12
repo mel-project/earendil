@@ -154,7 +154,7 @@ impl LinkNode {
         // send the raw packet
         self.send_raw(wrapped_onion, first_peeler).await;
 
-        let stats_key = format!("{}|up", first_peeler);
+        let stats_key = dbg!(format!("{}|up", first_peeler));
         self.ctx
             .stats_gatherer
             .insert(&stats_key, RAW_BODY_SIZE as f64);
