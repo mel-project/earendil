@@ -1,5 +1,5 @@
 name: Upload Daemon
-# to b2
+# upload to b2 bucket earendil
 
 on:
   push:
