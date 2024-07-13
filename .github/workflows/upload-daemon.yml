@@ -4,7 +4,7 @@ name: Upload Daemon
 on:
   push:
     branches:
-      - upload-daemon
+      - master
 
 jobs:
   setup-build-upload-linux-daemon:
