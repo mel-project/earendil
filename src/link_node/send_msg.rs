@@ -101,6 +101,7 @@ pub(super) async fn send_msg(
         .context("no link to this NeighborId")?
         .clone();
 
+    let stats_key = format!("{neighbor}|up");
     // disable payments if price == 0
     if info.price != 0.0 {
         // check debt & send payment if we are close to the debt limit
@@ -115,6 +116,11 @@ pub(super) async fn send_msg(
             } else {
                 // send message to remote
                 link.send_msg(msg).await?;
+
+                link_node_ctx
+                    .stats_gatherer
+                    .insert(&stats_key, RAW_BODY_SIZE as f64);
+
                 // increment our debt to them
                 link_node_ctx
                     .store
@@ -200,17 +206,18 @@ pub(super) async fn send_msg(
                 .store
                 .delta_debt(neighbor, info.price, None)
                 .await?;
+
+            link_node_ctx
+                .stats_gatherer
+                .insert(&stats_key, RAW_BODY_SIZE as f64);
         }
     } else {
         // debt system not in effect; always sending message!
         link.send_msg(msg).await?;
+        link_node_ctx
+            .stats_gatherer
+            .insert(&stats_key, RAW_BODY_SIZE as f64);
     }
-
-    let stats_key = format!("{neighbor}|up");
-    link_node_ctx
-        .stats_gatherer
-        .insert(&stats_key, RAW_BODY_SIZE as f64);
-    tracing::debug!("[stats]: inserted up metric for {}", neighbor.to_string());
 
     Ok(())
 }
