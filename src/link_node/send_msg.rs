@@ -1,8 +1,11 @@
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use anyhow::Context;
 use earendil_crypt::RelayFingerprint;
-use earendil_packet::RawPacket;
+use earendil_packet::{RawPacket, RAW_BODY_SIZE};
 use itertools::Itertools;
 use smol::{channel::Sender, lock::Semaphore};
 
@@ -167,7 +170,7 @@ pub(super) async fn send_msg(
                                         neighbor,
                                              -(current_pay_amt as f64),
                                            Some(proof)
-                                        
+
                                     )
                                     .await?;
                                 tracing::debug!("logged payment of amount: {}", current_pay_amt);
@@ -185,7 +188,7 @@ pub(super) async fn send_msg(
                         tracing::warn!("Payment process incomplete. Remaining amount: {}", remaining_pay_amt);
                         anyhow::bail!("Payment process incomplete")
                     }
-                }) 
+                })
                 .detach();
             }
         }
@@ -202,5 +205,12 @@ pub(super) async fn send_msg(
         // debt system not in effect; always sending message!
         link.send_msg(msg).await?;
     }
+
+    let stats_key = format!("{neighbor}|up");
+    link_node_ctx
+        .stats_gatherer
+        .insert(&stats_key, RAW_BODY_SIZE as f64);
+    tracing::debug!("[stats]: inserted up metric for {}", neighbor.to_string());
+
     Ok(())
 }

@@ -154,11 +154,6 @@ impl LinkNode {
         // send the raw packet
         self.send_raw(wrapped_onion, first_peeler).await;
 
-        let stats_key = dbg!(format!("{}|up", first_peeler));
-        self.ctx
-            .stats_gatherer
-            .insert(&stats_key, RAW_BODY_SIZE as f64);
-        tracing::debug!("[stats]: inserted up metric for {first_peeler}");
         Ok(())
     }
 
@@ -172,14 +167,6 @@ impl LinkNode {
             )?;
             self.send_raw(packet, reply_block.first_peeler).await;
 
-            let stats_key = format!("{}|down", reply_block.first_peeler);
-            self.ctx
-                .stats_gatherer
-                .insert(&stats_key, RAW_BODY_SIZE as f64);
-            tracing::debug!(
-                "[stats]: inserted down metric for {}",
-                reply_block.first_peeler
-            );
             Ok(())
         } else {
             anyhow::bail!("we must be a relay to send backwards packets")

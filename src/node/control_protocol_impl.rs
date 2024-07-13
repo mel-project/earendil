@@ -150,6 +150,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
         let relay_graph = self.ctx.v2h.link_node().relay_graph();
         let relays: Vec<RelayFingerprint> = relay_graph.all_nodes().collect();
+
         let adjacencies: Vec<(RelayFingerprint, RelayFingerprint)> = relay_graph
             .all_adjacencies()
             .map(|adj| (adj.left, adj.right))

@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::Context;
+use earendil_packet::RAW_BODY_SIZE;
 use earendil_topology::IdentityDescriptor;
 use futures::AsyncReadExt;
 use picomux::PicoMux;
@@ -217,6 +218,13 @@ async fn handle_pipe(
         loop {
             let msg = link.recv_msg().await?;
             tracing::trace!("received LinkMessage from {:?}", their_id);
+
+            let stats_key = format!("{}|down", their_id);
+            link_node_ctx
+                .stats_gatherer
+                .insert(&stats_key, RAW_BODY_SIZE as f64);
+            tracing::debug!("[stats]: inserted down metric for {their_id}",);
+
             if price_config.inbound_price != 0.0 {
                 let debt = link_node_ctx.store.get_debt(their_id).await?;
                 tracing::trace!(
