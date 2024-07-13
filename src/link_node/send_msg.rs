@@ -105,7 +105,7 @@ pub(super) async fn send_msg(
     if info.price != 0.0 {
         // check debt & send payment if we are close to the debt limit
         let curr_debt = link_node_ctx.store.get_debt(neighbor).await?;
-        // pay if we're within RIBBON µMEL of the debt limit
+        // we're within RIBBON µMEL of the debt limit, so PAY and SEND PKT probabilistically
         if curr_debt > info.debt_limit - RIBBON {
             // we're in the ribbon, so we slow down
             let random_number: f64 = rand::random();
@@ -192,7 +192,7 @@ pub(super) async fn send_msg(
                 .detach();
             }
         }
-        // otherwise, send the packet
+        // we're NOT within RIBBON µMEL of the debt limit, so we always send the packet
         else {
             link.send_msg(msg).await?;
             // increment our debt to them
