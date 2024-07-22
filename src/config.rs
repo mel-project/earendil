@@ -1,4 +1,11 @@
-use std::{collections::BTreeMap, fmt, io::Write, net::SocketAddr, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    io::Write,
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+    time::Duration,
+};
 
 use anyhow::Context;
 use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
@@ -43,6 +50,9 @@ pub struct ConfigFile {
     /// the haven address for our melprot::Client to bootstrap on
     /// e.g. http://<haven_addr>.haven:<port>
     pub mel_bootstrap: Option<String>,
+
+    /// Configuration for relay nodes to host an exit.
+    pub exit_config: Option<ExitConfig>,
 }
 
 impl ConfigFile {
@@ -328,4 +338,63 @@ impl SupportedPaymentSystems {
         }
         Ok(available)
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExitConfig {
+    allowed_ports: Vec<u16>,
+    rate_limit: RateLimit,
+    quality_of_service: QoSConfig,
+    exit_policies: Vec<ExitPolicy>,
+    max_bandwidth: NetworkBandwidth,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct NetworkBandwidth {
+    // in bits per second
+    speed: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RateLimit {}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct QoSConfig {
+    max_delay: Duration,
+    max_jitter: Duration,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExitPolicy {
+    ipv4_rules: Vec<Rule>,
+    ipv6_rules: Vec<Rule>,
+    ipv6_exit: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Rule {
+    action: Action,
+    address: AddressMatch,
+    ports: PortMatch,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Action {
+    Accept,
+    Reject,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum AddressMatch {
+    All,
+    Private,
+    Specific(IpAddr),
+    Range(IpAddr, u8), // IP and prefix length
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum PortMatch {
+    All,
+    Specific(u16),
+    Range(u16, u16),
 }
