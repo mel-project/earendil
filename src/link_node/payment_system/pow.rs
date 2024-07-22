@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use melpow::{HashFunction, SVec};
 use stdcode::StdcodeSerializeExt;
 
-use crate::NodeId;
+use crate::NeighborId;
 
 use super::PaymentSystem;
 
@@ -35,7 +35,7 @@ impl PoW {
 impl PaymentSystem for PoW {
     async fn pay(
         &self,
-        my_id: NodeId,
+        my_id: NeighborId,
         _to: &str,
         amount: u64,
         payment_id: &str,
@@ -61,7 +61,7 @@ impl PaymentSystem for PoW {
 
     async fn verify_payment(
         &self,
-        from: NodeId,
+        from: NeighborId,
         amount: u64,
         proof: &str,
     ) -> anyhow::Result<Option<String>> {
@@ -78,7 +78,7 @@ impl PaymentSystem for PoW {
         );
         // println!("MICROMEL from DIFFICULTY = {micromel}");
         if proof.verify(&puzzle, difficulty as _, BigHasher) && micromel > 4 * amount {
-            let (payment_id, sender_id): (String, NodeId) = stdcode::deserialize(&puzzle)?;
+            let (payment_id, sender_id): (String, NeighborId) = stdcode::deserialize(&puzzle)?;
             if sender_id == from {
                 return Ok(Some(payment_id));
             }

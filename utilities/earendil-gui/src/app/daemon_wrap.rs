@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use earendil::{control_protocol::ControlClient, Node, NodeId};
+use earendil::{control_protocol::ControlClient, NeighborId, Node};
 
 #[derive(Clone)]
 pub enum DaemonWrap {
@@ -22,7 +22,7 @@ impl DaemonWrap {
         }
     }
 
-    pub fn identity(&self) -> NodeId {
+    pub fn identity(&self) -> NeighborId {
         match self {
             DaemonWrap::Remote(_) => todo!(), // todo: add control method?
             DaemonWrap::Embedded(node) => node.identity(),

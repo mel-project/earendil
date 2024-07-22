@@ -32,7 +32,7 @@ use super::{
     link_protocol::LinkService,
     link_protocol_impl::LinkProtocolImpl,
     pascal::write_pascal,
-    types::{ClientId, LinkNodeCtx, LinkPaymentInfo, NodeId, NodeIdSecret},
+    types::{ClientId, LinkNodeCtx, LinkPaymentInfo, NeighborId, NeighborIdSecret},
 };
 
 pub(super) async fn process_in_route(
@@ -181,12 +181,12 @@ async fn handle_pipe(
     // insert as either client or relay
     match their_descr.clone() {
         LinkNodeDescr::Relay(descr) => link_node_ctx.link_table.insert(
-            NodeId::Relay(descr.identity_pk.fingerprint()),
+            NeighborId::Relay(descr.identity_pk.fingerprint()),
             (link.clone(), payment_info),
         ),
         LinkNodeDescr::Client(id) => link_node_ctx
             .link_table
-            .insert(NodeId::Client(id), (link.clone(), payment_info)),
+            .insert(NeighborId::Client(id), (link.clone(), payment_info)),
     };
 
     let their_relay_fp = match their_descr.clone() {
@@ -195,8 +195,8 @@ async fn handle_pipe(
     };
 
     let their_id = match their_descr {
-        LinkNodeDescr::Relay(descr) => NodeId::Relay(descr.identity_pk.fingerprint()),
-        LinkNodeDescr::Client(id) => NodeId::Client(id),
+        LinkNodeDescr::Relay(descr) => NeighborId::Relay(descr.identity_pk.fingerprint()),
+        LinkNodeDescr::Client(id) => NeighborId::Client(id),
     };
 
     let gossip_loop = async {
@@ -269,10 +269,10 @@ async fn pipe_to_mux(
     let (mut read, mut write) = pipe.split();
     let send_auth = async {
         let my_descr = match link_node_ctx.my_id {
-            NodeIdSecret::Relay(id) => {
+            NeighborIdSecret::Relay(id) => {
                 LinkNodeDescr::Relay(IdentityDescriptor::new(&id, &link_node_ctx.my_onion_sk))
             }
-            NodeIdSecret::Client(id) => LinkNodeDescr::Client(id),
+            NeighborIdSecret::Client(id) => LinkNodeDescr::Client(id),
         };
         let my_payment_info = LinkPaymentInfo {
             price: price_config.inbound_price,

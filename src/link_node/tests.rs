@@ -16,7 +16,7 @@ mod link_node_tests {
     use crate::OnChain;
     use crate::{
         config::{InRouteConfig, ObfsConfig, OutRouteConfig, PriceConfig},
-        link_node::types::NodeId,
+        link_node::types::NeighborId,
         Dummy, IncomingMsg, LinkConfig, LinkNode,
     };
 
@@ -643,7 +643,7 @@ mod link_node_tests {
             let chat_msg = "hi test".to_string();
             node2
                 .send_chat(
-                    NodeId::Relay(
+                    NeighborId::Relay(
                         node1
                             .ctx
                             .cfg
@@ -662,7 +662,7 @@ mod link_node_tests {
             smol::Timer::after(Duration::from_secs(1)).await;
 
             let node1_chat_hist = node1
-                .get_chat_history(NodeId::Relay(
+                .get_chat_history(NeighborId::Relay(
                     node2
                         .ctx
                         .cfg

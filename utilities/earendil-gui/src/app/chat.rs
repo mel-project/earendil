@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use anyctx::AnyCtx;
 use chrono::DateTime;
-use earendil::{ChatEntry, NodeId};
+use earendil::{ChatEntry, NeighborId};
 
 use egui::{mutex::Mutex, Color32};
 
@@ -31,7 +31,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
         let control = Arc::new(async_std::sync::Mutex::new(daemon.control()));
         let control_clone = control.clone();
 
-        static NEIGHBORS: fn(&AnyCtx<()>) -> Mutex<RefreshCell<anyhow::Result<Vec<NodeId>>>> =
+        static NEIGHBORS: fn(&AnyCtx<()>) -> Mutex<RefreshCell<anyhow::Result<Vec<NeighborId>>>> =
             |_| Mutex::new(RefreshCell::new());
         let mut neighbors = app.state.get(NEIGHBORS).lock();
         let neighbors = neighbors.get_or_refresh(Duration::from_millis(100), || {
@@ -122,7 +122,7 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
     }
 }
 
-fn render_convo(ui: &mut egui::Ui, tuple_chat: Vec<ChatEntry>, my_fp: NodeId, their_fp: NodeId) {
+fn render_convo(ui: &mut egui::Ui, tuple_chat: Vec<ChatEntry>, my_fp: NeighborId, their_fp: NeighborId) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.set_height(ui.available_height() - 25.0);
 
@@ -154,10 +154,10 @@ fn render_convo(ui: &mut egui::Ui, tuple_chat: Vec<ChatEntry>, my_fp: NodeId, th
     });
 }
 
-fn color_id(ui: &mut egui::Ui, id: NodeId) {
+fn color_id(ui: &mut egui::Ui, id: NeighborId) {
     let (hash, id) = match id {
-        NodeId::Relay(fp) => (blake3::hash(fp.as_bytes()), fp.to_string()),
-        NodeId::Client(id) => (blake3::hash(&id.to_be_bytes()), id.to_string()),
+        NeighborId::Relay(fp) => (blake3::hash(fp.as_bytes()), fp.to_string()),
+        NeighborId::Client(id) => (blake3::hash(&id.to_be_bytes()), id.to_string()),
     };
 
     let r: u8 = hash.as_bytes()[0] / 2;
@@ -172,7 +172,7 @@ fn render_input(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
     prefs: &mut Prefs,
-    dest: NodeId,
+    dest: NeighborId,
 ) {
     ui.horizontal(|ui| {
         let response = ui.add(

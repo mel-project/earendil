@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 
-use super::types::NodeId;
+use super::types::NeighborId;
 pub use dummy::Dummy;
 pub use onchain::OnChain;
 pub use pow::PoW;
@@ -16,7 +16,7 @@ pub trait PaymentSystem: Send + Sync + 'static {
     /// `amount` is in micromel. Returns proof of payment
     async fn pay(
         &self,
-        my_id: NodeId,
+        my_id: NeighborId,
         to: &str,
         amount: u64,
         payment_id: &str,
@@ -25,7 +25,7 @@ pub trait PaymentSystem: Send + Sync + 'static {
     /// returns Some(payment_id) if payment is valid, None otherwise
     async fn verify_payment(
         &self,
-        from: NodeId,
+        from: NeighborId,
         amount: u64,
         proof: &str,
     ) -> anyhow::Result<Option<String>>;
