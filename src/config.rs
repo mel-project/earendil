@@ -145,7 +145,7 @@ pub struct TcpForwardConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct Socks5Config {
     pub listen: SocketAddr,
@@ -153,15 +153,12 @@ pub struct Socks5Config {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum Socks5Fallback {
     Block,
     PassThrough,
-    SimpleProxy {
-        #[serde_as(as = "serde_with::DisplayFromStr")]
-        remote: HavenEndpoint,
-    },
+    SimpleProxy { exit_nodes: Vec<RelayFingerprint> },
 }
 
 #[serde_as]
@@ -180,7 +177,6 @@ pub struct HavenConfig {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HavenHandler {
     TcpService { upstream: SocketAddr },
-    SimpleProxy,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

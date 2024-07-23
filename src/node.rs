@@ -247,17 +247,16 @@ async fn serve_haven(v2h: Arc<V2hNode>, cfg: HavenConfig) -> anyhow::Result<()> 
                         smol::io::copy(read_client, upstream.clone())
                             .race(smol::io::copy(upstream.clone(), write_client))
                             .await?
-                    }
-                    HavenHandler::SimpleProxy => {
-                        let connect_to = String::from_utf8_lossy(client.metadata());
-                        tracing::debug!(connect_to = debug(&connect_to), "serving SimpleProxy");
-                        let upstream =
-                            smol::net::TcpStream::connect(connect_to.to_string()).await?;
-                        let (read_client, write_client) = client.split();
-                        smol::io::copy(read_client, upstream.clone())
-                            .race(smol::io::copy(upstream.clone(), write_client))
-                            .await?
-                    }
+                    } // HavenHandler::SimpleProxy => {
+                      //     let connect_to = String::from_utf8_lossy(client.metadata());
+                      //     tracing::debug!(connect_to = debug(&connect_to), "serving SimpleProxy");
+                      //     let upstream =
+                      //         smol::net::TcpStream::connect(connect_to.to_string()).await?;
+                      //     let (read_client, write_client) = client.split();
+                      //     smol::io::copy(read_client, upstream.clone())
+                      //         .race(smol::io::copy(upstream.clone(), write_client))
+                      //         .await?
+                      // }
                 };
                 anyhow::Ok(())
             })
@@ -273,7 +272,7 @@ async fn socks5_loop(v2h: Arc<V2hNode>, cfg: Socks5Config) -> anyhow::Result<()>
 
     nursery!(loop {
         let (client_stream, _) = tcp_listener.accept().await?;
-        spawn!(socks5_once(client_stream, fallback, &pool)
+        spawn!(socks5_once(client_stream, fallback.clone(), &pool)
             .map_err(|e| tracing::debug!(err = debug(e), "socks5 worker failed")))
         .detach();
     })
@@ -338,17 +337,18 @@ async fn socks5_once(
                         ))
                         .await?;
                 }
-                Socks5Fallback::SimpleProxy { remote } => {
-                    let remote_stream = pool.connect(remote, addr.as_bytes()).await?;
-                    tracing::debug!(addr = debug(&addr), "got remote stream");
-                    let (read, write) = remote_stream.split();
-                    match smol::io::copy(client_stream.clone(), write)
-                        .race(smol::io::copy(read, client_stream.clone()))
-                        .await
-                    {
-                        Ok(x) => tracing::debug!("RETURNED with {x}"),
-                        Err(e) => tracing::debug!("RETURNED with ERR: {e}"),
-                    }
+                Socks5Fallback::SimpleProxy { exit_nodes } => {
+                    todo!()
+                    // let remote_stream = pool.connect(remote, addr.as_bytes()).await?;
+                    // tracing::debug!(addr = debug(&addr), "got remote stream");
+                    // let (read, write) = remote_stream.split();
+                    // match smol::io::copy(client_stream.clone(), write)
+                    //     .race(smol::io::copy(read, client_stream.clone()))
+                    //     .await
+                    // {
+                    //     Ok(x) => tracing::debug!("RETURNED with {x}"),
+                    //     Err(e) => tracing::debug!("RETURNED with ERR: {e}"),
+                    // }
                 }
             }
         }
