@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    time::{SystemTime, UNIX_EPOCH},
+    net::IpAddr,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use bytes::Bytes;
@@ -23,6 +24,7 @@ pub struct RelayGraph {
     id_to_descriptor: HashMap<u64, IdentityDescriptor>,
     adjacency: HashMap<u64, HashSet<u64>>,
     documents: IndexMap<(u64, u64), AdjacencyDescriptor>,
+    exit_config: ExitConfig,
 }
 
 // Update the AdjacencyError enum with more specific cases
@@ -400,4 +402,76 @@ impl IdentityDescriptor {
 pub enum IdentityError {
     #[error("Invalid signature")]
     InvalidSignature,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExitConfig {
+    allowed_ports: Vec<u16>,
+    rate_limit: RateLimit,
+    quality_of_service: QoSConfig,
+    exit_policies: Vec<ExitPolicy>,
+    max_bandwidth: NetworkBandwidth,
+}
+
+// TODO: add sensible default values
+impl Default for ExitConfig {
+    fn default() -> Self {
+        Self {
+            allowed_ports: Default::default(),
+            rate_limit: RateLimit {},
+            quality_of_service: Default::default(),
+            exit_policies: Default::default(),
+            max_bandwidth: Default::default(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+struct NetworkBandwidth {
+    // in bits per second
+    speed: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct RateLimit {}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct QoSConfig {
+    max_delay: Duration,
+    max_jitter: Duration,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExitPolicy {
+    ipv4_rules: Vec<Rule>,
+    ipv6_rules: Vec<Rule>,
+    ipv6_exit: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Rule {
+    action: Action,
+    address: AddressMatch,
+    ports: PortMatch,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Action {
+    Accept,
+    Reject,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum AddressMatch {
+    All,
+    Private,
+    Specific(IpAddr),
+    Range(IpAddr, u8), // IP and prefix length
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum PortMatch {
+    All,
+    Specific(u16),
+    Range(u16, u16),
 }

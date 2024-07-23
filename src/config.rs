@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::Context;
 use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
+use earendil_topology::ExitConfig;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::serde_as;
 use std::fs::OpenOptions;
@@ -334,63 +335,4 @@ impl SupportedPaymentSystems {
         }
         Ok(available)
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ExitConfig {
-    allowed_ports: Vec<u16>,
-    rate_limit: RateLimit,
-    quality_of_service: QoSConfig,
-    exit_policies: Vec<ExitPolicy>,
-    max_bandwidth: NetworkBandwidth,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct NetworkBandwidth {
-    // in bits per second
-    speed: f64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RateLimit {}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct QoSConfig {
-    max_delay: Duration,
-    max_jitter: Duration,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ExitPolicy {
-    ipv4_rules: Vec<Rule>,
-    ipv6_rules: Vec<Rule>,
-    ipv6_exit: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Rule {
-    action: Action,
-    address: AddressMatch,
-    ports: PortMatch,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum Action {
-    Accept,
-    Reject,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum AddressMatch {
-    All,
-    Private,
-    Specific(IpAddr),
-    Range(IpAddr, u8), // IP and prefix length
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum PortMatch {
-    All,
-    Specific(u16),
-    Range(u16, u16),
 }
