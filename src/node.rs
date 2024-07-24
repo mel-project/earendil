@@ -130,6 +130,16 @@ impl Node {
                     fallible_tasks.push(spawn!(serve_haven(v2h_clone.clone(), haven_cfg)))
                 }
 
+                // TODO: serve simple proxy if there is an exit config
+                if let Some(exit_cfg) = config.exit_config {
+                    if let Some(relay_cfg) = config.relay_config {
+                        let my_relay_fp =
+                            relay_cfg.identity.actualize_relay()?.public().fingerprint();
+                        let haven_cfg = HavenConfig::new_for_exit(my_relay_fp)?;
+                        fallible_tasks.push(spawn!(serve_exit(v2h_clone.clone(), haven_cfg)));
+                    }
+                }
+
                 // serve socks5
                 fallible_tasks.push(spawn!(socks5_loop(v2h_clone.clone(), config.socks5)));
 
@@ -241,23 +251,46 @@ async fn serve_haven(v2h: Arc<V2hNode>, cfg: HavenConfig) -> anyhow::Result<()> 
             spawn!(async move {
                 match handler {
                     HavenHandler::TcpService { upstream } => {
-                        tracing::debug!(upstream = debug(upstream), "serving a tcp service");
+                        tracing::info!(upstream = debug(upstream), "serving a tcp service");
                         let upstream = smol::net::TcpStream::connect(upstream).await?;
                         let (read_client, write_client) = client.split();
                         smol::io::copy(read_client, upstream.clone())
                             .race(smol::io::copy(upstream.clone(), write_client))
                             .await?
-                    } // HavenHandler::SimpleProxy => {
-                      //     let connect_to = String::from_utf8_lossy(client.metadata());
-                      //     tracing::debug!(connect_to = debug(&connect_to), "serving SimpleProxy");
-                      //     let upstream =
-                      //         smol::net::TcpStream::connect(connect_to.to_string()).await?;
-                      //     let (read_client, write_client) = client.split();
-                      //     smol::io::copy(read_client, upstream.clone())
-                      //         .race(smol::io::copy(upstream.clone(), write_client))
-                      //         .await?
-                      // }
+                    }
+                    HavenHandler::Exit => {
+                        anyhow::bail!("No-op for exit haven handler. Use `serve_haven` instead.")
+                    }
+                    _ => anyhow::bail!("unsupported haven type"),
                 };
+                anyhow::Ok(())
+            })
+            .detach()
+        }
+    })
+}
+
+/// Serves a simple proxy exit via haven.
+/// We choose ourselves as haven's rendezvous point.
+async fn serve_exit(v2h: Arc<V2hNode>, cfg: HavenConfig) -> anyhow::Result<()> {
+    let identity = cfg.identity.actualize_haven()?;
+    let listener = v2h
+        .pooled_listen(identity, cfg.listen_port, cfg.rendezvous)
+        .await?;
+    nursery!({
+        loop {
+            let client = listener
+                .accept()
+                .await
+                .context("could not accept another from PooledListener")?;
+            spawn!(async move {
+                let connect_to = String::from_utf8_lossy(client.metadata());
+                tracing::info!(connect_to = debug(&connect_to), "serving SimpleProxy");
+                let upstream = smol::net::TcpStream::connect(connect_to.to_string()).await?;
+                let (read_client, write_client) = client.split();
+                smol::io::copy(read_client, upstream.clone())
+                    .race(smol::io::copy(upstream.clone(), write_client))
+                    .await?;
                 anyhow::Ok(())
             })
             .detach()
