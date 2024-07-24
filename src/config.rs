@@ -1,19 +1,15 @@
-use std::{
-    collections::BTreeMap,
-    fmt,
-    io::Write,
-    net::{IpAddr, SocketAddr},
-    path::PathBuf,
-    time::Duration,
-};
+use std::{collections::BTreeMap, fmt, io::Write, net::SocketAddr, path::PathBuf};
 
 use anyhow::Context;
 use bip39::Mnemonic;
-use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
+use earendil_crypt::{
+    HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret,
+};
 use earendil_topology::ExitConfig;
 use rand::Rng;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::serde_as;
+use serde_with::DisplayFromStr;
 use std::fs::OpenOptions;
 use tracing::instrument;
 
@@ -161,7 +157,10 @@ pub struct Socks5Config {
 pub enum Socks5Fallback {
     Block,
     PassThrough,
-    SimpleProxy { exit_nodes: Vec<RelayFingerprint> },
+    SimpleProxy {
+        #[serde_as(as = "Vec<serde_with::DisplayFromStr>")]
+        exit_nodes: Vec<HavenEndpoint>,
+    },
 }
 
 #[serde_as]

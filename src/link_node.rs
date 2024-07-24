@@ -33,7 +33,7 @@ use earendil_packet::{
     crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, ReplyDegarbler, Surb,
     RAW_BODY_SIZE,
 };
-use earendil_topology::{IdentityDescriptor, RelayGraph};
+use earendil_topology::{ExitConfig, IdentityDescriptor, RelayGraph};
 use itertools::Itertools;
 use parking_lot::RwLock;
 use smol::{
@@ -63,7 +63,7 @@ impl LinkNode {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
         let store = smolscale::block_on(LinkStore::new(cfg.db_path.clone()))?;
-        let relay_graph = match smol::future::block_on(store.get_misc("relay-graph"))
+        let mut relay_graph = match smol::future::block_on(store.get_misc("relay-graph"))
             .ok()
             .flatten()
             .and_then(|s| stdcode::deserialize(&s).ok())
@@ -71,7 +71,8 @@ impl LinkNode {
             Some(graph) => graph,
             None => RelayGraph::new(),
         };
-        let my_id = if let Some((idsk, _)) = cfg.relay_config.clone() {
+
+        let my_idsk = if let Some((idsk, _)) = cfg.relay_config.clone() {
             NeighborIdSecret::Relay(idsk)
         } else {
             // I am a client with a persistent ClientId
@@ -87,13 +88,24 @@ impl LinkNode {
             .unwrap();
             NeighborIdSecret::Client(client_id)
         };
+
+        // gossip exit config if it exists and we are a relay
+        if let Some(ref exit_cfg) = cfg.exit_config {
+            match my_idsk.public() {
+                NeighborId::Relay(my_relay_fp) => {
+                    relay_graph.insert_exit_config(my_relay_fp, exit_cfg.clone())
+                }
+                _ => {}
+            }
+        }
+
         let mut payment_systems = PaymentSystemSelector::new();
         for payment_system in cfg.payment_systems.drain(..) {
             payment_systems.insert(payment_system);
         }
         let ctx = LinkNodeCtx {
             cfg: Arc::new(cfg),
-            my_id,
+            my_id: my_idsk,
             relay_graph: Arc::new(RwLock::new(relay_graph)),
             my_onion_sk: DhSecret::generate(),
             link_table: Arc::new(DashMap::new()),

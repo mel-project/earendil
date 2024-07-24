@@ -4,7 +4,7 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
 use earendil_packet::{crypt::DhSecret, InnerPacket};
-use earendil_topology::RelayGraph;
+use earendil_topology::{ExitConfig, RelayGraph};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use smol::lock::Semaphore;
@@ -80,6 +80,7 @@ pub struct LinkConfig {
     pub out_routes: BTreeMap<String, OutRouteConfig>,
     pub payment_systems: Vec<Box<dyn PaymentSystem>>,
     pub db_path: PathBuf,
+    pub exit_config: Option<ExitConfig>,
 }
 
 #[derive(Clone)]

@@ -24,7 +24,7 @@ pub struct RelayGraph {
     id_to_descriptor: HashMap<u64, IdentityDescriptor>,
     adjacency: HashMap<u64, HashSet<u64>>,
     documents: IndexMap<(u64, u64), AdjacencyDescriptor>,
-    exit_config: ExitConfig,
+    exit_configs: HashMap<RelayFingerprint, ExitConfig>,
 }
 
 // Update the AdjacencyError enum with more specific cases
@@ -171,6 +171,14 @@ impl RelayGraph {
             .filter_map(|n| self.identity(&n))
             .map(|id| id.identity_pk.fingerprint())
             .choose_multiple(&mut rand::thread_rng(), num)
+    }
+
+    pub fn insert_exit_config(&mut self, relay_fp: RelayFingerprint, cfg: ExitConfig) {
+        self.exit_configs.insert(relay_fp, cfg);
+    }
+
+    pub fn get_exit_config(&self, relay_fp: &RelayFingerprint) -> Option<&ExitConfig> {
+        self.exit_configs.get(relay_fp)
     }
 
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.
@@ -406,11 +414,11 @@ pub enum IdentityError {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExitConfig {
-    allowed_ports: Vec<u16>,
-    rate_limit: RateLimit,
-    quality_of_service: QoSConfig,
-    exit_policies: Vec<ExitPolicy>,
-    max_bandwidth: NetworkBandwidth,
+    pub allowed_ports: Vec<u16>,
+    pub rate_limit: RateLimit,
+    pub quality_of_service: QoSConfig,
+    pub exit_policies: Vec<ExitPolicy>,
+    pub max_bandwidth: NetworkBandwidth,
 }
 
 // TODO: add sensible default values
@@ -418,7 +426,7 @@ impl Default for ExitConfig {
     fn default() -> Self {
         Self {
             allowed_ports: Default::default(),
-            rate_limit: RateLimit {},
+            rate_limit: Default::default(),
             quality_of_service: Default::default(),
             exit_policies: Default::default(),
             max_bandwidth: Default::default(),
@@ -427,32 +435,34 @@ impl Default for ExitConfig {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-struct NetworkBandwidth {
+pub struct NetworkBandwidth {
     // in bits per second
     speed: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct RateLimit {}
+pub struct RateLimit {
+    pub max_bps: u64,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct QoSConfig {
-    max_delay: Duration,
-    max_jitter: Duration,
+    pub max_delay: Duration,
+    pub max_jitter: Duration,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExitPolicy {
-    ipv4_rules: Vec<Rule>,
-    ipv6_rules: Vec<Rule>,
-    ipv6_exit: bool,
+    pub ipv4_rules: Vec<Rule>,
+    pub ipv6_rules: Vec<Rule>,
+    pub ipv6_exit: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Rule {
-    action: Action,
-    address: AddressMatch,
-    ports: PortMatch,
+    pub action: Action,
+    pub address: AddressMatch,
+    pub ports: PortMatch,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
