@@ -63,7 +63,7 @@ impl LinkNode {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
         let store = smolscale::block_on(LinkStore::new(cfg.db_path.clone()))?;
-        let mut relay_graph = match smol::future::block_on(store.get_misc("relay-graph"))
+        let relay_graph = match smol::future::block_on(store.get_misc("relay-graph"))
             .ok()
             .flatten()
             .and_then(|s| stdcode::deserialize(&s).ok())
@@ -88,16 +88,6 @@ impl LinkNode {
             .unwrap();
             NeighborIdSecret::Client(client_id)
         };
-
-        // gossip exit config if it exists and we are a relay
-        if let Some(ref exit_cfg) = cfg.exit_config {
-            match my_idsk.public() {
-                NeighborId::Relay(my_relay_fp) => {
-                    relay_graph.insert_exit_config(my_relay_fp, exit_cfg.clone())
-                }
-                _ => {}
-            }
-        }
 
         let mut payment_systems = PaymentSystemSelector::new();
         for payment_system in cfg.payment_systems.drain(..) {

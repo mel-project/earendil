@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use clone_macro::clone;
 use control_protocol_impl::ControlProtocolImpl;
 use earendil_crypt::{HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
-use earendil_topology::{ExitConfig, ExitPolicy, QoSConfig};
+use earendil_topology::{ExitConfig, ExitInfo, ExitPolicy, QoSConfig};
 use futures::task::noop_waker;
 use futures::{future::Shared, stream::FuturesUnordered, AsyncReadExt, TryFutureExt};
 use melstructs::NetID;
@@ -141,11 +141,10 @@ impl Node {
                         tracing::info!("serving exit!");
                         let my_relay_fp =
                             relay_cfg.identity.actualize_relay()?.public().fingerprint();
-                        let haven_cfg = HavenConfig::new_for_exit(my_relay_fp)?;
                         fallible_tasks.push(spawn!(serve_exit(
                             v2h_clone.clone(),
                             exit_cfg,
-                            haven_cfg
+                            my_relay_fp
                         )));
                     }
                 }
@@ -271,7 +270,6 @@ async fn serve_haven(v2h: Arc<V2hNode>, cfg: HavenConfig) -> anyhow::Result<()> 
                     HavenHandler::Exit => {
                         anyhow::bail!("No-op for exit haven handler. Use `serve_haven` instead.")
                     }
-                    _ => anyhow::bail!("unsupported haven type"),
                 };
                 anyhow::Ok(())
             })
@@ -285,11 +283,25 @@ async fn serve_haven(v2h: Arc<V2hNode>, cfg: HavenConfig) -> anyhow::Result<()> 
 async fn serve_exit(
     v2h: Arc<V2hNode>,
     exit_cfg: ExitConfig,
-    haven_cfg: HavenConfig,
+    my_relay_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
-    let identity = haven_cfg.identity.actualize_haven()?;
+    let haven_cfg = HavenConfig::new_for_exit(my_relay_fp)?;
+    let haven_idsk = haven_cfg.identity.actualize_haven()?;
+
+    // insert exit info into relay graph to be gossiped around
+    let exit_info = ExitInfo {
+        haven_endpoint: HavenEndpoint::new(
+            haven_idsk.public().fingerprint(),
+            haven_cfg.listen_port,
+        ),
+        config: exit_cfg.clone(),
+    };
+
+    let mut relay_graph = v2h.link_node().relay_graph();
+    relay_graph.insert_exit(my_relay_fp, exit_info);
+
     let listener = v2h
-        .pooled_listen(identity, haven_cfg.listen_port, haven_cfg.rendezvous)
+        .pooled_listen(haven_idsk, haven_cfg.listen_port, haven_cfg.rendezvous)
         .await?;
 
     let exit_cfg = Arc::new(exit_cfg);
@@ -317,6 +329,7 @@ async fn serve_exit(
 
                 tracing::info!(connect_to = debug(&connect_to), "serving SimpleProxy");
 
+                // TODO: exit config implementations
                 // let rate_limit = exit_cfg.rate_limit.max_bps;
                 // apply_rate_limiting(&client, rate_limit).await?;
 
@@ -338,15 +351,15 @@ async fn serve_exit(
     })
 }
 
-async fn apply_rate_limiting(stream: &Stream, rate_limit: u64) -> anyhow::Result<()> {
+async fn apply_rate_limiting(_stream: &Stream, _rate_limit: u64) -> anyhow::Result<()> {
     todo!()
 }
 
-async fn apply_qos(client: &Stream, qos: &QoSConfig) {
+async fn apply_qos(_stream: &Stream, _qos: &QoSConfig) {
     todo!()
 }
 
-fn check_exit_policies(client: &Stream, policies: &[ExitPolicy]) -> bool {
+fn check_exit_policies(_stream: &Stream, _policies: &[ExitPolicy]) -> bool {
     todo!()
 }
 
@@ -357,17 +370,20 @@ async fn socks5_loop(v2h: Arc<V2hNode>, cfg: Socks5Config) -> anyhow::Result<()>
 
     nursery!(loop {
         let (client_stream, _) = tcp_listener.accept().await?;
-        spawn!(socks5_once(client_stream, fallback.clone(), &pool)
-            .map_err(|e| tracing::debug!(err = debug(e), "socks5 worker failed")))
+        spawn!(
+            socks5_once(client_stream, fallback.clone(), &pool, v2h.clone())
+                .map_err(|e| tracing::debug!(err = debug(e), "socks5 worker failed"))
+        )
         .detach();
     })
 }
 
-#[tracing::instrument(skip(client_stream, fallback, pool))]
+#[tracing::instrument(skip(client_stream, fallback, pool, v2h))]
 async fn socks5_once(
     client_stream: TcpStream,
     fallback: Socks5Fallback,
     pool: &PooledVisitor,
+    v2h: Arc<V2hNode>,
 ) -> anyhow::Result<()> {
     client_stream.set_nodelay(true)?;
     let _handshake = read_handshake(client_stream.clone()).await?;
@@ -423,23 +439,26 @@ async fn socks5_once(
                         .await?;
                 }
                 Socks5Fallback::SimpleProxy { exit_nodes } => {
-                    // TODO: we have the exit node's haven endpoint here, but these should be RelayFingerprints of the exit nodes.
-                    // convert them to HavenEndpoints?
-
                     let mut rng = StdRng::from_entropy();
-                    if let Some(remote) = exit_nodes.choose(&mut rng) {
-                        let remote_stream = pool.connect(*remote, addr.as_bytes()).await?;
-                        tracing::debug!(addr = debug(&addr), "got remote stream");
-                        let (read, write) = remote_stream.split();
-                        match smol::io::copy(client_stream.clone(), write)
-                            .race(smol::io::copy(read, client_stream.clone()))
-                            .await
-                        {
-                            Ok(x) => tracing::debug!("RETURNED with {x}"),
-                            Err(e) => tracing::debug!("RETURNED with ERR: {e}"),
-                        }
-                    } else {
-                        anyhow::bail!("No exit nodes available for SimpleProxy");
+                    let relay_graph = v2h.link_node().relay_graph();
+                    let remote_ep: HavenEndpoint =
+                        if let Some(remote_relay_fp) = exit_nodes.choose(&mut rng) {
+                            // TODO: how do we get the haven endpoint from the relay fingerprint?
+                            todo!()
+                        } else if let Some(exit_info) = relay_graph.get_random_exit() {
+                            exit_info.haven_endpoint
+                        } else {
+                            anyhow::bail!("No exit nodes available for SimpleProxy");
+                        };
+                    let remote_stream = pool.connect(remote_ep, addr.as_bytes()).await?;
+                    tracing::debug!(addr = debug(&addr), "got remote stream");
+                    let (read, write) = remote_stream.split();
+                    match smol::io::copy(client_stream.clone(), write)
+                        .race(smol::io::copy(read, client_stream.clone()))
+                        .await
+                    {
+                        Ok(x) => tracing::debug!("RETURNED with {x}"),
+                        Err(e) => tracing::debug!("RETURNED with ERR: {e}"),
                     }
                 }
             }

@@ -5,10 +5,12 @@ use std::{
 };
 
 use bytes::Bytes;
-use earendil_crypt::{RelayFingerprint, RelayIdentityPublic, RelayIdentitySecret, VerifyError};
+use earendil_crypt::{
+    HavenEndpoint, RelayFingerprint, RelayIdentityPublic, RelayIdentitySecret, VerifyError,
+};
 use earendil_packet::crypt::{DhPublic, DhSecret};
 use indexmap::IndexMap;
-use rand::{seq::IteratorRandom, Rng};
+use rand::{seq::IteratorRandom, thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
 use thiserror::Error;
@@ -24,7 +26,7 @@ pub struct RelayGraph {
     id_to_descriptor: HashMap<u64, IdentityDescriptor>,
     adjacency: HashMap<u64, HashSet<u64>>,
     documents: IndexMap<(u64, u64), AdjacencyDescriptor>,
-    exit_configs: HashMap<RelayFingerprint, ExitConfig>,
+    exit_configs: HashMap<RelayFingerprint, ExitInfo>,
 }
 
 // Update the AdjacencyError enum with more specific cases
@@ -173,12 +175,17 @@ impl RelayGraph {
             .choose_multiple(&mut rand::thread_rng(), num)
     }
 
-    pub fn insert_exit_config(&mut self, relay_fp: RelayFingerprint, cfg: ExitConfig) {
-        self.exit_configs.insert(relay_fp, cfg);
+    pub fn insert_exit(&mut self, relay_fp: RelayFingerprint, exit_info: ExitInfo) {
+        self.exit_configs.insert(relay_fp, exit_info);
     }
 
-    pub fn get_exit_config(&self, relay_fp: &RelayFingerprint) -> Option<&ExitConfig> {
+    pub fn get_exit(&self, relay_fp: &RelayFingerprint) -> Option<&ExitInfo> {
         self.exit_configs.get(relay_fp)
+    }
+
+    pub fn get_random_exit(&self) -> Option<&ExitInfo> {
+        let mut rng = thread_rng();
+        self.exit_configs.values().choose(&mut rng)
     }
 
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.
@@ -413,25 +420,18 @@ pub enum IdentityError {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExitInfo {
+    pub haven_endpoint: HavenEndpoint,
+    pub config: ExitConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExitConfig {
     pub allowed_ports: Vec<u16>,
     pub rate_limit: RateLimit,
     pub quality_of_service: QoSConfig,
     pub exit_policies: Vec<ExitPolicy>,
     pub max_bandwidth: NetworkBandwidth,
-}
-
-// TODO: add sensible default values
-impl Default for ExitConfig {
-    fn default() -> Self {
-        Self {
-            allowed_ports: Default::default(),
-            rate_limit: Default::default(),
-            quality_of_service: Default::default(),
-            exit_policies: Default::default(),
-            max_bandwidth: Default::default(),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
