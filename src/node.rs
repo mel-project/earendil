@@ -17,7 +17,7 @@ use nursery_macro::nursery;
 use picomux::Stream;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use smol::{
     future::FutureExt,
     net::{TcpListener, TcpStream},
@@ -299,6 +299,7 @@ async fn serve_exit(
 
     let mut relay_graph = v2h.link_node().relay_graph();
     relay_graph.insert_exit(my_relay_fp, exit_info);
+    tracing::debug!("added exit into relay graph, needs to be gossiped around...");
 
     let listener = v2h
         .pooled_listen(haven_idsk, haven_cfg.listen_port, haven_cfg.rendezvous)
@@ -324,20 +325,10 @@ async fn serve_exit(
                     .parse()
                     .unwrap_or(0);
                 if !exit_cfg.allowed_ports.contains(&port) {
-                    anyhow::bail!("Port {} not allowed", port);
+                    anyhow::bail!("port {port} not allowed");
                 }
 
                 tracing::info!(connect_to = debug(&connect_to), "serving SimpleProxy");
-
-                // TODO: exit config implementations
-                // let rate_limit = exit_cfg.rate_limit.max_bps;
-                // apply_rate_limiting(&client, rate_limit).await?;
-
-                // apply_qos(&client, &exit_cfg.quality_of_service).await;
-
-                // if !check_exit_policies(&client, &exit_cfg.exit_policies) {
-                //     anyhow::bail!("Exit policy violation");
-                // }
 
                 let upstream = TcpStream::connect(connect_to.to_string()).await?;
                 let (read_client, write_client) = client.split();
@@ -349,18 +340,6 @@ async fn serve_exit(
             .detach()
         }
     })
-}
-
-async fn apply_rate_limiting(_stream: &Stream, _rate_limit: u64) -> anyhow::Result<()> {
-    todo!()
-}
-
-async fn apply_qos(_stream: &Stream, _qos: &QoSConfig) {
-    todo!()
-}
-
-fn check_exit_policies(_stream: &Stream, _policies: &[ExitPolicy]) -> bool {
-    todo!()
 }
 
 async fn socks5_loop(v2h: Arc<V2hNode>, cfg: Socks5Config) -> anyhow::Result<()> {
@@ -439,17 +418,27 @@ async fn socks5_once(
                         .await?;
                 }
                 Socks5Fallback::SimpleProxy { exit_nodes } => {
-                    let mut rng = StdRng::from_entropy();
+                    let random_port = rand::thread_rng().gen_range(1024..65535);
+
                     let relay_graph = v2h.link_node().relay_graph();
-                    let remote_ep: HavenEndpoint =
-                        if let Some(remote_relay_fp) = exit_nodes.choose(&mut rng) {
-                            // TODO: how do we get the haven endpoint from the relay fingerprint?
-                            todo!()
-                        } else if let Some(exit_info) = relay_graph.get_random_exit() {
-                            exit_info.haven_endpoint
-                        } else {
-                            anyhow::bail!("No exit nodes available for SimpleProxy");
-                        };
+                    let mut rng = StdRng::from_entropy();
+                    let remote_ep: HavenEndpoint = exit_nodes
+                        .choose(&mut rng)
+                        .and_then(|remote_relay_fp| {
+                            let exit = relay_graph.get_exit(&remote_relay_fp);
+                            tracing::debug!("got exit: {:?} node for {remote_relay_fp}", exit);
+                            exit
+                        })
+                        .or_else(|| {
+                            relay_graph
+                                .get_random_exit_for_port(random_port)
+                                .map(|(_, exit_info)| exit_info)
+                        })
+                        .map(|exit_info| exit_info.haven_endpoint)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("No exit nodes available for SimpleProxy")
+                        })?;
+
                     let remote_stream = pool.connect(remote_ep, addr.as_bytes()).await?;
                     tracing::debug!(addr = debug(&addr), "got remote stream");
                     let (read, write) = remote_stream.split();

@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     net::IpAddr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -26,7 +26,7 @@ pub struct RelayGraph {
     id_to_descriptor: HashMap<u64, IdentityDescriptor>,
     adjacency: HashMap<u64, HashSet<u64>>,
     documents: IndexMap<(u64, u64), AdjacencyDescriptor>,
-    exit_configs: HashMap<RelayFingerprint, ExitInfo>,
+    exits: ExitRegistry,
 }
 
 // Update the AdjacencyError enum with more specific cases
@@ -176,16 +176,25 @@ impl RelayGraph {
     }
 
     pub fn insert_exit(&mut self, relay_fp: RelayFingerprint, exit_info: ExitInfo) {
-        self.exit_configs.insert(relay_fp, exit_info);
+        self.exits.add_exit(relay_fp, exit_info);
     }
 
     pub fn get_exit(&self, relay_fp: &RelayFingerprint) -> Option<&ExitInfo> {
-        self.exit_configs.get(relay_fp)
+        self.exits.get_exit(relay_fp)
     }
 
-    pub fn get_random_exit(&self) -> Option<&ExitInfo> {
-        let mut rng = thread_rng();
-        self.exit_configs.values().choose(&mut rng)
+    pub fn get_random_exit_for_port(&self, port: u16) -> Option<(&RelayFingerprint, &ExitInfo)> {
+        self.exits.get_random_exit_for_port(port)
+    }
+
+    pub fn all_exits(&self) -> ExitRegistry {
+        self.exits.clone()
+    }
+
+    pub fn update_exits(&mut self, new_exits: HashMap<RelayFingerprint, ExitInfo>) {
+        for (fp, info) in new_exits {
+            self.insert_exit(fp, info);
+        }
     }
 
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.
@@ -419,19 +428,66 @@ pub enum IdentityError {
     InvalidSignature,
 }
 
+#[derive(Default, Serialize, Deserialize, Clone)]
+pub struct ExitRegistry {
+    port_to_exits: BTreeMap<u16, Vec<RelayFingerprint>>,
+    exit_configs: HashMap<RelayFingerprint, ExitInfo>,
+}
+
+impl ExitRegistry {
+    pub fn new() -> Self {
+        ExitRegistry {
+            port_to_exits: BTreeMap::new(),
+            exit_configs: HashMap::new(),
+        }
+    }
+
+    pub fn add_exit(&mut self, fingerprint: RelayFingerprint, exit_info: ExitInfo) {
+        for port in &exit_info.config.allowed_ports {
+            self.port_to_exits
+                .entry(*port)
+                .or_insert_with(Vec::new)
+                .push(fingerprint.clone());
+        }
+        self.exit_configs.insert(fingerprint, exit_info);
+    }
+
+    pub fn get_exit(&self, relay_fp: &RelayFingerprint) -> Option<&ExitInfo> {
+        self.exit_configs.get(relay_fp)
+    }
+
+    pub fn get_random_exit_for_port(&self, port: u16) -> Option<(&RelayFingerprint, &ExitInfo)> {
+        self.port_to_exits.get(&port).and_then(|exits| {
+            exits
+                .into_iter()
+                .choose(&mut thread_rng())
+                .and_then(|fingerprint| {
+                    self.exit_configs
+                        .get(fingerprint)
+                        .map(|exit_info| (fingerprint, exit_info))
+                })
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExitInfo {
     pub haven_endpoint: HavenEndpoint,
     pub config: ExitConfig,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ExitConfig {
+    #[serde(default)]
     pub allowed_ports: Vec<u16>,
-    pub rate_limit: RateLimit,
-    pub quality_of_service: QoSConfig,
-    pub exit_policies: Vec<ExitPolicy>,
-    pub max_bandwidth: NetworkBandwidth,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rate_limit: Option<RateLimit>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality_of_service: Option<QoSConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_policies: Option<Vec<ExitPolicy>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_bandwidth: Option<NetworkBandwidth>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

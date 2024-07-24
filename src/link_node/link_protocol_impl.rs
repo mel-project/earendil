@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 
 use earendil_crypt::RelayFingerprint;
 
-use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
+use earendil_topology::{AdjacencyDescriptor, ExitInfo, ExitRegistry, IdentityDescriptor};
 
 use itertools::Itertools;
 
@@ -145,5 +147,30 @@ impl LinkProtocol for LinkProtocolImpl {
         } else {
             return Err(LinkRpcErr::UnacceptedPaysystem);
         }
+    }
+
+    async fn get_exits(
+        &self,
+        relays: Vec<RelayFingerprint>,
+    ) -> Result<HashMap<RelayFingerprint, ExitInfo>, LinkRpcErr> {
+        let graph = self.ctx.relay_graph.read();
+        let mut result = HashMap::new();
+
+        for fp in relays {
+            match graph.get_exit(&fp) {
+                Some(exit_info) => {
+                    result.insert(fp, exit_info.clone());
+                }
+                None => {
+                    tracing::debug!("No exit information found for relay: {:?}", fp);
+                }
+            }
+        }
+
+        if result.is_empty() {
+            tracing::warn!("No exit information found for any of the requested relays");
+        }
+
+        Ok(result)
     }
 }

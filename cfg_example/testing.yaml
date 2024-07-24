@@ -18,4 +18,4 @@ socks5:
   listen: 127.0.0.1:23456 # localhost port where the proxy server listens
   fallback:
     simple_proxy: # proxy server for all clearnet traffic
-      remote: v5k6rydpg9yh9hft6c7qwz9sm3z99ytt:23456
+      exit_nodes: ["v5k6rydpg9yh9hft6c7qwz9sm3z99ytt:23456"]

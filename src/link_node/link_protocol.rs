@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use bytes::Bytes;
 
 use earendil_crypt::{RelayFingerprint, RelayIdentityPublic};
-use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
+use earendil_topology::{AdjacencyDescriptor, ExitInfo, ExitRegistry, IdentityDescriptor};
 use nanorpc::nanorpc_derive;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -38,6 +40,11 @@ pub trait LinkProtocol {
         paysystem_name: String,
         proof: String,
     ) -> Result<(), LinkRpcErr>;
+
+    async fn get_exits(
+        &self,
+        relays: Vec<RelayFingerprint>,
+    ) -> Result<HashMap<RelayFingerprint, ExitInfo>, LinkRpcErr>;
 }
 
 /// Response to an authentication challenge.

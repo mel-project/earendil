@@ -86,8 +86,14 @@ async fn gossip_graph(ctx: &LinkNodeCtx, link: &Link) -> anyhow::Result<()> {
         .copied()
         .collect_vec();
     let adjacencies = LinkClient(link.rpc_transport())
-        .adjacencies(random_sample)
+        .adjacencies(random_sample.clone())
         .await?;
+
+    // Fetch exit information for the same random sample
+    let exit_infos = LinkClient(link.rpc_transport())
+        .get_exits(random_sample)
+        .await??;
+
     for adjacency in adjacencies {
         let left_fp = adjacency.left;
         let right_fp = adjacency.right;
@@ -120,5 +126,9 @@ async fn gossip_graph(ctx: &LinkNodeCtx, link: &Link) -> anyhow::Result<()> {
         // insert the adjacency
         ctx.relay_graph.write().insert_adjacency(adjacency)?
     }
+
+    // Update exit information
+    ctx.relay_graph.write().update_exits(exit_infos);
+
     Ok(())
 }
