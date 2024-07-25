@@ -31,9 +31,8 @@ use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{
     crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, ReplyDegarbler, Surb,
-    RAW_BODY_SIZE,
 };
-use earendil_topology::{ExitConfig, IdentityDescriptor, RelayGraph};
+use earendil_topology::{IdentityDescriptor, RelayGraph};
 use itertools::Itertools;
 use parking_lot::RwLock;
 use smol::{
@@ -236,6 +235,11 @@ impl LinkNode {
     /// Gets the current relay graph.
     pub fn relay_graph(&self) -> RelayGraph {
         self.ctx.relay_graph.read().clone()
+    }
+
+    /// Gives us a writeable reference to the relay graph.
+    pub fn relay_graph_writeable(&self) -> RelayGraph {
+        self.ctx.relay_graph.write().clone()
     }
 
     /// Gets my identity.

@@ -7,16 +7,15 @@ use async_trait::async_trait;
 use clone_macro::clone;
 use control_protocol_impl::ControlProtocolImpl;
 use earendil_crypt::{HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
-use earendil_topology::{ExitConfig, ExitInfo, ExitPolicy, QoSConfig};
-use futures::task::noop_waker;
-use futures::{future::Shared, stream::FuturesUnordered, AsyncReadExt, TryFutureExt};
+use earendil_topology::{ExitConfig, ExitInfo};
+use futures::{
+    future::Shared, stream::FuturesUnordered, task::noop_waker, AsyncReadExt, TryFutureExt,
+};
 use melstructs::NetID;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 use nursery_macro::nursery;
-use picomux::Stream;
-use rand::rngs::StdRng;
-use rand::seq::SliceRandom;
+use rand::{rngs::StdRng, seq::SliceRandom};
 use rand::{Rng, SeedableRng};
 use smol::{
     future::FutureExt,
@@ -297,7 +296,7 @@ async fn serve_exit(
         config: exit_cfg.clone(),
     };
 
-    let mut relay_graph = v2h.link_node().relay_graph();
+    let mut relay_graph = v2h.link_node().relay_graph_writeable();
     relay_graph.insert_exit(my_relay_fp, exit_info);
     tracing::debug!("added exit into relay graph, needs to be gossiped around...");
 
