@@ -40,11 +40,6 @@ pub trait LinkProtocol {
         paysystem_name: String,
         proof: String,
     ) -> Result<(), LinkRpcErr>;
-
-    async fn get_exits(
-        &self,
-        relays: Vec<RelayFingerprint>,
-    ) -> Result<HashMap<RelayFingerprint, ExitInfo>, LinkRpcErr>;
 }
 
 /// Response to an authentication challenge.

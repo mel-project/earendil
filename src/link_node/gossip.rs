@@ -89,11 +89,6 @@ async fn gossip_graph(ctx: &LinkNodeCtx, link: &Link) -> anyhow::Result<()> {
         .adjacencies(random_sample.clone())
         .await?;
 
-    // Fetch exit information for the same random sample
-    let exit_infos = LinkClient(link.rpc_transport())
-        .get_exits(random_sample)
-        .await??;
-
     for adjacency in adjacencies {
         let left_fp = adjacency.left;
         let right_fp = adjacency.right;
@@ -127,8 +122,118 @@ async fn gossip_graph(ctx: &LinkNodeCtx, link: &Link) -> anyhow::Result<()> {
         ctx.relay_graph.write().insert_adjacency(adjacency)?
     }
 
-    // Update exit information
-    ctx.relay_graph.write().update_exits(exit_infos);
-
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::IpAddr;
+    use std::str::FromStr;
+    use std::time::Duration;
+
+    use bytes::Bytes;
+    use earendil_crypt::{HavenEndpoint, HavenFingerprint, RelayIdentitySecret};
+    use earendil_packet::crypt::DhSecret;
+    use earendil_topology::{
+        Action, AddressMatch, ExitConfig, ExitInfo, ExitPolicy, IdentityDescriptor,
+        NetworkBandwidth, PortMatch, QoSConfig, RateLimit, Rule,
+    };
+
+    #[test]
+    fn test_identity_descriptor_sign_and_verify() {
+        // Create a mock RelayIdentitySecret
+        let my_identity = RelayIdentitySecret::generate();
+
+        // Create a mock DhSecret
+        let my_onion = DhSecret::generate();
+
+        // Create a mock ExitInfo with the correct ExitConfig
+        let vec = vec![ExitPolicy {
+            ipv4_rules: vec![Rule {
+                action: Action::Accept,
+                address: AddressMatch::All,
+                ports: PortMatch::All,
+            }],
+            ipv6_rules: vec![Rule {
+                action: Action::Accept,
+                address: AddressMatch::All,
+                ports: PortMatch::All,
+            }],
+            ipv6_exit: true,
+        }];
+        let exit_info = Some(ExitInfo {
+            haven_endpoint: HavenEndpoint {
+                fingerprint: HavenFingerprint::from_bytes(&[0u8; 20]),
+                port: 8080,
+            },
+            config: ExitConfig {
+                allowed_ports: vec![80, 443],
+                rate_limit: Some(RateLimit { max_bps: 1_000_000 }),
+                quality_of_service: Some(QoSConfig {
+                    max_delay: Duration::from_millis(100),
+                    max_jitter: Duration::from_millis(20),
+                }),
+                exit_policies: Some(vec),
+                max_bandwidth: Some(NetworkBandwidth { speed: 10_000_000 }),
+            },
+        });
+
+        // Create a new IdentityDescriptor
+        let descriptor = IdentityDescriptor::new(&my_identity, &my_onion, exit_info);
+
+        // Verify the descriptor
+        assert!(descriptor.verify().is_ok(), "Verification should succeed");
+
+        // Test with invalid signature
+        let mut invalid_descriptor = descriptor.clone();
+        invalid_descriptor.sig = Bytes::from(vec![0u8; 64]); // Replace with an invalid signature
+        assert!(
+            invalid_descriptor.verify().is_err(),
+            "Verification should fail with invalid signature"
+        );
+
+        // Test with modified data
+        let mut modified_descriptor = descriptor.clone();
+        modified_descriptor.unix_timestamp += 1; // Modify the timestamp
+        assert!(
+            modified_descriptor.verify().is_err(),
+            "Verification should fail with modified data"
+        );
+
+        // Test with different exit_info
+        let different_exit_info = Some(ExitInfo {
+            haven_endpoint: HavenEndpoint {
+                fingerprint: [1u8; 32].into(),
+                port: 9090,
+            },
+            config: ExitConfig {
+                allowed_ports: vec![8080],
+                rate_limit: Some(RateLimit { max_bps: 2_000_000 }),
+                quality_of_service: Some(QoSConfig {
+                    max_delay: Duration::from_millis(50),
+                    max_jitter: Duration::from_millis(10),
+                }),
+                exit_policies: Some(vec![ExitPolicy {
+                    ipv4_rules: vec![Rule {
+                        action: Action::Accept,
+                        address: AddressMatch::Range(IpAddr::from_str("192.168.0.0").unwrap(), 16),
+                        ports: PortMatch::Range(1024, 65535),
+                    }],
+                    ipv6_rules: vec![],
+                    ipv6_exit: false,
+                }]),
+                max_bandwidth: Some(NetworkBandwidth { speed: 20_000_000 }),
+            },
+        });
+        let different_descriptor =
+            IdentityDescriptor::new(&my_identity, &my_onion, different_exit_info);
+        assert!(
+            different_descriptor.verify().is_ok(),
+            "Verification should succeed with different exit_info"
+        );
+        assert_ne!(
+            descriptor, different_descriptor,
+            "Descriptors with different exit_info should not be equal"
+        );
+    }
 }

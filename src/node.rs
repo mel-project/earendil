@@ -83,6 +83,24 @@ impl Node {
             }
         }
 
+        let (exit_info, exit_haven_cfg) = match (&config.relay_config, &config.exit_config) {
+            (Some(relay_cfg), Some(exit_cfg)) => {
+                let my_relay_fp = relay_cfg.identity.actualize_relay()?.public().fingerprint();
+                let haven_cfg = HavenConfig::new_for_exit(my_relay_fp)?;
+                let haven_idsk = haven_cfg.identity.actualize_haven()?;
+
+                let exit_info = ExitInfo {
+                    haven_endpoint: HavenEndpoint::new(
+                        haven_idsk.public().fingerprint(),
+                        haven_cfg.listen_port,
+                    ),
+                    config: exit_cfg.clone(),
+                };
+                (Some(exit_info), Some(haven_cfg))
+            }
+            _ => (None, None),
+        };
+
         let link = LinkNode::new(
             LinkConfig {
                 relay_config: config.relay_config.clone().map(
@@ -98,7 +116,7 @@ impl Node {
                     data_dir.push("earendil-link-store.db");
                     data_dir
                 }),
-                exit_config: config.exit_config.clone(),
+                exit_info,
             },
             mel_client,
         )?;
@@ -135,17 +153,13 @@ impl Node {
                     fallible_tasks.push(spawn!(serve_haven(v2h_clone.clone(), haven_cfg)))
                 }
 
-                if let Some(exit_cfg) = config.exit_config {
-                    if let Some(relay_cfg) = config.relay_config {
-                        tracing::info!("serving exit!");
-                        let my_relay_fp =
-                            relay_cfg.identity.actualize_relay()?.public().fingerprint();
-                        fallible_tasks.push(spawn!(serve_exit(
-                            v2h_clone.clone(),
-                            exit_cfg,
-                            my_relay_fp
-                        )));
-                    }
+                if let (Some(exit_cfg), Some(exit_haven_cfg)) = (config.exit_config, exit_haven_cfg)
+                {
+                    fallible_tasks.push(spawn!(serve_exit(
+                        v2h_clone.clone(),
+                        exit_cfg,
+                        exit_haven_cfg,
+                    )));
                 }
 
                 // serve socks5
@@ -278,27 +292,18 @@ async fn serve_haven(v2h: Arc<V2hNode>, cfg: HavenConfig) -> anyhow::Result<()> 
 }
 
 /// Serves a simple proxy exit via haven.
-/// We choose ourselves as haven's rendezvous point.
+/// We always choose ourselves as haven's rendezvous point.
 async fn serve_exit(
     v2h: Arc<V2hNode>,
     exit_cfg: ExitConfig,
-    my_relay_fp: RelayFingerprint,
+    haven_cfg: HavenConfig,
 ) -> anyhow::Result<()> {
-    let haven_cfg = HavenConfig::new_for_exit(my_relay_fp)?;
     let haven_idsk = haven_cfg.identity.actualize_haven()?;
 
-    // insert exit info into relay graph to be gossiped around
-    let exit_info = ExitInfo {
-        haven_endpoint: HavenEndpoint::new(
-            haven_idsk.public().fingerprint(),
-            haven_cfg.listen_port,
-        ),
-        config: exit_cfg.clone(),
-    };
-
-    let mut relay_graph = v2h.link_node().relay_graph_writeable();
-    relay_graph.insert_exit(my_relay_fp, exit_info);
-    tracing::debug!("added exit into relay graph, needs to be gossiped around...");
+    tracing::debug!(
+        "serving exit with haven FP: {}",
+        haven_idsk.public().fingerprint()
+    );
 
     let listener = v2h
         .pooled_listen(haven_idsk, haven_cfg.listen_port, haven_cfg.rendezvous)

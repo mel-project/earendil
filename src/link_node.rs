@@ -237,11 +237,6 @@ impl LinkNode {
         self.ctx.relay_graph.read().clone()
     }
 
-    /// Gives us a writeable reference to the relay graph.
-    pub fn relay_graph_writeable(&self) -> RelayGraph {
-        self.ctx.relay_graph.write().clone()
-    }
-
     /// Gets my identity.
     pub fn my_id(&self) -> NeighborIdSecret {
         self.ctx.my_id.clone()
@@ -352,7 +347,13 @@ async fn link_node_loop(
             let identity_refresh_loop = async {
                 loop {
                     // println!("WE ARE INSERTING OURSELVES");
-                    let myself = IdentityDescriptor::new(my_idsk, &link_node_ctx_clone.my_onion_sk);
+
+                    let exit_info = &link_node_ctx_clone.cfg.exit_info;
+                    let myself = IdentityDescriptor::new(
+                        my_idsk,
+                        &link_node_ctx_clone.my_onion_sk,
+                        exit_info.clone(),
+                    );
                     link_node_ctx_clone
                         .relay_graph
                         .write()

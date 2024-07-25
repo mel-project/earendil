@@ -381,11 +381,17 @@ pub struct IdentityDescriptor {
     pub sig: Bytes,
 
     pub unix_timestamp: u64,
+
+    pub exit_info: Option<ExitInfo>,
 }
 
 impl IdentityDescriptor {
     /// Creates an IdentityDescriptor from our own IdentitySecret
-    pub fn new(my_identity: &RelayIdentitySecret, my_onion: &DhSecret) -> Self {
+    pub fn new(
+        my_identity: &RelayIdentitySecret,
+        my_onion: &DhSecret,
+        exit_info: Option<ExitInfo>,
+    ) -> Self {
         let identity_pk = my_identity.public();
         let onion_pk = my_onion.public();
         let mut descr = IdentityDescriptor {
@@ -396,6 +402,7 @@ impl IdentityDescriptor {
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs(),
+            exit_info,
         };
         descr.sig = my_identity.sign(descr.to_sign().as_bytes());
         descr
@@ -470,13 +477,13 @@ impl ExitRegistry {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ExitInfo {
     pub haven_endpoint: HavenEndpoint,
     pub config: ExitConfig,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExitConfig {
     #[serde(default)]
     pub allowed_ports: Vec<u16>,
@@ -490,44 +497,44 @@ pub struct ExitConfig {
     pub max_bandwidth: Option<NetworkBandwidth>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct NetworkBandwidth {
     // in bits per second
-    speed: f64,
+    pub speed: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct RateLimit {
     pub max_bps: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct QoSConfig {
     pub max_delay: Duration,
     pub max_jitter: Duration,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ExitPolicy {
     pub ipv4_rules: Vec<Rule>,
     pub ipv6_rules: Vec<Rule>,
     pub ipv6_exit: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Rule {
     pub action: Action,
     pub address: AddressMatch,
     pub ports: PortMatch,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     Accept,
     Reject,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum AddressMatch {
     All,
     Private,
@@ -535,7 +542,7 @@ pub enum AddressMatch {
     Range(IpAddr, u8), // IP and prefix length
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum PortMatch {
     All,
     Specific(u16),
