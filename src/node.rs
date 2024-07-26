@@ -1,6 +1,5 @@
 mod control_protocol_impl;
 
-use std::time::Duration;
 use std::{convert::Infallible, net::Ipv4Addr, str::FromStr, sync::Arc};
 
 use anyhow::Context;
@@ -16,8 +15,8 @@ use melstructs::NetID;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 use nursery_macro::nursery;
+use rand::SeedableRng;
 use rand::{rngs::StdRng, seq::SliceRandom};
-use rand::{Rng, SeedableRng};
 use smol::{
     future::FutureExt,
     net::{TcpListener, TcpStream},
@@ -423,9 +422,6 @@ async fn socks5_once(
                         .await?;
                 }
                 Socks5Fallback::SimpleProxy { exit_nodes } => {
-                    // let random_port = rand::thread_rng().gen_range(1024..65535);
-                    let random_port = 443;
-
                     let relay_graph = v2h.link_node().relay_graph();
                     let exit_registry = relay_graph.all_exits();
                     tracing::info!(
@@ -437,12 +433,12 @@ async fn socks5_once(
                     let remote_ep: HavenEndpoint = exit_nodes
                         .choose(&mut rng)
                         .and_then(|remote_relay_fp| {
-                            let exit = relay_graph.get_exit(&remote_relay_fp);
+                            let exit = relay_graph.get_exit(remote_relay_fp);
                             exit
                         })
                         .or_else(|| {
                             relay_graph
-                                .get_random_exit_for_port(random_port)
+                                .get_random_exit_for_port(port)
                                 .map(|(_, exit_info)| exit_info)
                         })
                         .map(|exit_info| exit_info.haven_endpoint)

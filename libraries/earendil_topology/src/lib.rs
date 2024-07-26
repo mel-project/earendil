@@ -453,8 +453,8 @@ impl ExitRegistry {
         for port in &exit_info.config.allowed_ports {
             self.port_to_exits
                 .entry(*port)
-                .or_insert_with(Vec::new)
-                .push(fingerprint.clone());
+                .or_default()
+                .push(fingerprint);
         }
         self.exit_configs.insert(fingerprint, exit_info);
     }
@@ -466,7 +466,7 @@ impl ExitRegistry {
     pub fn get_random_exit_for_port(&self, port: u16) -> Option<(&RelayFingerprint, &ExitInfo)> {
         self.port_to_exits.get(&port).and_then(|exits| {
             exits
-                .into_iter()
+                .iter()
                 .choose(&mut thread_rng())
                 .and_then(|fingerprint| {
                     self.exit_configs
@@ -478,6 +478,10 @@ impl ExitRegistry {
 
     pub fn len(&self) -> usize {
         self.exit_configs.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.exit_configs.is_empty()
     }
 }
 

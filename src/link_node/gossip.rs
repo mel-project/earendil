@@ -40,14 +40,17 @@ async fn fetch_identity(
         .identity(remote_fp)
         .await?
         .context("relay neighbors should give us their own id!!!")?;
-    tracing::debug!(
-        "got identity with fingerprint: {:?}",
-        their_id.identity_pk.fingerprint()
+    tracing::trace!(
+        "got identity with fingerprint: {:?}\n and exit: {:?}",
+        their_id.identity_pk.fingerprint(),
+        their_id.exit_info,
     );
-    tracing::trace!("got identity with exit: {:?}", their_id.exit_info);
+
     ctx.relay_graph.write().insert_identity(their_id.clone())?;
+
     if let Some(exit_info) = their_id.exit_info {
         ctx.relay_graph.write().insert_exit(remote_fp, exit_info);
+
         tracing::trace!(
             "[gossip]: inserted exit into relay graph: {:?}",
             ctx.relay_graph.read().get_exit(&remote_fp),
