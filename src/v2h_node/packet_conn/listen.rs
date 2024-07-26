@@ -85,7 +85,10 @@ async fn register_haven(
                 dht_insert(ctx, HavenLocator::new(identity, epk, rendezvous))
                     .timeout(Duration::from_secs(30))
                     .await;
-                tracing::trace!("successfully inserted dht");
+                tracing::trace!(
+                    "successfully registered haven {} into DHT",
+                    identity.public().fingerprint()
+                );
                 Timer::after(Duration::from_secs(5)).await;
             }
         }

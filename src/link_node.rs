@@ -346,13 +346,16 @@ async fn link_node_loop(
         if let NeighborIdSecret::Relay(my_idsk) = &link_node_ctx.my_id {
             let identity_refresh_loop = async {
                 loop {
-                    // println!("WE ARE INSERTING OURSELVES");
-
                     let exit_info = &link_node_ctx_clone.cfg.exit_info;
                     let myself = IdentityDescriptor::new(
                         my_idsk,
                         &link_node_ctx_clone.my_onion_sk,
                         exit_info.clone(),
+                    );
+                    tracing::debug!(
+                        "inserting ourselves: {} into relay graph with exit: {:?}",
+                        my_idsk.public().fingerprint(),
+                        exit_info
                     );
                     link_node_ctx_clone
                         .relay_graph

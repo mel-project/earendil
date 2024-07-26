@@ -5,7 +5,7 @@ out_routes:
   exit:
     connect: 127.0.0.1:12345
     obfs: none
-    fingerprint: 04c48b49e5ba915e2f47655011a3aed75b3ac7e3b468bbc84b23884546312046
+    fingerprint: 8132ece35e78eb4ae6e97a64c3f0c8e08833fea0313f7ebb395050e7143d638b
     price_config:
       inbound_price: 0
       inbound_debt_limit: 0

@@ -475,6 +475,10 @@ impl ExitRegistry {
                 })
         })
     }
+
+    pub fn len(&self) -> usize {
+        self.exit_configs.len()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -487,14 +491,14 @@ pub struct ExitInfo {
 pub struct ExitConfig {
     #[serde(default)]
     pub allowed_ports: Vec<u16>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rate_limit: Option<RateLimit>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub quality_of_service: Option<QoSConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub exit_policies: Option<Vec<ExitPolicy>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_bandwidth: Option<NetworkBandwidth>,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub rate_limit: Option<RateLimit>,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub quality_of_service: Option<QoSConfig>,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub exit_policies: Option<Vec<ExitPolicy>>,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub max_bandwidth: Option<NetworkBandwidth>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]

@@ -1,5 +1,6 @@
 mod control_protocol_impl;
 
+use std::time::Duration;
 use std::{convert::Infallible, net::Ipv4Addr, str::FromStr, sync::Arc};
 
 use anyhow::Context;
@@ -422,15 +423,21 @@ async fn socks5_once(
                         .await?;
                 }
                 Socks5Fallback::SimpleProxy { exit_nodes } => {
-                    let random_port = rand::thread_rng().gen_range(1024..65535);
+                    // let random_port = rand::thread_rng().gen_range(1024..65535);
+                    let random_port = 443;
 
                     let relay_graph = v2h.link_node().relay_graph();
+                    let exit_registry = relay_graph.all_exits();
+                    tracing::info!(
+                        "[simple_proxy]: num exits in relay graph: {}",
+                        exit_registry.len()
+                    );
+
                     let mut rng = StdRng::from_entropy();
                     let remote_ep: HavenEndpoint = exit_nodes
                         .choose(&mut rng)
                         .and_then(|remote_relay_fp| {
                             let exit = relay_graph.get_exit(&remote_relay_fp);
-                            tracing::debug!("got exit: {:?} node for {remote_relay_fp}", exit);
                             exit
                         })
                         .or_else(|| {
@@ -443,6 +450,7 @@ async fn socks5_once(
                             anyhow::anyhow!("No exit nodes available for SimpleProxy")
                         })?;
 
+                    tracing::debug!("connecting to simple proxy remote endpoint: {remote_ep}...");
                     let remote_stream = pool.connect(remote_ep, addr.as_bytes()).await?;
                     tracing::debug!(addr = debug(&addr), "got remote stream");
                     let (read, write) = remote_stream.split();

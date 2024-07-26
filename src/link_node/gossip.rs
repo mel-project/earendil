@@ -35,12 +35,24 @@ async fn fetch_identity(
     link: &Link,
     remote_fp: RelayFingerprint,
 ) -> anyhow::Result<()> {
-    // tracing::trace!("fetching identity...");
+    tracing::trace!("fetching identity from link neighbor");
     let their_id = LinkClient(link.rpc_transport())
         .identity(remote_fp)
         .await?
         .context("relay neighbors should give us their own id!!!")?;
-    ctx.relay_graph.write().insert_identity(their_id)?;
+    tracing::debug!(
+        "got identity with fingerprint: {:?}",
+        their_id.identity_pk.fingerprint()
+    );
+    tracing::trace!("got identity with exit: {:?}", their_id.exit_info);
+    ctx.relay_graph.write().insert_identity(their_id.clone())?;
+    if let Some(exit_info) = their_id.exit_info {
+        ctx.relay_graph.write().insert_exit(remote_fp, exit_info);
+        tracing::trace!(
+            "[gossip]: inserted exit into relay graph: {:?}",
+            ctx.relay_graph.read().get_exit(&remote_fp),
+        );
+    }
     Ok(())
 }
 
@@ -79,7 +91,8 @@ async fn sign_adjacency(
 // Step 3: Gossip the relay graph, by asking info about random nodes.
 #[tracing::instrument(skip_all)]
 async fn gossip_graph(ctx: &LinkNodeCtx, link: &Link) -> anyhow::Result<()> {
-    // tracing::trace!("gossipping relay graph...");
+    tracing::trace!("gossiping relay graph with exit: {:?}", ctx.cfg.exit_info);
+
     let all_known_nodes = ctx.relay_graph.read().all_nodes().collect_vec();
     let random_sample = all_known_nodes
         .choose_multiple(&mut thread_rng(), 10.min(all_known_nodes.len()))
@@ -139,6 +152,8 @@ mod tests {
         NetworkBandwidth, PortMatch, QoSConfig, RateLimit, Rule,
     };
 
+    use crate::config::HavenHandler;
+
     #[test]
     fn test_identity_descriptor_sign_and_verify() {
         // Create a mock RelayIdentitySecret
@@ -168,13 +183,13 @@ mod tests {
             },
             config: ExitConfig {
                 allowed_ports: vec![80, 443],
-                rate_limit: Some(RateLimit { max_bps: 1_000_000 }),
-                quality_of_service: Some(QoSConfig {
-                    max_delay: Duration::from_millis(100),
-                    max_jitter: Duration::from_millis(20),
-                }),
-                exit_policies: Some(vec),
-                max_bandwidth: Some(NetworkBandwidth { speed: 10_000_000 }),
+                // rate_limit: Some(RateLimit { max_bps: 1_000_000 }),
+                // quality_of_service: Some(QoSConfig {
+                //     max_delay: Duration::from_millis(100),
+                //     max_jitter: Duration::from_millis(20),
+                // }),
+                // exit_policies: Some(vec),
+                // max_bandwidth: Some(NetworkBandwidth { speed: 10_000_000 }),
             },
         });
 
@@ -208,21 +223,21 @@ mod tests {
             },
             config: ExitConfig {
                 allowed_ports: vec![8080],
-                rate_limit: Some(RateLimit { max_bps: 2_000_000 }),
-                quality_of_service: Some(QoSConfig {
-                    max_delay: Duration::from_millis(50),
-                    max_jitter: Duration::from_millis(10),
-                }),
-                exit_policies: Some(vec![ExitPolicy {
-                    ipv4_rules: vec![Rule {
-                        action: Action::Accept,
-                        address: AddressMatch::Range(IpAddr::from_str("192.168.0.0").unwrap(), 16),
-                        ports: PortMatch::Range(1024, 65535),
-                    }],
-                    ipv6_rules: vec![],
-                    ipv6_exit: false,
-                }]),
-                max_bandwidth: Some(NetworkBandwidth { speed: 20_000_000 }),
+                // rate_limit: Some(RateLimit { max_bps: 2_000_000 }),
+                // quality_of_service: Some(QoSConfig {
+                //     max_delay: Duration::from_millis(50),
+                //     max_jitter: Duration::from_millis(10),
+                // }),
+                // exit_policies: Some(vec![ExitPolicy {
+                //     ipv4_rules: vec![Rule {
+                //         action: Action::Accept,
+                //         address: AddressMatch::Range(IpAddr::from_str("192.168.0.0").unwrap(), 16),
+                //         ports: PortMatch::Range(1024, 65535),
+                //     }],
+                //     ipv6_rules: vec![],
+                //     ipv6_exit: false,
+                // }]),
+                // max_bandwidth: Some(NetworkBandwidth { speed: 20_000_000 }),
             },
         });
         let different_descriptor =

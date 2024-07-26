@@ -92,6 +92,7 @@ pub async fn dht_get(
     let mut gatherer = FuturesUnordered::new();
     for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
         let n2r_skt = ctx.n2r.bind_anon();
+        tracing::debug!("[dht_get]: n2r_skt: {}", n2r_skt.local_endpoint());
         gatherer.push(async move {
             let gclient = GlobalRpcClient(GlobalRpcTransport::new(replica, n2r_skt));
             anyhow::Ok(gclient.dht_get(fingerprint).await?)
