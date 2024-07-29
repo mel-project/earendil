@@ -78,6 +78,7 @@ impl RelayGraph {
         let id = self.alloc_id(&relay_fp);
         self.id_to_descriptor.insert(id, identity.clone());
 
+        // insert an
         if let Some(exit_info) = identity.exit_info {
             self.insert_exit(relay_fp, exit_info);
         }
@@ -185,16 +186,6 @@ impl RelayGraph {
 
     pub fn get_random_exit_for_port(&self, port: u16) -> Option<(&RelayFingerprint, &ExitInfo)> {
         self.exits.get_random_exit_for_port(port)
-    }
-
-    pub fn all_exits(&self) -> ExitRegistry {
-        self.exits.clone()
-    }
-
-    pub fn update_exits(&mut self, new_exits: HashMap<RelayFingerprint, ExitInfo>) {
-        for (fp, info) in new_exits {
-            self.insert_exit(fp, info);
-        }
     }
 
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.

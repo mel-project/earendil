@@ -223,7 +223,6 @@ async fn handle_pipe(
             link_node_ctx
                 .stats_gatherer
                 .insert(&stats_key, RAW_BODY_SIZE as f64);
-            tracing::debug!("[stats]: inserted down metric for {their_id}",);
 
             if price_config.inbound_price != 0.0 {
                 let debt = link_node_ctx.store.get_debt(their_id).await?;

@@ -423,19 +423,11 @@ async fn socks5_once(
                 }
                 Socks5Fallback::SimpleProxy { exit_nodes } => {
                     let relay_graph = v2h.link_node().relay_graph();
-                    let exit_registry = relay_graph.all_exits();
-                    tracing::info!(
-                        "[simple_proxy]: num exits in relay graph: {}",
-                        exit_registry.len()
-                    );
 
                     let mut rng = StdRng::from_entropy();
                     let remote_ep: HavenEndpoint = exit_nodes
                         .choose(&mut rng)
-                        .and_then(|remote_relay_fp| {
-                            let exit = relay_graph.get_exit(remote_relay_fp);
-                            exit
-                        })
+                        .and_then(|remote_relay_fp| relay_graph.get_exit(remote_relay_fp))
                         .or_else(|| {
                             relay_graph
                                 .get_random_exit_for_port(port)
