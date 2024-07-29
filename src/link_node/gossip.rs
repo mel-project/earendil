@@ -47,15 +47,6 @@ async fn fetch_identity(
     );
 
     ctx.relay_graph.write().insert_identity(their_id.clone())?;
-
-    if let Some(exit_info) = their_id.exit_info {
-        ctx.relay_graph.write().insert_exit(remote_fp, exit_info);
-
-        tracing::trace!(
-            "[gossip]: inserted exit into relay graph: {:?}",
-            ctx.relay_graph.read().get_exit(&remote_fp),
-        );
-    }
     Ok(())
 }
 
@@ -150,10 +141,7 @@ mod tests {
     use bytes::Bytes;
     use earendil_crypt::{HavenEndpoint, HavenFingerprint, RelayIdentitySecret};
     use earendil_packet::crypt::DhSecret;
-    use earendil_topology::{
-        Action, AddressMatch, ExitConfig, ExitInfo, ExitPolicy, IdentityDescriptor,
-        NetworkBandwidth, PortMatch, QoSConfig, RateLimit, Rule,
-    };
+    use earendil_topology::{ExitConfig, ExitInfo, IdentityDescriptor};
 
     use crate::config::HavenHandler;
 

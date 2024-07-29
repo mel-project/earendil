@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    net::IpAddr,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use bytes::Bytes;
@@ -65,11 +64,6 @@ impl RelayGraph {
 
     /// Inserts an identity descriptor. Verifies its self-consistency.
     pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> Result<(), VerifyError> {
-        // tracing::trace!(
-        //     identity = debug(identity.identity_pk.fingerprint()),
-        //     "inserting an identity into relay graph"
-        // );
-
         // do not insert if we already have a newer copy
         if let Some(existing) = self.identity(&identity.identity_pk.fingerprint()) {
             if existing.unix_timestamp > identity.unix_timestamp {
@@ -80,8 +74,14 @@ impl RelayGraph {
         identity
             .identity_pk
             .verify(identity.to_sign().as_bytes(), &identity.sig)?;
-        let id = self.alloc_id(&identity.identity_pk.fingerprint());
-        self.id_to_descriptor.insert(id, identity);
+        let relay_fp = identity.identity_pk.fingerprint();
+        let id = self.alloc_id(&relay_fp);
+        self.id_to_descriptor.insert(id, identity.clone());
+
+        if let Some(exit_info) = identity.exit_info {
+            self.insert_exit(relay_fp, exit_info);
+        }
+
         Ok(())
     }
 
@@ -175,7 +175,7 @@ impl RelayGraph {
             .choose_multiple(&mut rand::thread_rng(), num)
     }
 
-    pub fn insert_exit(&mut self, relay_fp: RelayFingerprint, exit_info: ExitInfo) {
+    fn insert_exit(&mut self, relay_fp: RelayFingerprint, exit_info: ExitInfo) {
         self.exits.add_exit(relay_fp, exit_info);
     }
 

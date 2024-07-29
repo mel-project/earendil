@@ -20,6 +20,7 @@ use payment_system::PaymentSystemSelector;
 use send_msg::{send_to_next_peeler, send_to_nonself_next_peeler};
 use std::{
     collections::HashMap,
+    fmt::Debug,
     sync::Arc,
     time::{Duration, Instant},
 };
