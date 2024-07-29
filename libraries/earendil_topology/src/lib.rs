@@ -78,7 +78,6 @@ impl RelayGraph {
         let id = self.alloc_id(&relay_fp);
         self.id_to_descriptor.insert(id, identity.clone());
 
-        // insert an
         if let Some(exit_info) = identity.exit_info {
             self.insert_exit(relay_fp, exit_info);
         }
