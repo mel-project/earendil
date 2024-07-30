@@ -223,7 +223,6 @@ async fn handle_pipe(
             link_node_ctx
                 .stats_gatherer
                 .insert(&stats_key, RAW_BODY_SIZE as f64);
-            tracing::debug!("[stats]: inserted down metric for {their_id}",);
 
             if price_config.inbound_price != 0.0 {
                 let debt = link_node_ctx.store.get_debt(their_id).await?;
@@ -268,10 +267,13 @@ async fn pipe_to_mux(
 ) -> anyhow::Result<(PicoMux, LinkNodeDescr, LinkPaymentInfo)> {
     let (mut read, mut write) = pipe.split();
     let send_auth = async {
+        let exit_info = link_node_ctx.cfg.exit_info.clone();
         let my_descr = match link_node_ctx.my_id {
-            NeighborIdSecret::Relay(id) => {
-                LinkNodeDescr::Relay(IdentityDescriptor::new(&id, &link_node_ctx.my_onion_sk))
-            }
+            NeighborIdSecret::Relay(id) => LinkNodeDescr::Relay(IdentityDescriptor::new(
+                &id,
+                &link_node_ctx.my_onion_sk,
+                exit_info,
+            )),
             NeighborIdSecret::Client(id) => LinkNodeDescr::Client(id),
         };
         let my_payment_info = LinkPaymentInfo {
@@ -285,9 +287,18 @@ async fn pipe_to_mux(
     };
 
     let recv_auth = async {
+        tracing::debug!("waiting for auth message...");
         let bts = read_pascal(&mut read).await?;
+        tracing::debug!("got auth message...");
         let (their_descr, their_payinfo): (LinkNodeDescr, LinkPaymentInfo) =
-            stdcode::deserialize(&bts)?;
+            match stdcode::deserialize(&bts) {
+                Ok((their_descr, their_payinfo)) => (their_descr, their_payinfo),
+                Err(e) => {
+                    tracing::error!("Failed to deserialize auth message: {}", e);
+                    anyhow::bail!("F");
+                }
+            };
+
         tracing::debug!(
             "their_price: {}; our_max_price: {}",
             their_payinfo.price,

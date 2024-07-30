@@ -7,12 +7,16 @@ use async_trait::async_trait;
 use clone_macro::clone;
 use control_protocol_impl::ControlProtocolImpl;
 use earendil_crypt::{HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
-use futures::task::noop_waker;
-use futures::{future::Shared, stream::FuturesUnordered, AsyncReadExt, TryFutureExt};
+use earendil_topology::{ExitConfig, ExitInfo};
+use futures::{
+    future::Shared, stream::FuturesUnordered, task::noop_waker, AsyncReadExt, TryFutureExt,
+};
 use melstructs::NetID;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 use nursery_macro::nursery;
+use rand::SeedableRng;
+use rand::{rngs::StdRng, seq::SliceRandom};
 use smol::{
     future::FutureExt,
     net::{TcpListener, TcpStream},
@@ -79,6 +83,24 @@ impl Node {
             }
         }
 
+        let (exit_info, exit_haven_cfg) = match (&config.relay_config, &config.exit_config) {
+            (Some(relay_cfg), Some(exit_cfg)) => {
+                let my_relay_fp = relay_cfg.identity.actualize_relay()?.public().fingerprint();
+                let haven_cfg = HavenConfig::new_for_exit(my_relay_fp)?;
+                let haven_idsk = haven_cfg.identity.actualize_haven()?;
+
+                let exit_info = ExitInfo {
+                    haven_endpoint: HavenEndpoint::new(
+                        haven_idsk.public().fingerprint(),
+                        haven_cfg.listen_port,
+                    ),
+                    config: exit_cfg.clone(),
+                };
+                (Some(exit_info), Some(haven_cfg))
+            }
+            _ => (None, None),
+        };
+
         let link = LinkNode::new(
             LinkConfig {
                 relay_config: config.relay_config.clone().map(
@@ -94,6 +116,7 @@ impl Node {
                     data_dir.push("earendil-link-store.db");
                     data_dir
                 }),
+                exit_info,
             },
             mel_client,
         )?;
@@ -128,6 +151,15 @@ impl Node {
                 // for every haven, serve the haven
                 for haven_cfg in config.havens {
                     fallible_tasks.push(spawn!(serve_haven(v2h_clone.clone(), haven_cfg)))
+                }
+
+                if let (Some(exit_cfg), Some(exit_haven_cfg)) = (config.exit_config, exit_haven_cfg)
+                {
+                    fallible_tasks.push(spawn!(serve_exit(
+                        v2h_clone.clone(),
+                        exit_cfg,
+                        exit_haven_cfg,
+                    )));
                 }
 
                 // serve socks5
@@ -241,24 +273,72 @@ async fn serve_haven(v2h: Arc<V2hNode>, cfg: HavenConfig) -> anyhow::Result<()> 
             spawn!(async move {
                 match handler {
                     HavenHandler::TcpService { upstream } => {
-                        tracing::debug!(upstream = debug(upstream), "serving a tcp service");
+                        tracing::info!(upstream = debug(upstream), "serving a tcp service");
                         let upstream = smol::net::TcpStream::connect(upstream).await?;
                         let (read_client, write_client) = client.split();
                         smol::io::copy(read_client, upstream.clone())
                             .race(smol::io::copy(upstream.clone(), write_client))
                             .await?
                     }
-                    HavenHandler::SimpleProxy => {
-                        let connect_to = String::from_utf8_lossy(client.metadata());
-                        tracing::debug!(connect_to = debug(&connect_to), "serving SimpleProxy");
-                        let upstream =
-                            smol::net::TcpStream::connect(connect_to.to_string()).await?;
-                        let (read_client, write_client) = client.split();
-                        smol::io::copy(read_client, upstream.clone())
-                            .race(smol::io::copy(upstream.clone(), write_client))
-                            .await?
+                    HavenHandler::Exit => {
+                        anyhow::bail!("No-op for exit haven handler. Use `serve_haven` instead.")
                     }
                 };
+                anyhow::Ok(())
+            })
+            .detach()
+        }
+    })
+}
+
+/// Serves a simple proxy exit via haven.
+/// We always choose ourselves as haven's rendezvous point.
+async fn serve_exit(
+    v2h: Arc<V2hNode>,
+    exit_cfg: ExitConfig,
+    haven_cfg: HavenConfig,
+) -> anyhow::Result<()> {
+    let haven_idsk = haven_cfg.identity.actualize_haven()?;
+
+    tracing::debug!(
+        "serving exit with haven FP: {}",
+        haven_idsk.public().fingerprint()
+    );
+
+    let listener = v2h
+        .pooled_listen(haven_idsk, haven_cfg.listen_port, haven_cfg.rendezvous)
+        .await?;
+
+    let exit_cfg = Arc::new(exit_cfg);
+
+    nursery!({
+        loop {
+            let client = listener
+                .accept()
+                .await
+                .context("could not accept another from PooledListener")?;
+
+            let exit_cfg = Arc::clone(&exit_cfg);
+            spawn!(async move {
+                let connect_to = String::from_utf8_lossy(client.metadata());
+
+                let port: u16 = connect_to
+                    .split(':')
+                    .last()
+                    .unwrap_or("")
+                    .parse()
+                    .unwrap_or(0);
+                if !exit_cfg.allowed_ports.contains(&port) {
+                    anyhow::bail!("port {port} not allowed");
+                }
+
+                tracing::info!(connect_to = debug(&connect_to), "serving SimpleProxy");
+
+                let upstream = TcpStream::connect(connect_to.to_string()).await?;
+                let (read_client, write_client) = client.split();
+                smol::io::copy(read_client, upstream.clone())
+                    .race(smol::io::copy(upstream.clone(), write_client))
+                    .await?;
                 anyhow::Ok(())
             })
             .detach()
@@ -273,17 +353,20 @@ async fn socks5_loop(v2h: Arc<V2hNode>, cfg: Socks5Config) -> anyhow::Result<()>
 
     nursery!(loop {
         let (client_stream, _) = tcp_listener.accept().await?;
-        spawn!(socks5_once(client_stream, fallback, &pool)
-            .map_err(|e| tracing::debug!(err = debug(e), "socks5 worker failed")))
+        spawn!(
+            socks5_once(client_stream, fallback.clone(), &pool, v2h.clone())
+                .map_err(|e| tracing::debug!(err = debug(e), "socks5 worker failed"))
+        )
         .detach();
     })
 }
 
-#[tracing::instrument(skip(client_stream, fallback, pool))]
+#[tracing::instrument(skip(client_stream, fallback, pool, v2h))]
 async fn socks5_once(
     client_stream: TcpStream,
     fallback: Socks5Fallback,
     pool: &PooledVisitor,
+    v2h: Arc<V2hNode>,
 ) -> anyhow::Result<()> {
     client_stream.set_nodelay(true)?;
     let _handshake = read_handshake(client_stream.clone()).await?;
@@ -338,8 +421,25 @@ async fn socks5_once(
                         ))
                         .await?;
                 }
-                Socks5Fallback::SimpleProxy { remote } => {
-                    let remote_stream = pool.connect(remote, addr.as_bytes()).await?;
+                Socks5Fallback::SimpleProxy { exit_nodes } => {
+                    let relay_graph = v2h.link_node().relay_graph();
+
+                    let mut rng = StdRng::from_entropy();
+                    let remote_ep: HavenEndpoint = exit_nodes
+                        .choose(&mut rng)
+                        .and_then(|remote_relay_fp| relay_graph.get_exit(remote_relay_fp))
+                        .or_else(|| {
+                            relay_graph
+                                .get_random_exit_for_port(port)
+                                .map(|(_, exit_info)| exit_info)
+                        })
+                        .map(|exit_info| exit_info.haven_endpoint)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("No exit nodes available for SimpleProxy")
+                        })?;
+
+                    tracing::debug!("connecting to simple proxy remote endpoint: {remote_ep}...");
+                    let remote_stream = pool.connect(remote_ep, addr.as_bytes()).await?;
                     tracing::debug!(addr = debug(&addr), "got remote stream");
                     let (read, write) = remote_stream.split();
                     match smol::io::copy(client_stream.clone(), write)

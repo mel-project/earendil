@@ -1,7 +1,10 @@
 use std::{collections::BTreeMap, fmt, io::Write, net::SocketAddr, path::PathBuf};
 
 use anyhow::Context;
+use bip39::Mnemonic;
 use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
+use earendil_topology::ExitConfig;
+use rand::Rng;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::serde_as;
 use std::fs::OpenOptions;
@@ -43,6 +46,9 @@ pub struct ConfigFile {
     /// the haven address for our melprot::Client to bootstrap on
     /// e.g. http://<haven_addr>.haven:<port>
     pub mel_bootstrap: Option<String>,
+
+    /// Configuration for relay nodes to host an exit.
+    pub exit_config: Option<ExitConfig>,
 }
 
 impl ConfigFile {
@@ -135,7 +141,7 @@ pub struct TcpForwardConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct Socks5Config {
     pub listen: SocketAddr,
@@ -143,14 +149,14 @@ pub struct Socks5Config {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum Socks5Fallback {
     Block,
     PassThrough,
     SimpleProxy {
-        #[serde_as(as = "serde_with::DisplayFromStr")]
-        remote: HavenEndpoint,
+        #[serde_as(as = "Vec<serde_with::DisplayFromStr>")]
+        exit_nodes: Vec<RelayFingerprint>,
     },
 }
 
@@ -165,12 +171,40 @@ pub struct HavenConfig {
     pub handler: HavenHandler,
 }
 
+impl HavenConfig {
+    pub fn new_for_exit(my_relay_fp: RelayFingerprint) -> anyhow::Result<Self> {
+        let identity_seed = Self::generate_identity_seed()?;
+        let listen_port = Self::generate_random_local_port();
+        let rendezvous = my_relay_fp;
+
+        Ok(HavenConfig {
+            identity: Identity::IdentitySeed(identity_seed),
+            listen_port,
+            rendezvous,
+            handler: HavenHandler::Exit,
+        })
+    }
+
+    /// Generates a human-readable identity seed using bip39.
+    fn generate_identity_seed() -> anyhow::Result<String> {
+        let entropy: [u8; 16] = rand::random();
+        let mnemonic = Mnemonic::from_entropy(&entropy)?;
+        Ok(mnemonic.to_string().replace(' ', "-"))
+    }
+
+    /// Generates a random local port number within the typical non-reserved range.
+    /// NOTE: if this turns out to cause issues, we can choose a different range.
+    fn generate_random_local_port() -> u16 {
+        rand::thread_rng().gen_range(1024..65535)
+    }
+}
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HavenHandler {
     TcpService { upstream: SocketAddr },
-    SimpleProxy,
+    Exit,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -210,7 +244,6 @@ impl Identity {
                             use std::os::unix::prelude::OpenOptionsExt;
                             options.mode(0o600);
                         }
-
                         let mut file = options.open(file)?;
                         file.write_all(identity.as_bytes())?;
                     }

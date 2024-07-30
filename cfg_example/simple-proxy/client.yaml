@@ -1,0 +1,20 @@
+db_path: ./client.db
+control_listen: 127.0.0.1:11111
+
+out_routes:
+  exit:
+    connect: 127.0.0.1:12345
+    obfs: none
+    fingerprint: 8132ece35e78eb4ae6e97a64c3f0c8e08833fea0313f7ebb395050e7143d638b
+    price_config:
+      inbound_price: 0
+      inbound_debt_limit: 0
+      outbound_max_price: 0
+      outbound_min_debt_limit: 0
+
+socks5:
+  listen: 127.0.0.1:23456
+  fallback:
+    simple_proxy:
+      exit_nodes:
+        ["2d2b5429d2c814c05c31bc67b3731817a1b09ba353f8b31b54dce7f149fa16a7"]

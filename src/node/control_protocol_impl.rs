@@ -42,9 +42,8 @@ impl ControlProtocol for ControlProtocolImpl {
                             "TcpService".to_string(),
                             fp.to_string() + ":" + &haven_cfg.listen_port.to_string(),
                         )),
-                        crate::config::HavenHandler::SimpleProxy => Ok((
-                            "SimpleProxy".to_string(),
-                            fp.to_string() + ":" + &haven_cfg.listen_port.to_string(),
+                        _ => Err(ConfigError::Error(
+                            "Only TcpService handler is supported".to_string(),
                         )),
                     }
                 }

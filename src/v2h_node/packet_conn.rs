@@ -62,10 +62,18 @@ impl HavenPacketConn {
         let n2r_skt = ctx.n2r.bind_anon();
 
         // lookup the haven info using the dht
-        let locator = dht_get(ctx, dest_haven.fingerprint)
-            .await
-            .context("dht_get failed")?
-            .context("haven not found in DHT")?;
+        let locator = match dht_get(ctx, dest_haven.fingerprint).await {
+            Ok(Some(loc)) => loc,
+            Ok(None) => {
+                println!("Error: Haven not found in DHT");
+                anyhow::bail!("Haven not found in DHT")
+            }
+            Err(e) => {
+                println!("Error: DHT get failed: {}", e);
+                return Err(e.context("dht_get failed"));
+            }
+        };
+        tracing::debug!("got haven info from DHT: {:?}", locator);
 
         let rendezvous_ep = RelayEndpoint::new(locator.rendezvous_point, HAVEN_FORWARD_DOCK);
         tracing::debug!("got n2r_skt: {}", n2r_skt.local_endpoint());

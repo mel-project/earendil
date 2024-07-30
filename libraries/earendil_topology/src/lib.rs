@@ -1,13 +1,15 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use bytes::Bytes;
-use earendil_crypt::{RelayFingerprint, RelayIdentityPublic, RelayIdentitySecret, VerifyError};
+use earendil_crypt::{
+    HavenEndpoint, RelayFingerprint, RelayIdentityPublic, RelayIdentitySecret, VerifyError,
+};
 use earendil_packet::crypt::{DhPublic, DhSecret};
 use indexmap::IndexMap;
-use rand::{seq::IteratorRandom, Rng};
+use rand::{seq::IteratorRandom, thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
 use thiserror::Error;
@@ -23,6 +25,7 @@ pub struct RelayGraph {
     id_to_descriptor: HashMap<u64, IdentityDescriptor>,
     adjacency: HashMap<u64, HashSet<u64>>,
     documents: IndexMap<(u64, u64), AdjacencyDescriptor>,
+    exits: ExitRegistry,
 }
 
 // Update the AdjacencyError enum with more specific cases
@@ -61,11 +64,6 @@ impl RelayGraph {
 
     /// Inserts an identity descriptor. Verifies its self-consistency.
     pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> Result<(), VerifyError> {
-        // tracing::trace!(
-        //     identity = debug(identity.identity_pk.fingerprint()),
-        //     "inserting an identity into relay graph"
-        // );
-
         // do not insert if we already have a newer copy
         if let Some(existing) = self.identity(&identity.identity_pk.fingerprint()) {
             if existing.unix_timestamp > identity.unix_timestamp {
@@ -76,8 +74,14 @@ impl RelayGraph {
         identity
             .identity_pk
             .verify(identity.to_sign().as_bytes(), &identity.sig)?;
-        let id = self.alloc_id(&identity.identity_pk.fingerprint());
-        self.id_to_descriptor.insert(id, identity);
+        let relay_fp = identity.identity_pk.fingerprint();
+        let id = self.alloc_id(&relay_fp);
+        self.id_to_descriptor.insert(id, identity.clone());
+
+        if let Some(exit_info) = identity.exit_info {
+            self.insert_exit(relay_fp, exit_info);
+        }
+
         Ok(())
     }
 
@@ -169,6 +173,18 @@ impl RelayGraph {
             .filter_map(|n| self.identity(&n))
             .map(|id| id.identity_pk.fingerprint())
             .choose_multiple(&mut rand::thread_rng(), num)
+    }
+
+    fn insert_exit(&mut self, relay_fp: RelayFingerprint, exit_info: ExitInfo) {
+        self.exits.add_exit(relay_fp, exit_info);
+    }
+
+    pub fn get_exit(&self, relay_fp: &RelayFingerprint) -> Option<&ExitInfo> {
+        self.exits.get_exit(relay_fp)
+    }
+
+    pub fn get_random_exit_for_port(&self, port: u16) -> Option<(&RelayFingerprint, &ExitInfo)> {
+        self.exits.get_random_exit_for_port(port)
     }
 
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.
@@ -355,11 +371,17 @@ pub struct IdentityDescriptor {
     pub sig: Bytes,
 
     pub unix_timestamp: u64,
+
+    pub exit_info: Option<ExitInfo>,
 }
 
 impl IdentityDescriptor {
     /// Creates an IdentityDescriptor from our own IdentitySecret
-    pub fn new(my_identity: &RelayIdentitySecret, my_onion: &DhSecret) -> Self {
+    pub fn new(
+        my_identity: &RelayIdentitySecret,
+        my_onion: &DhSecret,
+        exit_info: Option<ExitInfo>,
+    ) -> Self {
         let identity_pk = my_identity.public();
         let onion_pk = my_onion.public();
         let mut descr = IdentityDescriptor {
@@ -370,6 +392,7 @@ impl IdentityDescriptor {
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs(),
+            exit_info,
         };
         descr.sig = my_identity.sign(descr.to_sign().as_bytes());
         descr
@@ -400,4 +423,66 @@ impl IdentityDescriptor {
 pub enum IdentityError {
     #[error("Invalid signature")]
     InvalidSignature,
+}
+
+#[derive(Default, Serialize, Deserialize, Clone)]
+pub struct ExitRegistry {
+    port_to_exits: BTreeMap<u16, Vec<RelayFingerprint>>,
+    exit_configs: HashMap<RelayFingerprint, ExitInfo>,
+}
+
+impl ExitRegistry {
+    pub fn new() -> Self {
+        ExitRegistry {
+            port_to_exits: BTreeMap::new(),
+            exit_configs: HashMap::new(),
+        }
+    }
+
+    pub fn add_exit(&mut self, fingerprint: RelayFingerprint, exit_info: ExitInfo) {
+        for port in &exit_info.config.allowed_ports {
+            self.port_to_exits
+                .entry(*port)
+                .or_default()
+                .push(fingerprint);
+        }
+        self.exit_configs.insert(fingerprint, exit_info);
+    }
+
+    pub fn get_exit(&self, relay_fp: &RelayFingerprint) -> Option<&ExitInfo> {
+        self.exit_configs.get(relay_fp)
+    }
+
+    pub fn get_random_exit_for_port(&self, port: u16) -> Option<(&RelayFingerprint, &ExitInfo)> {
+        self.port_to_exits.get(&port).and_then(|exits| {
+            exits
+                .iter()
+                .choose(&mut thread_rng())
+                .and_then(|fingerprint| {
+                    self.exit_configs
+                        .get(fingerprint)
+                        .map(|exit_info| (fingerprint, exit_info))
+                })
+        })
+    }
+
+    pub fn len(&self) -> usize {
+        self.exit_configs.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.exit_configs.is_empty()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ExitInfo {
+    pub haven_endpoint: HavenEndpoint,
+    pub config: ExitConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct ExitConfig {
+    #[serde(default)]
+    pub allowed_ports: Vec<u16>,
 }

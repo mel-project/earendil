@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use bytes::Bytes;
 
 use earendil_crypt::{RelayFingerprint, RelayIdentityPublic};
-use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
+use earendil_topology::{AdjacencyDescriptor, ExitInfo, ExitRegistry, IdentityDescriptor};
 use nanorpc::nanorpc_derive;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

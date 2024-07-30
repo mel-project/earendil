@@ -33,10 +33,14 @@ impl RpcTransport for GlobalRpcTransport {
 
         // let socket = self.skt.clone();
         loop {
-            self.skt
+            match self
+                .skt
                 .send_to(serde_json::to_string(&req)?.into(), endpoint)
                 .await
-                .context("socket send_to failed")?;
+            {
+                Ok(_) => {}
+                Err(e) => tracing::error!("[global_rpc]: error sending message: {}", e),
+            }
             tracing::debug!(
                 "=====> x{retries} {}/{} ({:?})",
                 self.dest_fp,
