@@ -1,4 +1,5 @@
 name: Upload Daemon
+# upload to b2 bucket earendil
 
 on:
   push:
@@ -16,16 +17,18 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
 
+      - name: Install musl-tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
       - name: Build Linux Binary
         run: |
           rustup target add x86_64-unknown-linux-musl
           cargo build --release --target x86_64-unknown-linux-musl
 
       - name: Upload Linux Binary to B2
-        env:
-          B2_ACCOUNT_ID: ${{ secrets.B2_ACCOUNT_ID }}
-          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
         run: |
           pip install b2
-          b2 authorize-account $B2_ACCOUNT_ID $B2_APPLICATION_KEY
+          b2 account authorize ${{ secrets.B2_ACCOUNT_ID }} ${{ secrets.B2_APPLICATION_KEY }}
           b2 upload-file earendil ./target/x86_64-unknown-linux-musl/release/earendil earendil-linux-amd64
