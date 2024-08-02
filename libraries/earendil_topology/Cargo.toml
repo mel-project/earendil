@@ -10,7 +10,7 @@ license.workspace = true
 [dependencies]
 anyhow = "1.0.75"
 async-trait = "0.1.73"
-earendil_packet = { version = "0.2", path = "../earendil_packet" }
+earendil_packet = { version = "0.5", path = "../earendil_packet" }
 ed25519-compact = "2.0.4"
 log = "0.4.20"
 pod = "0.5.0"
