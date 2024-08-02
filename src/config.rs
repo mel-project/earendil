@@ -64,7 +64,7 @@ fn default_control_listen() -> SocketAddr {
 fn default_socks5() -> Socks5Config {
     Socks5Config {
         listen: "127.0.0.1:30003".parse().unwrap(),
-        fallback: Socks5Fallback::PassThrough,
+        fallback: Socks5Fallback::SimpleProxy { exit_nodes: vec![] },
     }
 }
 
