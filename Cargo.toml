@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.5.7"
+version = "0.5.8"
 edition = "2021"
 repository = "https://github.com/mel-project/earendil"
 license = "MPL-2.0"
