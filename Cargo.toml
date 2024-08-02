@@ -1,16 +1,23 @@
 [workspace]
 members = [
-  "libraries/*",
-  "utilities/*", 
-  # "infra/spawn-network"
+    "libraries/*",
+    "utilities/*",
+    # "infra/spawn-network"
 ]
 
-[package]
-name = "earendil"
+[workspace.package]
 version = "0.5.4"
 edition = "2021"
 repository = "https://github.com/mel-project/earendil"
 license = "MPL-2.0"
+
+[package]
+name = "earendil"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+
 description = "A decentralized, ban-resistant mixnet"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

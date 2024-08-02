@@ -2057,7 +2057,7 @@ dependencies = [
 
 [[package]]
 name = "earendil-gui"
-version = "0.1.1"
+version = "0.5.4"
 dependencies = [
  "anyctx",
  "anyhow",
