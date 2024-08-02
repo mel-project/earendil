@@ -1,10 +1,10 @@
 [package]
 name = "earendil-gui"
-version = "0.1.1"
-edition = "2021"
-repository = "https://github.com/mel-project/earendil"
-license="MPL-2.0"
-description="Earendil GUI"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Earendil GUI"
 exclude = ["src/assets/big.ttf"]
 
 
@@ -16,7 +16,7 @@ eframe = "0.27"
 egui = "0.27"
 egui-modal = "0.3.6"
 tap = "1.0.1"
-earendil={version= "0.5", path="../../"}
+earendil = { version = "0.5", path = "../../" }
 nanorpc-http = "0.1.5"
 poll-promise = "0.3.0"
 anyctx = "0.1"
