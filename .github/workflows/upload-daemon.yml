@@ -17,7 +17,7 @@ jobs:
                   source $HOME/.cargo/env
 
             - name: Install musl tools
-              run: apt install musl-tools
+              run: sudo apt-get update && sudo apt-get install musl-tools
 
             - name: Build Linux Binary
               run: |
