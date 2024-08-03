@@ -1,11 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-
-
 use subscriber::VecLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-
 
 mod app;
 mod subscriber;
@@ -30,7 +26,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "earendil",
         native_options,
-        Box::new(|cc| Box::new(app::App::new(cc))),
+        Box::new(|cc| Ok(Box::new(app::App::new(cc)))),
     )?;
     Ok(())
 }

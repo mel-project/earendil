@@ -50,12 +50,13 @@ impl FromStr for DhPublic {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let decoded = general_purpose::STANDARD.decode(s)?;
-        if decoded.len() == 32 {
+        let decoded_len = decoded.len();
+        if decoded_len == 32 {
             let mut array = [0u8; 32];
             array.copy_from_slice(&decoded);
             Ok(DhPublic::from_bytes(&array))
         } else {
-            Err(base64::DecodeError::InvalidLength)
+            Err(base64::DecodeError::InvalidLength(decoded_len))
         }
     }
 }
