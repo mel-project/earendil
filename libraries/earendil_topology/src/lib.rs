@@ -277,7 +277,7 @@ impl RelayGraph {
             .collect();
 
         for (left_id, right_id) in outdated_documents {
-            self.documents.remove(&(left_id, right_id));
+            self.documents.swap_remove(&(left_id, right_id));
             if let Some(neighbors) = self.adjacency.get_mut(&left_id) {
                 neighbors.remove(&right_id);
             }

@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "libraries/*",
-    "utilities/*",
-    # "infra/spawn-network"
+  "libraries/*",
+  "utilities/*",
+  # "infra/spawn-network"
 ]
 
 [workspace.package]
@@ -17,10 +17,7 @@ version.workspace = true
 edition.workspace = true
 repository.workspace = true
 license.workspace = true
-
 description = "A decentralized, ban-resistant mixnet"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyctx = "0.1"
@@ -44,22 +41,22 @@ bytes = "1.5.0"
 blake3 = "1.5.0"
 
 concurrent-queue = "2.3.0"
-smol = "1.3.0"
+smol = "2"
 scopeguard = "1.2.0"
 serde_json = "1.0.107"
 bytemuck = "1.14.0"
 thiserror = "1.0.49"
 futures-util = "0.3.28"
-dashmap = { version = "5.5.3", features = ["serde"] }
-indexmap = "1.9.3"
+dashmap = { version = "6", features = ["serde"] }
+indexmap = "2"
 parking_lot = "0.12.1"
 rand = { version = "0.8.5", features = ["alloc"] }
 clone-macro = "0.1.0"
 moka = { version = "0.12.1", features = ["sync", "future"] }
 lru = "0.12.0"
 smol-timeout = "0.6.0"
-base64 = "0.21.5"
-itertools = "0.11.0"
+base64 = "0.22"
+itertools = "0.13"
 moro = "0.4.0"
 replay_filter = "0.1.2"
 once_cell = "1.18.0"
@@ -70,7 +67,7 @@ tracing = "0.1.40"
 
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tap = "1.0.1"
-sqlx = { version = "0.7.3", features = ["sqlite", "runtime-async-std"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-async-std"] }
 oneshot = "0.1.6"
 chrono = "0.4.31"
 colored = "2.1.0"
@@ -78,8 +75,8 @@ futures = "0.3.30"
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 melpow = "0.1.1"
 smolscale = "0.4.3"
-priority-queue = "1.4.0"
-async-event = "0.1.0"
+priority-queue = "2"
+async-event = "0.2"
 either = "1.10.0"
 async-recursion = "1.0.5"
 picomux = "0.1.1"

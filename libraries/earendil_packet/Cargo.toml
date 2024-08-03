@@ -6,8 +6,6 @@ repository.workspace = true
 license.workspace = true
 description = "tbd"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 arrayref = "0.3.7"
 blake3 = "1.5.0"
@@ -24,12 +22,12 @@ anyhow = "1.0.75"
 bs58 = "0.5.0"
 serde-big-array = "0.5.1"
 earendil_crypt = { version = "0.5", path = "../earendil_crypt" }
-base64 = "0.21.5"
+base64 = "0.22"
 x25519-dalek = { version = "2.0.0", features = ["reusable_secrets"] }
 rand_distr = "0.4.3"
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.5"
 
 [[bench]]
 name = "benchmark"
