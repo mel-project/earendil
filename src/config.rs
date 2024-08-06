@@ -49,6 +49,15 @@ pub struct ConfigFile {
 
     /// Configuration for relay nodes to host an exit.
     pub exit_config: Option<ExitConfig>,
+
+    /// Configuration for mixnet privacy parameters.
+    pub privacy_config: Option<PrivacyConfig>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PrivacyConfig {
+    max_peelers: usize,
+    max_peeler_delay: u64,
 }
 
 impl ConfigFile {
