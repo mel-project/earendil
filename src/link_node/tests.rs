@@ -87,6 +87,7 @@ mod link_node_tests {
                     path
                 },
                 payment_systems: vec![Box::new(Dummy::new())],
+                exit_info: None,
             },
             Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
         );
@@ -101,6 +102,7 @@ mod link_node_tests {
                     path
                 },
                 payment_systems: vec![Box::new(Dummy::new())],
+                exit_info: None,
             },
             Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
         );
@@ -172,6 +174,7 @@ mod link_node_tests {
                     )
                     .unwrap(),
                 )],
+                exit_info: None,
             },
             mel_client_1,
         )
@@ -200,6 +203,7 @@ mod link_node_tests {
                     )
                     .unwrap(),
                 )],
+                exit_info: None,
             },
             mel_client_2,
         )
@@ -327,6 +331,7 @@ mod link_node_tests {
                     path
                 },
                 payment_systems: vec![Box::new(Dummy::new())],
+                exit_info: None,
             },
             Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
         );
@@ -340,6 +345,7 @@ mod link_node_tests {
                     path
                 },
                 payment_systems: vec![Box::new(Dummy::new())],
+                exit_info: None,
             },
             Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
         );
@@ -353,6 +359,7 @@ mod link_node_tests {
                     path
                 },
                 payment_systems: vec![Box::new(Dummy::new())],
+                exit_info: None,
             },
             Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
         );
@@ -366,6 +373,7 @@ mod link_node_tests {
                     path
                 },
                 payment_systems: vec![Box::new(Dummy::new())],
+                exit_info: None,
             },
             Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
         );

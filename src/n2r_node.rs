@@ -27,7 +27,7 @@ pub struct N2rNode {
 impl N2rNode {
     pub fn new(link_node: LinkNode, cfg: N2rConfig) -> Self {
         let ctx = N2rNodeCtx {
-            cfg,
+            _cfg: cfg,
             link_node: Arc::new(link_node),
             anon_queues: Arc::new(DashMap::new()),
             relay_queues: Arc::new(DashMap::new()),
@@ -156,7 +156,7 @@ impl N2rAnonSocket {
 
 #[derive(Clone)]
 struct N2rNodeCtx {
-    cfg: N2rConfig,
+    _cfg: N2rConfig,
     link_node: Arc<LinkNode>,
     anon_queues: Arc<DashMap<AnonEndpoint, Sender<(Bytes, RelayEndpoint, usize)>>>,
     relay_queues: Arc<DashMap<Dock, Sender<(Bytes, AnonEndpoint)>>>,

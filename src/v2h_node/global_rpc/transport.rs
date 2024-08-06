@@ -1,6 +1,5 @@
 use std::time::{Duration, Instant};
 
-use anyhow::Context;
 use async_trait::async_trait;
 use earendil_crypt::{RelayEndpoint, RelayFingerprint};
 use futures_util::{future, FutureExt};

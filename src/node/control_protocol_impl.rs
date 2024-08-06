@@ -1,8 +1,8 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
 use earendil_crypt::{HavenFingerprint, RelayFingerprint};
-use itertools::{Itertools, TakeWhileRef};
+use itertools::{Itertools};
 use nanorpc::RpcTransport;
 use serde_json::json;
 

@@ -6,7 +6,6 @@ use melstructs::{Address, BlockHeight, CoinData, CoinID, CoinValue, Denom, NetID
 use melwallet::{PrepareTxArgs, StdEd25519Signer};
 use smol::Timer;
 use std::{collections::BTreeMap, str::FromStr, sync::Arc, time::Duration};
-use stdcode::StdcodeSerializeExt;
 use tmelcrypt::Ed25519SK;
 
 use crate::{NeighborId, PaymentSystem};

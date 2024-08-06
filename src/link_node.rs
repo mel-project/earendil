@@ -20,7 +20,6 @@ use payment_system::PaymentSystemSelector;
 use send_msg::{send_to_next_peeler, send_to_nonself_next_peeler};
 use std::{
     collections::HashMap,
-    fmt::Debug,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -101,7 +100,7 @@ impl LinkNode {
             link_table: Arc::new(DashMap::new()),
             store: Arc::new(store),
             payment_systems: Arc::new(payment_systems),
-            mel_client,
+            _mel_client: mel_client,
             send_task_semaphores: Default::default(),
             stats_gatherer: Arc::new(StatsGatherer::default()),
         };
