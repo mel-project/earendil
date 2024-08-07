@@ -12,14 +12,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, Copy)]
 pub struct PrivacyConfig {
     pub max_peelers: usize,
-    pub max_peeler_delay: u64,
+    pub mean_peeler_delay: Option<u64>,
 }
 
 impl Default for PrivacyConfig {
     fn default() -> Self {
         PrivacyConfig {
             max_peelers: 3,
-            max_peeler_delay: 5,
+            mean_peeler_delay: None,
         }
     }
 }
@@ -74,6 +74,7 @@ mod tests {
             InnerPacket::Message(msg.clone()),
             &[0; 32],
             RemoteId::Relay(my_isk.public().fingerprint()),
+            PrivacyConfig::default(),
         )?;
 
         let mut peeled_packet = packet;
@@ -157,9 +158,15 @@ mod tests {
         let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
 
         // Prepare reply block
-        let (reply_block, (_, reply_degarbler)) =
-            Surb::new(&route, first_peeler, &alice_opk, 0, alice_anon_id)
-                .expect("Failed to create reply block");
+        let (reply_block, (_, reply_degarbler)) = Surb::new(
+            &route,
+            first_peeler,
+            &alice_opk,
+            0,
+            alice_anon_id,
+            PrivacyConfig::default(),
+        )
+        .expect("Failed to create reply block");
 
         // Prepare message using header from reply block
         let body = "hello world from reply block!";

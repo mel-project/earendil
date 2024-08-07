@@ -63,8 +63,11 @@ pub enum PacketPeelError {
     InnerPacketOpenError,
 }
 
-fn sample_delay(avg: u16) -> u16 {
-    let exp = Exp::new(1.0 / avg as f64).expect("avg must be greater than zero");
+fn sample_delay(config_delay: Option<u64>, fallback_avg: u16) -> u16 {
+    let mean = config_delay
+        .map(|d| d as f64)
+        .unwrap_or(fallback_avg as f64);
+    let exp = Exp::new(1.0 / mean).expect("mean must be greater than zero");
     let mut rng = rand::thread_rng();
     rng.sample(exp) as u16
 }
@@ -121,7 +124,7 @@ impl RawPacket {
             return Err(PacketConstructError::TooManyHops);
         }
 
-        let delay = sample_delay(LOW_LATENCY_MS);
+        let delay = sample_delay(privacy_cfg.mean_peeler_delay, LOW_LATENCY_MS);
 
         // Use a recursive algorithm. Base case: the route is empty
         if route.is_empty() {
