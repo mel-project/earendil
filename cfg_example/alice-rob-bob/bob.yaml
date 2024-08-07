@@ -38,6 +38,16 @@ havens:
     listen_port: 29421
     rendezvous: 04c48b49e5ba915e2f47655011a3aed75b3ac7e3b468bbc84b23884546312046
     handler:
-      type: simple_proxy
+      type: exit
       # type: tcp_service
       # upstream: 127.0.0.1:42424
+
+exit_config:
+  allowed_ports:
+    - 80
+    - 443
+    - 8080
+
+# privacy_config:
+#   max_peelers: 0,
+#   mean_peeler_delay: 0,
