@@ -30,7 +30,8 @@ use clone_macro::clone;
 use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{
-    crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, ReplyDegarbler, Surb,
+    crypt::DhSecret, InnerPacket, Message, PeeledPacket, PrivacyConfig, RawPacket, ReplyDegarbler,
+    Surb,
 };
 use earendil_topology::{IdentityDescriptor, RelayGraph};
 use itertools::Itertools;
@@ -128,6 +129,12 @@ impl LinkNode {
         src: AnonEndpoint,
         dest_relay: RelayFingerprint,
     ) -> anyhow::Result<()> {
+        // TODO: pass in the privacy config to raw packet construction
+        let privacy_config = match self.privacy_config() {
+            Some(_) => todo!(),
+            None => PrivacyConfig::default(),
+        };
+
         let (first_peeler, wrapped_onion) = {
             let relay_graph = self.ctx.relay_graph.read();
             let route = forward_route_to(&relay_graph, dest_relay)
@@ -148,7 +155,13 @@ impl LinkNode {
                 .onion_pk;
             (
                 first_peeler,
-                RawPacket::new_normal(&instructs, &dest_opk, packet, RemoteId::Anon(src))?,
+                RawPacket::new_normal(
+                    &instructs,
+                    &dest_opk,
+                    packet,
+                    RemoteId::Anon(src),
+                    privacy_config,
+                )?,
             )
         };
 
@@ -200,12 +213,19 @@ impl LinkNode {
             NeighborIdSecret::Relay(_) => 0, // special ClientId for relays
             NeighborIdSecret::Client(id) => id,
         };
+
+        let privacy_cfg = match self.privacy_config() {
+            Some(_) => todo!(),
+            None => PrivacyConfig::default(),
+        };
+
         let (surb, (id, degarbler)) = Surb::new(
             &reverse_instructs,
             reverse_route[0],
             &dest_opk,
             my_client_id,
             my_anon_id,
+            privacy_cfg,
         )
         .context("cannot build reply block")?;
         Ok((surb, id, degarbler))
@@ -294,6 +314,10 @@ impl LinkNode {
 
     pub async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
         self.ctx.stats_gatherer.get(&key, start..end)
+    }
+
+    pub fn privacy_config(&self) -> Option<PrivacyConfig> {
+        self.ctx.cfg.privacy_config
     }
 }
 

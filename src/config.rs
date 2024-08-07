@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, fmt, io::Write, net::SocketAddr, path::PathBuf}
 use anyhow::Context;
 use bip39::Mnemonic;
 use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint, RelayIdentitySecret};
+use earendil_packet::PrivacyConfig;
 use earendil_topology::ExitConfig;
 use rand::Rng;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -52,12 +53,6 @@ pub struct ConfigFile {
 
     /// Configuration for mixnet privacy parameters.
     pub privacy_config: Option<PrivacyConfig>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct PrivacyConfig {
-    max_peelers: usize,
-    max_peeler_delay: u64,
 }
 
 impl ConfigFile {

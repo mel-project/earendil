@@ -117,6 +117,7 @@ impl Node {
                     data_dir
                 }),
                 exit_info,
+                privacy_config: config.privacy_config.clone(),
             },
             mel_client,
         )?;

@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::{
     crypt::{box_decrypt, box_encrypt, stream_dencrypt, DhPublic, DhSecret, BOX_OVERHEAD},
-    InnerPacket, Surb,
+    InnerPacket, PrivacyConfig, Surb,
 };
 
 pub const RAW_BODY_SIZE: usize = 20000;
@@ -75,8 +75,17 @@ impl RawPacket {
         dest_opk: &DhPublic,
         payload: InnerPacket,
         my_id: RemoteId,
+        privacy_cfg: PrivacyConfig,
     ) -> Result<Self, PacketConstructError> {
-        let (raw, _) = Self::new(route, dest_opk, false, payload, &[0; 32], my_id)?;
+        let (raw, _) = Self::new(
+            route,
+            dest_opk,
+            false,
+            payload,
+            &[0; 32],
+            my_id,
+            privacy_cfg,
+        )?;
         Ok(raw)
     }
 
@@ -106,6 +115,7 @@ impl RawPacket {
         payload: InnerPacket,
         metadata: &[u8; 32],
         my_id: RemoteId,
+        privacy_cfg: PrivacyConfig,
     ) -> Result<(Self, Vec<[u8; 32]>), PacketConstructError> {
         if route.len() >= MAX_HOPS {
             return Err(PacketConstructError::TooManyHops);
@@ -177,6 +187,7 @@ impl RawPacket {
                 payload,
                 metadata,
                 my_id,
+                privacy_cfg,
             )?;
 
             buffer[33..].copy_from_slice(&delay.to_be_bytes());

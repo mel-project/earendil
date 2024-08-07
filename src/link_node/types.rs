@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
-use earendil_packet::{crypt::DhSecret, InnerPacket};
+use earendil_packet::{crypt::DhSecret, InnerPacket, PrivacyConfig};
 use earendil_topology::{ExitInfo, RelayGraph};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -81,6 +81,7 @@ pub struct LinkConfig {
     pub payment_systems: Vec<Box<dyn PaymentSystem>>,
     pub db_path: PathBuf,
     pub exit_info: Option<ExitInfo>,
+    pub privacy_config: Option<PrivacyConfig>,
 }
 
 #[derive(Clone)]

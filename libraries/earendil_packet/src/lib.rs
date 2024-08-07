@@ -7,6 +7,22 @@ mod raw;
 pub use inner::*;
 pub use raw::*;
 pub use reply_block::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Clone, Debug, Copy)]
+pub struct PrivacyConfig {
+    pub max_peelers: usize,
+    pub max_peeler_delay: u64,
+}
+
+impl Default for PrivacyConfig {
+    fn default() -> Self {
+        PrivacyConfig {
+            max_peelers: 3,
+            max_peeler_delay: 5,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
