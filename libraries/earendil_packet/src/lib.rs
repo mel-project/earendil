@@ -15,10 +15,12 @@ pub struct PrivacyConfig {
     pub mean_peeler_delay: Option<u64>,
 }
 
+pub const DEFAULT_NUM_PEELERS: usize = 2;
+
 impl Default for PrivacyConfig {
     fn default() -> Self {
         PrivacyConfig {
-            max_peelers: 3,
+            max_peelers: DEFAULT_NUM_PEELERS,
             mean_peeler_delay: None,
         }
     }

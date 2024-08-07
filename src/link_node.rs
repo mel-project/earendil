@@ -130,14 +130,14 @@ impl LinkNode {
         dest_relay: RelayFingerprint,
     ) -> anyhow::Result<()> {
         // TODO: pass in the privacy config to raw packet construction
-        let privacy_config = match self.privacy_config() {
-            Some(_) => todo!(),
+        let privacy_cfg = match self.privacy_config() {
+            Some(cfg) => cfg,
             None => PrivacyConfig::default(),
         };
 
         let (first_peeler, wrapped_onion) = {
             let relay_graph = self.ctx.relay_graph.read();
-            let route = forward_route_to(&relay_graph, dest_relay)
+            let route = forward_route_to(&relay_graph, dest_relay, privacy_cfg.max_peelers)
                 .context("failed to create forward route")?;
             tracing::trace!("route to {dest_relay}: {:?}", route);
             let first_peeler = *route
@@ -160,7 +160,7 @@ impl LinkNode {
                     &dest_opk,
                     packet,
                     RemoteId::Anon(src),
-                    privacy_config,
+                    privacy_cfg,
                 )?,
             )
         };
@@ -207,16 +207,17 @@ impl LinkNode {
                 "destination {destination} is surprisingly not in our RelayGraph"
             ))?
             .onion_pk;
-        let reverse_route = forward_route_to(&graph, destination)?;
+
+        let privacy_cfg = match self.privacy_config() {
+            Some(cfg) => cfg,
+            None => PrivacyConfig::default(),
+        };
+
+        let reverse_route = forward_route_to(&graph, destination, privacy_cfg.max_peelers)?;
         let reverse_instructs = route_to_instructs(&graph, &reverse_route)?;
         let my_client_id = match self.ctx.my_id {
             NeighborIdSecret::Relay(_) => 0, // special ClientId for relays
             NeighborIdSecret::Client(id) => id,
-        };
-
-        let privacy_cfg = match self.privacy_config() {
-            Some(_) => todo!(),
-            None => PrivacyConfig::default(),
         };
 
         let (surb, (id, degarbler)) = Surb::new(

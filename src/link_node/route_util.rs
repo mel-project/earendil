@@ -3,11 +3,14 @@ use earendil_crypt::RelayFingerprint;
 use earendil_packet::ForwardInstruction;
 use earendil_topology::RelayGraph;
 
+pub const DEFAULT_NUM_PEELERS: usize = 2;
+
 pub fn forward_route_to(
     graph: &RelayGraph,
     dest_fp: RelayFingerprint,
+    num_peelers: usize,
 ) -> anyhow::Result<Vec<RelayFingerprint>> {
-    let mut route = graph.rand_relays(2);
+    let mut route = graph.rand_relays(num_peelers);
     route.push(dest_fp);
     tracing::trace!("forward route formed: {:?}", route);
     Ok(route)
