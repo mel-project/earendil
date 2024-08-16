@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
-use earendil_packet::{crypt::DhSecret, InnerPacket};
+use earendil_packet::{crypt::DhSecret, InnerPacket, PrivacyConfig};
 use earendil_topology::{ExitConfig, ExitInfo, RelayGraph};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -81,7 +81,7 @@ pub struct LinkConfig {
     pub payment_systems: Vec<Box<dyn PaymentSystem>>,
     pub db_path: PathBuf,
     pub exit_info: Option<ExitInfo>,
-    pub privacy_config: Option<PrivacyConfig>,
+    pub privacy_config: PrivacyConfig,
 }
 
 #[derive(Clone)]
@@ -93,7 +93,7 @@ pub(super) struct LinkNodeCtx {
     pub link_table: Arc<DashMap<NeighborId, (Arc<Link>, LinkPaymentInfo)>>,
     pub payment_systems: Arc<PaymentSystemSelector>,
     pub store: Arc<LinkStore>,
-    pub mel_client: Arc<melprot::Client>,
+
     pub stats_gatherer: Arc<StatsGatherer>,
     pub send_task_semaphores: Arc<DashMap<NeighborId, Arc<Semaphore>>>,
 }

@@ -104,7 +104,7 @@ impl LinkNode {
             link_table: Arc::new(DashMap::new()),
             store: Arc::new(store),
             payment_systems: Arc::new(payment_systems),
-            mel_client,
+
             send_task_semaphores: Default::default(),
             stats_gatherer: Arc::new(StatsGatherer::default()),
         };
@@ -135,26 +135,22 @@ impl LinkNode {
         src: AnonEndpoint,
         dest_relay: RelayFingerprint,
     ) -> anyhow::Result<()> {
+        let privacy_config = self.privacy_config();
+
         let route = self
             .route_cache
             .try_get_with((src, dest_relay), || {
                 let relay_graph = self.ctx.relay_graph.read();
-                let route = forward_route_to(&relay_graph, dest_relay)
+                let route = forward_route_to(&relay_graph, dest_relay, privacy_config.max_peelers)
                     .context("failed to create forward route")?;
                 tracing::debug!("route to {dest_relay}: {:?}", route);
                 anyhow::Ok(Arc::new(route))
             })
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        // TODO: pass in the privacy config to raw packet construction
-        let privacy_cfg = match self.privacy_config() {
-            Some(cfg) => cfg,
-            None => PrivacyConfig::default(),
-        };
-
         let (first_peeler, wrapped_onion) = {
             let relay_graph = self.ctx.relay_graph.read();
-            let route = forward_route_to(&relay_graph, dest_relay)
+            let route = forward_route_to(&relay_graph, dest_relay, privacy_config.max_peelers)
                 .context("failed to create forward route")?;
             tracing::trace!("route to {dest_relay}: {:?}", route);
             let first_peeler = *route
@@ -177,7 +173,7 @@ impl LinkNode {
                     &dest_opk,
                     packet,
                     RemoteId::Anon(src),
-                    privacy_cfg,
+                    privacy_config,
                 )?,
             )
         };
@@ -225,10 +221,7 @@ impl LinkNode {
             ))?
             .onion_pk;
 
-        let privacy_cfg = match self.privacy_config() {
-            Some(cfg) => cfg,
-            None => PrivacyConfig::default(),
-        };
+        let privacy_cfg = self.privacy_config();
 
         let reverse_route = forward_route_to(&graph, destination, privacy_cfg.max_peelers)?;
         let reverse_instructs = route_to_instructs(&graph, &reverse_route)?;
@@ -334,7 +327,7 @@ impl LinkNode {
         self.ctx.stats_gatherer.get(&key, start..end)
     }
 
-    pub fn privacy_config(&self) -> Option<PrivacyConfig> {
+    pub fn privacy_config(&self) -> PrivacyConfig {
         self.ctx.cfg.privacy_config
     }
 }

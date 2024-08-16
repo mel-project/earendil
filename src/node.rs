@@ -101,26 +101,23 @@ impl Node {
             _ => (None, None),
         };
 
-        let link = LinkNode::new(
-            LinkConfig {
-                relay_config: config.relay_config.clone().map(
-                    |RelayConfig {
-                         identity,
-                         in_routes,
-                     }| (identity.actualize_relay().unwrap(), in_routes),
-                ),
-                out_routes: config.out_routes.clone(),
-                payment_systems,
-                db_path: config.db_path.unwrap_or_else(|| {
-                    let mut data_dir = dirs::data_dir().unwrap();
-                    data_dir.push("earendil-link-store.db");
-                    data_dir
-                }),
-                exit_info,
-                privacy_config: config.privacy_config.clone(),
-            },
-            mel_client,
-        )?;
+        let link = LinkNode::new(LinkConfig {
+            relay_config: config.relay_config.clone().map(
+                |RelayConfig {
+                     identity,
+                     in_routes,
+                 }| (identity.actualize_relay().unwrap(), in_routes),
+            ),
+            out_routes: config.out_routes.clone(),
+            payment_systems,
+            db_path: config.db_path.unwrap_or_else(|| {
+                let mut data_dir = dirs::data_dir().unwrap();
+                data_dir.push("earendil-link-store.db");
+                data_dir
+            }),
+            exit_info,
+            privacy_config: config.privacy_config,
+        })?;
 
         let n2r = N2rNode::new(link, N2rConfig {});
         let v2h = Arc::new(V2hNode::new(

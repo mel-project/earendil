@@ -52,7 +52,8 @@ pub struct ConfigFile {
     pub exit_config: Option<ExitConfig>,
 
     /// Configuration for mixnet privacy parameters.
-    pub privacy_config: Option<PrivacyConfig>,
+    #[serde(default)]
+    pub privacy_config: PrivacyConfig,
 }
 
 impl ConfigFile {
