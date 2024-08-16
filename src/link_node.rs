@@ -16,6 +16,7 @@ mod types;
 use inout_route::{process_in_route, process_out_route};
 use link_protocol::LinkClient;
 pub use link_store::*;
+use moka::sync::Cache;
 use payment_system::PaymentSystemSelector;
 use send_msg::{send_to_next_peeler, send_to_nonself_next_peeler};
 use std::{
@@ -54,6 +55,8 @@ pub struct LinkNode {
     _task: Immortal,
     send_raw: Sender<LinkMessage>,
     recv_incoming: Receiver<IncomingMsg>,
+
+    route_cache: Cache<(AnonEndpoint, RelayFingerprint), Arc<Vec<RelayFingerprint>>>,
 }
 
 impl LinkNode {
@@ -117,6 +120,9 @@ impl LinkNode {
             ctx,
             send_raw,
             recv_incoming,
+            route_cache: Cache::builder()
+                .time_to_live(Duration::from_secs(10))
+                .build(),
             _task,
         })
     }
@@ -128,11 +134,19 @@ impl LinkNode {
         src: AnonEndpoint,
         dest_relay: RelayFingerprint,
     ) -> anyhow::Result<()> {
+        let route = self
+            .route_cache
+            .try_get_with((src, dest_relay), || {
+                let relay_graph = self.ctx.relay_graph.read();
+                let route = forward_route_to(&relay_graph, dest_relay)
+                    .context("failed to create forward route")?;
+                tracing::debug!("route to {dest_relay}: {:?}", route);
+                anyhow::Ok(Arc::new(route))
+            })
+            .map_err(|e| anyhow::anyhow!(e))?;
+
         let (first_peeler, wrapped_onion) = {
             let relay_graph = self.ctx.relay_graph.read();
-            let route = forward_route_to(&relay_graph, dest_relay)
-                .context("failed to create forward route")?;
-            tracing::trace!("route to {dest_relay}: {:?}", route);
             let first_peeler = *route
                 .first()
                 .context("empty route, cannot obtain first peeler")?;

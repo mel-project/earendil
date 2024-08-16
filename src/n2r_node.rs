@@ -193,7 +193,7 @@ async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
                     let degarbler = ctx
                         .degarblers
                         .remove(&rb_id)
-                        .context("no degarbler for rb_id = {rb_id}")?;
+                        .context(format!("no degarbler for rb_id = {rb_id}"))?;
                     tracing::trace!(
                         "incoming n2r: IncomingMsg::Backward with rb_id = {rb_id} for {}",
                         degarbler.my_anon_id()
