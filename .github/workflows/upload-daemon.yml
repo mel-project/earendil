@@ -42,4 +42,5 @@ jobs:
 
       - name: Upload Linux Binary to B2
         run: |
-          rclone copy ./target/x86_64-unknown-linux-musl/release/earendil b2:earendil/earendil-linux-amd64
+          cp copy ./target/x86_64-unknown-linux-musl/release/earendil earendil-linux-amd64
+          rclone copy ./earendil-linux-amd64 b2:earendil/
