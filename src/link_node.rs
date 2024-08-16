@@ -201,10 +201,9 @@ impl LinkNode {
     }
 
     /// Constructs a reply block back from the given relay.
-    pub fn surb_from(
+    pub fn new_surb(
         &self,
         my_anon_id: AnonEndpoint,
-        _remote: RelayFingerprint, // will use in the future for finding more efficient routes
     ) -> anyhow::Result<(Surb, u64, ReplyDegarbler)> {
         let destination = if let NeighborIdSecret::Relay(my_idsk) = self.ctx.my_id {
             my_idsk.public().fingerprint()

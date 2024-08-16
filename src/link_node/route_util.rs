@@ -3,8 +3,6 @@ use earendil_crypt::RelayFingerprint;
 use earendil_packet::ForwardInstruction;
 use earendil_topology::RelayGraph;
 
-pub const DEFAULT_NUM_PEELERS: usize = 2;
-
 pub fn forward_route_to(
     graph: &RelayGraph,
     dest_fp: RelayFingerprint,

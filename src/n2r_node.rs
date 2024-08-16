@@ -134,10 +134,7 @@ impl N2rAnonSocket {
         // send a batch of 10 surbs
         let surbs = (0..10)
             .map(|_| {
-                let (rb, id, degarble) = self
-                    .ctx
-                    .link_node
-                    .surb_from(self.my_endpoint, fingerprint)?;
+                let (rb, id, degarble) = self.ctx.link_node.new_surb(self.my_endpoint)?;
                 self.ctx.degarblers.insert(id, degarble);
                 anyhow::Ok(rb)
             })

@@ -12,16 +12,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, Copy)]
 pub struct PrivacyConfig {
     pub max_peelers: usize,
-    pub mean_peeler_delay: Option<u64>,
+    pub peel_delay_ms: u64,
 }
-
-pub const DEFAULT_NUM_PEELERS: usize = 2;
 
 impl Default for PrivacyConfig {
     fn default() -> Self {
         PrivacyConfig {
-            max_peelers: DEFAULT_NUM_PEELERS,
-            mean_peeler_delay: None,
+            max_peelers: 2,
+            peel_delay_ms: 10,
         }
     }
 }

@@ -417,20 +417,7 @@ mod link_node_tests {
         smol::block_on(async {
             let (node1, node2) = get_two_connected_relays().await;
             smol::Timer::after(Duration::from_secs(3)).await;
-            let (surb_1to2, surb_id, degarbler) = node2
-                .surb_from(
-                    AnonEndpoint::random(),
-                    node1
-                        .ctx
-                        .cfg
-                        .relay_config
-                        .clone()
-                        .unwrap()
-                        .0
-                        .public()
-                        .fingerprint(),
-                )
-                .unwrap(); // we know that node1 is a relay
+            let (surb_1to2, surb_id, degarbler) = node2.new_surb(AnonEndpoint::random()).unwrap(); // we know that node1 is a relay
             println!("got surb");
             let msg_relay_dock = 123;
             let msg_body = Bytes::from_static(b"lol");
@@ -534,20 +521,8 @@ mod link_node_tests {
                     .public()
                     .fingerprint(),
             );
-            let (surb_1to2, surb_id, degarbler) = client_node
-                .surb_from(
-                    AnonEndpoint::random(),
-                    relay_node
-                        .ctx
-                        .cfg
-                        .relay_config
-                        .clone()
-                        .unwrap()
-                        .0
-                        .public()
-                        .fingerprint(),
-                )
-                .unwrap(); // we know that node1 is a relay
+            let (surb_1to2, surb_id, degarbler) =
+                client_node.new_surb(AnonEndpoint::random()).unwrap(); // we know that node1 is a relay
             println!("got surb");
             let msg_relay_dock = 123;
             let msg_body = Bytes::from_static(b"lol");

@@ -16,7 +16,7 @@ use crate::{
 
 pub const RAW_BODY_SIZE: usize = 20000;
 const MAX_HOPS: usize = 10;
-const LOW_LATENCY_MS: u16 = 15;
+
 const METADATA_BUFFER_SIZE: usize = 35;
 const FORWARD_TO_CLIENT_FLAG: u8 = 2;
 const FORWARD_TO_RELAY_FLAG: u8 = 1;
@@ -63,10 +63,8 @@ pub enum PacketPeelError {
     InnerPacketOpenError,
 }
 
-fn sample_delay(config_delay: Option<u64>, fallback_avg: u16) -> u16 {
-    let mean = config_delay
-        .map(|d| d as f64)
-        .unwrap_or(fallback_avg as f64);
+fn sample_delay(config_delay: u64) -> u16 {
+    let mean = config_delay as f64;
     let exp = Exp::new(1.0 / mean).expect("mean must be greater than zero");
     let mut rng = rand::thread_rng();
     rng.sample(exp) as u16
@@ -124,7 +122,7 @@ impl RawPacket {
             return Err(PacketConstructError::TooManyHops);
         }
 
-        let delay = sample_delay(privacy_cfg.mean_peeler_delay, LOW_LATENCY_MS);
+        let delay = sample_delay(privacy_cfg.peel_delay_ms);
 
         // Use a recursive algorithm. Base case: the route is empty
         if route.is_empty() {
