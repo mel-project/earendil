@@ -1,10 +1,9 @@
-use std::collections::HashMap;
 
 use async_trait::async_trait;
 
 use earendil_crypt::RelayFingerprint;
 
-use earendil_topology::{AdjacencyDescriptor, ExitInfo, IdentityDescriptor};
+use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 
 use itertools::Itertools;
 

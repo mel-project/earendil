@@ -95,19 +95,16 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
                         let daemon = app.daemon.as_ref().and_then(|d| d.ready());
                         if let Some(Ok(_daemon)) = daemon {
                             if let Some(neigh) = chatting_with {
-                                match neighbors {
-                                    Some(Ok(neighs)) => {
-                                        if neighs.contains(&neigh) {
-                                            render_input(
-                                                app,
-                                                ctx,
-                                                &mut cols[1],
-                                                &mut daemon_cfg.gui_prefs,
-                                                neigh,
-                                            );
-                                        }
+                                if let Some(Ok(neighs)) = neighbors {
+                                    if neighs.contains(&neigh) {
+                                        render_input(
+                                            app,
+                                            ctx,
+                                            &mut cols[1],
+                                            &mut daemon_cfg.gui_prefs,
+                                            neigh,
+                                        );
                                     }
-                                    _ => (),
                                 }
                             }
                         }
@@ -122,7 +119,12 @@ pub fn render_chat(app: &App, ctx: &egui::Context, ui: &mut egui::Ui) {
     }
 }
 
-fn render_convo(ui: &mut egui::Ui, tuple_chat: Vec<ChatEntry>, my_fp: NeighborId, their_fp: NeighborId) {
+fn render_convo(
+    ui: &mut egui::Ui,
+    tuple_chat: Vec<ChatEntry>,
+    my_fp: NeighborId,
+    their_fp: NeighborId,
+) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.set_height(ui.available_height() - 25.0);
 

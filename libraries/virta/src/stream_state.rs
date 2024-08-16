@@ -231,13 +231,12 @@ impl StreamState {
 
                     // use BIC
                     for _ in 0..ack_count {
-                        let bic_inc = if self.cwnd < self.ssthresh {
+                        let bic_inc = (if self.cwnd < self.ssthresh {
                             (self.ssthresh - self.cwnd) / 2.0
                         } else {
                             self.cwnd - self.ssthresh
-                        }
-                        .max(1.0)
-                        .min(50.0)
+                        })
+                        .clamp(1.0, 50.0)
                         .min(self.cwnd);
                         self.cwnd += bic_inc / self.cwnd;
                     }

@@ -77,33 +77,29 @@ mod link_node_tests {
             },
         );
 
-        let node1 = LinkNode::new(
-            LinkConfig {
-                relay_config: Some((idsk1, in_1)),
-                out_routes: BTreeMap::new(),
-                db_path: {
-                    let mut path = tempfile::tempdir().unwrap().into_path();
-                    path.push(idsk1.public().fingerprint().to_string());
-                    path
-                },
-                payment_systems: vec![Box::new(Dummy::new())],
+        let node1 = LinkNode::new(LinkConfig {
+            relay_config: Some((idsk1, in_1)),
+            out_routes: BTreeMap::new(),
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk1.public().fingerprint().to_string());
+                path
             },
-            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-        );
+            payment_systems: vec![Box::new(Dummy::new())],
+            exit_info: None,
+        });
 
-        let node2 = LinkNode::new(
-            LinkConfig {
-                relay_config: Some((idsk2, in_2)),
-                out_routes: out_2,
-                db_path: {
-                    let mut path = tempfile::tempdir().unwrap().into_path();
-                    path.push(idsk2.public().fingerprint().to_string());
-                    path
-                },
-                payment_systems: vec![Box::new(Dummy::new())],
+        let node2 = LinkNode::new(LinkConfig {
+            relay_config: Some((idsk2, in_2)),
+            out_routes: out_2,
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk2.public().fingerprint().to_string());
+                path
             },
-            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-        );
+            payment_systems: vec![Box::new(Dummy::new())],
+            exit_info: None,
+        });
 
         (node1.unwrap(), node2.unwrap())
     }
@@ -155,54 +151,50 @@ mod link_node_tests {
 
         let mel_client_1 = Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap());
 
-        let relay = LinkNode::new(
-            LinkConfig {
-                relay_config: Some((idsk1, in_1)),
-                out_routes: BTreeMap::new(),
-                db_path: {
-                    let mut path = tempfile::tempdir().unwrap().into_path();
-                    path.push(idsk1.public().fingerprint().to_string());
-                    path
-                },
-                payment_systems: vec![Box::new(
-                    // PoW::new(mel_client_1.clone()), // Dummy::new(),
-                    OnChain::new(
-                        "NKWCC6XHVS3RFMP5NMN8Z931D0K27RN7M22AFGRSZBWFE4N83760",
-                        mel_client_1.clone(),
-                    )
-                    .unwrap(),
-                )],
+        let relay = LinkNode::new(LinkConfig {
+            relay_config: Some((idsk1, in_1)),
+            out_routes: BTreeMap::new(),
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk1.public().fingerprint().to_string());
+                path
             },
-            mel_client_1,
-        )
+            payment_systems: vec![Box::new(
+                // PoW::new(mel_client_1.clone()), // Dummy::new(),
+                OnChain::new(
+                    "NKWCC6XHVS3RFMP5NMN8Z931D0K27RN7M22AFGRSZBWFE4N83760",
+                    mel_client_1.clone(),
+                )
+                .unwrap(),
+            )],
+            exit_info: None,
+        })
         .unwrap();
 
         let mel_client_2 = Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap());
-        let client = LinkNode::new(
-            LinkConfig {
-                relay_config: None,
-                out_routes: out_2,
-                db_path: {
-                    let mut path = tempfile::tempdir().unwrap().into_path();
-                    path.push(
-                        RelayIdentitySecret::generate()
-                            .public()
-                            .fingerprint()
-                            .to_string(),
-                    );
-                    path
-                },
-                payment_systems: vec![Box::new(
-                    // PoW::new(mel_client_2.clone()), // Dummy::new(),
-                    OnChain::new(
-                        "0BVY4PMM69Q7P5VC0SPV900EGH8VFMCV5A2645YAPR6NGD7PJKTG",
-                        mel_client_2.clone(),
-                    )
-                    .unwrap(),
-                )],
+        let client = LinkNode::new(LinkConfig {
+            relay_config: None,
+            out_routes: out_2,
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(
+                    RelayIdentitySecret::generate()
+                        .public()
+                        .fingerprint()
+                        .to_string(),
+                );
+                path
             },
-            mel_client_2,
-        )
+            payment_systems: vec![Box::new(
+                // PoW::new(mel_client_2.clone()), // Dummy::new(),
+                OnChain::new(
+                    "0BVY4PMM69Q7P5VC0SPV900EGH8VFMCV5A2645YAPR6NGD7PJKTG",
+                    mel_client_2.clone(),
+                )
+                .unwrap(),
+            )],
+            exit_info: None,
+        })
         .unwrap();
 
         (relay, client)
@@ -317,58 +309,50 @@ mod link_node_tests {
             },
         );
 
-        let node1 = LinkNode::new(
-            LinkConfig {
-                relay_config: Some((idsk1, in_1)),
-                out_routes: BTreeMap::new(),
-                db_path: {
-                    let mut path = tempfile::tempdir().unwrap().into_path();
-                    path.push(idsk1.public().fingerprint().to_string());
-                    path
-                },
-                payment_systems: vec![Box::new(Dummy::new())],
+        let node1 = LinkNode::new(LinkConfig {
+            relay_config: Some((idsk1, in_1)),
+            out_routes: BTreeMap::new(),
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk1.public().fingerprint().to_string());
+                path
             },
-            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-        );
-        let node2 = LinkNode::new(
-            LinkConfig {
-                relay_config: Some((idsk2, in_2)),
-                out_routes: out_2,
-                db_path: {
-                    let mut path = tempfile::tempdir().unwrap().into_path();
-                    path.push(idsk2.public().fingerprint().to_string());
-                    path
-                },
-                payment_systems: vec![Box::new(Dummy::new())],
+            payment_systems: vec![Box::new(Dummy::new())],
+            exit_info: None,
+        });
+        let node2 = LinkNode::new(LinkConfig {
+            relay_config: Some((idsk2, in_2)),
+            out_routes: out_2,
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk2.public().fingerprint().to_string());
+                path
             },
-            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-        );
-        let node3 = LinkNode::new(
-            LinkConfig {
-                relay_config: Some((idsk3, in_3)),
-                out_routes: out_3,
-                db_path: {
-                    let mut path = tempfile::tempdir().unwrap().into_path();
-                    path.push(idsk3.public().fingerprint().to_string());
-                    path
-                },
-                payment_systems: vec![Box::new(Dummy::new())],
+            payment_systems: vec![Box::new(Dummy::new())],
+            exit_info: None,
+        });
+        let node3 = LinkNode::new(LinkConfig {
+            relay_config: Some((idsk3, in_3)),
+            out_routes: out_3,
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk3.public().fingerprint().to_string());
+                path
             },
-            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-        );
-        let node4 = LinkNode::new(
-            LinkConfig {
-                relay_config: Some((idsk4, in_4)),
-                out_routes: out_4,
-                db_path: {
-                    let mut path = tempfile::tempdir().unwrap().into_path();
-                    path.push(idsk4.public().fingerprint().to_string());
-                    path
-                },
-                payment_systems: vec![Box::new(Dummy::new())],
+            payment_systems: vec![Box::new(Dummy::new())],
+            exit_info: None,
+        });
+        let node4 = LinkNode::new(LinkConfig {
+            relay_config: Some((idsk4, in_4)),
+            out_routes: out_4,
+            db_path: {
+                let mut path = tempfile::tempdir().unwrap().into_path();
+                path.push(idsk4.public().fingerprint().to_string());
+                path
             },
-            Arc::new(melprot::Client::autoconnect(NetID::Mainnet).await.unwrap()),
-        );
+            payment_systems: vec![Box::new(Dummy::new())],
+            exit_info: None,
+        });
 
         (
             node1.unwrap(),

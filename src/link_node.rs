@@ -20,7 +20,6 @@ use payment_system::PaymentSystemSelector;
 use send_msg::{send_to_next_peeler, send_to_nonself_next_peeler};
 use std::{
     collections::HashMap,
-    fmt::Debug,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -59,7 +58,7 @@ pub struct LinkNode {
 
 impl LinkNode {
     /// Creates a new link node.
-    pub fn new(mut cfg: LinkConfig, mel_client: Arc<melprot::Client>) -> anyhow::Result<Self> {
+    pub fn new(mut cfg: LinkConfig) -> anyhow::Result<Self> {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
         let store = smolscale::block_on(LinkStore::new(cfg.db_path.clone()))?;
@@ -101,7 +100,7 @@ impl LinkNode {
             link_table: Arc::new(DashMap::new()),
             store: Arc::new(store),
             payment_systems: Arc::new(payment_systems),
-            mel_client,
+
             send_task_semaphores: Default::default(),
             stats_gatherer: Arc::new(StatsGatherer::default()),
         };

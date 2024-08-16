@@ -114,10 +114,6 @@ impl V2hNode {
         ))
     }
 
-    pub fn n2r_node(&self) -> &N2rNode {
-        &self.ctx.n2r
-    }
-
     pub fn link_node(&self) -> &LinkNode {
         self.ctx.n2r.link_node()
     }

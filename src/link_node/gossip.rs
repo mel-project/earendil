@@ -134,16 +134,11 @@ async fn gossip_graph(ctx: &LinkNodeCtx, link: &Link) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::net::IpAddr;
-    use std::str::FromStr;
-    use std::time::Duration;
 
     use bytes::Bytes;
     use earendil_crypt::{HavenEndpoint, HavenFingerprint, RelayIdentitySecret};
     use earendil_packet::crypt::DhSecret;
     use earendil_topology::{ExitConfig, ExitInfo, IdentityDescriptor};
-
-    use crate::config::HavenHandler;
 
     #[test]
     fn test_identity_descriptor_sign_and_verify() {
@@ -153,20 +148,6 @@ mod tests {
         // Create a mock DhSecret
         let my_onion = DhSecret::generate();
 
-        // Create a mock ExitInfo with the correct ExitConfig
-        let vec = vec![ExitPolicy {
-            ipv4_rules: vec![Rule {
-                action: Action::Accept,
-                address: AddressMatch::All,
-                ports: PortMatch::All,
-            }],
-            ipv6_rules: vec![Rule {
-                action: Action::Accept,
-                address: AddressMatch::All,
-                ports: PortMatch::All,
-            }],
-            ipv6_exit: true,
-        }];
         let exit_info = Some(ExitInfo {
             haven_endpoint: HavenEndpoint {
                 fingerprint: HavenFingerprint::from_bytes(&[0u8; 20]),
@@ -174,13 +155,6 @@ mod tests {
             },
             config: ExitConfig {
                 allowed_ports: vec![80, 443],
-                // rate_limit: Some(RateLimit { max_bps: 1_000_000 }),
-                // quality_of_service: Some(QoSConfig {
-                //     max_delay: Duration::from_millis(100),
-                //     max_jitter: Duration::from_millis(20),
-                // }),
-                // exit_policies: Some(vec),
-                // max_bandwidth: Some(NetworkBandwidth { speed: 10_000_000 }),
             },
         });
 
@@ -209,26 +183,11 @@ mod tests {
         // Test with different exit_info
         let different_exit_info = Some(ExitInfo {
             haven_endpoint: HavenEndpoint {
-                fingerprint: [1u8; 32].into(),
+                fingerprint: HavenFingerprint::from_bytes(&[1u8; 20]),
                 port: 9090,
             },
             config: ExitConfig {
                 allowed_ports: vec![8080],
-                // rate_limit: Some(RateLimit { max_bps: 2_000_000 }),
-                // quality_of_service: Some(QoSConfig {
-                //     max_delay: Duration::from_millis(50),
-                //     max_jitter: Duration::from_millis(10),
-                // }),
-                // exit_policies: Some(vec![ExitPolicy {
-                //     ipv4_rules: vec![Rule {
-                //         action: Action::Accept,
-                //         address: AddressMatch::Range(IpAddr::from_str("192.168.0.0").unwrap(), 16),
-                //         ports: PortMatch::Range(1024, 65535),
-                //     }],
-                //     ipv6_rules: vec![],
-                //     ipv6_exit: false,
-                // }]),
-                // max_bandwidth: Some(NetworkBandwidth { speed: 20_000_000 }),
             },
         });
         let different_descriptor =

@@ -101,25 +101,22 @@ impl Node {
             _ => (None, None),
         };
 
-        let link = LinkNode::new(
-            LinkConfig {
-                relay_config: config.relay_config.clone().map(
-                    |RelayConfig {
-                         identity,
-                         in_routes,
-                     }| (identity.actualize_relay().unwrap(), in_routes),
-                ),
-                out_routes: config.out_routes.clone(),
-                payment_systems,
-                db_path: config.db_path.unwrap_or_else(|| {
-                    let mut data_dir = dirs::data_dir().unwrap();
-                    data_dir.push("earendil-link-store.db");
-                    data_dir
-                }),
-                exit_info,
-            },
-            mel_client,
-        )?;
+        let link = LinkNode::new(LinkConfig {
+            relay_config: config.relay_config.clone().map(
+                |RelayConfig {
+                     identity,
+                     in_routes,
+                 }| (identity.actualize_relay().unwrap(), in_routes),
+            ),
+            out_routes: config.out_routes.clone(),
+            payment_systems,
+            db_path: config.db_path.unwrap_or_else(|| {
+                let mut data_dir = dirs::data_dir().unwrap();
+                data_dir.push("earendil-link-store.db");
+                data_dir
+            }),
+            exit_info,
+        })?;
 
         let n2r = N2rNode::new(link, N2rConfig {});
         let v2h = Arc::new(V2hNode::new(
@@ -442,13 +439,9 @@ async fn socks5_once(
                     let remote_stream = pool.connect(remote_ep, addr.as_bytes()).await?;
                     tracing::debug!(addr = debug(&addr), "got remote stream");
                     let (read, write) = remote_stream.split();
-                    match smol::io::copy(client_stream.clone(), write)
+                    smol::io::copy(client_stream.clone(), write)
                         .race(smol::io::copy(read, client_stream.clone()))
-                        .await
-                    {
-                        Ok(x) => tracing::debug!("RETURNED with {x}"),
-                        Err(e) => tracing::debug!("RETURNED with ERR: {e}"),
-                    }
+                        .await?;
                 }
             }
         }
