@@ -443,13 +443,9 @@ async fn socks5_once(
                     let remote_stream = pool.connect(remote_ep, addr.as_bytes()).await?;
                     tracing::debug!(addr = debug(&addr), "got remote stream");
                     let (read, write) = remote_stream.split();
-                    match smol::io::copy(client_stream.clone(), write)
+                    smol::io::copy(client_stream.clone(), write)
                         .race(smol::io::copy(read, client_stream.clone()))
-                        .await
-                    {
-                        Ok(x) => tracing::debug!("RETURNED with {x}"),
-                        Err(e) => tracing::debug!("RETURNED with ERR: {e}"),
-                    }
+                        .await?;
                 }
             }
         }

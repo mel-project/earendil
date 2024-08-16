@@ -131,3 +131,74 @@ async fn gossip_graph(ctx: &LinkNodeCtx, link: &Link) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+
+    use bytes::Bytes;
+    use earendil_crypt::{HavenEndpoint, HavenFingerprint, RelayIdentitySecret};
+    use earendil_packet::crypt::DhSecret;
+    use earendil_topology::{ExitConfig, ExitInfo, IdentityDescriptor};
+
+    #[test]
+    fn test_identity_descriptor_sign_and_verify() {
+        // Create a mock RelayIdentitySecret
+        let my_identity = RelayIdentitySecret::generate();
+
+        // Create a mock DhSecret
+        let my_onion = DhSecret::generate();
+
+        let exit_info = Some(ExitInfo {
+            haven_endpoint: HavenEndpoint {
+                fingerprint: HavenFingerprint::from_bytes(&[0u8; 20]),
+                port: 8080,
+            },
+            config: ExitConfig {
+                allowed_ports: vec![80, 443],
+            },
+        });
+
+        // Create a new IdentityDescriptor
+        let descriptor = IdentityDescriptor::new(&my_identity, &my_onion, exit_info);
+
+        // Verify the descriptor
+        assert!(descriptor.verify().is_ok(), "Verification should succeed");
+
+        // Test with invalid signature
+        let mut invalid_descriptor = descriptor.clone();
+        invalid_descriptor.sig = Bytes::from(vec![0u8; 64]); // Replace with an invalid signature
+        assert!(
+            invalid_descriptor.verify().is_err(),
+            "Verification should fail with invalid signature"
+        );
+
+        // Test with modified data
+        let mut modified_descriptor = descriptor.clone();
+        modified_descriptor.unix_timestamp += 1; // Modify the timestamp
+        assert!(
+            modified_descriptor.verify().is_err(),
+            "Verification should fail with modified data"
+        );
+
+        // Test with different exit_info
+        let different_exit_info = Some(ExitInfo {
+            haven_endpoint: HavenEndpoint {
+                fingerprint: HavenFingerprint::from_bytes(&[1u8; 20]),
+                port: 9090,
+            },
+            config: ExitConfig {
+                allowed_ports: vec![8080],
+            },
+        });
+        let different_descriptor =
+            IdentityDescriptor::new(&my_identity, &my_onion, different_exit_info);
+        assert!(
+            different_descriptor.verify().is_ok(),
+            "Verification should succeed with different exit_info"
+        );
+        assert_ne!(
+            descriptor, different_descriptor,
+            "Descriptors with different exit_info should not be equal"
+        );
+    }
+}

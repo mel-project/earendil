@@ -3,8 +3,8 @@ use std::{collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
-use earendil_packet::{crypt::DhSecret, InnerPacket, PrivacyConfig};
-use earendil_topology::{ExitInfo, RelayGraph};
+use earendil_packet::{crypt::DhSecret, InnerPacket};
+use earendil_topology::{ExitConfig, ExitInfo, RelayGraph};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use smol::lock::Semaphore;
@@ -93,7 +93,7 @@ pub(super) struct LinkNodeCtx {
     pub link_table: Arc<DashMap<NeighborId, (Arc<Link>, LinkPaymentInfo)>>,
     pub payment_systems: Arc<PaymentSystemSelector>,
     pub store: Arc<LinkStore>,
-    pub _mel_client: Arc<melprot::Client>,
+    pub mel_client: Arc<melprot::Client>,
     pub stats_gatherer: Arc<StatsGatherer>,
     pub send_task_semaphores: Arc<DashMap<NeighborId, Arc<Semaphore>>>,
 }

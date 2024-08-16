@@ -16,6 +16,7 @@ mod types;
 use inout_route::{process_in_route, process_out_route};
 use link_protocol::LinkClient;
 pub use link_store::*;
+use moka::sync::Cache;
 use payment_system::PaymentSystemSelector;
 use send_msg::{send_to_next_peeler, send_to_nonself_next_peeler};
 use std::{
@@ -55,11 +56,13 @@ pub struct LinkNode {
     _task: Immortal,
     send_raw: Sender<LinkMessage>,
     recv_incoming: Receiver<IncomingMsg>,
+
+    route_cache: Cache<(AnonEndpoint, RelayFingerprint), Arc<Vec<RelayFingerprint>>>,
 }
 
 impl LinkNode {
     /// Creates a new link node.
-    pub fn new(mut cfg: LinkConfig, mel_client: Arc<melprot::Client>) -> anyhow::Result<Self> {
+    pub fn new(mut cfg: LinkConfig) -> anyhow::Result<Self> {
         let (send_raw, recv_raw) = smol::channel::bounded(1);
         let (send_incoming, recv_incoming) = smol::channel::bounded(1);
         let store = smolscale::block_on(LinkStore::new(cfg.db_path.clone()))?;
@@ -101,7 +104,7 @@ impl LinkNode {
             link_table: Arc::new(DashMap::new()),
             store: Arc::new(store),
             payment_systems: Arc::new(payment_systems),
-            _mel_client: mel_client,
+            mel_client,
             send_task_semaphores: Default::default(),
             stats_gatherer: Arc::new(StatsGatherer::default()),
         };
@@ -118,6 +121,9 @@ impl LinkNode {
             ctx,
             send_raw,
             recv_incoming,
+            route_cache: Cache::builder()
+                .time_to_live(Duration::from_secs(10))
+                .build(),
             _task,
         })
     }
@@ -129,6 +135,17 @@ impl LinkNode {
         src: AnonEndpoint,
         dest_relay: RelayFingerprint,
     ) -> anyhow::Result<()> {
+        let route = self
+            .route_cache
+            .try_get_with((src, dest_relay), || {
+                let relay_graph = self.ctx.relay_graph.read();
+                let route = forward_route_to(&relay_graph, dest_relay)
+                    .context("failed to create forward route")?;
+                tracing::debug!("route to {dest_relay}: {:?}", route);
+                anyhow::Ok(Arc::new(route))
+            })
+            .map_err(|e| anyhow::anyhow!(e))?;
+
         // TODO: pass in the privacy config to raw packet construction
         let privacy_cfg = match self.privacy_config() {
             Some(cfg) => cfg,
@@ -137,7 +154,7 @@ impl LinkNode {
 
         let (first_peeler, wrapped_onion) = {
             let relay_graph = self.ctx.relay_graph.read();
-            let route = forward_route_to(&relay_graph, dest_relay, privacy_cfg.max_peelers)
+            let route = forward_route_to(&relay_graph, dest_relay)
                 .context("failed to create forward route")?;
             tracing::trace!("route to {dest_relay}: {:?}", route);
             let first_peeler = *route
