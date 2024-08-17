@@ -1,4 +1,4 @@
-use std::{ops::DerefMut, sync::Arc};
+use std::{ops::DerefMut, sync::Arc, time::Instant};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -83,9 +83,17 @@ impl Link {
                             let mut line = String::new();
                             read.read_line(&mut line).await?;
                             let req: JrpcRequest = serde_json::from_str(&line)?;
-                            tracing::trace!("got req: {:?}", req);
+                            let method = req.method.clone();
+                            let id = req.id.clone();
+                            tracing::debug!(method, id = debug(&id), "linkrpc request");
+                            let start = Instant::now();
                             let resp = service.respond_raw(req).await;
-                            tracing::trace!("got resp: {:?}", resp);
+                            tracing::debug!(
+                                method,
+                                id = debug(&id),
+                                elapsed = debug(start.elapsed()),
+                                "linkrpc response"
+                            );
                             write
                                 .write_all(
                                     format!("{}\n", serde_json::to_string(&resp)?).as_bytes(),
