@@ -260,6 +260,7 @@ enum LinkNodeDescr {
     Client(ClientId),
 }
 
+#[tracing::instrument(skip_all, fields(pipe=debug(pipe.remote_addr())))]
 async fn pipe_to_mux(
     link_node_ctx: &LinkNodeCtx,
     pipe: impl Pipe,
@@ -289,7 +290,7 @@ async fn pipe_to_mux(
     let recv_auth = async {
         tracing::debug!("waiting for auth message...");
         let bts = read_pascal(&mut read).await?;
-        tracing::debug!("got auth message...");
+        tracing::debug!(len = bts.len(), "got auth message...");
         let (their_descr, their_payinfo): (LinkNodeDescr, LinkPaymentInfo) =
             match stdcode::deserialize(&bts) {
                 Ok((their_descr, their_payinfo)) => (their_descr, their_payinfo),
