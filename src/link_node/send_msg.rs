@@ -64,7 +64,7 @@ pub(super) async fn send_to_nonself_next_peeler(
             .collect_vec();
         one_hop_closer(&my_neighs, &graph, next_peeler)?
     };
-    tracing::debug!(
+    tracing::trace!(
         next_peeler = display(next_peeler),
         closer_hop = display(closer_hop),
         "sending peeled packet to nonself"
@@ -75,7 +75,7 @@ pub(super) async fn send_to_nonself_next_peeler(
         if let Some(emit_time) = emit_time {
             smol::Timer::at(emit_time).await;
         }
-        tracing::debug!(
+        tracing::trace!(
             next_peeler = display(next_peeler),
             closer_hop = display(closer_hop),
             neighbor = debug(NeighborId::Relay(closer_hop)),

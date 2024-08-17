@@ -201,7 +201,7 @@ async fn handle_pipe(
 
     let gossip_loop = async {
         loop {
-            smol::Timer::after(Duration::from_secs(1)).await;
+            smol::Timer::after(Duration::from_secs(30)).await;
             if let Err(e) = gossip_once(&link_node_ctx, &link, their_relay_fp).await {
                 tracing::warn!(err = debug(e), "gossip_once failed");
             };
@@ -217,7 +217,7 @@ async fn handle_pipe(
         // pull messages from the link & forward into LinkNode
         loop {
             let msg = link.recv_msg().await?;
-            tracing::trace!("received LinkMessage from {:?}", their_id);
+            tracing::debug!("received LinkMessage from {:?}", their_id);
 
             let stats_key = format!("{}|down", their_id);
             link_node_ctx

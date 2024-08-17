@@ -3,6 +3,7 @@ use earendil_crypt::RelayFingerprint;
 use earendil_packet::ForwardInstruction;
 use earendil_topology::RelayGraph;
 use rand::prelude::*;
+
 pub fn forward_route_to(
     graph: &RelayGraph,
     dest_fp: RelayFingerprint,
@@ -62,8 +63,7 @@ pub fn one_hop_closer(
         }
     }
 
-    tracing::debug!(
-        my_neighs = debug(&my_neighs),
+    tracing::trace!(
         dest = display(dest),
         next_hop = debug(next_hop),
         shortest_route = debug(shortest_route),

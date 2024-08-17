@@ -81,10 +81,12 @@ async fn peel_loop(
                     packet,
                     next_peeler,
                 } => {
+                    tracing::debug!(len = packet.len(), "received a packet");
+
                     if !raw_dedup.insert(blake3::hash(&packet)) {
                         anyhow::bail!("already processed this packet")
                     }
-                    tracing::debug!(
+                    tracing::trace!(
                         next_peeler = display(next_peeler),
                         myself = display(my_idsk.public().fingerprint()),
                         "peeling and forwarding",
