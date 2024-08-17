@@ -48,7 +48,7 @@ impl N2rNode {
 
     /// Binds a relay endpoint to the node, creating a new `N2rRelaySocket` for communication.
     pub fn bind_relay(&self, dock: Dock) -> N2rRelaySocket {
-        let (sender, receiver) = smol::channel::bounded(100);
+        let (sender, receiver) = smol::channel::bounded(1000);
         self.ctx.relay_queues.insert(dock, sender);
 
         N2rRelaySocket {
@@ -61,7 +61,7 @@ impl N2rNode {
     /// Binds an anonymous endpoint to the node, creating a new `N2rAnonSocket` for communication.
     pub fn bind_anon(&self) -> N2rAnonSocket {
         let my_endpoint = AnonEndpoint::random();
-        let (sender, receiver) = smol::channel::bounded(100);
+        let (sender, receiver) = smol::channel::bounded(1000);
         self.ctx.anon_queues.insert(my_endpoint, sender);
 
         N2rAnonSocket {
