@@ -2032,6 +2032,7 @@ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 name = "earendil"
 version = "0.5.8"
 dependencies = [
+ "ahash 0.8.11",
  "anyctx",
  "anyhow",
  "async-dup",

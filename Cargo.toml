@@ -98,6 +98,7 @@ melvm = "0.1.1"
 ed25519-dalek = "2.1.1"
 melprot = "0.13.9"
 nanorpc-http = "0.1.5"
+ahash = "0.8.11"
 # nanorpc-http = { path="../nanorpc-http" }
 
 [profile.dev]

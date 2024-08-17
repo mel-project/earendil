@@ -2,7 +2,7 @@ use anyhow::Context;
 use earendil_crypt::RelayFingerprint;
 use earendil_packet::ForwardInstruction;
 use earendil_topology::RelayGraph;
-
+use rand::prelude::*;
 pub fn forward_route_to(
     graph: &RelayGraph,
     dest_fp: RelayFingerprint,
@@ -45,7 +45,11 @@ pub fn one_hop_closer(
         anyhow::bail!("cannot route one hop closer since we don't have ANY neighbors!")
     }
 
+    let mut my_neighs = my_neighs.to_vec();
+    my_neighs.shuffle(&mut rand::thread_rng());
+
     let mut shortest_route_len = usize::MAX;
+    let mut shortest_route = None;
     let mut next_hop = None;
 
     for neigh in my_neighs.iter() {
@@ -53,9 +57,18 @@ pub fn one_hop_closer(
             if route.len() < shortest_route_len {
                 shortest_route_len = route.len();
                 next_hop = Some(*neigh);
+                shortest_route = Some(route);
             }
         }
     }
+
+    tracing::debug!(
+        my_neighs = debug(&my_neighs),
+        dest = display(dest),
+        next_hop = debug(next_hop),
+        shortest_route = debug(shortest_route),
+        "found closest hop"
+    );
 
     next_hop
         .context(format!("cannot route one hop closer to {:?} since none of our neighbors ({:?}) could find a route there", dest, my_neighs))

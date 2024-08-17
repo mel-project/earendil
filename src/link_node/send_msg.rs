@@ -64,13 +64,23 @@ pub(super) async fn send_to_nonself_next_peeler(
             .collect_vec();
         one_hop_closer(&my_neighs, &graph, next_peeler)?
     };
-    tracing::trace!("sending peeled packet to nonself next_peeler = {next_peeler}");
+    tracing::debug!(
+        next_peeler = display(next_peeler),
+        closer_hop = display(closer_hop),
+        "sending peeled packet to nonself"
+    );
     // TODO delay queue here rather than this inefficient approach
     let link_node_ctx = link_node_ctx.clone();
     smolscale::spawn(async move {
         if let Some(emit_time) = emit_time {
             smol::Timer::at(emit_time).await;
         }
+        tracing::debug!(
+            next_peeler = display(next_peeler),
+            closer_hop = display(closer_hop),
+            neighbor = debug(NeighborId::Relay(closer_hop)),
+            "gonna send to closer hop"
+        );
         if let Err(e) = send_msg(
             &link_node_ctx,
             NeighborId::Relay(closer_hop),

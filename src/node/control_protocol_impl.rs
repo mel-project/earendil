@@ -86,59 +86,7 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn relay_graphviz(&self) -> String {
-        let (my_id, my_shape) = match self.ctx.v2h.link_node().my_id() {
-            NeighborIdSecret::Client(id) => (id.to_string() + "\n[client]", "rect"),
-            NeighborIdSecret::Relay(id) => (
-                get_node_label(&id.public().fingerprint()) + "\n[relay]",
-                "oval",
-            ),
-        };
-        let relay_graph = self.ctx.v2h.link_node().relay_graph();
-        let all_relays = relay_graph.all_nodes().fold(String::new(), |acc, node| {
-            let node_label = get_node_label(&node);
-            if my_id.contains(&node_label) {
-                // if we're a relay, don't print two nodes for ourselves in the graphviz
-                acc
-            } else {
-                acc + &format!(
-                    "    {:?} [label={:?}, shape={}]\n",
-                    node.to_string(),
-                    node_label,
-                    "oval, color=lightpink,style=filled"
-                )
-            }
-        });
-        let all_relay_adjs = relay_graph
-            .all_adjacencies()
-            .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
-            .fold(String::new(), |acc, adj| {
-                acc + &format!(
-                    "    {:?} -- {:?};\n",
-                    adj.left.to_string(),
-                    adj.right.to_string()
-                )
-            });
-        let all_my_adjs = self
-            .ctx
-            .v2h
-            .link_node()
-            .all_neighs()
-            .iter()
-            .filter_map(|neigh| {
-                if let NeighborId::Relay(id) = neigh {
-                    Some(id)
-                } else {
-                    None
-                }
-            })
-            .fold(String::new(), |acc, neigh| {
-                acc + &format!("    {:?} -- {:?};\n", my_id, neigh.to_string())
-            });
-
-        format!(
-                "graph G {{\n    rankdir=\"LR\"\n    # my ID\n    {:?} [shape={},color=lightblue,style=filled]\n\n    # all relays\n{}\n    # all relay connections\n{}\n    # all my connections\n{}\n}}",
-                my_id, my_shape, all_relays, all_relay_adjs, all_my_adjs
-            )
+        todo!()
     }
 
     async fn relay_graph_info(&self) -> RelayGraphInfo {

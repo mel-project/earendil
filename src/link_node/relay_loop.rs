@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use ahash::AHashSet;
 use anyhow::Context;
 use earendil_crypt::RelayIdentitySecret;
 use earendil_packet::{PeeledPacket, RawPacket};
@@ -71,6 +72,8 @@ async fn peel_loop(
     recv_raw: Receiver<LinkMessage>,
     send_incoming: Sender<IncomingMsg>,
 ) -> anyhow::Result<()> {
+    let mut raw_dedup = AHashSet::new();
+
     loop {
         let fallible = async {
             match recv_raw.recv().await? {
@@ -78,6 +81,9 @@ async fn peel_loop(
                     packet,
                     next_peeler,
                 } => {
+                    if !raw_dedup.insert(blake3::hash(&packet)) {
+                        anyhow::bail!("already processed this packet")
+                    }
                     tracing::debug!(
                         next_peeler = display(next_peeler),
                         myself = display(my_idsk.public().fingerprint()),
@@ -90,7 +96,7 @@ async fn peel_loop(
                     // relay pkt
                     if next_peeler != my_idsk.public().fingerprint() {
                         // forward pkt without delay
-                        send_to_nonself_next_peeler(&ctx, None, next_peeler, *packet).await?
+                        send_to_nonself_next_peeler(ctx, None, next_peeler, *packet).await?
                     } else {
                         let peeled: PeeledPacket = packet.peel(&ctx.my_onion_sk)?;
 
@@ -106,7 +112,7 @@ async fn peel_loop(
                                 let emit_time =
                                     Instant::now() + Duration::from_millis(delay_ms as u64);
                                 send_to_next_peeler(
-                                    &ctx,
+                                    ctx,
                                     Some(emit_time),
                                     next_peeler,
                                     pkt,
