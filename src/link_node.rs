@@ -20,6 +20,7 @@ pub use link_store::*;
 use moka::sync::Cache;
 use payment_system::PaymentSystemSelector;
 use relay_loop::relay_loop;
+use send_msg::send_to_nonself_next_peeler;
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use types::LinkNodeCtx;
@@ -386,10 +387,14 @@ async fn link_node_loop(
             let fallible = async {
                 match recv_raw.recv().await? {
                     LinkMessage::ToRelay {
-                        packet: _,
-                        next_peeler: _,
+                        packet,
+                        next_peeler,
                     } => {
-                        tracing::warn!("incorrectly received relay message at client")
+                        let packet: &RawPacket = bytemuck::try_from_bytes(&packet)
+                            .ok()
+                            .context("could not cast")?;
+                        send_to_nonself_next_peeler(&link_node_ctx, None, next_peeler, *packet)
+                            .await?
                     }
                     LinkMessage::ToClient { body, rb_id } => {
                         send_incoming
