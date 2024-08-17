@@ -85,10 +85,10 @@ impl Link {
                             let req: JrpcRequest = serde_json::from_str(&line)?;
                             let method = req.method.clone();
                             let id = req.id.clone();
-                            tracing::debug!(method, id = debug(&id), "linkrpc request");
+                            tracing::trace!(method, id = debug(&id), "linkrpc request");
                             let start = Instant::now();
                             let resp = service.respond_raw(req).await;
-                            tracing::debug!(
+                            tracing::trace!(
                                 method,
                                 id = debug(&id),
                                 elapsed = debug(start.elapsed()),
