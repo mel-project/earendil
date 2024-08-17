@@ -78,9 +78,10 @@ async fn peel_loop(
                     packet,
                     next_peeler,
                 } => {
-                    tracing::trace!(
-                        "{:?} received incoming linkmsg ToRelay. next_peeler = {next_peeler}",
-                        my_idsk.public().fingerprint()
+                    tracing::debug!(
+                        next_peeler = display(next_peeler),
+                        myself = display(my_idsk.public().fingerprint()),
+                        "peeling and forwarding",
                     );
                     let packet: &RawPacket = bytemuck::try_from_bytes(&packet)
                         .ok()
