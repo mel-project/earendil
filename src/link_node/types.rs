@@ -4,7 +4,7 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
 use earendil_packet::{crypt::DhSecret, InnerPacket, PrivacyConfig};
-use earendil_topology::{ExitConfig, ExitInfo, RelayGraph};
+use earendil_topology::{ExitInfo, RelayGraph};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use smol::lock::Semaphore;

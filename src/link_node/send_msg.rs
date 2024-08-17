@@ -90,11 +90,13 @@ pub(super) async fn send_to_nonself_next_peeler(
 }
 
 const RIBBON: f64 = 100_000.0;
+
 pub(super) async fn send_msg(
     link_node_ctx: &LinkNodeCtx,
     neighbor: NeighborId,
     msg: LinkMessage,
 ) -> anyhow::Result<()> {
+    tracing::debug!(neighbor = debug(neighbor), "send link message");
     let (link, info) = link_node_ctx
         .link_table
         .get(&neighbor)

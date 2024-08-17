@@ -448,14 +448,9 @@ async fn link_node_loop(
                                     )
                                     .await?
                                 } else {
-                                    // tracing::debug!(
-                                    //     next_peeler = display(next_peeler),
-                                    //     "I am the designated peeler"
-                                    // );
-                                    // let now = Instant::now();
                                     let peeled: PeeledPacket =
                                         packet.peel(&link_node_ctx.my_onion_sk)?;
-                                    // tracing::trace!("message peel took {:?}", now.elapsed());
+
                                     match peeled {
                                         PeeledPacket::Relay {
                                             next_peeler,
