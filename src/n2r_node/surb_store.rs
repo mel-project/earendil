@@ -4,17 +4,17 @@ use earendil_crypt::AnonEndpoint;
 use earendil_packet::Surb;
 use lru::LruCache;
 
-pub struct ReplyBlockStore {
+pub struct SurbStore {
     items: LruCache<AnonEndpoint, ReplyBlockDeque>,
 }
 
-impl Default for ReplyBlockStore {
+impl Default for SurbStore {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ReplyBlockStore {
+impl SurbStore {
     pub fn new() -> Self {
         let items =
             LruCache::new(NonZeroUsize::new(5000).expect("reply block store can't be of size 0"));
@@ -44,7 +44,7 @@ struct ReplyBlockDeque {
 impl ReplyBlockDeque {
     fn new(capacity: usize) -> Self {
         ReplyBlockDeque {
-            deque: VecDeque::with_capacity(capacity),
+            deque: VecDeque::new(),
             capacity,
         }
     }

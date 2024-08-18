@@ -1,4 +1,4 @@
-mod reply_block_store;
+mod surb_store;
 
 use std::{sync::Arc, time::Duration};
 
@@ -16,7 +16,7 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use crate::link_node::{IncomingMsg, LinkNode};
 
-use self::reply_block_store::ReplyBlockStore;
+use self::surb_store::SurbStore;
 
 /// An implementation of the N2R layer.
 pub struct N2rNode {
@@ -31,7 +31,7 @@ impl N2rNode {
             link_node: Arc::new(link_node),
             anon_queues: Arc::new(DashMap::new()),
             relay_queues: Arc::new(DashMap::new()),
-            rb_store: Arc::new(Mutex::new(ReplyBlockStore::new())),
+            rb_store: Arc::new(Mutex::new(SurbStore::new())),
             degarblers: Cache::builder()
                 .time_to_live(Duration::from_secs(3600))
                 .build(),
@@ -157,7 +157,7 @@ struct N2rNodeCtx {
     link_node: Arc<LinkNode>,
     anon_queues: Arc<DashMap<AnonEndpoint, Sender<(Bytes, RelayEndpoint, usize)>>>,
     relay_queues: Arc<DashMap<Dock, Sender<(Bytes, AnonEndpoint)>>>,
-    rb_store: Arc<Mutex<ReplyBlockStore>>,
+    rb_store: Arc<Mutex<SurbStore>>,
     degarblers: Cache<u64, ReplyDegarbler>,
 }
 
