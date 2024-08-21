@@ -28,6 +28,14 @@ pub const RAW_PACKET_SIZE: usize = std::mem::size_of::<RawPacket>();
 
 pub type RawBody = [u8; RAW_BODY_SIZE];
 
+/// A raw, on-the-wire packet, alongside an indicator of the next peeler as a relay fingerprint.
+#[repr(C)]
+#[derive(Pod, Clone, Copy, Zeroable, Debug, PartialEq, Eq, Hash)]
+pub struct RawPacketWithNext {
+    pub packet: RawPacket,
+    pub next_peeler: RelayFingerprint,
+}
+
 /// A raw, on-the-wire Earendil packet.
 #[repr(C)]
 #[derive(Pod, Clone, Copy, Zeroable, Debug, PartialEq, Eq, Hash)]

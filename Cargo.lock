@@ -2060,6 +2060,7 @@ dependencies = [
  "env_logger 0.11.5",
  "futures",
  "futures-util",
+ "haiyuu",
  "hex",
  "indexmap 1.9.3",
  "itertools 0.11.0",
@@ -3096,6 +3097,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bf0b36e6f090b7e1d8a4b49c0cb81c1f8376f72198c65dd3ad9ff3556b8b78c"
 dependencies = [
  "bitflags 2.6.0",
+]
+
+[[package]]
+name = "haiyuu"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eecbbbeb055524996a8dbdf3d566f94069ed78b64c3b7f35cf5abc3235d75dfd"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "oneshot",
+ "smolscale 0.4.7",
+ "tachyonix 0.3.0",
+ "thiserror",
 ]
 
 [[package]]
