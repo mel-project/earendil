@@ -9,7 +9,8 @@ use anyhow::Context;
 use bytes::Bytes;
 use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayEndpoint, RelayFingerprint};
 use earendil_packet::crypt::{AeadKey, DhSecret};
-use futures::TryFutureExt;
+
+use futures_util::TryFutureExt as _;
 use smol::{
     channel::{Receiver, Sender},
     future::FutureExt as _,

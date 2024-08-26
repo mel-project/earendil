@@ -74,7 +74,7 @@ sqlx = { version = "0.7.3", features = ["sqlite", "runtime-async-std"] }
 oneshot = "0.1.6"
 chrono = "0.4.31"
 colored = "2.1.0"
-futures = "0.3.30"
+
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 melpow = "0.1.1"
 smolscale = "0.4.3"
@@ -84,8 +84,8 @@ either = "1.10.0"
 async-recursion = "1.0.5"
 picomux = "0.1.1"
 async-dup = "1.2.4"
-sillad-sosistab3 = "0.1.2"
-sillad = "0.1.1"
+sillad-sosistab3 = "0.2.0-alpha.12"
+sillad = "0.2.1"
 env_logger = "0.11.3"
 dirs = "5.0.1"
 tempfile = "3.10.1"
@@ -99,7 +99,9 @@ ed25519-dalek = "2.1.1"
 melprot = "0.13.9"
 nanorpc-http = "0.1.5"
 ahash = "0.8.11"
-haiyuu = {version="0.4", features=["smolscale"]}
+haiyuu = {version="0.4", path="../haiyuu", features=["smolscale"]}
+derivative = "2.2.0"
+ciborium = "0.2.2"
 # nanorpc-http = { path="../nanorpc-http" }
 
 [profile.dev]

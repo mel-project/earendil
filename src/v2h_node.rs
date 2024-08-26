@@ -15,7 +15,7 @@ use earendil_crypt::{
     AnonEndpoint, HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint,
 };
 
-use futures::TryFutureExt;
+use futures_util::TryFutureExt as _;
 use global_rpc::GlobalRpcTransport;
 use nanorpc::{JrpcRequest, RpcService};
 use smolscale::immortal::{Immortal, RespawnStrategy};

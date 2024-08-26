@@ -1,9 +1,10 @@
+mod client_proc;
 mod link_protocol;
 mod link_store;
-mod neighbors_proc;
 mod payment_system;
 mod relay_proc;
 pub mod stats;
+mod switch_proc;
 
 mod types;
 

@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Context as _;
 use earendil_crypt::HavenEndpoint;
-use futures::{future::Shared, AsyncReadExt, FutureExt, TryFutureExt};
+use futures_util::{future::Shared, AsyncReadExt, FutureExt, TryFutureExt};
 use nursery_macro::nursery;
 use picomux::{LivenessConfig, PicoMux};
 use smol::{

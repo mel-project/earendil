@@ -8,8 +8,10 @@ use clone_macro::clone;
 use control_protocol_impl::ControlProtocolImpl;
 use earendil_crypt::{HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
 use earendil_topology::{ExitConfig, ExitInfo};
-use futures::{
-    future::Shared, stream::FuturesUnordered, task::noop_waker, AsyncReadExt, TryFutureExt,
+
+use futures_util::{
+    future::Shared, stream::FuturesUnordered, task::noop_waker, AsyncReadExt, FutureExt,
+    TryFutureExt as _,
 };
 use melstructs::NetID;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
@@ -18,7 +20,7 @@ use nursery_macro::nursery;
 use rand::SeedableRng;
 use rand::{rngs::StdRng, seq::SliceRandom};
 use smol::{
-    future::FutureExt,
+    future::FutureExt as _,
     net::{TcpListener, TcpStream},
     stream::StreamExt,
 };
@@ -174,7 +176,7 @@ impl Node {
 
         Ok(Self {
             ctx,
-            task: futures::FutureExt::shared(task),
+            task: task.shared(),
         })
     }
 
