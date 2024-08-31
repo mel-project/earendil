@@ -3,6 +3,7 @@ mod link_proc;
 
 use ahash::AHashMap;
 use anyhow::Context;
+use async_trait::async_trait;
 use bytes::Bytes;
 use clone_macro::clone;
 use derivative::Derivative;
@@ -10,6 +11,8 @@ use earendil_crypt::{ClientId, RelayFingerprint, RelayIdentitySecret};
 use futures_util::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use inout_route::{process_in_route, process_out_route};
 use itertools::Itertools;
+use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport, ServerError};
+use rand::Rng;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use std::{collections::BTreeMap, convert::Infallible};
@@ -37,6 +40,42 @@ pub struct SwitchProcess {
 
     in_routes: BTreeMap<String, InRouteConfig>,
     out_routes: BTreeMap<String, OutRouteConfig>,
+}
+
+#[derive(Clone)]
+struct RpcImpl(WeakHandle<RelayProcess>);
+
+#[async_trait]
+impl RpcService for RpcImpl {
+    async fn respond(
+        &self,
+        method: &str,
+        params: Vec<serde_json::Value>,
+    ) -> Option<Result<serde_json::Value, ServerError>> {
+        let id = rand::thread_rng().gen();
+        let req = JrpcRequest {
+            jsonrpc: "2.0".into(),
+            method: method.to_string(),
+            params,
+            id: nanorpc::JrpcId::Number(id),
+        };
+        let (send, recv) = oneshot::channel();
+        let _ = self.0.send(RelayMsg::LinkRpc(req, send)).await;
+        let resp = if let Ok(resp) = recv.await {
+            resp
+        } else {
+            return None;
+        };
+        if let Some(err) = resp.error {
+            Some(Err(ServerError {
+                code: err.code as _,
+                message: err.message,
+                details: err.data,
+            }))
+        } else {
+            Some(Ok(resp.result.unwrap()))
+        }
+    }
 }
 
 impl SwitchProcess {
@@ -82,6 +121,14 @@ impl SwitchProcess {
     fn role_proc(&self) -> either::Either<&WeakHandle<RelayProcess>, &WeakHandle<ClientProcess>> {
         self.role.as_ref().map_either(|l| &l.1, |r| &r.1)
     }
+
+    fn rpc(&self) -> Option<RpcImpl> {
+        if let either::Either::Left(proc) = self.role_proc() {
+            Some(RpcImpl(proc.clone()))
+        } else {
+            None
+        }
+    }
 }
 
 impl haiyuu::Process for SwitchProcess {
@@ -92,6 +139,7 @@ impl haiyuu::Process for SwitchProcess {
     async fn run(&mut self, mailbox: &mut haiyuu::Mailbox<Self>) -> Infallible {
         // set up link tasks
         let handle = mailbox.handle();
+        let rpc = self.rpc();
         let _in_routes = self
             .in_routes
             .values()
@@ -99,8 +147,8 @@ impl haiyuu::Process for SwitchProcess {
             .map(|route| {
                 Immortal::respawn(
                     RespawnStrategy::Immediate,
-                    clone!([handle], move || {
-                        process_in_route(route.clone(), handle.clone(), None)
+                    clone!([handle, rpc], move || {
+                        process_in_route(route.clone(), handle.clone(), rpc.clone())
                     }),
                 )
             })
@@ -113,11 +161,11 @@ impl haiyuu::Process for SwitchProcess {
                 let identity = self.identity();
                 Immortal::respawn(
                     RespawnStrategy::Immediate,
-                    clone!([handle, route], move || process_out_route(
+                    clone!([handle, route, rpc], move || process_out_route(
                         route.clone(),
                         handle.clone(),
                         identity,
-                        None
+                        rpc.clone()
                     )),
                 )
             })

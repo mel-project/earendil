@@ -360,6 +360,18 @@ impl AdjacencyDescriptor {
         this.right_sig = Bytes::new();
         blake3::keyed_hash(b"adjacency_descriptor____________", &this.stdcode())
     }
+
+    /// Check whether the UNIX timestamp is timely.
+    pub fn is_timely(&self) -> bool {
+        self.unix_timestamp + 300 > unix_now()
+    }
+}
+
+pub fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs()
 }
 
 /// An identity descriptor, signed by the owner of an identity. Declares that the identity owns a particular onion key, as well as implicitly

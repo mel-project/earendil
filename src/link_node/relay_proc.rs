@@ -8,14 +8,19 @@ use std::{
 
 use ahash::AHashSet;
 use anyhow::Context;
-use earendil_crypt::{RelayFingerprint, RelayIdentitySecret};
-use earendil_packet::{crypt::DhSecret, PeeledPacket, RawPacketWithNext};
-use earendil_topology::RelayGraph;
+use async_trait::async_trait;
+use bytes::Bytes;
+use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret, RemoteId};
+use earendil_packet::{
+    crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, RawPacketWithNext, Surb,
+};
+use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor, RelayGraph};
 use haiyuu::Handle;
+use itertools::Itertools as _;
 use moka::future::Cache;
-use nanorpc::{JrpcRequest, JrpcResponse};
+use nanorpc::{JrpcRequest, JrpcResponse, RpcService};
 use parking_lot::RwLock;
-use smol::future::FutureExt as _;
+use smol::{channel::Sender, future::FutureExt as _};
 use stdcode::StdcodeSerializeExt as _;
 
 use crate::{
@@ -23,7 +28,11 @@ use crate::{
     link_node::switch_proc::SwitchMessage,
 };
 
-use super::switch_proc::SwitchProcess;
+use super::{
+    link_protocol::{InfoResponse, LinkProtocol, LinkRpcErr, LinkService},
+    switch_proc::SwitchProcess,
+    IncomingMsg,
+};
 
 pub struct RelayProcess {
     identity: RelayIdentitySecret,
@@ -38,6 +47,8 @@ pub struct RelayProcess {
     delay_queue: BTreeMap<Instant, RawPacketWithNext>,
 
     next_hop_cache: Cache<RelayFingerprint, RelayFingerprint>,
+
+    send_incoming: Sender<IncomingMsg>,
 }
 
 impl RelayProcess {
@@ -46,6 +57,8 @@ impl RelayProcess {
         identity: RelayIdentitySecret,
         in_routes: BTreeMap<String, InRouteConfig>,
         out_routes: BTreeMap<String, OutRouteConfig>,
+        relay_graph: Arc<RwLock<RelayGraph>>,
+        send_incoming: Sender<IncomingMsg>,
     ) -> Self {
         Self {
             identity,
@@ -55,12 +68,14 @@ impl RelayProcess {
             out_routes,
 
             peel_dedup: AHashSet::new(),
-            relay_graph: Arc::new(RwLock::new(RelayGraph::new())),
+            relay_graph,
             delay_queue: BTreeMap::new(),
 
             next_hop_cache: Cache::builder()
                 .time_to_live(Duration::from_secs(60))
                 .build(),
+
+            send_incoming,
         }
     }
 
@@ -94,7 +109,11 @@ impl RelayProcess {
                         },
                     );
                 }
-                PeeledPacket::Received { from, pkt } => todo!(),
+                PeeledPacket::Received { from, pkt } => {
+                    let _ = self
+                        .send_incoming
+                        .try_send(IncomingMsg::Forward { from, body: pkt });
+                }
                 PeeledPacket::GarbledReply {
                     client_id,
                     rb_id,
@@ -130,7 +149,12 @@ impl RelayProcess {
                 })
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
-            todo!()
+            switch
+                .send(SwitchMessage::ToRelay(
+                    Bytes::copy_from_slice(bytemuck::bytes_of(&packet)),
+                    next_hop,
+                ))
+                .await?;
         }
         anyhow::Ok(())
     }
@@ -153,6 +177,10 @@ impl haiyuu::Process for RelayProcess {
             )
             .ok()
             .unwrap();
+        let server = LinkService(LinkProtocolImpl {
+            identity: self.identity,
+            relay_graph: self.relay_graph.clone(),
+        });
         loop {
             let get_delayed = async {
                 if let Some((time, _)) = self.delay_queue.first_key_value() {
@@ -169,7 +197,30 @@ impl haiyuu::Process for RelayProcess {
                         tracing::warn!(err = debug(err), "failed to peel and forward");
                     }
                 }
-                RelayMsg::LinkRpc(_, _) => todo!(),
+                RelayMsg::LinkRpc(req, send) => {
+                    let resp = server.respond_raw(req).await;
+                    let _ = send.send(resp);
+                }
+                RelayMsg::Backwards(surb, msg) => {
+                    let packet = RawPacket::new_reply(
+                        &surb,
+                        InnerPacket::Message(msg),
+                        &RemoteId::Relay(self.identity.public().fingerprint()),
+                    )
+                    .expect("could not construct backwards packet");
+                    if let Err(err) = self
+                        .process(RawPacketWithNext {
+                            packet,
+                            next_peeler: surb.first_peeler,
+                        })
+                        .await
+                    {
+                        tracing::warn!(
+                            err = debug(err),
+                            "failed to forward a backwards packet we constructed"
+                        );
+                    }
+                }
             }
         }
     }
@@ -178,5 +229,84 @@ impl haiyuu::Process for RelayProcess {
 #[allow(clippy::large_enum_variant)]
 pub enum RelayMsg {
     PeelForward(RawPacketWithNext),
+    Backwards(Surb, Message),
     LinkRpc(JrpcRequest, oneshot::Sender<JrpcResponse>),
+}
+
+struct LinkProtocolImpl {
+    identity: RelayIdentitySecret,
+    relay_graph: Arc<RwLock<RelayGraph>>,
+}
+
+#[async_trait]
+impl LinkProtocol for LinkProtocolImpl {
+    /// A method that returns some random info. Used for keepalive and statistics.
+    async fn info(&self) -> InfoResponse {
+        InfoResponse {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        }
+    }
+
+    /// Asks the other end to complete an adjacency descriptor. Returns None to indicate refusal. This is called by the "left-hand" neighbor to ask the "right-hand" neighbor to sign.
+    async fn sign_adjacency(
+        &self,
+        mut left_incomplete: AdjacencyDescriptor,
+    ) -> Option<AdjacencyDescriptor> {
+        let my_fp = self.identity.public().fingerprint();
+        // This must be a neighbor that is "left" of us
+        let valid = left_incomplete.left < left_incomplete.right
+            && left_incomplete.right == my_fp
+            && left_incomplete.is_timely();
+        if !valid {
+            tracing::debug!("incomplete adjacency invalid! Refusing to sign adjacency x_x");
+            return None;
+        }
+
+        // Fill in the right-hand-side
+        let signature = self.identity.sign(left_incomplete.to_sign().as_bytes());
+        left_incomplete.right_sig = signature;
+
+        self.relay_graph
+            .write()
+            .insert_adjacency(left_incomplete.clone())
+            .map_err(|e| {
+                tracing::warn!("could not insert here: {:?}", e);
+                e
+            })
+            .ok()?;
+        Some(left_incomplete)
+    }
+
+    /// Gets the identity of a particular fingerprint. Returns None if that identity is not known to this node.
+    async fn identity(&self, fp: RelayFingerprint) -> Option<IdentityDescriptor> {
+        self.relay_graph.read().identity(&fp)
+    }
+
+    /// Gets all the adjacency-descriptors adjacent to the given fingerprints. This is called repeatedly to eventually discover the entire graph.
+    async fn adjacencies(&self, fps: Vec<RelayFingerprint>) -> Vec<AdjacencyDescriptor> {
+        let rg = self.relay_graph.read();
+        fps.into_iter()
+            .flat_map(|fp| rg.adjacencies(&fp).into_iter().flatten())
+            .dedup()
+            .collect()
+    }
+
+    /// Send a chat message to the other end of the link.
+    async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr> {
+        todo!()
+    }
+
+    /// Gets a one-time token to use in payment proofs for anti-double-spending
+    async fn get_ott(&self) -> Result<String, LinkRpcErr> {
+        todo!()
+    }
+
+    async fn send_payment_proof(
+        &self,
+        amount: u64,
+        paysystem_name: String,
+        proof: String,
+    ) -> Result<(), LinkRpcErr> {
+        todo!()
+    }
 }

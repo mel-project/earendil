@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-use anyhow::Context;
 use bytes::Bytes;
-use earendil_crypt::{ClientId, RelayFingerprint, RelayIdentityPublic, RelayIdentitySecret};
-use earendil_topology::IdentityDescriptor;
+use earendil_crypt::{ClientId, RelayIdentityPublic, RelayIdentitySecret};
+
 use futures_util::AsyncReadExt;
 use haiyuu::{Process, WeakHandle};
 use nanorpc::RpcService;
@@ -26,7 +25,7 @@ use super::{link_proc::LinkProcess, SwitchMessage, SwitchProcess};
 pub async fn process_in_route(
     in_route: InRouteConfig,
     switch: WeakHandle<SwitchProcess>,
-    rpc_serve: Option<Arc<dyn RpcService>>,
+    rpc_serve: Option<impl RpcService>,
 ) -> anyhow::Result<()> {
     let listener = sillad::tcp::TcpListener::bind(in_route.listen).await?;
     let mut listener = match in_route.obfs {
@@ -35,7 +34,7 @@ pub async fn process_in_route(
             sillad_sosistab3::listener::SosistabListener::new(listener, Cookie::new(&cookie)),
         ),
     };
-
+    let rpc_serve = rpc_serve.map(Arc::new);
     loop {
         let mut pipe = listener.accept().await?;
         let switch = switch.clone();
@@ -80,8 +79,9 @@ pub async fn process_out_route(
     switch: WeakHandle<SwitchProcess>,
 
     my_identity: either::Either<RelayIdentitySecret, ClientId>,
-    rpc_serve: Option<Arc<dyn RpcService>>,
+    rpc_serve: Option<impl RpcService>,
 ) -> anyhow::Result<()> {
+    let rpc_serve = rpc_serve.map(Arc::new);
     loop {
         let addrs = smol::net::resolve(out_route.connect.clone()).await?;
         let dialer = sillad::tcp::HappyEyeballsTcpDialer(addrs);
