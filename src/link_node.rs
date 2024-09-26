@@ -12,7 +12,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context as _;
 use client_proc::ClientProcess;
-use earendil_crypt::{AnonEndpoint, RelayFingerprint};
+use earendil_crypt::{AnonEndpoint, ClientId, RelayFingerprint};
 use earendil_packet::{
     InnerPacket, Message, PrivacyConfig, RawPacket, RawPacketWithNext, ReplyDegarbler, Surb,
 };
@@ -27,10 +27,12 @@ use relay_proc::{RelayMsg, RelayProcess};
 use route_util::{forward_route_to, route_to_instructs};
 use smol::channel::Receiver;
 pub use types::{IncomingMsg, LinkConfig, NeighborId, NeighborIdSecret};
+
 /// An implementation of the link-level interface.
 pub struct LinkNode {
     cfg: LinkConfig,
     process: either::Either<Handle<RelayProcess>, Handle<ClientProcess>>,
+    client_id: ClientId,
     graph: Arc<RwLock<RelayGraph>>,
 
     recv_incoming: Receiver<IncomingMsg>,
@@ -56,11 +58,17 @@ impl LinkNode {
             todo!()
         };
 
+        let client_id = if cfg.relay_config.is_some() {
+            0
+        } else {
+            rand::random()
+        };
         Ok(Self {
             cfg,
             process,
             graph,
             recv_incoming,
+            client_id,
         })
     }
 
@@ -138,16 +146,12 @@ impl LinkNode {
 
         let reverse_route = forward_route_to(&graph, destination, privacy_cfg.max_peelers)?;
         let reverse_instructs = route_to_instructs(&graph, &reverse_route)?;
-        let my_client_id = match self.ctx.my_id {
-            NeighborIdSecret::Relay(_) => 0, // special ClientId for relays
-            NeighborIdSecret::Client(id) => id,
-        };
 
         let (surb, (id, degarbler)) = Surb::new(
             &reverse_instructs,
             reverse_route[0],
             &dest_opk,
-            my_client_id,
+            self.client_id,
             my_anon_id,
             privacy_cfg,
         )
@@ -160,11 +164,6 @@ impl LinkNode {
             Some(val) => val.0.public().fingerprint(),
             None => todo!(),
         }
-    }
-
-    /// Sends a raw packet.
-    async fn send_raw(&self, raw: RawPacket, next_peeler: RelayFingerprint) {
-        todo!()
     }
 
     /// Receives an incoming message. Blocks until we have something that's for us, and not to be forwarded elsewhere.

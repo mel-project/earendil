@@ -11,8 +11,8 @@ use earendil_crypt::{ClientId, RelayFingerprint, RelayIdentitySecret};
 use futures_util::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use inout_route::{process_in_route, process_out_route};
 use itertools::Itertools;
-use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport, ServerError};
-use rand::Rng;
+use nanorpc::{JrpcRequest, RpcService, ServerError};
+use rand::{seq::IteratorRandom, Rng};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use std::{collections::BTreeMap, convert::Infallible};
@@ -82,7 +82,6 @@ impl SwitchProcess {
     pub fn new_client(
         identity: ClientId,
         process: WeakHandle<ClientProcess>,
-        in_routes: BTreeMap<String, InRouteConfig>,
         out_routes: BTreeMap<String, OutRouteConfig>,
     ) -> Self {
         Self {
@@ -90,7 +89,7 @@ impl SwitchProcess {
 
             relays: AHashMap::new(),
             clients: AHashMap::new(),
-            in_routes,
+            in_routes: Default::default(),
             out_routes,
         }
     }
@@ -183,6 +182,16 @@ impl haiyuu::Process for SwitchProcess {
                             .send(LinkMsg::Message(bts.clone()))
                             .await?;
                     }
+                    SwitchMessage::ToRandomRelay(bts) => {
+                        let relay = self.relays.keys().choose(&mut rand::thread_rng());
+                        if let Some(relay) = relay {
+                            self.relays
+                                .get(relay)
+                                .context("could not find link to relay")?
+                                .send(LinkMsg::Message(bts.clone()))
+                                .await?;
+                        }
+                    }
                     SwitchMessage::ToClient(bts, client) => {
                         self.clients
                             .get(&client)
@@ -225,6 +234,7 @@ impl haiyuu::Process for SwitchProcess {
 #[derivative(Debug)]
 pub enum SwitchMessage {
     ToRelay(#[derivative(Debug = "ignore")] Bytes, RelayFingerprint),
+    ToRandomRelay(#[derivative(Debug = "ignore")] Bytes),
     ToClient(#[derivative(Debug = "ignore")] Bytes, ClientId),
 
     FromClient(#[derivative(Debug = "ignore")] Bytes, ClientId),
