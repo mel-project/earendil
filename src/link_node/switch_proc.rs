@@ -11,7 +11,7 @@ use earendil_crypt::{ClientId, RelayFingerprint, RelayIdentitySecret};
 use futures_util::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use inout_route::{process_in_route, process_out_route};
 use itertools::Itertools;
-use nanorpc::{JrpcRequest, RpcService, ServerError};
+use nanorpc::{JrpcRequest, JrpcResponse, RpcService, ServerError};
 use rand::{seq::IteratorRandom, Rng};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
@@ -226,6 +226,13 @@ impl haiyuu::Process for SwitchProcess {
                     SwitchMessage::DumpRelays(send) => {
                         send.send(self.relays.keys().copied().collect_vec())?;
                     }
+                    SwitchMessage::CallLinkRpc(relay_fingerprint, jrpc_request, sender) => {
+                        self.relays
+                            .get(&relay_fingerprint)
+                            .context("could not find link to relay")?
+                            .send(LinkMsg::Request(jrpc_request, sender))
+                            .await?;
+                    }
                 }
                 anyhow::Ok(())
             };
@@ -242,6 +249,8 @@ pub enum SwitchMessage {
     ToRelay(#[derivative(Debug = "ignore")] Bytes, RelayFingerprint),
     ToRandomRelay(#[derivative(Debug = "ignore")] Bytes),
     ToClient(#[derivative(Debug = "ignore")] Bytes, ClientId),
+
+    CallLinkRpc(RelayFingerprint, JrpcRequest, oneshot::Sender<JrpcResponse>),
 
     FromClient(#[derivative(Debug = "ignore")] Bytes, ClientId),
     FromRelay(#[derivative(Debug = "ignore")] Bytes, RelayFingerprint),

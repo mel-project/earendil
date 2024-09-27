@@ -7,6 +7,7 @@ mod route_util;
 pub mod stats;
 mod switch_proc;
 mod types;
+mod gossip;
 
 use std::{collections::HashMap, sync::Arc};
 

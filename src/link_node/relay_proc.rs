@@ -10,7 +10,7 @@ use ahash::AHashSet;
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
-use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret, RemoteId};
+use earendil_crypt::{RelayFingerprint, RelayIdentitySecret, RemoteId};
 use earendil_packet::{
     crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, RawPacketWithNext, Surb,
 };
