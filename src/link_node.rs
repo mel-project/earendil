@@ -43,6 +43,11 @@ impl LinkNode {
     pub fn new(cfg: LinkConfig) -> anyhow::Result<Self> {
         let (send_incoming, recv_incoming) = smol::channel::unbounded();
         let graph = Arc::new(RwLock::new(RelayGraph::new()));
+        let client_id = if cfg.relay_config.is_some() {
+            0
+        } else {
+            rand::random()
+        };
         let process = if let Some((identity, in_routes)) = &cfg.relay_config {
             either::Either::Left(
                 RelayProcess::new(
@@ -55,14 +60,12 @@ impl LinkNode {
                 .spawn_smolscale(),
             )
         } else {
-            todo!()
+            either::Either::Right(
+                ClientProcess::new(client_id, cfg.out_routes.clone(), send_incoming)
+                    .spawn_smolscale(),
+            )
         };
 
-        let client_id = if cfg.relay_config.is_some() {
-            0
-        } else {
-            rand::random()
-        };
         Ok(Self {
             cfg,
             process,
@@ -178,7 +181,7 @@ impl LinkNode {
 
     /// Gets the current relay graph.
     pub fn relay_graph(&self) -> RelayGraph {
-        todo!()
+        self.graph.read().clone()
     }
 
     /// Gets my identity.

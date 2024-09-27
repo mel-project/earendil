@@ -22,7 +22,10 @@ use earendil_packet::RawPacketWithNext;
 use haiyuu::{Handle, WeakHandle};
 use link_proc::{LinkMsg, LinkProcess};
 
-use crate::config::{InRouteConfig, OutRouteConfig};
+use crate::{
+    config::{InRouteConfig, OutRouteConfig},
+    link_node::client_proc::ClientMsg,
+};
 
 use super::{
     client_proc::ClientProcess,
@@ -208,7 +211,10 @@ impl haiyuu::Process for SwitchProcess {
                                     .context("cannot cast as RawPacketWithNext")?;
                                 relay.send(RelayMsg::PeelForward(*rpnx)).await?;
                             }
-                            either::Either::Right(_) => todo!(),
+                            either::Either::Right(client) => {
+                                let (rb_id, bts): (u64, Bytes) = stdcode::deserialize(&bts)?;
+                                client.send(ClientMsg::Backward(rb_id, bts)).await?;
+                            }
                         }
                     }
                     SwitchMessage::NewClientLink(link, client) => {

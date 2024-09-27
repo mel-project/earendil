@@ -19,14 +19,14 @@ relay_config:
         outbound_max_price: 0
         outbound_min_debt_limit: 0
 
-havens:
-  - identity_seed: i-am-a-haven-pls-no-eat-me
-    listen_port: 29421
-    rendezvous: 2d2b5429d2c814c05c31bc67b3731817a1b09ba353f8b31b54dce7f149fa16a7 # self
-    handler:
-      type: simple_proxy
-      # type: tcp_service
-      # upstream: 127.0.0.1:42424
+# havens:
+#   - identity_seed: i-am-a-haven-pls-no-eat-me
+#     listen_port: 29421
+#     rendezvous: 2d2b5429d2c814c05c31bc67b3731817a1b09ba353f8b31b54dce7f149fa16a7 # self
+#     handler:
+#       type: simple_proxy
+#       # type: tcp_service
+#       # upstream: 127.0.0.1:42424
 
 payment_methods:
   - dummy

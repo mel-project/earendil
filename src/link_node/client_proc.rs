@@ -19,6 +19,20 @@ pub struct ClientProcess {
     send_incoming: Sender<IncomingMsg>,
 }
 
+impl ClientProcess {
+    pub fn new(
+        identity: u64,
+        out_routes: BTreeMap<String, OutRouteConfig>,
+        send_incoming: Sender<IncomingMsg>,
+    ) -> Self {
+        Self {
+            identity,
+            out_routes,
+            send_incoming,
+        }
+    }
+}
+
 impl Process for ClientProcess {
     type Message = ClientMsg;
 
