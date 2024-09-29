@@ -62,6 +62,11 @@ impl RelayGraph {
         self.id_to_descriptor.get(&id).cloned()
     }
 
+    /// A rough size estimate of the graph.
+    pub fn size(&self) -> usize {
+        self.adjacency.len()
+    }
+
     /// Inserts an identity descriptor. Verifies its self-consistency.
     pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> Result<(), VerifyError> {
         // do not insert if we already have a newer copy

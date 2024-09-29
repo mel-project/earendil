@@ -278,17 +278,18 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     /// Gets the identity of a particular fingerprint. Returns None if that identity is not known to this node.
-    async fn identity(&self, fp: RelayFingerprint) -> Option<IdentityDescriptor> {
-        self.relay_graph.read().identity(&fp)
+    async fn all_identities(&self) -> Vec<IdentityDescriptor> {
+        let graph = self.relay_graph.read();
+        graph
+            .all_nodes()
+            .filter_map(|fp| graph.identity(&fp))
+            .collect()
     }
 
     /// Gets all the adjacency-descriptors adjacent to the given fingerprints. This is called repeatedly to eventually discover the entire graph.
-    async fn adjacencies(&self, fps: Vec<RelayFingerprint>) -> Vec<AdjacencyDescriptor> {
+    async fn all_adjacencies(&self) -> Vec<AdjacencyDescriptor> {
         let rg = self.relay_graph.read();
-        fps.into_iter()
-            .flat_map(|fp| rg.adjacencies(&fp).into_iter().flatten())
-            .dedup()
-            .collect()
+        rg.all_adjacencies().collect()
     }
 
     /// Send a chat message to the other end of the link.

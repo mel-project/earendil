@@ -1,43 +1,84 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::Context;
 use async_trait::async_trait;
-use earendil_crypt::RelayFingerprint;
-use earendil_topology::RelayGraph;
+use bytes::Bytes;
+use earendil_crypt::{RelayFingerprint, RelayIdentitySecret};
+use earendil_topology::{AdjacencyDescriptor, RelayGraph};
 use haiyuu::{Handle, WeakHandle};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
 use parking_lot::RwLock;
-use rand::seq::SliceRandom;
+use rand::{seq::SliceRandom, Rng};
 
 use crate::link_node::{link_protocol::LinkClient, switch_proc::SwitchMessage};
 
 use super::switch_proc::SwitchProcess;
 
 /// A loop to go around the graph and pull relay graph data from our relay neighbors.
-pub async fn gossip_pull_graph(graph: Arc<RwLock<RelayGraph>>, switch: Handle<SwitchProcess>) {
+pub async fn graph_gossip_loop(
+    my_identity: Option<RelayIdentitySecret>,
+    graph: Arc<RwLock<RelayGraph>>,
+    switch: Handle<SwitchProcess>,
+) {
     loop {
-        if let Err(err) = gossip_pull_once(graph.clone(), switch.clone()).await {
+        if let Err(err) = gossip_once(my_identity, graph.clone(), switch.clone()).await {
             tracing::warn!(err = debug(err), "failed to gossip once");
         }
-        smol::Timer::after(Duration::from_secs(1)).await;
+        let graph_size = graph.read().size();
+        let sleep_secs =
+            rand::thread_rng().gen_range((graph_size as f64)..2.0 * (graph_size as f64));
+        tracing::debug!(graph_size, sleep_secs, "sleeping before gossipping again");
+        smol::Timer::after(Duration::from_secs_f64(sleep_secs)).await;
     }
 }
 
-async fn gossip_pull_once(
+async fn gossip_once(
+    my_identity: Option<RelayIdentitySecret>,
     graph: Arc<RwLock<RelayGraph>>,
     switch: Handle<SwitchProcess>,
 ) -> anyhow::Result<()> {
     let (send, recv) = oneshot::channel();
     switch.send(SwitchMessage::DumpRelays(send)).await?;
     let relays = recv.await?;
-    let chosen_neighbor = relays
+    let neighbor_fp = relays
         .choose(&mut rand::thread_rng())
         .cloned()
         .context("no relay neighbors connected to the switch")?;
     let rpc = LinkClient(SwitchRpcTransport {
         switch: switch.downgrade(),
-        neighbor: chosen_neighbor,
+        neighbor: neighbor_fp,
     });
+
+    // if we are a relay, do the whole adjacency signing thing
+    if let Some(my_identity) = my_identity {
+        let my_fp = my_identity.public().fingerprint();
+        if my_fp < neighbor_fp {
+            let mut left_incomplete = AdjacencyDescriptor {
+                left: my_fp,
+                right: neighbor_fp,
+                left_sig: Bytes::new(),
+                right_sig: Bytes::new(),
+                unix_timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+            };
+            left_incomplete.left_sig = my_identity.sign(left_incomplete.to_sign().as_bytes());
+            let complete = rpc
+                .sign_adjacency(left_incomplete)
+                .await?
+                .context("remote refused to sign off")?;
+            graph.write().insert_adjacency(complete.clone())?;
+        }
+    }
+
+    // then sync up the *entire* graph they have
+    for identity in rpc.all_identities().await? {
+        graph.write().insert_identity(identity)?;
+    }
+    for adjacency in rpc.all_adjacencies().await? {
+        graph.write().insert_adjacency(adjacency)?;
+    }
 
     todo!()
 }

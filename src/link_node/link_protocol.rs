@@ -20,11 +20,11 @@ pub trait LinkProtocol {
         left_incomplete: AdjacencyDescriptor,
     ) -> Option<AdjacencyDescriptor>;
 
-    /// Gets the identity of a particular fingerprint. Returns None if that identity is not known to this node.
-    async fn identity(&self, fp: RelayFingerprint) -> Option<IdentityDescriptor>;
+    /// Gets *all* the known identities in the relay graph
+    async fn all_identities(&self) -> Vec<IdentityDescriptor>;
 
-    /// Gets all the adjacency-descriptors adjacent to the given fingerprints. This is called repeatedly to eventually discover the entire graph.
-    async fn adjacencies(&self, fps: Vec<RelayFingerprint>) -> Vec<AdjacencyDescriptor>;
+    /// Gets *all* the adjacency-descriptors.
+    async fn all_adjacencies(&self) -> Vec<AdjacencyDescriptor>;
 
     /// Send a chat message to the other end of the link.
     async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr>;
