@@ -12,7 +12,7 @@ mod types;
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context as _;
-use client_proc::ClientProcess;
+use client_proc::{ClientMsg, ClientProcess};
 use earendil_crypt::{AnonEndpoint, ClientId, RelayFingerprint};
 use earendil_packet::{
     InnerPacket, Message, PrivacyConfig, RawPacket, RawPacketWithNext, ReplyDegarbler, Surb,
@@ -95,11 +95,7 @@ impl LinkNode {
                 proc.send(RelayMsg::PeelForward(raw_packet)).await?;
             }
             either::Either::Right(client) => {
-                let raw_packet = RawPacketWithNext {
-                    packet: todo!(),
-                    next_peeler: todo!(),
-                };
-                todo!()
+                client.send(ClientMsg::Forward(raw_packet)).await?;
             }
         }
         anyhow::Ok(())

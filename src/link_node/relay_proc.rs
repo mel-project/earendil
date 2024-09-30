@@ -122,10 +122,21 @@ impl RelayProcess {
                     client_id,
                     rb_id,
                     pkt,
-                } => switch.send_or_drop(SwitchMessage::ToClient(
-                    (rb_id, pkt.to_vec()).stdcode().into(),
-                    client_id,
-                ))?,
+                } => {
+                    if client_id > 0 {
+                        switch.send_or_drop(SwitchMessage::ToClient(
+                            (rb_id, pkt.to_vec()).stdcode().into(),
+                            client_id,
+                        ))?
+                    } else {
+                        self.send_incoming
+                            .send(IncomingMsg::Backward {
+                                rb_id,
+                                body: pkt.to_vec().into(),
+                            })
+                            .await?;
+                    }
+                }
             }
         } else {
             let next_hop = self
