@@ -1,4 +1,5 @@
 mod client_proc;
+mod gossip;
 mod link_protocol;
 mod link_store;
 mod payment_system;
@@ -7,7 +8,6 @@ mod route_util;
 pub mod stats;
 mod switch_proc;
 mod types;
-mod gossip;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -56,14 +56,20 @@ impl LinkNode {
                     in_routes.clone(),
                     cfg.out_routes.clone(),
                     graph.clone(),
+                    cfg.exit_info.clone(),
                     send_incoming,
                 )
                 .spawn_smolscale(),
             )
         } else {
             either::Either::Right(
-                ClientProcess::new(client_id, cfg.out_routes.clone(), send_incoming)
-                    .spawn_smolscale(),
+                ClientProcess::new(
+                    client_id,
+                    cfg.out_routes.clone(),
+                    graph.clone(),
+                    send_incoming,
+                )
+                .spawn_smolscale(),
             )
         };
 
@@ -88,7 +94,13 @@ impl LinkNode {
             either::Either::Left(proc) => {
                 proc.send(RelayMsg::PeelForward(raw_packet)).await?;
             }
-            either::Either::Right(_) => todo!(),
+            either::Either::Right(client) => {
+                let raw_packet = RawPacketWithNext {
+                    packet: todo!(),
+                    next_peeler: todo!(),
+                };
+                todo!()
+            }
         }
         anyhow::Ok(())
     }
@@ -166,18 +178,16 @@ impl LinkNode {
     fn surb_destination(&self) -> RelayFingerprint {
         match &self.cfg.relay_config {
             Some(val) => val.0.public().fingerprint(),
-            None => todo!(),
+            None => {
+                // TODO something more intelligent and correct
+                self.cfg.out_routes.values().next().unwrap().fingerprint
+            }
         }
     }
 
     /// Receives an incoming message. Blocks until we have something that's for us, and not to be forwarded elsewhere.
     pub async fn recv(&self) -> IncomingMsg {
         self.recv_incoming.recv().await.unwrap()
-    }
-
-    /// Gets all the currently known relays.
-    pub fn all_relays(&self) -> Vec<RelayFingerprint> {
-        todo!()
     }
 
     /// Gets the current relay graph.
@@ -222,6 +232,6 @@ impl LinkNode {
     }
 
     pub fn privacy_config(&self) -> PrivacyConfig {
-        todo!()
+        self.cfg.privacy_config
     }
 }

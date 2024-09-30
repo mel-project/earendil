@@ -14,7 +14,7 @@ use earendil_crypt::{RelayFingerprint, RelayIdentitySecret, RemoteId};
 use earendil_packet::{
     crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, RawPacketWithNext, Surb,
 };
-use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor, RelayGraph};
+use earendil_topology::{AdjacencyDescriptor, ExitInfo, IdentityDescriptor, RelayGraph};
 use haiyuu::Handle;
 use itertools::Itertools as _;
 use moka::future::Cache;
@@ -29,6 +29,7 @@ use crate::{
 };
 
 use super::{
+    gossip::graph_gossip_loop,
     link_protocol::{InfoResponse, LinkProtocol, LinkRpcErr, LinkService},
     switch_proc::SwitchProcess,
     IncomingMsg,
@@ -47,7 +48,7 @@ pub struct RelayProcess {
     delay_queue: BTreeMap<Instant, RawPacketWithNext>,
 
     next_hop_cache: Cache<RelayFingerprint, RelayFingerprint>,
-
+    exit_info: Option<ExitInfo>,
     send_incoming: Sender<IncomingMsg>,
 }
 
@@ -58,6 +59,7 @@ impl RelayProcess {
         in_routes: BTreeMap<String, InRouteConfig>,
         out_routes: BTreeMap<String, OutRouteConfig>,
         relay_graph: Arc<RwLock<RelayGraph>>,
+        exit_info: Option<ExitInfo>,
         send_incoming: Sender<IncomingMsg>,
     ) -> Self {
         Self {
@@ -74,6 +76,8 @@ impl RelayProcess {
             next_hop_cache: Cache::builder()
                 .time_to_live(Duration::from_secs(60))
                 .build(),
+
+            exit_info,
 
             send_incoming,
         }
@@ -181,6 +185,35 @@ impl haiyuu::Process for RelayProcess {
             identity: self.identity,
             relay_graph: self.relay_graph.clone(),
         });
+        let _gossip_loop = smolscale::spawn(graph_gossip_loop(
+            Some(self.identity),
+            self.relay_graph.clone(),
+            self.switch.get().unwrap().downgrade(),
+        ));
+
+        let _identity_refresh_loop = {
+            let exit_info = self.exit_info.clone();
+            let graph = self.relay_graph.clone();
+            let identity = self.identity;
+            let peel_secret = self.peel_secret.clone();
+            smolscale::spawn(async move {
+                loop {
+                    let myself =
+                        IdentityDescriptor::new(&identity, &peel_secret, exit_info.clone());
+                    tracing::debug!(
+                        "inserting ourselves: {} into relay graph with exit: {:?}",
+                        identity.public().fingerprint(),
+                        exit_info
+                    );
+                    graph
+                        .write()
+                        .insert_identity(myself)
+                        .expect("could not insert ourselves");
+                    smol::Timer::after(Duration::from_secs(1)).await;
+                }
+            })
+        };
+
         loop {
             let get_delayed = async {
                 if let Some((time, _)) = self.delay_queue.first_key_value() {

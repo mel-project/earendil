@@ -21,13 +21,13 @@ use super::switch_proc::SwitchProcess;
 pub async fn graph_gossip_loop(
     my_identity: Option<RelayIdentitySecret>,
     graph: Arc<RwLock<RelayGraph>>,
-    switch: Handle<SwitchProcess>,
+    switch: WeakHandle<SwitchProcess>,
 ) {
     loop {
         if let Err(err) = gossip_once(my_identity, graph.clone(), switch.clone()).await {
             tracing::warn!(err = debug(err), "failed to gossip once");
         }
-        let graph_size = graph.read().size();
+        let graph_size = graph.read().size() + 1;
         let sleep_secs =
             rand::thread_rng().gen_range((graph_size as f64)..2.0 * (graph_size as f64));
         tracing::debug!(graph_size, sleep_secs, "sleeping before gossipping again");
@@ -38,7 +38,7 @@ pub async fn graph_gossip_loop(
 async fn gossip_once(
     my_identity: Option<RelayIdentitySecret>,
     graph: Arc<RwLock<RelayGraph>>,
-    switch: Handle<SwitchProcess>,
+    switch: WeakHandle<SwitchProcess>,
 ) -> anyhow::Result<()> {
     let (send, recv) = oneshot::channel();
     switch.send(SwitchMessage::DumpRelays(send)).await?;
@@ -48,7 +48,7 @@ async fn gossip_once(
         .cloned()
         .context("no relay neighbors connected to the switch")?;
     let rpc = LinkClient(SwitchRpcTransport {
-        switch: switch.downgrade(),
+        switch: switch.clone(),
         neighbor: neighbor_fp,
     });
 
@@ -80,7 +80,7 @@ async fn gossip_once(
         graph.write().insert_adjacency(adjacency)?;
     }
 
-    todo!()
+    Ok(())
 }
 
 struct SwitchRpcTransport {

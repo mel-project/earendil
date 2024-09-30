@@ -19,6 +19,9 @@ relay_config:
         outbound_max_price: 0
         outbound_min_debt_limit: 0
 
+exit_config:
+  allowed_ports: [80, 443]
+
 # havens:
 #   - identity_seed: i-am-a-haven-pls-no-eat-me
 #     listen_port: 29421
