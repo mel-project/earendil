@@ -29,21 +29,6 @@ impl Display for NeighborId {
     }
 }
 
-#[derive(Clone)]
-pub enum NeighborIdSecret {
-    Relay(RelayIdentitySecret),
-    Client(ClientId),
-}
-
-impl NeighborIdSecret {
-    pub fn public(&self) -> NeighborId {
-        match self {
-            NeighborIdSecret::Relay(relay_id) => NeighborId::Relay(relay_id.public().fingerprint()),
-            NeighborIdSecret::Client(client_id) => NeighborId::Client(*client_id),
-        }
-    }
-}
-
 /// Incoming messages from the link layer that are addressed to "us".
 #[derive(Debug)]
 pub enum IncomingMsg {

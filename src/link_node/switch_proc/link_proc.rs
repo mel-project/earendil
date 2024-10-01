@@ -6,7 +6,7 @@ use bytes::Bytes;
 use earendil_crypt::{ClientId, RelayFingerprint};
 
 use futures_util::io::AsyncReadExt;
-use haiyuu::{Handle, WeakHandle};
+use haiyuu::WeakHandle;
 use nanorpc::{JrpcId, JrpcRequest, JrpcResponse, RpcService};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};

@@ -23,10 +23,7 @@ impl DaemonWrap {
     }
 
     pub fn identity(&self) -> NeighborId {
-        match self {
-            DaemonWrap::Remote(_) => todo!(), // todo: add control method?
-            DaemonWrap::Embedded(node) => node.identity(),
-        }
+        todo!()
     }
 
     pub fn check_dead(&self) -> anyhow::Result<()> {

@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use earendil_crypt::{RelayFingerprint, RelayIdentitySecret};
 use earendil_topology::{AdjacencyDescriptor, RelayGraph};
-use haiyuu::{Handle, WeakHandle};
+use haiyuu::WeakHandle;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
 use parking_lot::RwLock;
 use rand::{seq::SliceRandom, Rng};

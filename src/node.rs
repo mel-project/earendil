@@ -231,9 +231,9 @@ impl Node {
         })
     }
 
-    pub fn identity(&self) -> NeighborId {
-        self.ctx.v2h.link_node().my_id().public()
-    }
+    // pub fn identity(&self) -> NeighborId {
+    //     self.ctx.v2h.link_node().my_id().public()
+    // }
 }
 struct DummyControlProtocolTransport {
     inner: ControlService<ControlProtocolImpl>,

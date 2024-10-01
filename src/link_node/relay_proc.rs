@@ -16,7 +16,7 @@ use earendil_packet::{
 };
 use earendil_topology::{AdjacencyDescriptor, ExitInfo, IdentityDescriptor, RelayGraph};
 use haiyuu::Handle;
-use itertools::Itertools as _;
+
 use moka::future::Cache;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService};
 use parking_lot::RwLock;

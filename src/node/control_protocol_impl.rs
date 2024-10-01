@@ -9,7 +9,7 @@ use crate::{
     config::{InRouteConfig, PriceConfig},
     control_protocol::{DebtError, RelayGraphInfo},
     v2h_node::HavenLocator,
-    ChatEntry, NeighborId, NeighborIdSecret,
+    ChatEntry, NeighborId,
 };
 
 use super::NodeCtx;
@@ -89,26 +89,24 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn relay_graph_info(&self) -> RelayGraphInfo {
-        let my_fingerprint = match self.ctx.v2h.link_node().my_id() {
-            NeighborIdSecret::Client(_) => None,
-            NeighborIdSecret::Relay(id) => Some(id.public().fingerprint()),
-        };
+        todo!()
+        // let my_fingerprint = match self.ctx.;
 
-        let relay_graph = self.ctx.v2h.link_node().relay_graph();
-        let relays: Vec<RelayFingerprint> = relay_graph.all_nodes().collect();
+        // let relay_graph = self.ctx.v2h.link_node().relay_graph();
+        // let relays: Vec<RelayFingerprint> = relay_graph.all_nodes().collect();
 
-        let adjacencies: Vec<(RelayFingerprint, RelayFingerprint)> = relay_graph
-            .all_adjacencies()
-            .map(|adj| (adj.left, adj.right))
-            .collect();
-        let neighbors: Vec<NeighborId> = self.ctx.v2h.link_node().all_neighs().clone();
+        // let adjacencies: Vec<(RelayFingerprint, RelayFingerprint)> = relay_graph
+        //     .all_adjacencies()
+        //     .map(|adj| (adj.left, adj.right))
+        //     .collect();
+        // let neighbors: Vec<NeighborId> = self.ctx.v2h.link_node().all_neighs().clone();
 
-        RelayGraphInfo {
-            my_fingerprint,
-            relays,
-            adjacencies,
-            neighbors,
-        }
+        // RelayGraphInfo {
+        //     my_fingerprint,
+        //     relays,
+        //     adjacencies,
+        //     neighbors,
+        // }
     }
 
     // ------------- functionality to test GlobalRpc --------------

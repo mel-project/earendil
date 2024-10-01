@@ -27,7 +27,7 @@ pub use payment_system::{Dummy, OnChain, PaymentSystem, PoW};
 use relay_proc::{RelayMsg, RelayProcess};
 use route_util::{forward_route_to, route_to_instructs};
 use smol::channel::Receiver;
-pub use types::{IncomingMsg, LinkConfig, NeighborId, NeighborIdSecret};
+pub use types::{IncomingMsg, LinkConfig, NeighborId};
 
 /// An implementation of the link-level interface.
 pub struct LinkNode {
@@ -189,11 +189,6 @@ impl LinkNode {
     /// Gets the current relay graph.
     pub fn relay_graph(&self) -> RelayGraph {
         self.graph.read().clone()
-    }
-
-    /// Gets my identity.
-    pub fn my_id(&self) -> NeighborIdSecret {
-        todo!()
     }
 
     /// Gets all our currently connected neighbors.
