@@ -15,19 +15,19 @@ use rand::{seq::SliceRandom, Rng};
 
 use crate::link_node::{link_protocol::LinkClient, switch_proc::SwitchMessage};
 
-use super::switch_proc::SwitchProcess;
+use super::{netgraph::NetGraph, switch_proc::SwitchProcess};
 
 /// A loop to go around the graph and pull relay graph data from our relay neighbors.
 pub async fn graph_gossip_loop(
     my_identity: Option<RelayIdentitySecret>,
-    graph: Arc<RwLock<RelayGraph>>,
+    graph: NetGraph,
     switch: WeakHandle<SwitchProcess>,
 ) {
     loop {
         if let Err(err) = gossip_once(my_identity, graph.clone(), switch.clone()).await {
             tracing::warn!(err = debug(err), "failed to gossip once");
         }
-        let graph_size = graph.read().size() + 1;
+        let graph_size = graph.read_graph(|g| g.size()) + 1;
         let sleep_secs =
             rand::thread_rng().gen_range((graph_size as f64)..2.0 * (graph_size as f64));
         tracing::debug!(graph_size, sleep_secs, "sleeping before gossipping again");
@@ -37,7 +37,7 @@ pub async fn graph_gossip_loop(
 
 async fn gossip_once(
     my_identity: Option<RelayIdentitySecret>,
-    graph: Arc<RwLock<RelayGraph>>,
+    graph: NetGraph,
     switch: WeakHandle<SwitchProcess>,
 ) -> anyhow::Result<()> {
     let (send, recv) = oneshot::channel();
@@ -68,16 +68,16 @@ async fn gossip_once(
                 .sign_adjacency(left_incomplete)
                 .await?
                 .context("remote refused to sign off")?;
-            graph.write().insert_adjacency(complete.clone())?;
+            graph.modify_graph(|g| g.insert_adjacency(complete.clone()))?;
         }
     }
 
     // then sync up the *entire* graph they have
     for identity in rpc.all_identities().await? {
-        graph.write().insert_identity(identity)?;
+        graph.modify_graph(|g| g.insert_identity(identity))?;
     }
     for adjacency in rpc.all_adjacencies().await? {
-        graph.write().insert_adjacency(adjacency)?;
+        graph.modify_graph(|g| g.insert_adjacency(adjacency))?;
     }
 
     Ok(())

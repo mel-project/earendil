@@ -2,6 +2,7 @@ mod client_proc;
 mod gossip;
 mod link_protocol;
 mod link_store;
+mod netgraph;
 mod payment_system;
 mod relay_proc;
 mod route_util;
@@ -21,6 +22,7 @@ use earendil_topology::RelayGraph;
 use haiyuu::{Handle, Process};
 pub use link_store::*;
 
+use netgraph::NetGraph;
 use parking_lot::RwLock;
 pub use payment_system::{Dummy, OnChain, PaymentSystem, PoW};
 
@@ -34,7 +36,7 @@ pub struct LinkNode {
     cfg: LinkConfig,
     process: either::Either<Handle<RelayProcess>, Handle<ClientProcess>>,
     client_id: ClientId,
-    graph: Arc<RwLock<RelayGraph>>,
+    graph: NetGraph,
 
     recv_incoming: Receiver<IncomingMsg>,
 }
@@ -43,12 +45,16 @@ impl LinkNode {
     /// Creates a new link node.
     pub fn new(cfg: LinkConfig) -> anyhow::Result<Self> {
         let (send_incoming, recv_incoming) = smol::channel::unbounded();
-        let graph = Arc::new(RwLock::new(RelayGraph::new()));
         let client_id = if cfg.relay_config.is_some() {
             0
         } else {
             rand::random()
         };
+        let graph = NetGraph::new(if let Some((identity, _)) = &cfg.relay_config {
+            NeighborId::Relay(identity.public().fingerprint())
+        } else {
+            NeighborId::Client(client_id)
+        });
         let process = if let Some((identity, in_routes)) = &cfg.relay_config {
             either::Either::Left(
                 RelayProcess::new(
@@ -108,25 +114,28 @@ impl LinkNode {
         dest_relay: RelayFingerprint,
     ) -> anyhow::Result<RawPacketWithNext> {
         let privacy_config = self.privacy_config();
-        let graph = self.graph.read();
-        let route = forward_route_to(&graph, dest_relay, privacy_config.max_peelers)?;
-        let first_peeler = *route.first().context("empty route")?;
-        let instructs = route_to_instructs(&graph, &route).context("route_to_instructs failed")?;
-        let dest_opk = graph
-            .identity(&dest_relay)
-            .context(format!(
-                "couldn't get the identity of the destination fp {dest_relay}"
-            ))?
-            .onion_pk;
-        Ok(RawPacketWithNext {
-            packet: RawPacket::new_normal(
-                &instructs,
-                &dest_opk,
-                packet,
-                earendil_crypt::RemoteId::Anon(src),
-                privacy_config,
-            )?,
-            next_peeler: first_peeler,
+
+        self.graph.read_graph(|graph| {
+            let route = forward_route_to(&graph, dest_relay, privacy_config.max_peelers)?;
+            let first_peeler = *route.first().context("empty route")?;
+            let instructs =
+                route_to_instructs(&graph, &route).context("route_to_instructs failed")?;
+            let dest_opk = graph
+                .identity(&dest_relay)
+                .context(format!(
+                    "couldn't get the identity of the destination fp {dest_relay}"
+                ))?
+                .onion_pk;
+            Ok(RawPacketWithNext {
+                packet: RawPacket::new_normal(
+                    &instructs,
+                    &dest_opk,
+                    packet,
+                    earendil_crypt::RemoteId::Anon(src),
+                    privacy_config,
+                )?,
+                next_peeler: first_peeler,
+            })
         })
     }
 
@@ -146,29 +155,30 @@ impl LinkNode {
         my_anon_id: AnonEndpoint,
     ) -> anyhow::Result<(Surb, u64, ReplyDegarbler)> {
         let destination = self.surb_destination();
-        let graph = self.graph.read();
-        let dest_opk = graph
-            .identity(&destination)
-            .context(format!(
-                "destination {destination} is surprisingly not in our RelayGraph"
-            ))?
-            .onion_pk;
+        self.graph.read_graph(|graph| {
+            let dest_opk = graph
+                .identity(&destination)
+                .context(format!(
+                    "destination {destination} is surprisingly not in our RelayGraph"
+                ))?
+                .onion_pk;
 
-        let privacy_cfg = self.privacy_config();
+            let privacy_cfg = self.privacy_config();
 
-        let reverse_route = forward_route_to(&graph, destination, privacy_cfg.max_peelers)?;
-        let reverse_instructs = route_to_instructs(&graph, &reverse_route)?;
+            let reverse_route = forward_route_to(&graph, destination, privacy_cfg.max_peelers)?;
+            let reverse_instructs = route_to_instructs(&graph, &reverse_route)?;
 
-        let (surb, (id, degarbler)) = Surb::new(
-            &reverse_instructs,
-            reverse_route[0],
-            &dest_opk,
-            self.client_id,
-            my_anon_id,
-            privacy_cfg,
-        )
-        .context("cannot build reply block")?;
-        Ok((surb, id, degarbler))
+            let (surb, (id, degarbler)) = Surb::new(
+                &reverse_instructs,
+                reverse_route[0],
+                &dest_opk,
+                self.client_id,
+                my_anon_id,
+                privacy_cfg,
+            )
+            .context("cannot build reply block")?;
+            Ok((surb, id, degarbler))
+        })
     }
 
     fn surb_destination(&self) -> RelayFingerprint {
@@ -188,7 +198,7 @@ impl LinkNode {
 
     /// Gets the current relay graph.
     pub fn relay_graph(&self) -> RelayGraph {
-        self.graph.read().clone()
+        self.graph.read_graph(|g| g.clone())
     }
 
     /// Gets all our currently connected neighbors.

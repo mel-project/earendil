@@ -31,6 +31,7 @@ use crate::{
 use super::{
     gossip::graph_gossip_loop,
     link_protocol::{InfoResponse, LinkProtocol, LinkRpcErr, LinkService},
+    netgraph::NetGraph,
     switch_proc::SwitchProcess,
     IncomingMsg,
 };
@@ -44,7 +45,7 @@ pub struct RelayProcess {
     out_routes: BTreeMap<String, OutRouteConfig>,
 
     peel_dedup: AHashSet<blake3::Hash>,
-    relay_graph: Arc<RwLock<RelayGraph>>,
+    relay_graph: NetGraph,
     delay_queue: BTreeMap<Instant, RawPacketWithNext>,
 
     next_hop_cache: Cache<RelayFingerprint, RelayFingerprint>,
@@ -58,7 +59,7 @@ impl RelayProcess {
         identity: RelayIdentitySecret,
         in_routes: BTreeMap<String, InRouteConfig>,
         out_routes: BTreeMap<String, OutRouteConfig>,
-        relay_graph: Arc<RwLock<RelayGraph>>,
+        relay_graph: NetGraph,
         exit_info: Option<ExitInfo>,
         send_incoming: Sender<IncomingMsg>,
     ) -> Self {
@@ -147,20 +148,21 @@ impl RelayProcess {
                     let neighbors = recv.await?;
 
                     // find the neighbor with the lowest hops to the destination
-                    let graph = self.relay_graph.read();
-                    let mut min_hops = usize::MAX;
-                    let mut min_hop_neighbor = None;
-                    for neighbor in neighbors {
-                        let hops = graph
-                            .find_shortest_path(&neighbor, &packet.next_peeler)
-                            .map(|hps| hps.len())
-                            .unwrap_or(usize::MAX);
-                        if hops < min_hops {
-                            min_hops = hops;
-                            min_hop_neighbor = Some(neighbor);
+                    self.relay_graph.read_graph(|graph| {
+                        let mut min_hops = usize::MAX;
+                        let mut min_hop_neighbor = None;
+                        for neighbor in neighbors {
+                            let hops = graph
+                                .find_shortest_path(&neighbor, &packet.next_peeler)
+                                .map(|hps| hps.len())
+                                .unwrap_or(usize::MAX);
+                            if hops < min_hops {
+                                min_hops = hops;
+                                min_hop_neighbor = Some(neighbor);
+                            }
                         }
-                    }
-                    min_hop_neighbor.ok_or_else(|| anyhow::anyhow!("no relay found"))
+                        min_hop_neighbor.ok_or_else(|| anyhow::anyhow!("no relay found"))
+                    })
                 })
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
@@ -216,10 +218,10 @@ impl haiyuu::Process for RelayProcess {
                         identity.public().fingerprint(),
                         exit_info
                     );
-                    graph
-                        .write()
-                        .insert_identity(myself)
-                        .expect("could not insert ourselves");
+                    graph.modify_graph(|g| {
+                        g.insert_identity(myself)
+                            .expect("could not insert ourselves")
+                    });
                     smol::Timer::after(Duration::from_secs(1)).await;
                 }
             })
@@ -279,7 +281,7 @@ pub enum RelayMsg {
 
 struct LinkProtocolImpl {
     identity: RelayIdentitySecret,
-    relay_graph: Arc<RwLock<RelayGraph>>,
+    relay_graph: NetGraph,
 }
 
 #[async_trait]
@@ -310,30 +312,31 @@ impl LinkProtocol for LinkProtocolImpl {
         let signature = self.identity.sign(left_incomplete.to_sign().as_bytes());
         left_incomplete.right_sig = signature;
 
-        self.relay_graph
-            .write()
-            .insert_adjacency(left_incomplete.clone())
-            .map_err(|e| {
-                tracing::warn!("could not insert here: {:?}", e);
-                e
-            })
-            .ok()?;
+        self.relay_graph.modify_graph(|g| {
+            g.insert_adjacency(left_incomplete.clone())
+                .map_err(|e| {
+                    tracing::warn!("could not insert here: {:?}", e);
+                    e
+                })
+                .ok()
+        })?;
         Some(left_incomplete)
     }
 
     /// Gets the identity of a particular fingerprint. Returns None if that identity is not known to this node.
     async fn all_identities(&self) -> Vec<IdentityDescriptor> {
-        let graph = self.relay_graph.read();
-        graph
-            .all_nodes()
-            .filter_map(|fp| graph.identity(&fp))
-            .collect()
+        self.relay_graph.read_graph(|graph| {
+            graph
+                .all_nodes()
+                .filter_map(|fp| graph.identity(&fp))
+                .collect()
+        })
     }
 
     /// Gets all the adjacency-descriptors adjacent to the given fingerprints. This is called repeatedly to eventually discover the entire graph.
     async fn all_adjacencies(&self) -> Vec<AdjacencyDescriptor> {
-        let rg = self.relay_graph.read();
-        rg.all_adjacencies().collect()
+        self.relay_graph
+            .read_graph(|graph| graph.all_adjacencies().collect())
     }
 
     /// Send a chat message to the other end of the link.

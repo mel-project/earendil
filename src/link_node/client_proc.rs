@@ -11,6 +11,7 @@ use crate::config::OutRouteConfig;
 
 use super::{
     gossip::graph_gossip_loop,
+    netgraph::NetGraph,
     switch_proc::{SwitchMessage, SwitchProcess},
     IncomingMsg,
 };
@@ -18,7 +19,7 @@ use super::{
 pub struct ClientProcess {
     identity: u64,
     out_routes: BTreeMap<String, OutRouteConfig>,
-    relay_graph: Arc<RwLock<RelayGraph>>,
+    relay_graph: NetGraph,
     send_incoming: Sender<IncomingMsg>,
 }
 
@@ -26,7 +27,7 @@ impl ClientProcess {
     pub fn new(
         identity: u64,
         out_routes: BTreeMap<String, OutRouteConfig>,
-        relay_graph: Arc<RwLock<RelayGraph>>,
+        relay_graph: NetGraph,
         send_incoming: Sender<IncomingMsg>,
     ) -> Self {
         Self {

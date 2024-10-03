@@ -162,15 +162,15 @@ impl RelayGraph {
         self.fp_to_id.keys().copied()
     }
 
-    /// Picks a random AdjacencyDescriptor from the graph.
-    pub fn random_adjacency(&self) -> Option<AdjacencyDescriptor> {
-        if self.documents.is_empty() {
-            return None;
-        }
-        self.documents
-            .get_index(rand::thread_rng().gen_range(0..self.documents.len()))
-            .map(|v| v.1.clone())
-    }
+    // /// Picks a random AdjacencyDescriptor from the graph.
+    // pub fn random_adjacency(&self) -> Option<AdjacencyDescriptor> {
+    //     if self.documents.is_empty() {
+    //         return None;
+    //     }
+    //     self.documents
+    //         .get_index(rand::thread_rng().gen_range(0..self.documents.len()))
+    //         .map(|v| v.1.clone())
+    // }
 
     /// Picks a certain number of random relays.
     pub fn rand_relays(&self, num: usize) -> Vec<RelayFingerprint> {
@@ -193,7 +193,6 @@ impl RelayGraph {
     }
 
     /// Returns a Vec of Fingerprint instances representing the shortest path or None if no path exists.
-    /// bypassing any Fingerprint in the blacklist.
     pub fn find_shortest_path(
         &self,
         start_fp: &RelayFingerprint,
