@@ -106,6 +106,7 @@ pub struct OutRouteConfig {
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub fingerprint: RelayFingerprint,
     pub obfs: ObfsConfig,
+    #[serde(default)]
     pub price_config: PriceConfig,
 }
 
