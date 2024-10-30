@@ -1,16 +1,13 @@
-use std::{
-    sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use earendil_crypt::{RelayFingerprint, RelayIdentitySecret};
-use earendil_topology::{AdjacencyDescriptor, RelayGraph};
+use earendil_topology::AdjacencyDescriptor;
 use haiyuu::WeakHandle;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
-use parking_lot::RwLock;
+
 use rand::{seq::SliceRandom, Rng};
 
 use crate::link_node::{link_protocol::LinkClient, switch_proc::SwitchMessage};
@@ -40,9 +37,7 @@ async fn gossip_once(
     graph: NetGraph,
     switch: WeakHandle<SwitchProcess>,
 ) -> anyhow::Result<()> {
-    let (send, recv) = oneshot::channel();
-    switch.send(SwitchMessage::DumpRelays(send)).await?;
-    let relays = recv.await?;
+    let relays = graph.usable_relay_neighbors();
     let neighbor_fp = relays
         .choose(&mut rand::thread_rng())
         .cloned()

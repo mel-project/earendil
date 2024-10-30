@@ -37,12 +37,13 @@ impl NetGraph {
 
     /// Obtains a list of *usable* neighbor relays, which must be both live and within the relay graph.
     pub fn usable_relay_neighbors(&self) -> Vec<RelayFingerprint> {
+        let rg = self.relay_graph.read();
         self.live_neighbors
             .iter()
             .filter_map(|r| {
                 let id = r.key();
                 if let NeighborId::Relay(id) = id {
-                    if self.relay_graph.read().identity(id).is_some() {
+                    if rg.identity(id).is_some() {
                         Some(*id)
                     } else {
                         None
@@ -51,7 +52,31 @@ impl NetGraph {
                     None
                 }
             })
+            .filter(|neigh| {
+                if let NeighborId::Relay(this) = self.myself {
+                    if let Some(mut it) = rg.neighbors(&this) {
+                        if it.any(|n| &n == neigh) {
+                            return true;
+                        }
+                    }
+                    false
+                } else {
+                    false
+                }
+            })
             .collect()
+    }
+
+    /// Obtain the closest neighbor to the given relay destination.
+    pub fn closest_neigh_to(&self, dest: RelayFingerprint) -> Option<RelayFingerprint> {
+        let usable_relays = self.usable_relay_neighbors();
+        let graph = self.relay_graph.read();
+        usable_relays.into_iter().min_by_key(|relay| {
+            graph
+                .find_shortest_path(relay, &dest)
+                .map(|s| s.len())
+                .unwrap_or(usize::MAX)
+        })
     }
 
     /// Modify the underlying relay graph.

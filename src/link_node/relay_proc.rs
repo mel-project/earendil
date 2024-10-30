@@ -2,7 +2,6 @@ use std::{
     cell::OnceCell,
     collections::BTreeMap,
     convert::Infallible,
-    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -10,16 +9,15 @@ use ahash::AHashSet;
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
-use earendil_crypt::{RelayFingerprint, RelayIdentitySecret, RemoteId};
+use earendil_crypt::{RelayIdentitySecret, RemoteId};
 use earendil_packet::{
     crypt::DhSecret, InnerPacket, Message, PeeledPacket, RawPacket, RawPacketWithNext, Surb,
 };
-use earendil_topology::{AdjacencyDescriptor, ExitInfo, IdentityDescriptor, RelayGraph};
+use earendil_topology::{AdjacencyDescriptor, ExitInfo, IdentityDescriptor};
 use haiyuu::Handle;
 
-use moka::future::Cache;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService};
-use parking_lot::RwLock;
+
 use smol::{channel::Sender, future::FutureExt as _};
 use stdcode::StdcodeSerializeExt as _;
 
@@ -46,9 +44,8 @@ pub struct RelayProcess {
 
     peel_dedup: AHashSet<blake3::Hash>,
     relay_graph: NetGraph,
-    delay_queue: BTreeMap<Instant, RawPacketWithNext>,
+    delay_queue: BTreeMap<Instant, Box<RawPacketWithNext>>,
 
-    next_hop_cache: Cache<RelayFingerprint, RelayFingerprint>,
     exit_info: Option<ExitInfo>,
     send_incoming: Sender<IncomingMsg>,
 }
@@ -74,10 +71,6 @@ impl RelayProcess {
             relay_graph,
             delay_queue: BTreeMap::new(),
 
-            next_hop_cache: Cache::builder()
-                .time_to_live(Duration::from_secs(60))
-                .build(),
-
             exit_info,
 
             send_incoming,
@@ -85,7 +78,7 @@ impl RelayProcess {
     }
 
     /// Process a particular raw packet.
-    async fn process(&mut self, packet: RawPacketWithNext) -> anyhow::Result<()> {
+    async fn process(&mut self, packet: &RawPacketWithNext) -> anyhow::Result<()> {
         tracing::debug!("received a packet to peel and forward");
         let packet_hash = blake3::hash(bytemuck::bytes_of(&packet.packet));
         if !self.peel_dedup.insert(packet_hash) {
@@ -108,10 +101,10 @@ impl RelayProcess {
                     let emit_time = Instant::now() + Duration::from_millis(delay_ms as _);
                     self.delay_queue.insert(
                         emit_time,
-                        RawPacketWithNext {
+                        Box::new(RawPacketWithNext {
                             next_peeler,
                             packet: pkt,
-                        },
+                        }),
                     );
                 }
                 PeeledPacket::Received { from, pkt } => {
@@ -130,48 +123,22 @@ impl RelayProcess {
                             client_id,
                         ))?
                     } else {
-                        self.send_incoming
-                            .send(IncomingMsg::Backward {
-                                rb_id,
-                                body: pkt.to_vec().into(),
-                            })
-                            .await?;
+                        let _ = self.send_incoming.try_send(IncomingMsg::Backward {
+                            rb_id,
+                            body: pkt.to_vec().into(),
+                        });
                     }
                 }
             }
         } else {
             let next_hop = self
-                .next_hop_cache
-                .try_get_with(packet.next_peeler, async {
-                    let (send, recv) = oneshot::channel();
-                    switch.send(SwitchMessage::DumpRelays(send)).await?;
-                    let neighbors = recv.await?;
-
-                    // find the neighbor with the lowest hops to the destination
-                    self.relay_graph.read_graph(|graph| {
-                        let mut min_hops = usize::MAX;
-                        let mut min_hop_neighbor = None;
-                        for neighbor in neighbors {
-                            let hops = graph
-                                .find_shortest_path(&neighbor, &packet.next_peeler)
-                                .map(|hps| hps.len())
-                                .unwrap_or(usize::MAX);
-                            if hops < min_hops {
-                                min_hops = hops;
-                                min_hop_neighbor = Some(neighbor);
-                            }
-                        }
-                        min_hop_neighbor.ok_or_else(|| anyhow::anyhow!("no relay found"))
-                    })
-                })
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?;
-            switch
-                .send(SwitchMessage::ToRelay(
-                    Bytes::copy_from_slice(bytemuck::bytes_of(&packet)),
-                    next_hop,
-                ))
-                .await?;
+                .relay_graph
+                .closest_neigh_to(packet.next_peeler)
+                .context(format!("no closest path to {}", packet.next_peeler))?;
+            switch.send_or_drop(SwitchMessage::ToRelay(
+                Bytes::copy_from_slice(bytemuck::bytes_of(packet)),
+                next_hop,
+            ))?;
         }
         anyhow::Ok(())
     }
@@ -187,6 +154,7 @@ impl haiyuu::Process for RelayProcess {
                 SwitchProcess::new_relay(
                     self.identity,
                     mailbox.handle(),
+                    self.relay_graph.clone(),
                     self.in_routes.clone(),
                     self.out_routes.clone(),
                 )
@@ -239,7 +207,7 @@ impl haiyuu::Process for RelayProcess {
             };
             match mailbox.recv().or(get_delayed).await {
                 RelayMsg::PeelForward(packet) => {
-                    if let Err(err) = self.process(packet).await {
+                    if let Err(err) = self.process(&packet).await {
                         tracing::warn!(err = debug(err), "failed to peel and forward");
                     }
                 }
@@ -255,7 +223,7 @@ impl haiyuu::Process for RelayProcess {
                     )
                     .expect("could not construct backwards packet");
                     if let Err(err) = self
-                        .process(RawPacketWithNext {
+                        .process(&RawPacketWithNext {
                             packet,
                             next_peeler: surb.first_peeler,
                         })
@@ -272,9 +240,8 @@ impl haiyuu::Process for RelayProcess {
     }
 }
 
-#[allow(clippy::large_enum_variant)]
 pub enum RelayMsg {
-    PeelForward(RawPacketWithNext),
+    PeelForward(Box<RawPacketWithNext>),
     Backwards(Surb, Message),
     LinkRpc(JrpcRequest, oneshot::Sender<JrpcResponse>),
 }

@@ -1,10 +1,10 @@
-use std::{collections::BTreeMap, convert::Infallible, sync::Arc};
+use std::{collections::BTreeMap, convert::Infallible};
 
 use bytes::Bytes;
 use earendil_packet::RawPacketWithNext;
-use earendil_topology::RelayGraph;
+
 use haiyuu::Process;
-use parking_lot::RwLock;
+
 use smol::channel::Sender;
 
 use crate::config::OutRouteConfig;
@@ -45,9 +45,13 @@ impl Process for ClientProcess {
     type Output = Infallible;
 
     async fn run(&mut self, mailbox: &mut haiyuu::Mailbox<Self>) -> Self::Output {
-        let switch =
-            SwitchProcess::new_client(self.identity, mailbox.handle(), self.out_routes.clone())
-                .spawn_smolscale();
+        let switch = SwitchProcess::new_client(
+            self.identity,
+            mailbox.handle(),
+            self.relay_graph.clone(),
+            self.out_routes.clone(),
+        )
+        .spawn_smolscale();
         let _gossip_loop = smolscale::spawn(graph_gossip_loop(
             None,
             self.relay_graph.clone(),
@@ -57,17 +61,20 @@ impl Process for ClientProcess {
             let msg = mailbox.recv().await;
             match msg {
                 ClientMsg::Forward(raw) => {
-                    let _ = switch
-                        .send(SwitchMessage::ToRandomRelay(
-                            bytemuck::bytes_of(&raw).to_vec().into(),
-                        ))
-                        .await;
+                    let relay = self.relay_graph.closest_neigh_to(raw.next_peeler);
+                    if let Some(relay) = relay {
+                        let _ = switch.send_or_drop(SwitchMessage::ToRelay(
+                            bytemuck::bytes_of(&*raw).to_vec().into(),
+                            relay,
+                        ));
+                    } else {
+                        tracing::warn!(next = debug(raw.next_peeler), "unable to route to next")
+                    }
                 }
                 ClientMsg::Backward(rb_id, body) => {
                     let _ = self
                         .send_incoming
-                        .send(IncomingMsg::Backward { rb_id, body })
-                        .await;
+                        .try_send(IncomingMsg::Backward { rb_id, body });
                 }
             }
         }
@@ -75,6 +82,6 @@ impl Process for ClientProcess {
 }
 
 pub enum ClientMsg {
-    Forward(RawPacketWithNext),
+    Forward(Box<RawPacketWithNext>),
     Backward(u64, Bytes),
 }

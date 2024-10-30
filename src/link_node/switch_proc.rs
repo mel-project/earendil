@@ -12,7 +12,7 @@ use futures_util::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use inout_route::{process_in_route, process_out_route};
 use itertools::Itertools;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, ServerError};
-use rand::{seq::IteratorRandom, Rng};
+use rand::Rng;
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
 use std::{collections::BTreeMap, convert::Infallible};
@@ -29,7 +29,9 @@ use crate::{
 
 use super::{
     client_proc::ClientProcess,
+    netgraph::{NeighborGuard, NetGraph},
     relay_proc::{RelayMsg, RelayProcess},
+    NeighborId,
 };
 
 pub struct SwitchProcess {
@@ -37,9 +39,10 @@ pub struct SwitchProcess {
         (RelayIdentitySecret, WeakHandle<RelayProcess>),
         (ClientId, WeakHandle<ClientProcess>),
     >,
+    graph: NetGraph,
 
-    relays: AHashMap<RelayFingerprint, Handle<LinkProcess>>,
-    clients: AHashMap<ClientId, Handle<LinkProcess>>,
+    relays: AHashMap<RelayFingerprint, (Handle<LinkProcess>, NeighborGuard)>,
+    clients: AHashMap<ClientId, (Handle<LinkProcess>, NeighborGuard)>,
 
     in_routes: BTreeMap<String, InRouteConfig>,
     out_routes: BTreeMap<String, OutRouteConfig>,
@@ -85,6 +88,7 @@ impl SwitchProcess {
     pub fn new_client(
         identity: ClientId,
         process: WeakHandle<ClientProcess>,
+        graph: NetGraph,
         out_routes: BTreeMap<String, OutRouteConfig>,
     ) -> Self {
         Self {
@@ -94,12 +98,14 @@ impl SwitchProcess {
             clients: AHashMap::new(),
             in_routes: Default::default(),
             out_routes,
+            graph,
         }
     }
 
     pub fn new_relay(
         identity: RelayIdentitySecret,
         process: WeakHandle<RelayProcess>,
+        graph: NetGraph,
         in_routes: BTreeMap<String, InRouteConfig>,
         out_routes: BTreeMap<String, OutRouteConfig>,
     ) -> Self {
@@ -107,13 +113,10 @@ impl SwitchProcess {
             role: either::Either::Left((identity, process)),
             relays: AHashMap::new(),
             clients: AHashMap::new(),
+            graph,
             in_routes,
             out_routes,
         }
-    }
-
-    fn is_client(&self) -> bool {
-        self.role.is_right()
     }
 
     fn identity(&self) -> either::Either<RelayIdentitySecret, ClientId> {
@@ -182,23 +185,16 @@ impl haiyuu::Process for SwitchProcess {
                         self.relays
                             .get(&relay)
                             .context("could not find link to relay")?
+                            .0
                             .send(LinkMsg::Message(bts.clone()))
                             .await?;
                     }
-                    SwitchMessage::ToRandomRelay(bts) => {
-                        let relay = self.relays.keys().choose(&mut rand::thread_rng());
-                        if let Some(relay) = relay {
-                            self.relays
-                                .get(relay)
-                                .context("could not find link to relay")?
-                                .send(LinkMsg::Message(bts.clone()))
-                                .await?;
-                        }
-                    }
+
                     SwitchMessage::ToClient(bts, client) => {
                         self.clients
                             .get(&client)
                             .context("could not find link to client")?
+                            .0
                             .send(LinkMsg::Message(bts.clone()))
                             .await?;
                     }
@@ -209,7 +205,7 @@ impl haiyuu::Process for SwitchProcess {
                                 let rpnx: &RawPacketWithNext = bytemuck::try_from_bytes(&bts)
                                     .ok()
                                     .context("cannot cast as RawPacketWithNext")?;
-                                relay.send(RelayMsg::PeelForward(*rpnx)).await?;
+                                relay.send(RelayMsg::PeelForward(Box::new(*rpnx))).await?;
                             }
                             either::Either::Right(client) => {
                                 let (rb_id, bts): (u64, Bytes) = stdcode::deserialize(&bts)?;
@@ -218,18 +214,23 @@ impl haiyuu::Process for SwitchProcess {
                         }
                     }
                     SwitchMessage::NewClientLink(link, client) => {
-                        self.clients.insert(client, link);
+                        self.clients.insert(
+                            client,
+                            (link, self.graph.neighbor_guard(NeighborId::Client(client))),
+                        );
                     }
                     SwitchMessage::NewRelayLink(link, relay) => {
-                        self.relays.insert(relay, link);
+                        self.relays.insert(
+                            relay,
+                            (link, self.graph.neighbor_guard(NeighborId::Relay(relay))),
+                        );
                     }
-                    SwitchMessage::DumpRelays(send) => {
-                        send.send(self.relays.keys().copied().collect_vec())?;
-                    }
+
                     SwitchMessage::CallLinkRpc(relay_fingerprint, jrpc_request, sender) => {
                         self.relays
                             .get(&relay_fingerprint)
                             .context("could not find link to relay")?
+                            .0
                             .send(LinkMsg::Request(jrpc_request, sender))
                             .await?;
                     }
@@ -247,7 +248,6 @@ impl haiyuu::Process for SwitchProcess {
 #[derivative(Debug)]
 pub enum SwitchMessage {
     ToRelay(#[derivative(Debug = "ignore")] Bytes, RelayFingerprint),
-    ToRandomRelay(#[derivative(Debug = "ignore")] Bytes),
     ToClient(#[derivative(Debug = "ignore")] Bytes, ClientId),
 
     CallLinkRpc(RelayFingerprint, JrpcRequest, oneshot::Sender<JrpcResponse>),
@@ -264,8 +264,6 @@ pub enum SwitchMessage {
         #[derivative(Debug = "ignore")] Handle<LinkProcess>,
         RelayFingerprint,
     ),
-
-    DumpRelays(#[derivative(Debug = "ignore")] oneshot::Sender<Vec<RelayFingerprint>>),
 }
 
 async fn write_pascal<W: AsyncWrite + Unpin>(message: &[u8], mut out: W) -> anyhow::Result<()> {

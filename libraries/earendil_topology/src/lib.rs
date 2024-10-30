@@ -9,14 +9,16 @@ use earendil_crypt::{
 };
 use earendil_packet::crypt::{DhPublic, DhSecret};
 use indexmap::IndexMap;
-use rand::{seq::IteratorRandom, thread_rng, Rng};
+use rand::{seq::IteratorRandom, thread_rng};
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
 use thiserror::Error;
 
-/// A full, indexed representation of the Earendil relay graph. Includes info about:
+/// A full, indexed representation of the Earendil relay graph from an "objective" view. Includes info about:
 /// - Which fingerprints are adjacent to which fingerprints
 /// - What signing keys and midterm keys do each fingerprint have
+///
+/// but *not* any information about "myself".
 #[derive(Default, Serialize, Deserialize, Clone)]
 pub struct RelayGraph {
     unalloc_id: u64,
@@ -161,16 +163,6 @@ impl RelayGraph {
     pub fn all_nodes(&self) -> impl Iterator<Item = RelayFingerprint> + '_ {
         self.fp_to_id.keys().copied()
     }
-
-    // /// Picks a random AdjacencyDescriptor from the graph.
-    // pub fn random_adjacency(&self) -> Option<AdjacencyDescriptor> {
-    //     if self.documents.is_empty() {
-    //         return None;
-    //     }
-    //     self.documents
-    //         .get_index(rand::thread_rng().gen_range(0..self.documents.len()))
-    //         .map(|v| v.1.clone())
-    // }
 
     /// Picks a certain number of random relays.
     pub fn rand_relays(&self, num: usize) -> Vec<RelayFingerprint> {

@@ -10,7 +10,7 @@ pub mod stats;
 mod switch_proc;
 mod types;
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use anyhow::Context as _;
 use client_proc::{ClientMsg, ClientProcess};
@@ -23,9 +23,10 @@ use haiyuu::{Handle, Process};
 pub use link_store::*;
 
 use netgraph::NetGraph;
-use parking_lot::RwLock;
+
 pub use payment_system::{Dummy, OnChain, PaymentSystem, PoW};
 
+use rand::seq::SliceRandom;
 use relay_proc::{RelayMsg, RelayProcess};
 use route_util::{forward_route_to, route_to_instructs};
 use smol::channel::Receiver;
@@ -112,21 +113,21 @@ impl LinkNode {
         packet: InnerPacket,
         src: AnonEndpoint,
         dest_relay: RelayFingerprint,
-    ) -> anyhow::Result<RawPacketWithNext> {
+    ) -> anyhow::Result<Box<RawPacketWithNext>> {
         let privacy_config = self.privacy_config();
 
         self.graph.read_graph(|graph| {
-            let route = forward_route_to(&graph, dest_relay, privacy_config.max_peelers)?;
+            let route = forward_route_to(graph, dest_relay, privacy_config.max_peelers)?;
             let first_peeler = *route.first().context("empty route")?;
             let instructs =
-                route_to_instructs(&graph, &route).context("route_to_instructs failed")?;
+                route_to_instructs(graph, &route).context("route_to_instructs failed")?;
             let dest_opk = graph
                 .identity(&dest_relay)
                 .context(format!(
                     "couldn't get the identity of the destination fp {dest_relay}"
                 ))?
                 .onion_pk;
-            Ok(RawPacketWithNext {
+            Ok(Box::new(RawPacketWithNext {
                 packet: RawPacket::new_normal(
                     &instructs,
                     &dest_opk,
@@ -135,7 +136,7 @@ impl LinkNode {
                     privacy_config,
                 )?,
                 next_peeler: first_peeler,
-            })
+            }))
         })
     }
 
@@ -154,7 +155,7 @@ impl LinkNode {
         &self,
         my_anon_id: AnonEndpoint,
     ) -> anyhow::Result<(Surb, u64, ReplyDegarbler)> {
-        let destination = self.surb_destination();
+        let destination = self.surb_destination()?;
         self.graph.read_graph(|graph| {
             let dest_opk = graph
                 .identity(&destination)
@@ -165,8 +166,8 @@ impl LinkNode {
 
             let privacy_cfg = self.privacy_config();
 
-            let reverse_route = forward_route_to(&graph, destination, privacy_cfg.max_peelers)?;
-            let reverse_instructs = route_to_instructs(&graph, &reverse_route)?;
+            let reverse_route = forward_route_to(graph, destination, privacy_cfg.max_peelers)?;
+            let reverse_instructs = route_to_instructs(graph, &reverse_route)?;
 
             let (surb, (id, degarbler)) = Surb::new(
                 &reverse_instructs,
@@ -181,13 +182,14 @@ impl LinkNode {
         })
     }
 
-    fn surb_destination(&self) -> RelayFingerprint {
+    fn surb_destination(&self) -> anyhow::Result<RelayFingerprint> {
         match &self.cfg.relay_config {
-            Some(val) => val.0.public().fingerprint(),
-            None => {
-                // TODO something more intelligent and correct
-                self.cfg.out_routes.values().next().unwrap().fingerprint
-            }
+            Some(val) => Ok(val.0.public().fingerprint()),
+            None => Ok(*self
+                .graph
+                .usable_relay_neighbors()
+                .choose(&mut rand::thread_rng())
+                .context("no relay neighbors to act as a SURB destination")?),
         }
     }
 
@@ -207,12 +209,12 @@ impl LinkNode {
     }
 
     /// Sends a chat message to a neighbor.
-    pub async fn send_chat(&self, neighbor: NeighborId, text: String) -> anyhow::Result<()> {
+    pub async fn send_chat(&self, _neighbor: NeighborId, _text: String) -> anyhow::Result<()> {
         todo!()
     }
 
     /// Gets the entire chat history with a neighbor.
-    pub async fn get_chat_history(&self, neighbor: NeighborId) -> anyhow::Result<Vec<ChatEntry>> {
+    pub async fn get_chat_history(&self, _neighbor: NeighborId) -> anyhow::Result<Vec<ChatEntry>> {
         todo!()
     }
 
@@ -224,11 +226,11 @@ impl LinkNode {
         todo!()
     }
 
-    pub async fn get_debt(&self, neighbor: NeighborId) -> anyhow::Result<f64> {
+    pub async fn get_debt(&self, _neighbor: NeighborId) -> anyhow::Result<f64> {
         todo!()
     }
 
-    pub async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
+    pub async fn timeseries_stats(&self, _key: String, _start: i64, _end: i64) -> Vec<(i64, f64)> {
         todo!()
     }
 
