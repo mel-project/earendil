@@ -88,6 +88,7 @@ pub struct RelayConfig {
 pub struct InRouteConfig {
     pub listen: SocketAddr,
     pub obfs: ObfsConfig,
+    #[serde(default)]
     pub price_config: PriceConfig,
 }
 
@@ -109,7 +110,7 @@ pub struct OutRouteConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct PriceConfig {
     #[serde(deserialize_with = "deserialize_nonneg_f64")]
     /// price, in micromel. Must be nonnegative
