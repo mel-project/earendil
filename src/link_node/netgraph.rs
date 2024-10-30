@@ -1,7 +1,9 @@
 use std::sync::{Arc, Weak};
 
+use anyhow::Context as _;
 use dashmap::DashMap;
 use earendil_crypt::RelayFingerprint;
+use earendil_packet::PeelInstruction;
 use earendil_topology::RelayGraph;
 use parking_lot::RwLock;
 
@@ -89,6 +91,40 @@ impl NetGraph {
     pub fn read_graph<T>(&self, f: impl FnOnce(&RelayGraph) -> T) -> T {
         let inner = self.relay_graph.read();
         f(&inner)
+    }
+
+    /// Obtains a number of peelers that terminate with the given last peeler.
+    pub fn get_peelers(
+        &self,
+        last: RelayFingerprint,
+        additional_count: usize,
+    ) -> anyhow::Result<Vec<RelayFingerprint>> {
+        let mut route = self.read_graph(|g| g.rand_relays(additional_count));
+        route.push(last);
+        Ok(route)
+    }
+
+    /// Convert a list of peelers to a list of instructions by looking up onion keys.
+    pub fn generate_instructs(
+        &self,
+        peelers: &[RelayFingerprint],
+    ) -> anyhow::Result<Vec<PeelInstruction>> {
+        peelers
+            .windows(2)
+            .map(|wind| {
+                let this = wind[0];
+                let next = wind[1];
+
+                let this_pubkey = self
+                    .read_graph(|graph| graph.identity(&this))
+                    .context("failed to get an identity somewhere in our route")?
+                    .onion_pk;
+                Ok(PeelInstruction {
+                    this_pubkey,
+                    next_hop: next,
+                })
+            })
+            .collect()
     }
 }
 

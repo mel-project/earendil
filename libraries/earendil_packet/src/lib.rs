@@ -33,7 +33,7 @@ mod tests {
 
     use super::*;
 
-    fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, DhSecret)> {
+    fn generate_forward_instructions(n: usize) -> Vec<(PeelInstruction, DhSecret)> {
         (0..n)
             .map(|_| {
                 let our_sk = DhSecret::generate();
@@ -41,7 +41,7 @@ mod tests {
 
                 let next_hop = RelayFingerprint::from_bytes(&[10; 32]);
                 (
-                    ForwardInstruction {
+                    PeelInstruction {
                         this_pubkey,
                         next_hop,
                     },
@@ -52,7 +52,7 @@ mod tests {
     }
 
     fn test_packet_route(
-        route: &[(ForwardInstruction, DhSecret)],
+        route: &[(PeelInstruction, DhSecret)],
     ) -> Result<(), PacketConstructError> {
         let my_isk = RelayIdentitySecret::generate();
         let destination_sk = DhSecret::generate();
@@ -63,7 +63,7 @@ mod tests {
             remaining_surbs: 0,
         };
 
-        let forward_instructions: Vec<ForwardInstruction> =
+        let forward_instructions: Vec<PeelInstruction> =
             route.iter().map(|(inst, _)| *inst).collect();
         let is_client = false;
 
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn one_hop() {
-        let route: Vec<(ForwardInstruction, DhSecret)> = Vec::new();
+        let route: Vec<(PeelInstruction, DhSecret)> = Vec::new();
         test_packet_route(&route).expect("One-hop test failed");
     }
 
@@ -141,8 +141,8 @@ mod tests {
     #[test]
     fn reply_block_five_hops() {
         use crate::reply_block::Surb;
-        use crate::ForwardInstruction;
         use crate::InnerPacket;
+        use crate::PeelInstruction;
         use crate::RawPacket;
 
         // Generate  identity secrets
@@ -151,14 +151,14 @@ mod tests {
         let alice_opk = alice_osk.public();
         // Generate 5-hop route
         let route_with_onion_secrets = generate_forward_instructions(5);
-        let route: Vec<ForwardInstruction> = route_with_onion_secrets
+        let route: Vec<PeelInstruction> = route_with_onion_secrets
             .iter()
             .map(|(inst, _)| *inst)
             .collect();
         let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
 
         // Prepare reply block
-        let (reply_block, (_, reply_degarbler)) = Surb::new(
+        let (reply_block, reply_degarbler) = Surb::new(
             &route,
             first_peeler,
             &alice_opk,

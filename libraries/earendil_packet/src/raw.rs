@@ -46,7 +46,7 @@ pub struct RawPacket {
 
 /// An instruction for forwarding one layer of the onion.
 #[derive(Clone, Copy, Debug)]
-pub struct ForwardInstruction {
+pub struct PeelInstruction {
     /// The DH public key of this hop
     pub this_pubkey: DhPublic,
     /// The unique id of the next hop
@@ -80,7 +80,7 @@ fn sample_delay(config_delay: u64) -> u16 {
 
 impl RawPacket {
     pub fn new_normal(
-        route: &[ForwardInstruction],
+        route: &[PeelInstruction],
         dest_opk: &DhPublic,
         payload: InnerPacket,
         my_id: RemoteId,
@@ -118,7 +118,7 @@ impl RawPacket {
 
     /// Creates a new RawPacket along with a vector of the shared secrets used to encrypt each layer of the onion body, given a payload and the series of relays that the packet is supposed to be peeled by.
     pub(crate) fn new(
-        route: &[ForwardInstruction],
+        route: &[PeelInstruction],
         dest_opk: &DhPublic,
         dest_is_client: bool,
         payload: InnerPacket,

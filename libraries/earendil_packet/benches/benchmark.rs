@@ -2,10 +2,10 @@ use bytes::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{
-    crypt::DhSecret, ForwardInstruction, InnerPacket, Message, PrivacyConfig, RawPacket, Surb,
+    crypt::DhSecret, InnerPacket, Message, PeelInstruction, PrivacyConfig, RawPacket, Surb,
 };
 
-fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, DhSecret)> {
+fn generate_forward_instructions(n: usize) -> Vec<(PeelInstruction, DhSecret)> {
     (0..n)
         .map(|_| {
             let our_sk = DhSecret::generate();
@@ -13,7 +13,7 @@ fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, DhSecret)
 
             let next_hop = RelayFingerprint::from_bytes(&[10; 32]);
             (
-                ForwardInstruction {
+                PeelInstruction {
                     this_pubkey,
                     next_hop,
                 },

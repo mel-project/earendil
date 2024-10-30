@@ -125,18 +125,19 @@ impl N2rAnonSocket {
             || *self.remote_surb_counts.entry(fingerprint).or_insert(0) < 50)
             && *self.remote_surb_counts.entry(fingerprint).or_insert(0) < 500
         {
-            self.replenish_surbs(fingerprint).await?;
+            self.send_surbs(fingerprint).await?;
         }
         Ok(())
     }
 
-    pub async fn replenish_surbs(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
+    /// Sends a batch of SURBs to the destination, so that they can send us some data. This is unnecessary if we typically talk first, but it's necessary if the first application data comes from the relay to the client.
+    pub async fn send_surbs(&self, fingerprint: RelayFingerprint) -> anyhow::Result<()> {
         // send a batch of 10 surbs
         let surbs = (0..10)
             .map(|_| {
-                let (rb, id, degarble) = self.ctx.link_node.new_surb(self.my_endpoint)?;
-                self.ctx.degarblers.insert(id, degarble);
-                anyhow::Ok(rb)
+                let (surb, degarble) = self.ctx.link_node.new_surb(self.my_endpoint)?;
+                self.ctx.degarblers.insert(degarble.surb_id(), degarble);
+                anyhow::Ok(surb)
             })
             .try_collect()?;
         self.ctx

@@ -107,7 +107,7 @@ async fn haven_demultiplex(
         loop {
             smol::Timer::after(Duration::from_secs(10)).await;
             tracing::trace!("resupplying reply blocks for the rendezvous");
-            n2r_socket.replenish_surbs(rendezvous).await?;
+            n2r_socket.send_surbs(rendezvous).await?;
         }
     };
 

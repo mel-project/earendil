@@ -38,7 +38,7 @@ use crate::{
     n2r_node::{N2rConfig, N2rNode},
     v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, V2hConfig, V2hNode},
 };
-use crate::{Dummy, NeighborId, OnChain, PaymentSystem, PoW};
+use crate::{Dummy, OnChain, PaymentSystem, PoW};
 
 /// The public interface to the whole Earendil system.
 pub struct Node {
