@@ -76,13 +76,13 @@ jobs:
         run: echo "TAG_NAME=$(echo ${GITHUB_REF#refs/tags/})" >> $GITHUB_ENV
 
       - name: Download macOS Artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: earendil-macos
           path: ./
 
       - name: Download Windows Artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: earendil-windows
           path: ./
