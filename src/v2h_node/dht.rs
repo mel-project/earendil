@@ -122,8 +122,11 @@ pub async fn dht_get(
 }
 
 fn dht_key_to_fps(ctx: &V2hNodeCtx, key: &str) -> Vec<RelayFingerprint> {
-    let mut all_nodes: Vec<RelayFingerprint> =
-        ctx.n2r.link_node().relay_graph().all_nodes().collect();
+    let mut all_nodes: Vec<RelayFingerprint> = ctx
+        .n2r
+        .link_node()
+        .netgraph()
+        .read_graph(|g| g.all_nodes().collect());
     all_nodes.sort_unstable_by_key(|fp| *blake3::hash(&(key, fp).stdcode()).as_bytes());
     all_nodes
 }

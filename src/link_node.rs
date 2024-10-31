@@ -177,7 +177,7 @@ impl LinkNode {
             Some(val) => Ok(val.0.public().fingerprint()),
             None => Ok(*self
                 .graph
-                .usable_relay_neighbors()
+                .connected_relays()
                 .choose(&mut rand::thread_rng())
                 .context("no relay neighbors to act as a SURB destination")?),
         }
@@ -188,14 +188,14 @@ impl LinkNode {
         self.recv_incoming.recv().await.unwrap()
     }
 
-    /// Gets the current relay graph.
-    pub fn relay_graph(&self) -> RelayGraph {
-        self.graph.read_graph(|g| g.clone())
-    }
+    // /// Gets the current NetGraph.
+    // pub fn relay_graph(&self) -> RelayGraph {
+    //     self.graph.read_graph(|g| g.clone())
+    // }
 
-    /// Gets all our currently connected neighbors.
-    pub fn all_neighs(&self) -> Vec<NeighborId> {
-        todo!()
+    /// Gets the current NetGraph.
+    pub fn netgraph(&self) -> NetGraph {
+        self.graph.clone()
     }
 
     /// Sends a chat message to a neighbor.

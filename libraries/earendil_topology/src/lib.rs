@@ -176,11 +176,11 @@ impl RelayGraph {
         self.exits.add_exit(relay_fp, exit_info);
     }
 
-    pub fn get_exit(&self, relay_fp: &RelayFingerprint) -> Option<&ExitInfo> {
-        self.exits.get_exit(relay_fp)
+    pub fn get_exit(&self, relay_fp: RelayFingerprint) -> Option<ExitInfo> {
+        self.exits.get_exit(&relay_fp).cloned()
     }
 
-    pub fn get_random_exit_for_port(&self, port: u16) -> Option<(&RelayFingerprint, &ExitInfo)> {
+    pub fn get_random_exit_for_port(&self, port: u16) -> Option<(RelayFingerprint, ExitInfo)> {
         self.exits.get_random_exit_for_port(port)
     }
 
@@ -434,7 +434,7 @@ pub enum IdentityError {
 }
 
 #[derive(Default, Serialize, Deserialize, Clone)]
-pub struct ExitRegistry {
+struct ExitRegistry {
     port_to_exits: BTreeMap<u16, Vec<RelayFingerprint>>,
     exit_configs: HashMap<RelayFingerprint, ExitInfo>,
 }
@@ -461,7 +461,7 @@ impl ExitRegistry {
         self.exit_configs.get(relay_fp)
     }
 
-    pub fn get_random_exit_for_port(&self, port: u16) -> Option<(&RelayFingerprint, &ExitInfo)> {
+    pub fn get_random_exit_for_port(&self, port: u16) -> Option<(RelayFingerprint, ExitInfo)> {
         self.port_to_exits.get(&port).and_then(|exits| {
             exits
                 .iter()
@@ -469,7 +469,7 @@ impl ExitRegistry {
                 .and_then(|fingerprint| {
                     self.exit_configs
                         .get(fingerprint)
-                        .map(|exit_info| (fingerprint, exit_info))
+                        .map(|exit_info| (*fingerprint, exit_info.clone()))
                 })
         })
     }

@@ -37,7 +37,7 @@ async fn gossip_once(
     graph: NetGraph,
     switch: WeakHandle<SwitchProcess>,
 ) -> anyhow::Result<()> {
-    let relays = graph.usable_relay_neighbors();
+    let relays = graph.connected_relays();
     let neighbor_fp = relays
         .choose(&mut rand::thread_rng())
         .cloned()

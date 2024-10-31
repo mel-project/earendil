@@ -148,7 +148,13 @@ impl ControlProtocol for ControlProtocolImpl {
 
     // ---------------- chat-related functionality -----------------
     async fn list_neighbors(&self) -> Vec<NeighborId> {
-        self.ctx.v2h.link_node().all_neighs()
+        let graph = self.ctx.v2h.link_node().netgraph();
+        graph
+            .connected_clients()
+            .into_iter()
+            .map(NeighborId::Client)
+            .chain(graph.connected_relays().into_iter().map(NeighborId::Relay))
+            .collect()
     }
 
     async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError> {

@@ -7,7 +7,7 @@ use earendil_packet::PeelInstruction;
 use earendil_topology::RelayGraph;
 use parking_lot::RwLock;
 
-use super::NeighborId;
+use super::{types::ClientId, NeighborId};
 
 /// A graph of the network. Similar to RelayGraph, but concurrency-enabled and augmented with information about where *we* are in the graph and what live neighbors we have.
 #[derive(Clone)]
@@ -37,8 +37,19 @@ impl NetGraph {
         }
     }
 
-    /// Obtains a list of *usable* neighbor relays, which must be both live and within the relay graph.
-    pub fn usable_relay_neighbors(&self) -> Vec<RelayFingerprint> {
+    /// Obtains a list of connected clients.
+    pub fn connected_clients(&self) -> Vec<ClientId> {
+        self.live_neighbors
+            .iter()
+            .filter_map(|n| match n.key() {
+                NeighborId::Client(id) => Some(*id),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Obtains a list of connected relays, which must be both live and within the relay graph.
+    pub fn connected_relays(&self) -> Vec<RelayFingerprint> {
         let rg = self.relay_graph.read();
         self.live_neighbors
             .iter()
@@ -71,7 +82,7 @@ impl NetGraph {
 
     /// Obtain the closest neighbor to the given relay destination.
     pub fn closest_neigh_to(&self, dest: RelayFingerprint) -> Option<RelayFingerprint> {
-        let usable_relays = self.usable_relay_neighbors();
+        let usable_relays = self.connected_relays();
         let graph = self.relay_graph.read();
         usable_relays.into_iter().min_by_key(|relay| {
             graph
