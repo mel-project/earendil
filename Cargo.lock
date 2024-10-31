@@ -2030,7 +2030,7 @@ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
 name = "earendil"
-version = "0.5.10"
+version = "0.5.11"
 dependencies = [
  "ahash 0.8.11",
  "anyctx",
@@ -2108,7 +2108,7 @@ dependencies = [
 
 [[package]]
 name = "earendil-gui"
-version = "0.5.10"
+version = "0.5.11"
 dependencies = [
  "anyctx",
  "anyhow",
@@ -2138,7 +2138,7 @@ dependencies = [
 
 [[package]]
 name = "earendil_crypt"
-version = "0.5.10"
+version = "0.5.11"
 dependencies = [
  "anyhow",
  "argon2",
@@ -2158,7 +2158,7 @@ dependencies = [
 
 [[package]]
 name = "earendil_packet"
-version = "0.5.10"
+version = "0.5.11"
 dependencies = [
  "anyhow",
  "arrayref",
@@ -2182,7 +2182,7 @@ dependencies = [
 
 [[package]]
 name = "earendil_topology"
-version = "0.5.10"
+version = "0.5.11"
 dependencies = [
  "anyhow",
  "arrayref",
