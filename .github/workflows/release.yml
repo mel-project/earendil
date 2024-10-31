@@ -27,7 +27,7 @@ jobs:
           zip -j earendil-macos.zip ./utilities/earendil-gui/target/x86_64-apple-darwin/release/earendil-gui
 
       - name: Upload macOS Artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: earendil-macos
           path: earendil-macos.zip
@@ -59,7 +59,7 @@ jobs:
           zip -j earendil-windows.zip ./utilities/earendil-gui/target/x86_64-pc-windows-gnu/release/earendil-gui.exe
 
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: earendil-windows
           path: earendil-windows.zip
