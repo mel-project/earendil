@@ -158,7 +158,7 @@ mod tests {
         let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
 
         // Prepare reply block
-        let (reply_block, reply_degarbler) = Surb::new(
+        let (surb, reply_degarbler) = Surb::new(
             &route,
             first_peeler,
             &alice_opk,
@@ -176,7 +176,7 @@ mod tests {
             remaining_surbs: 0,
         };
         let packet = RawPacket::new_reply(
-            &reply_block,
+            &surb,
             InnerPacket::Message(message.clone()),
             &RemoteId::Relay(RelayFingerprint::from_bytes(&rand::random())),
         )
