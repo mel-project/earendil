@@ -19,13 +19,6 @@ pub enum Commands {
         control_command: ControlCommand,
     },
 
-    /// Runs a control-protocol verb.
-    // Control {
-    //     #[arg(short, long, default_value = "127.0.0.1:18964")]
-    //     connect: SocketAddr,
-    //     #[command(subcommand)]
-    //     control_command: ControlCommand,
-    // },
     GenerateSeed,
 }
 
@@ -66,37 +59,4 @@ pub enum ControlCommand {
 
     /// Dumps my own routes.
     MyRoutes,
-
-    /// Interactive chat for talking to immediate neighbors
-    Chat {
-        #[command(subcommand)]
-        chat_command: ChatCommand,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum ChatCommand {
-    /// print a summary of all your conversations
-    List,
-
-    /// start an interactive chat session with a neighbor
-    Start {
-        /// The fingerprint or client id of the neighbor to start a chat with.
-        /// Accepts prefixes: TODO
-        neighbor: String,
-    },
-
-    /// Pulls conversation between you and neighbor
-    Get {
-        #[arg(short, long)]
-        src: String,
-    },
-
-    /// Sends a single chat message to a neighbor
-    Send {
-        #[arg(short, long)]
-        dest: String,
-        #[arg(short, long)]
-        msg: String,
-    },
 }

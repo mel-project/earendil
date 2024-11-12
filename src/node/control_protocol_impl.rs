@@ -9,12 +9,12 @@ use crate::{
     config::{InRouteConfig, PriceConfig},
     control_protocol::{DebtError, RelayGraphInfo},
     v2h_node::HavenLocator,
-    ChatEntry, NeighborId,
+    NeighborId,
 };
 
 use super::NodeCtx;
 use crate::control_protocol::{
-    ChatError, ConfigError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError,
+    ConfigError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError,
 };
 pub struct ControlProtocolImpl {
     ctx: NodeCtx,
@@ -90,23 +90,6 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn relay_graph_info(&self) -> RelayGraphInfo {
         todo!()
-        // let my_fingerprint = match self.ctx.;
-
-        // let relay_graph = self.ctx.v2h.link_node().relay_graph();
-        // let relays: Vec<RelayFingerprint> = relay_graph.all_nodes().collect();
-
-        // let adjacencies: Vec<(RelayFingerprint, RelayFingerprint)> = relay_graph
-        //     .all_adjacencies()
-        //     .map(|adj| (adj.left, adj.right))
-        //     .collect();
-        // let neighbors: Vec<NeighborId> = self.ctx.v2h.link_node().all_neighs().clone();
-
-        // RelayGraphInfo {
-        //     my_fingerprint,
-        //     relays,
-        //     adjacencies,
-        //     neighbors,
-        // }
     }
 
     // ------------- functionality to test GlobalRpc --------------
@@ -155,49 +138,6 @@ impl ControlProtocol for ControlProtocolImpl {
             .map(NeighborId::Client)
             .chain(graph.connected_relays().into_iter().map(NeighborId::Relay))
             .collect()
-    }
-
-    async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError> {
-        let chats_summary = self
-            .ctx
-            .v2h
-            .link_node()
-            .get_chat_summary()
-            .await
-            .map_err(|e| ChatError::Db(e.to_string()))?;
-
-        let mut res = HashMap::new();
-        for (neigh, last, count) in chats_summary {
-            res.insert(neigh.to_string(), (Some(last), count));
-        }
-        // add all neighbors that are not in the chat summary
-        for neigh in self.list_neighbors().await {
-            res.entry(neigh.to_string()).or_insert((None, 0));
-        }
-        Ok(res)
-    }
-
-    // true = outgoing, false = incoming
-    async fn get_chat(&self, neighbor_prefix: String) -> Result<Vec<ChatEntry>, ChatError> {
-        let neighbor = neigh_by_prefix(self.list_neighbors().await, &neighbor_prefix)
-            .map_err(|e| ChatError::Get(e.to_string()))?;
-        self.ctx
-            .v2h
-            .link_node()
-            .get_chat_history(neighbor)
-            .await
-            .map_err(|e| ChatError::Get(e.to_string()))
-    }
-
-    async fn send_chat(&self, dest_neighbor_prefix: String, msg: String) -> Result<(), ChatError> {
-        let neighbor = neigh_by_prefix(self.list_neighbors().await, &dest_neighbor_prefix)
-            .map_err(|e| ChatError::Send(e.to_string()))?;
-        self.ctx
-            .v2h
-            .link_node()
-            .send_chat(neighbor, msg)
-            .await
-            .map_err(|e| ChatError::Send(e.to_string()))
     }
 
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {

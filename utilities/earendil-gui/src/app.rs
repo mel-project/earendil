@@ -1,4 +1,3 @@
-mod chat;
 mod config;
 mod daemon_wrap;
 mod modal_state;
@@ -23,7 +22,6 @@ use tap::Tap;
 use crate::{app::refresh_cell::RefreshCell, subscriber::LOGS};
 
 use self::{
-    chat::render_chat,
     config::{parse_config_yaml, ConfigState},
     daemon_wrap::DaemonWrap,
     modal_state::{ModalState, Severity},
@@ -43,7 +41,7 @@ pub struct App {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum TabName {
     Dashboard,
-    Chat,
+
     Settings,
     Logs,
 }
@@ -87,7 +85,6 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.selected_tab, TabName::Dashboard, "Dashboard");
-                ui.selectable_value(&mut self.selected_tab, TabName::Chat, "Chat");
                 ui.selectable_value(&mut self.selected_tab, TabName::Logs, "Logs");
                 ui.selectable_value(&mut self.selected_tab, TabName::Settings, "Settings");
             })
@@ -95,7 +92,6 @@ impl eframe::App for App {
         egui::TopBottomPanel::bottom("bottom").show(ctx, |ui| self.render_bottom_panel(ctx, ui));
         egui::CentralPanel::default().show(ctx, |ui| match self.selected_tab {
             TabName::Dashboard => self.render_dashboard(ctx, ui),
-            TabName::Chat => render_chat(self, ctx, ui),
             TabName::Settings => self.render_settings(ctx, ui),
             TabName::Logs => self.render_logs(ctx, ui),
         });

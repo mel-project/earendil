@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use crate::{v2h_node::HavenLocator, ChatEntry, NeighborId};
+use crate::{v2h_node::HavenLocator, NeighborId};
 
 #[nanorpc_derive]
 #[async_trait]
@@ -36,13 +36,6 @@ pub trait ControlProtocol {
 
     // ---------------- chat-related functionality -----------------
     async fn list_neighbors(&self) -> Vec<NeighborId>;
-
-    async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError>;
-
-    // true = outgoing, false = incoming
-    async fn get_chat(&self, neighbor: String) -> Result<Vec<ChatEntry>, ChatError>;
-
-    async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError>;
 
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)>;
 

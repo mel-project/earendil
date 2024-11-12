@@ -16,7 +16,7 @@ use anyhow::Context as _;
 use client_proc::{ClientMsg, ClientProcess};
 use earendil_crypt::{AnonEndpoint, ClientId, RelayFingerprint};
 use earendil_packet::{InnerPacket, Message, RawPacket, RawPacketWithNext, ReplyDegarbler, Surb};
-use earendil_topology::RelayGraph;
+
 use haiyuu::{Handle, Process};
 pub use link_store::*;
 
@@ -196,20 +196,6 @@ impl LinkNode {
     /// Gets the current NetGraph.
     pub fn netgraph(&self) -> NetGraph {
         self.graph.clone()
-    }
-
-    /// Sends a chat message to a neighbor.
-    pub async fn send_chat(&self, _neighbor: NeighborId, _text: String) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    /// Gets the entire chat history with a neighbor.
-    pub async fn get_chat_history(&self, _neighbor: NeighborId) -> anyhow::Result<Vec<ChatEntry>> {
-        todo!()
-    }
-
-    pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NeighborId, ChatEntry, u32)>> {
-        todo!()
     }
 
     pub async fn get_debt_summary(&self) -> anyhow::Result<HashMap<String, f64>> {

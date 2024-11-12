@@ -1,23 +1,45 @@
-# Refactoring ideas
+# Refactoring plan
 
-Besides some code duplication issues, the biggest problem is weak encapsulation and abstraction.
+Currently, the link layer is refactored to primarily use actors. This might or might not be a great idea, but it's a good start.
 
-Partly to the difficulty presented by Rust's type system (most notably, mutually referencing objects are highly difficult and unidiomatic), we aren't using an "object-oriented"/noun-based abstraction system, but a procedural style.
+The objective is to have a really robust design for the entire link layer, including:
 
-But we don't have a great organization for the procedures, so we have a bunch of functions calling each other, touching all sorts of context-scoped variables and spawning tasks running about, making the code hard to follow.
+- avoiding passing around weird tuples and other unstructured data
+- avoiding direct use of `bytemuck` by better encapsulation in `earendil_packet`
+- a _much better_ debt and payment system
 
-It seems like fundamentally, humans need to think in terms of big, abstract "nouns" in addition to procedural "verbs", not just verbs operating on primitive pieces of data.
+## New debt and storage
 
-I think the best approach to this is to **treat modules as "nouns"**. Each **module** should present a coherent mental model of some part of the system, and only expose what's needed.
+We simply record the current debt with each neighbor, rather than recording a ledger. This simplifies the database and improves performance.
 
-## Refactoring the network layer
+We also now initialize a `SqlitePool` and pass it around. Structs like `DebtStore` take this single global database as an input.
 
-The most complex and spaghetti area of the current code is the network layer --- the code that takes outgoing raw packets and sends them off, while feeding the rest of the code incoming raw packets. It's currently a mess of a bunch of tables with channels, connected to tasks on the other end, with lots of subtle race conditions related to tasks restarting, etc.
+We simply use _other_ structs, like `OttStore` and `KeyStore`, for other uses of the database.
 
-Here we outline a better design:
+This way, any `Store` object would be a _view_ into the global database, which we would assume does not have "writeback" caching, can be discarded at any time, etc.
 
-- `network`
-  - `send_raw()`
-  - `incoming_raw()`
-  - `subscribe_outgoing_relay()`, returning a receiver that represents all the packets outgoing to a particular neighboring relay. If this is called multiple times, packets are sent to arbitrary channels, and none of them should be closed. The receiver should only close when there are no more subscribers at all.
-  - `subscribe_outgoing_client()`
+This also enables debugging code to have much more direct access to the database without hacks, and it also allows for global configuration of database options more easily.
+
+## Payment methods
+
+Instead of an "ott" or invoice-id based system, we use a _nonce_ based system for eliminating double-spending. This removes the need for an initial RTT and simplifies the data flow. It also avoids keeping track of an unbounded number of invoice ids.
+
+The basic idea is that payment systems have:
+
+- A method `new_payment(PaymentInfo{destination, source, amount, nonce}) -> Proof` where `nonce` is an always-increasing u64. This can be implemented as a microsecond timestamp plus counter, which is almost certainly safe against wraparounds.
+- A method `verify(proof) -> Result<PaymentInfo>` that returns the `PaymentInfo` if the proof is valid.
+
+The caller is responsible for keeping track of nonces. In particular, we keep track of the highest nonce from each source, and we reject any payment with a nonce lower than the highest nonce from that source. This is by a `NonceStore` struct.
+
+## Chat?
+
+Chat will be removed. It's not a core feature of a network protocol. There's no reason for "chatting with your ISP" to be built into IP.
+
+Instead, once we have "xirtam" working, we can have a semi-official community of node runners etc there. Before that, Discord should suffice.
+
+## Action plan
+
+- Completely remove chat
+- Implement storage system for debts
+- Test
+- Implement payment system
