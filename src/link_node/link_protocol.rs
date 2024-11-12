@@ -26,12 +26,6 @@ pub trait LinkProtocol {
     /// Gets *all* the adjacency-descriptors.
     async fn all_adjacencies(&self) -> Vec<AdjacencyDescriptor>;
 
-    /// Send a chat message to the other end of the link.
-    async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr>;
-
-    /// Gets a one-time token to use in payment proofs for anti-double-spending
-    async fn get_ott(&self) -> Result<String, LinkRpcErr>;
-
     async fn send_payment_proof(
         &self,
         amount: u64,

@@ -21,7 +21,6 @@ pub trait ControlProtocol {
 
     async fn relay_graph_info(&self) -> RelayGraphInfo;
 
-    // ------------- functionality to test GlobalRpc --------------
     async fn send_global_rpc(
         &self,
         args: GlobalRpcArgs,
@@ -34,7 +33,6 @@ pub trait ControlProtocol {
         fingerprint: HavenFingerprint,
     ) -> Result<Option<HavenLocator>, DhtError>;
 
-    // ---------------- chat-related functionality -----------------
     async fn list_neighbors(&self) -> Vec<NeighborId>;
 
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)>;
@@ -96,16 +94,6 @@ pub struct GlobalRpcArgs {
 pub enum GlobalRpcError {
     #[error("error sending GlobalRpc request")]
     SendError,
-}
-
-#[derive(Error, Serialize, Deserialize, Debug)]
-pub enum ChatError {
-    #[error("error getting conversation {0}")]
-    Get(String),
-    #[error("error sending chat message {0}")]
-    Send(String),
-    #[error("database error: {0}")]
-    Db(String),
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]

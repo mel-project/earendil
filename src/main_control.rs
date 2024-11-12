@@ -1,12 +1,9 @@
 use anyhow::Context;
-use chrono::{DateTime, NaiveDateTime};
-use colored::{ColoredString, Colorize};
 use earendil_crypt::HavenIdentitySecret;
 use earendil_packet::crypt::DhPublic;
 use nanorpc_http::client::HttpRpcTransport;
-use smol::Timer;
 use std::{
-    collections::HashSet, io::Write, net::SocketAddr, str::FromStr, sync::Arc, time::Duration,
+    net::SocketAddr, str::FromStr,
 };
 
 use crate::{

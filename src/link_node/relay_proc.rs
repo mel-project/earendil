@@ -306,16 +306,6 @@ impl LinkProtocol for LinkProtocolImpl {
             .read_graph(|graph| graph.all_adjacencies().collect())
     }
 
-    /// Send a chat message to the other end of the link.
-    async fn push_chat(&self, msg: String) -> Result<(), LinkRpcErr> {
-        todo!()
-    }
-
-    /// Gets a one-time token to use in payment proofs for anti-double-spending
-    async fn get_ott(&self) -> Result<String, LinkRpcErr> {
-        todo!()
-    }
-
     async fn send_payment_proof(
         &self,
         amount: u64,
