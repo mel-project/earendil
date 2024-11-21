@@ -1,75 +1,31 @@
 mod dummy;
-mod onchain;
-mod pow;
-
-use std::collections::HashMap;
 
 use async_trait::async_trait;
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 
-use super::types::NeighborId;
 pub use dummy::Dummy;
-pub use onchain::OnChain;
-pub use pow::PoW;
 
 #[async_trait]
+/// A trait that all payment systems implement. A payment system can be understood a
 pub trait PaymentSystem: Send + Sync + 'static {
-    /// `amount` is in micromel. Returns proof of payment
-    async fn pay(
-        &self,
-        my_id: NeighborId,
-        to: &str,
-        amount: u64,
-        payment_id: &str,
-    ) -> anyhow::Result<String>;
-
-    /// returns Some(payment_id) if payment is valid, None otherwise
-    async fn verify_payment(
-        &self,
-        from: NeighborId,
-        amount: u64,
-        proof: &str,
-    ) -> anyhow::Result<Option<String>>;
+    async fn new_payment(&self, info: PaymentInfo) -> anyhow::Result<PaymentProof>;
+    async fn verify_proof(&self, proof: PaymentProof) -> anyhow::Result<PaymentInfo>;
 
     fn my_addr(&self) -> String;
-
-    fn name(&self) -> String;
-
-    /// max amount a payment can be, in micromels
-    fn max_granularity(&self) -> u64;
+    fn protocol_name(&self) -> String;
 }
 
-pub struct PaymentSystemSelector {
-    inner: HashMap<String, Box<dyn PaymentSystem>>,
-}
+/// The proof that a payment happened. This is an opaque bytestring that must be encoded and decoded by system-specific code, and which must carry enough information to verify the payment and reconstruct the original PaymentInfo.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PaymentProof(pub Bytes);
 
-impl PaymentSystemSelector {
-    pub fn new() -> Self {
-        Self {
-            inner: HashMap::new(),
-        }
-    }
-
-    pub fn get(&self, payment_system: &str) -> Option<&dyn PaymentSystem> {
-        self.inner.get(payment_system).map(|s| s.as_ref())
-    }
-
-    pub fn insert(&mut self, payment_system: Box<dyn PaymentSystem>) {
-        self.inner.insert(payment_system.name(), payment_system);
-    }
-
-    pub fn get_available(&self) -> Vec<(String, String)> {
-        self.inner
-            .iter()
-            .map(|(name, ps)| (name.clone(), ps.my_addr()))
-            .collect()
-    }
-
-    pub fn select(&self, name_addrs: &[(String, String)]) -> Option<(&dyn PaymentSystem, String)> {
-        for (name, addr) in name_addrs {
-            if let Some(ret) = self.get(name) {
-                return Some((ret, addr.to_string()));
-            }
-        }
-        None
-    }
+/// The information needed to create a new payment.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PaymentInfo {
+    pub dst_addr: String,
+    pub src_addr: String,
+    pub amount_micromel: u64,
+    pub nonce: u64,
 }

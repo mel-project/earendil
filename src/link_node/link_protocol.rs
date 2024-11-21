@@ -53,8 +53,6 @@ pub struct InfoResponse {
 /// Errors that can occur during a Link RPC call.
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum LinkRpcErr {
-    #[error("push chat failed")]
-    PushChatFailed,
     #[error("invalid payment proof")]
     InvalidPaymentProof,
     #[error("unaccepted payment system")]

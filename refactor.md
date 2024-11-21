@@ -40,6 +40,6 @@ Instead, once we have "xirtam" working, we can have a semi-official community of
 ## Action plan
 
 - [x] Completely remove chat
-- [ ] Implement storage system for debts
+- [x] Implement storage system for debts
 - [ ] Test
 - [ ] Implement payment system

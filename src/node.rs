@@ -38,7 +38,7 @@ use crate::{
     n2r_node::{N2rConfig, N2rNode},
     v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, V2hConfig, V2hNode},
 };
-use crate::{Dummy, OnChain, PaymentSystem, PoW};
+use crate::{Dummy, PaymentSystem};
 
 /// The public interface to the whole Earendil system.
 pub struct Node {
@@ -55,16 +55,16 @@ pub struct NodeCtx {
 impl Node {
     pub async fn start(config: ConfigFile) -> anyhow::Result<Self> {
         let config_clone = config.clone();
-        let mel_client = Arc::new(if let Some(bootstrap_route) = config.mel_bootstrap {
-            melprot::Client::connect_with_proxy(
-                NetID::Mainnet,
-                config.socks5.listen,
-                bootstrap_route,
-            )
-            .await?
-        } else {
-            melprot::Client::autoconnect(NetID::Mainnet).await?
-        });
+        // let mel_client = Arc::new(if let Some(bootstrap_route) = config.mel_bootstrap {
+        //     melprot::Client::connect_with_proxy(
+        //         NetID::Mainnet,
+        //         config.socks5.listen,
+        //         bootstrap_route,
+        //     )
+        //     .await?
+        // } else {
+        //     melprot::Client::autoconnect(NetID::Mainnet).await?
+        // });
 
         // construct payment systems based on our config
         let mut payment_systems: Vec<Box<dyn PaymentSystem>> = vec![];
@@ -75,12 +75,10 @@ impl Node {
                     payment_systems.push(Box::new(Dummy::new()));
                 }
                 crate::config::PaymentSystemKind::Pow => {
-                    tracing::debug!("PoW payments supported!");
-                    payment_systems.push(Box::new(PoW::new(mel_client.clone())));
+                    todo!()
                 }
                 crate::config::PaymentSystemKind::OnChain(secret) => {
-                    tracing::debug!("OnChain payments supported!");
-                    payment_systems.push(Box::new(OnChain::new(secret, mel_client.clone())?));
+                    todo!()
                 }
             }
         }

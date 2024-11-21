@@ -1,9 +1,8 @@
-
+use anyhow::Context;
 use async_trait::async_trait;
+use stdcode::StdcodeSerializeExt;
 
-use crate::NeighborId;
-
-use super::PaymentSystem;
+use super::{PaymentInfo, PaymentProof, PaymentSystem};
 
 #[derive(Clone)]
 pub struct Dummy {
@@ -26,42 +25,19 @@ impl Default for Dummy {
 
 #[async_trait]
 impl PaymentSystem for Dummy {
-    async fn pay(
-        &self,
-        my_id: NeighborId,
-        to: &str,
-        amount: u64,
-        payment_id: &str,
-    ) -> anyhow::Result<String> {
-        let proof =
-            serde_json::to_string(&(format!("{my_id},{to},{amount}"), payment_id.to_string()))?;
-        // smol::Timer::after(Duration::from_secs(100)).await;
-        Ok(proof)
+    async fn new_payment(&self, info: PaymentInfo) -> anyhow::Result<PaymentProof> {
+        Ok(PaymentProof(info.stdcode().into()))
     }
 
-    async fn verify_payment(
-        &self,
-        from: NeighborId,
-        amount: u64,
-        proof: &str,
-    ) -> anyhow::Result<Option<String>> {
-        let (proof, payment_id): (String, String) = serde_json::from_str(proof)?;
-        if proof == format!("{from},{},{amount}", self.my_addr) {
-            Ok(Some(payment_id))
-        } else {
-            Ok(None)
-        }
+    async fn verify_proof(&self, proof: PaymentProof) -> anyhow::Result<PaymentInfo> {
+        stdcode::deserialize(&proof.0).context("invalid proof")
     }
 
     fn my_addr(&self) -> String {
         self.my_addr.to_string()
     }
 
-    fn name(&self) -> String {
+    fn protocol_name(&self) -> String {
         "dummy".to_string()
-    }
-
-    fn max_granularity(&self) -> u64 {
-        u64::MAX
     }
 }

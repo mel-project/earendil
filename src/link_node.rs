@@ -22,7 +22,7 @@ pub use link_store::*;
 
 use netgraph::NetGraph;
 
-pub use payment_system::{Dummy, OnChain, PaymentSystem, PoW};
+pub use payment_system::{Dummy, PaymentSystem};
 
 use rand::seq::SliceRandom;
 use relay_proc::{RelayMsg, RelayProcess};
