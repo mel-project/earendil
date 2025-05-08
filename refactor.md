@@ -1,23 +1,29 @@
 # Refactoring ideas
 
-Besides some code duplication issues, the biggest problem is weak encapsulation and abstraction.
+## Relays and clients
 
-Partly to the difficulty presented by Rust's type system (most notably, mutually referencing objects are highly difficult and unidiomatic), we aren't using an "object-oriented"/noun-based abstraction system, but a procedural style.
+The whole refactor to make clients a special kind of node was a disaster, as it introduced relay vs client special casing throughout the stack.
 
-But we don't have a great organization for the procedures, so we have a bunch of functions calling each other, touching all sorts of context-scoped variables and spawning tasks running about, making the code hard to follow.
+Instead, we take a page from IP, and simply have nodes that either have globally reachable addresses or don't. There is no need to special case around this if we are careful about non-leaky abstractions.
 
-It seems like fundamentally, humans need to think in terms of big, abstract "nouns" in addition to procedural "verbs", not just verbs operating on primitive pieces of data.
+## Pricing and peeling
 
-I think the best approach to this is to **treat modules as "nouns"**. Each **module** should present a coherent mental model of some part of the system, and only expose what's needed.
+Should we enforce the original design of peeling, which is entirely based on source routing that couples the mixnet layer with the network layer, rather than the new design?
 
-## Refactoring the network layer
+The new design is easier to tune for the performance/privacy tradeoff and has more provable privacy, but it makes pricing somewhat problematic, since per-packet costs will vary drastically based on whether the relay needs to peel or simply pass along. (Or maybe not, if we can make peeling cheap enough)
 
-The most complex and spaghetti area of the current code is the network layer --- the code that takes outgoing raw packets and sends them off, while feeding the rest of the code incoming raw packets. It's currently a mess of a bunch of tables with channels, connected to tasks on the other end, with lots of subtle race conditions related to tasks restarting, etc.
 
-Here we outline a better design:
+## Layers
 
-- `network`
-  - `send_raw()`
-  - `incoming_raw()`
-  - `subscribe_outgoing_relay()`, returning a receiver that represents all the packets outgoing to a particular neighboring relay. If this is called multiple times, packets are sent to arbitrary channels, and none of them should be closed. The receiver should only close when there are no more subscribers at all.
-  - `subscribe_outgoing_client()`
+This will be assuming we keep the separation between the mixing layer and the network layer.
+
+Earendil's internal abstractions are inspired by traditional IP stack abstractions.
+
+The lowest level exposes an interface like IP: you can send or receive datagrams, and they are addressed to a `Fingerprint`, which represents a public key hash. Receive receives fingerprints that are addressed to oneself.
+
+At one higher level, we implement the onion encryption stuff.
+
+
+## Implementation
+
+The current API is actually quite nice. The only thing that needs to be changed is probably a refactor of `LinkNode`, to separate out the network layer better.
