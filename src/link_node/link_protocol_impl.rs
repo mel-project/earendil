@@ -9,9 +9,9 @@ use itertools::Itertools;
 use crate::ChatEntry;
 
 use super::{
+    LinkNodeCtx,
     link_protocol::{InfoResponse, LinkProtocol, LinkRpcErr},
     types::NeighborId,
-    LinkNodeCtx,
 };
 
 pub struct LinkProtocolImpl {
@@ -63,14 +63,14 @@ impl LinkProtocol for LinkProtocolImpl {
     }
 
     async fn identity(&self, fp: RelayFingerprint) -> Option<IdentityDescriptor> {
-        self.ctx.relay_graph.read().identity(&fp)
+        self.ctx.relay_graph.read().identity(fp)
     }
 
     #[tracing::instrument(skip(self))]
     async fn adjacencies(&self, fps: Vec<RelayFingerprint>) -> Vec<AdjacencyDescriptor> {
         let rg = self.ctx.relay_graph.read();
         fps.into_iter()
-            .flat_map(|fp| rg.adjacencies(&fp).into_iter().flatten())
+            .flat_map(|fp| rg.adjacencies(fp).into_iter().flatten())
             .dedup()
             .collect()
     }

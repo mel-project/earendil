@@ -7,7 +7,7 @@ use anyhow::Context;
 use argon2::Argon2;
 use arrayref::array_ref;
 use base32::Alphabet;
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use bytemuck::{Pod, Zeroable};
 use bytes::Bytes;
 use rand::Rng;
@@ -100,7 +100,7 @@ impl HavenIdentitySecret {
 
     /// Generates a new random secret identity.
     pub fn generate() -> Self {
-        Self(rand::thread_rng().gen())
+        Self(rand::thread_rng().r#gen())
     }
 
     /// Returns the public half of this secret identity.
@@ -275,7 +275,7 @@ impl RelayIdentitySecret {
 
     /// Generates a new random secret identity.
     pub fn generate() -> Self {
-        Self(rand::thread_rng().gen())
+        Self(rand::thread_rng().r#gen())
     }
 
     /// Returns the public half of this secret identity.
@@ -356,7 +356,7 @@ pub struct AnonEndpoint(pub [u8; 16]);
 
 impl AnonEndpoint {
     pub fn random() -> Self {
-        let new_anon_id: [u8; 16] = rand::thread_rng().gen();
+        let new_anon_id: [u8; 16] = rand::thread_rng().r#gen();
         AnonEndpoint(new_anon_id)
     }
 }

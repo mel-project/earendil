@@ -5,9 +5,9 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    crypt::{stream_dencrypt, DhPublic},
     ForwardInstruction, InnerPacket, Message, PacketConstructError, PrivacyConfig, RawBody,
     RawHeader, RawPacket,
+    crypt::{DhPublic, stream_dencrypt},
 };
 
 /// A single-use reply block. Surbs are constructed by endpoints who wish other endpoints to talk to them via an anonymous address, and are single-use, consumed when used to construct a packet going to that anonymous address.
@@ -48,7 +48,7 @@ impl Surb {
             privacy_cfg,
         )?;
         let header = raw_packet.header;
-        let stream_key = rand::thread_rng().gen();
+        let stream_key = rand::thread_rng().r#gen();
 
         let rb_degarbler = ReplyDegarbler {
             shared_secs,

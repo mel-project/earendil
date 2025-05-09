@@ -30,7 +30,7 @@ use clone_macro::clone;
 use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{
-    crypt::DhSecret, InnerPacket, Message, PrivacyConfig, RawPacket, ReplyDegarbler, Surb,
+    InnerPacket, Message, PrivacyConfig, RawPacket, ReplyDegarbler, Surb, crypt::DhSecret,
 };
 use earendil_topology::RelayGraph;
 use itertools::Itertools;
@@ -156,7 +156,7 @@ impl LinkNode {
                 route_to_instructs(&relay_graph, &route).context("route_to_instructs failed")?;
 
             let dest_opk = relay_graph
-                .identity(&dest_relay)
+                .identity(dest_relay)
                 .context(format!(
                     "couldn't get the identity of the destination fp {dest_relay}"
                 ))?
@@ -209,7 +209,7 @@ impl LinkNode {
         };
         let graph = self.ctx.relay_graph.read();
         let dest_opk = graph
-            .identity(&destination)
+            .identity(destination)
             .context(format!(
                 "destination {destination} is surprisingly not in our RelayGraph"
             ))?

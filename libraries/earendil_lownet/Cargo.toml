@@ -1,0 +1,25 @@
+[package]
+name = "earendil_lownet"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+ahash = "0.8.12"
+anyhow = "1.0.98"
+async_stdcode={path="../async_stdcode"}
+bytes = "1.10.1"
+dashmap = "6.1.0"
+earendil_crypt={path="../earendil_crypt"}
+earendil_packet={path="../earendil_packet"}
+earendil_topology={path="../earendil_topology"}
+futures-concurrency = "7.6.3"
+futures-util = {version="0.3.31", features=["io"]}
+haiyuu = {version="0.5", features=["smolscale"]}
+rand = "0.9.1"
+serde = {version="1.0.219", features=["derive"]}
+sillad = "0.2.5"
+tachyonix = "0.3.1"
+thiserror = "2.0.12"
+tracing = "0.1.41"

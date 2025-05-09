@@ -26,7 +26,7 @@ pub fn route_to_instructs(
             let next = wind[1];
 
             let this_pubkey = graph
-                .identity(&this)
+                .identity(this)
                 .context("failed to get an identity somewhere in our route")?
                 .onion_pk;
             Ok(ForwardInstruction {
@@ -54,7 +54,7 @@ pub fn one_hop_closer(
     let mut next_hop = None;
 
     for neigh in my_neighs.iter() {
-        if let Some(route) = graph.find_shortest_path(neigh, &dest) {
+        if let Some(route) = graph.find_shortest_path(*neigh, dest) {
             if route.len() < shortest_route_len {
                 shortest_route_len = route.len();
                 next_hop = Some(*neigh);

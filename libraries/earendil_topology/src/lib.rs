@@ -9,7 +9,7 @@ use earendil_crypt::{
 };
 use earendil_packet::crypt::{DhPublic, DhSecret};
 use indexmap::IndexMap;
-use rand::{seq::IteratorRandom, thread_rng, Rng};
+use rand::{Rng, seq::IteratorRandom, thread_rng};
 use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
 use thiserror::Error;
@@ -51,7 +51,7 @@ impl RelayGraph {
     }
 
     /// Looks up the identity descriptor of a fingerprint.
-    pub fn identity(&self, fingerprint: &RelayFingerprint) -> Option<IdentityDescriptor> {
+    pub fn identity(&self, fingerprint: RelayFingerprint) -> Option<IdentityDescriptor> {
         // tracing::trace!(
         //     needle = debug(fingerprint),
         //     haystack = debug(self.fp_to_id.iter().collect::<Vec<_>>()),
@@ -65,7 +65,7 @@ impl RelayGraph {
     /// Inserts an identity descriptor. Verifies its self-consistency.
     pub fn insert_identity(&mut self, identity: IdentityDescriptor) -> Result<(), VerifyError> {
         // do not insert if we already have a newer copy
-        if let Some(existing) = self.identity(&identity.identity_pk.fingerprint()) {
+        if let Some(existing) = self.identity(identity.identity_pk.fingerprint()) {
             if existing.unix_timestamp > identity.unix_timestamp {
                 return Ok(());
             }
@@ -110,7 +110,7 @@ impl RelayGraph {
     /// Returns a list of neighbors to the given Fingerprint.
     pub fn neighbors(
         &self,
-        fp: &RelayFingerprint,
+        fp: RelayFingerprint,
     ) -> Option<impl Iterator<Item = RelayFingerprint> + '_> {
         let id = self.id(fp)?;
         let neighs = self.adjacency.get(&id)?;
@@ -127,10 +127,9 @@ impl RelayGraph {
     /// None is returned if the given Fingerprint is not present in the graph.
     pub fn adjacencies(
         &self,
-        fp: &RelayFingerprint,
+        fp: RelayFingerprint,
     ) -> Option<impl Iterator<Item = AdjacencyDescriptor> + '_> {
-        let fp = *fp;
-        let id = self.id(&fp)?;
+        let id = self.id(fp)?;
         Some(
             self.adjacency
                 .get(&id)?
@@ -170,7 +169,7 @@ impl RelayGraph {
     /// Picks a certain number of random relays.
     pub fn rand_relays(&self, num: usize) -> Vec<RelayFingerprint> {
         self.all_nodes()
-            .filter_map(|n| self.identity(&n))
+            .filter_map(|n| self.identity(n))
             .map(|id| id.identity_pk.fingerprint())
             .choose_multiple(&mut rand::thread_rng(), num)
     }
@@ -191,8 +190,8 @@ impl RelayGraph {
     /// bypassing any Fingerprint in the blacklist.
     pub fn find_shortest_path(
         &self,
-        start_fp: &RelayFingerprint,
-        end_fp: &RelayFingerprint,
+        start_fp: RelayFingerprint,
+        end_fp: RelayFingerprint,
     ) -> Option<Vec<RelayFingerprint>> {
         let start_id = self.id(start_fp)?;
         let end_id = self.id(end_fp)?;
@@ -302,8 +301,8 @@ impl RelayGraph {
         }
     }
 
-    fn id(&self, fp: &RelayFingerprint) -> Option<u64> {
-        self.fp_to_id.get(fp).copied()
+    fn id(&self, fp: RelayFingerprint) -> Option<u64> {
+        self.fp_to_id.get(&fp).copied()
     }
 
     fn verify_adjacency(&self, adj: &AdjacencyDescriptor) -> Result<(), AdjacencyError> {
@@ -311,13 +310,13 @@ impl RelayGraph {
             return Err(AdjacencyError::LeftNotSmallerThanRight);
         }
 
-        let left_idpk = if let Some(left) = self.identity(&adj.left) {
+        let left_idpk = if let Some(left) = self.identity(adj.left) {
             left.identity_pk
         } else {
             return Err(AdjacencyError::LeftIdentityNotFound);
         };
 
-        let right_idpk = if let Some(right) = self.identity(&adj.right) {
+        let right_idpk = if let Some(right) = self.identity(adj.right) {
             right.identity_pk
         } else {
             return Err(AdjacencyError::RightIdentityNotFound);
