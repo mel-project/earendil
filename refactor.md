@@ -1,29 +1,41 @@
-# Refactoring ideas
+# Refactoring the lowest level
 
-## Relays and clients
+## Addresses
 
-The whole refactor to make clients a special kind of node was a disaster, as it introduced relay vs client special casing throughout the stack.
+Having addresses be uniformly globally routable would be nice. This can be accomplished by
 
-Instead, we take a page from IP, and simply have nodes that either have globally reachable addresses or don't. There is no need to special case around this if we are careful about non-leaky abstractions.
+```rust
+pub struct NodeAddr {
+    pub relay: RelayFingerprint,
+    pub client_id: u64
+}
+```
 
-## Pricing and peeling
+serialized as `na-[hex]-[client_id]`
 
-Should we enforce the original design of peeling, which is entirely based on source routing that couples the mixnet layer with the network layer, rather than the new design?
+where a `client_id` of 0 indicates the relay itself.
 
-The new design is easier to tune for the performance/privacy tradeoff and has more provable privacy, but it makes pricing somewhat problematic, since per-packet costs will vary drastically based on whether the relay needs to peel or simply pass along. (Or maybe not, if we can make peeling cheap enough)
+This allows us to have a low-level IP-like layer where every node can reach every other node with an arbitrary datagram. That will also be the layer that all bandwidth / cost accounting happens, since we assume that bandwidth is the cost bottleneck in the entire stack.
+
+This also means that if a node has $n$ neighbors, then it has either $n$ or $n+1$ addresses (depending on whether it's a client or relay). A helper function can sort these in order of importance.
+
+## Network layer code
+
+There's a *relay-specific* part and an *invariant* part.
+
+The invariant part is that to send a datagram to an address, we pick the link that goes closest to the destination address and go for it. And all incoming datagrams addressed to us get put into a big queue that a `recv()` method pops.
+
+The relay-specific part is that incoming datagrams addressed *not to* us get forwarded.
+
+## Onion peeling
+
+We don't special-case clients anymore. Everybody is a potential peeler.
+
+Forward packets take in destination `NodeAddr` and destination `OnionPublic`. Backward packets consume a SURB.
+
+At each level of peeling, the next hop is a `NodeAddr`.
 
 
-## Layers
+## Non-mixnet usage?
 
-This will be assuming we keep the separation between the mixing layer and the network layer.
-
-Earendil's internal abstractions are inspired by traditional IP stack abstractions.
-
-The lowest level exposes an interface like IP: you can send or receive datagrams, and they are addressed to a `Fingerprint`, which represents a public key hash. Receive receives fingerprints that are addressed to oneself.
-
-At one higher level, we implement the onion encryption stuff.
-
-
-## Implementation
-
-The current API is actually quite nice. The only thing that needs to be changed is probably a refactor of `LinkNode`, to separate out the network layer better.
+Completely non-mixnet traffic can easily travel over the low-level network transport. This may or may not be a good thing?
