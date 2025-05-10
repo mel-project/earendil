@@ -9,7 +9,6 @@ use crate::{Datagram, NodeAddr, link_table::LinkTable};
 pub struct Router {
     pub graph: Arc<RwLock<RelayGraph>>,
     pub table: Arc<RwLock<LinkTable>>,
-    pub my_addrs: Vec<NodeAddr>,
     pub send_incoming: tachyonix::Sender<Datagram>,
 }
 
@@ -18,9 +17,10 @@ impl Process for Router {
     type Output = ();
 
     async fn run(&mut self, mailbox: &mut Mailbox<Self>) -> Self::Output {
-        let my_addrs: AHashSet<NodeAddr> = self.my_addrs.iter().copied().collect();
         loop {
             let mut dg = mailbox.recv().await;
+            // TODO: caching
+            let my_addrs: AHashSet<NodeAddr> = self.table.read().unwrap().local_addrs().collect();
             if my_addrs.contains(&dg.dest_addr) {
                 tracing::debug!(
                     dest = display(dg.dest_addr),
@@ -39,7 +39,7 @@ impl Process for Router {
             }
             dg.ttl -= 1;
 
-            if let Some(neigh) = self.table.read().unwrap().get_link(dg.dest_addr) {
+            if let Some(neigh) = self.table.read().unwrap().neigh_link(dg.dest_addr) {
                 tracing::debug!(dest = display(dg.dest_addr), "destination is neighbor");
                 let _ = neigh.send_or_drop(dg);
             } else {
@@ -61,7 +61,7 @@ impl Process for Router {
                         });
                 if let Some(neigh) = best_neigh {
                     tracing::debug!(dest = display(dg.dest_addr), "routing through a neighbor");
-                    let _ = table.get_link(neigh).unwrap().send_or_drop(dg);
+                    let _ = table.neigh_link(neigh).unwrap().send_or_drop(dg);
                 } else {
                     tracing::warn!(dest = display(dg.dest_addr), "cannot route to destination")
                 }

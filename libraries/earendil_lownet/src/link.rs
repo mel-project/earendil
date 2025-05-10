@@ -8,12 +8,14 @@ use crate::{Datagram, router::Router};
 pub struct Link {
     pub pipe: Box<dyn sillad::Pipe>,
     pub router: WeakHandle<Router>,
-    pub on_drop: Box<dyn FnMut() + Send + 'static>,
+    pub on_drop: Box<dyn FnOnce() + Send + 'static>,
 }
 
 impl Drop for Link {
     fn drop(&mut self) {
-        (self.on_drop)()
+        let mut lala: Box<dyn FnOnce() + Send + 'static> = Box::new(|| {});
+        std::mem::swap(&mut self.on_drop, &mut lala);
+        lala()
     }
 }
 
