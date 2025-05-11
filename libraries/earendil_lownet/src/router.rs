@@ -1,13 +1,13 @@
 use std::sync::{Arc, RwLock};
 
 use async_channel::Sender;
-use earendil_topology::RelayGraph;
+
 use haiyuu::{Mailbox, Process};
 
-use crate::{Datagram, link_table::LinkTable};
+use crate::{Datagram, link_table::LinkTable, topology::Topology};
 
 pub struct Router {
-    pub graph: Arc<RwLock<RelayGraph>>,
+    pub topo: Topology,
     pub table: Arc<RwLock<LinkTable>>,
     pub send_incoming: Sender<Datagram>,
 }
@@ -19,7 +19,7 @@ impl Process for Router {
     async fn run(&mut self, mailbox: &mut Mailbox<Self>) -> Self::Output {
         loop {
             let mut dg = mailbox.recv().await;
-            // TODO: caching
+
             if self.table.read().unwrap().is_local_addr(dg.dest_addr) {
                 tracing::debug!(
                     dest = display(dg.dest_addr),
@@ -51,7 +51,8 @@ impl Process for Router {
                         .neighbors()
                         .filter(|n| n.client_id == 0)
                         .min_by_key(|neigh| {
-                            self.graph
+                            self.topo
+                                .graph()
                                 .read()
                                 .unwrap()
                                 .find_shortest_path(neigh.relay, dg.dest_addr.relay)

@@ -34,3 +34,4 @@ blake3 = "1.8.2"
 nursery_macro = {path="../nursery_macro"}
 async-task = "4.7.1"
 smolscale = "0.4.15"
+async-lock = "3.4.0"

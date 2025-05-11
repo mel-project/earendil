@@ -13,11 +13,11 @@ use sillad::dialer::{Dialer, DialerExt};
 
 use crate::{
     NodeAddr, NodeIdentity, OutLinkConfig, auth::AddrAssignment, link::Link, link_table::LinkTable,
-    router::Router,
+    router::Router, topology::Topology,
 };
 
 pub async fn out_link(
-    secret: NodeIdentity,
+    topo: Topology,
     cfg: OutLinkConfig,
     table: Arc<RwLock<LinkTable>>,
     router: Handle<Router>,
@@ -25,8 +25,8 @@ pub async fn out_link(
     const INIT_RETRY: Duration = Duration::from_millis(100);
     let mut retry = INIT_RETRY;
     loop {
-        if let Err(err) = out_link_once(secret, &cfg, table.clone(), router.clone()).await {
-            retry = retry * 2;
+        if let Err(err) = out_link_once(topo.clone(), &cfg, table.clone(), router.clone()).await {
+            retry *= 2;
             tracing::warn!(
                 connect = display(&cfg.connect),
                 retry = debug(retry),
@@ -41,7 +41,7 @@ pub async fn out_link(
 }
 
 async fn out_link_once(
-    secret: NodeIdentity,
+    topo: Topology,
     cfg: &OutLinkConfig,
     table: Arc<RwLock<LinkTable>>,
     router: Handle<Router>,
@@ -75,8 +75,8 @@ async fn out_link_once(
     let (read, write) = conn.split();
     let mux = PicoMux::new(read, write);
     let auth = mux.open(b"auth").await?;
-    let assignment = out_link_auth(secret, auth).await?;
-    let local_addr = match secret {
+    let assignment = out_link_auth(topo.identity(), auth).await?;
+    let local_addr = match topo.identity() {
         NodeIdentity::Relay(relay_identity_secret) => NodeAddr {
             relay: relay_identity_secret.public().fingerprint(),
             client_id: 0,
@@ -103,6 +103,7 @@ async fn out_link_once(
     let link = Link {
         link_pipe,
         gossip_pipe,
+        topo,
         router: router.downgrade(),
         on_drop: Box::new(on_drop),
         neigh_addr,

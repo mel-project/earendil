@@ -19,3 +19,9 @@ This is prevented by a basic "accounting" procedure:
 - The relay assigns an ID based on this random bearer secret. This assignment can be done either through a persistent mapping, or through some deterministic pseudorandom process.
 
 This way, somebody else with a different bearer secret will not get assigned the same ID.
+
+## Gossip
+
+We currently have a very trivial gossip: 
+- every 1 second, we sign an AdjacencyDescriptor, during which we also exchange IdentityDescriptors.
+- every 1 minute, we sync the RelayGraph. This is by sending the entire list of AdjacencyDescriptors and IdentityDescriptors.

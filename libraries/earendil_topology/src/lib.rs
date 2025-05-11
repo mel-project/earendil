@@ -71,9 +71,7 @@ impl RelayGraph {
             }
         }
 
-        identity
-            .identity_pk
-            .verify(identity.to_sign().as_bytes(), &identity.sig)?;
+        identity.verify()?;
         let relay_fp = identity.identity_pk.fingerprint();
         let id = self.alloc_id(&relay_fp);
         self.id_to_descriptor.insert(id, identity.clone());
@@ -405,16 +403,9 @@ impl IdentityDescriptor {
     }
 
     /// Verifies the signature of the IdentityDescriptor
-    pub fn verify(&self) -> Result<(), IdentityError> {
-        if self
-            .identity_pk
+    pub fn verify(&self) -> Result<(), VerifyError> {
+        self.identity_pk
             .verify(self.to_sign().as_bytes(), &self.sig)
-            .is_ok()
-        {
-            Ok(())
-        } else {
-            Err(IdentityError::InvalidSignature)
-        }
     }
 }
 
