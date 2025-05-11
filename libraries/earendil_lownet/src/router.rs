@@ -1,15 +1,15 @@
 use std::sync::{Arc, RwLock};
 
-use ahash::AHashSet;
+use async_channel::Sender;
 use earendil_topology::RelayGraph;
 use haiyuu::{Mailbox, Process};
 
-use crate::{Datagram, NodeAddr, link_table::LinkTable};
+use crate::{Datagram, link_table::LinkTable};
 
 pub struct Router {
     pub graph: Arc<RwLock<RelayGraph>>,
     pub table: Arc<RwLock<LinkTable>>,
-    pub send_incoming: tachyonix::Sender<Datagram>,
+    pub send_incoming: Sender<Datagram>,
 }
 
 impl Process for Router {
@@ -20,8 +20,7 @@ impl Process for Router {
         loop {
             let mut dg = mailbox.recv().await;
             // TODO: caching
-            let my_addrs: AHashSet<NodeAddr> = self.table.read().unwrap().local_addrs().collect();
-            if my_addrs.contains(&dg.dest_addr) {
+            if self.table.read().unwrap().is_local_addr(dg.dest_addr) {
                 tracing::debug!(
                     dest = display(dg.dest_addr),
                     "datagram addressed to myself!"

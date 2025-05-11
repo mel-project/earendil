@@ -7,6 +7,7 @@ use rand::seq::IndexedRandom;
 
 use crate::{NodeAddr, link::Link};
 
+#[derive(Default)]
 pub struct LinkTable {
     id_to_link: AHashMap<u64, (NodeAddr, NodeAddr, Handle<Link>)>,
     local_addr_to_id: AHashMap<NodeAddr, Vec<u64>>,
@@ -71,5 +72,9 @@ impl LinkTable {
 
     pub fn local_addrs(&self) -> impl Iterator<Item = NodeAddr> + '_ {
         self.local_addr_to_id.keys().copied()
+    }
+
+    pub fn is_local_addr(&self, addr: NodeAddr) -> bool {
+        self.local_addr_to_id.contains_key(&addr)
     }
 }

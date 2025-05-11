@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! nursery {
     ($body:expr) => {{
-        let exec = smol::Executor::new();
+        let exec = $crate::__private::Executor::new();
 
         {
             // This allows the `spawn!` macro to access `exec` by name
@@ -16,19 +16,8 @@ macro_rules! nursery {
     }};
 }
 
-#[cfg(test)]
-mod test {
-    use std::time::Duration;
-
-    #[test]
-    fn simple_nursery() {
-        smol::future::block_on(async {
-            nursery!({
-                println!("test");
-
-                spawn!(async move { println!("world") }).detach();
-                smol::Timer::after(Duration::from_secs(1)).await;
-            });
-        });
-    }
+#[doc(hidden)]
+pub mod __private {
+    #[doc(hidden)]
+    pub use async_executor::Executor;
 }

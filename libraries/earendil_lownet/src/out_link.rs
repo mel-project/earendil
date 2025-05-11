@@ -1,7 +1,11 @@
+use async_io::Timer;
 use async_stdcode::{StdcodeReader, StdcodeWriter};
 use clone_macro::clone;
 use haiyuu::{Handle, Process};
-use std::sync::{Arc, RwLock};
+use std::{
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 use futures_util::AsyncReadExt;
 use picomux::{PicoMux, Stream};
@@ -12,7 +16,29 @@ use crate::{
     router::Router,
 };
 
-pub async fn out_link(secret: NodeIdentity, cfg: OutLinkConfig) {}
+pub async fn out_link(
+    secret: NodeIdentity,
+    cfg: OutLinkConfig,
+    table: Arc<RwLock<LinkTable>>,
+    router: Handle<Router>,
+) {
+    const INIT_RETRY: Duration = Duration::from_millis(100);
+    let mut retry = INIT_RETRY;
+    loop {
+        if let Err(err) = out_link_once(secret, &cfg, table.clone(), router.clone()).await {
+            retry = retry * 2;
+            tracing::warn!(
+                connect = display(&cfg.connect),
+                retry = debug(retry),
+                err = debug(err),
+                "out_link died"
+            )
+        } else {
+            retry = INIT_RETRY;
+        }
+        Timer::after(retry).await;
+    }
+}
 
 async fn out_link_once(
     secret: NodeIdentity,
@@ -68,21 +94,24 @@ async fn out_link_once(
         table.write().unwrap().remove(link_id);
         let _ = send_death.send(());
     });
+    let neigh_addr = NodeAddr {
+        relay: cfg.fingerprint,
+        client_id: 0,
+    };
+    let link_pipe = Box::new(mux.open(b"link").await?);
+    let gossip_pipe = Box::new(mux.open(b"gossip").await?);
     let link = Link {
-        pipe: Box::new(mux.open(b"link").await?),
+        link_pipe,
+        gossip_pipe,
         router: router.downgrade(),
         on_drop: Box::new(on_drop),
+        neigh_addr,
     }
     .spawn_smolscale();
-    table.write().unwrap().insert(
-        local_addr,
-        NodeAddr {
-            relay: cfg.fingerprint,
-            client_id: 0,
-        },
-        link_id,
-        link,
-    );
+    table
+        .write()
+        .unwrap()
+        .insert(local_addr, neigh_addr, link_id, link);
     let _ = recv_death.await;
     Ok(())
 }
@@ -91,11 +120,17 @@ async fn out_link_auth(secret: NodeIdentity, auth: Stream) -> anyhow::Result<Add
     let (down, up) = auth.split();
     let mut down = StdcodeReader::new(down);
     let mut up = StdcodeWriter::new(up);
+    // read the challenge
+    let challenge: [u8; 32] = down.read().await?;
     // indicate our ID to the other end
     match secret {
         NodeIdentity::Relay(relay_identity_secret) => {
             up.write(0u128).await?;
             up.write(relay_identity_secret.public()).await?;
+            up.write(relay_identity_secret.sign(
+                blake3::keyed_hash(b"linkauth________________________", &challenge).as_bytes(),
+            ))
+            .await?;
         }
         NodeIdentity::ClientBearer(id) => {
             up.write(id).await?;

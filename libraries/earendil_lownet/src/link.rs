@@ -3,10 +3,12 @@ use futures_concurrency::future::Race;
 use futures_util::AsyncReadExt;
 use haiyuu::{Process, WeakHandle};
 
-use crate::{Datagram, router::Router};
+use crate::{Datagram, NodeAddr, router::Router};
 
 pub struct Link {
-    pub pipe: Box<dyn sillad::Pipe>,
+    pub link_pipe: Box<dyn sillad::Pipe>,
+    pub gossip_pipe: Box<dyn sillad::Pipe>,
+    pub neigh_addr: NodeAddr,
     pub router: WeakHandle<Router>,
     pub on_drop: Box<dyn FnOnce() + Send + 'static>,
 }
@@ -25,7 +27,7 @@ impl Process for Link {
     const MAILBOX_CAP: usize = 100;
 
     async fn run(&mut self, mailbox: &mut haiyuu::Mailbox<Self>) -> Self::Output {
-        let (read, write) = (&mut self.pipe).split();
+        let (read, write) = (&mut self.link_pipe).split();
         let (mut read, mut write) = (StdcodeReader::new(read), StdcodeWriter::new(write));
         let read_loop = async {
             loop {
