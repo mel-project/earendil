@@ -107,6 +107,7 @@ async fn out_link_once(
         router: router.downgrade(),
         on_drop: Box::new(on_drop),
         neigh_addr,
+        mux,
     }
     .spawn_smolscale();
     table

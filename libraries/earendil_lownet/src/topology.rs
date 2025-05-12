@@ -52,6 +52,14 @@ impl Topology {
         self.identity
     }
 
+    pub fn relay_identity_descriptor(&self) -> Option<IdentityDescriptor> {
+        if let NodeIdentity::Relay(relay) = self.identity {
+            Some(IdentityDescriptor::new(&relay, &self.dh_secret, None))
+        } else {
+            None
+        }
+    }
+
     pub fn dh_secret(&self) -> &DhSecret {
         &self.dh_secret
     }

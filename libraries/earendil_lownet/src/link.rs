@@ -1,17 +1,17 @@
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use async_io::Timer;
 use async_stdcode::{StdcodeReader, StdcodeWriter};
+use bytes::Bytes;
 use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use futures_concurrency::future::Race;
 use futures_util::AsyncReadExt;
 use haiyuu::{Process, WeakHandle};
+use picomux::PicoMux;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    Datagram, NodeAddr, NodeIdentity, router::Router, topology::Topology,
-};
+use crate::{Datagram, NodeAddr, NodeIdentity, router::Router, topology::Topology};
 
 pub struct Link {
     pub link_pipe: Box<dyn sillad::Pipe>,
@@ -20,6 +20,8 @@ pub struct Link {
     pub topo: Topology,
     pub router: WeakHandle<Router>,
     pub on_drop: Box<dyn FnOnce() + Send + 'static>,
+
+    pub mux: PicoMux,
 }
 
 impl Drop for Link {
@@ -62,7 +64,41 @@ impl Process for Link {
             };
 
             let (read, write) = (&mut self.gossip_pipe).split();
-            let (mut read, mut write) = (StdcodeReader::new(read), StdcodeWriter::new(write));
+            let (mut read, write) = (StdcodeReader::new(read), StdcodeWriter::new(write));
+            let write = async_lock::Mutex::new(write);
+
+            let adj_loop = async {
+                if let NodeIdentity::Relay(my_id) = self.topo.identity() {
+                    if self.neigh_addr.client_id == 0
+                        && my_id.public().fingerprint() < self.neigh_addr.relay
+                    {
+                        loop {
+                            let mut template = AdjacencyDescriptor {
+                                left: my_id.public().fingerprint(),
+                                right: self.neigh_addr.relay,
+                                left_sig: Bytes::new(),
+                                right_sig: Bytes::new(),
+                                unix_timestamp: SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs(),
+                            };
+                            let sig = my_id.sign(template.to_sign().as_bytes());
+                            template.left_sig = sig;
+                            write
+                                .lock()
+                                .await
+                                .write(GossipMsg::IncompleteAdjacency(
+                                    template,
+                                    self.topo.relay_identity_descriptor().unwrap(),
+                                ))
+                                .await?;
+                            Timer::after(Duration::from_secs(10)).await;
+                        }
+                    }
+                }
+                futures_util::future::pending().await
+            };
 
             // up loop actually sends stuff
             let up_loop = async {
@@ -83,7 +119,7 @@ impl Process for Link {
                             msg = debug(&msg),
                             "sending gossip msg"
                         );
-                        write.write(msg).await?;
+                        write.lock().await.write(msg).await?;
                     } else {
                         tracing::warn!(
                             neigh_addr = display(self.neigh_addr),
@@ -142,7 +178,7 @@ impl Process for Link {
                     }
                 }
             };
-            (up_loop, dn_loop).race().await
+            (up_loop, dn_loop, adj_loop).race().await
         };
         let res: anyhow::Result<()> = (link_loop, gossip_loop).race().await;
         if let Err(err) = res {

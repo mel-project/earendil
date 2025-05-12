@@ -7,8 +7,8 @@ mod out_link;
 mod router;
 mod topology;
 mod types;
-
 use std::sync::{Arc, RwLock};
+pub use topology::Topology;
 
 use async_channel::Receiver;
 use async_task::Task;
@@ -20,13 +20,30 @@ use in_link::in_link;
 use link_table::LinkTable;
 use out_link::out_link;
 use router::Router;
-use topology::Topology;
+
 pub use types::*;
 
+/// A low-level networking abstraction for managing communication between nodes.
+///
+/// The `LowNet` struct represents a node in the network and provides methods for
+/// sending and receiving datagrams, as well as accessing the network topology.
+/// # Example
+///
+/// ```
+/// use earendil_lownet::{LowNet, LowNetConfig, InLinkConfig, OutLinkConfig, NodeIdentity};
+///
+/// let config = LowNetConfig {
+///     in_links: vec![],
+///     out_links: vec![],
+///     identity: NodeIdentity::ClientBearer(100),
+/// };
+///
+/// let lownet = LowNet::new(config);
+/// ```
 pub struct LowNet {
     router: Handle<Router>,
     recv_incoming: Receiver<Datagram>,
-
+    topology: Topology,
     _task: Task<()>,
 }
 
@@ -37,6 +54,7 @@ pub struct LowNetConfig {
 }
 
 impl LowNet {
+    /// Creates a new `LowNet` instance with the given configuration.
     pub fn new(cfg: LowNetConfig) -> Self {
         let table = Arc::new(RwLock::new(LinkTable::default()));
 
@@ -78,15 +96,25 @@ impl LowNet {
         Self {
             router,
             recv_incoming,
+            topology: topo,
             _task,
         }
     }
 
+    /// Receives an incoming datagram from the network.
+    ///
+    /// This method will block until a datagram is available.
     pub async fn recv(&self) -> Datagram {
         self.recv_incoming.recv().await.expect("router died")
     }
 
+    /// Sends a datagram to the network.
     pub async fn send(&self, dg: Datagram) {
         self.router.send(dg).await.expect("router died")
+    }
+
+    /// Returns a clone of the current network topology.
+    pub async fn topology(&self) -> Topology {
+        self.topology.clone()
     }
 }
