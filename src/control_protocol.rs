@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use crate::{v2h_node::HavenLocator, ChatEntry, NeighborId};
+use crate::{ChatEntry, NeighborId, v2h_node::HavenLocator};
 
 #[nanorpc_derive]
 #[async_trait]

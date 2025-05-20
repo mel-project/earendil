@@ -4,16 +4,15 @@ use colored::{ColoredString, Colorize};
 use earendil_crypt::HavenIdentitySecret;
 use earendil_packet::crypt::DhPublic;
 use nanorpc_http::client::HttpRpcTransport;
-use smol::Timer;
 use std::{
-    collections::HashSet, io::Write, net::SocketAddr, str::FromStr, sync::Arc, time::Duration,
+    net::SocketAddr, str::FromStr,
 };
 
 use crate::{
-    commands::{ChatCommand, ControlCommand},
+    ChatEntry,
+    commands::ControlCommand,
     control_protocol::{ControlClient, GlobalRpcArgs},
     v2h_node::HavenLocator,
-    ChatEntry,
 };
 
 pub async fn main_control(
@@ -77,96 +76,6 @@ pub async fn main_control(
                 println!("{} - {}", info.0, info.1);
             }
         }
-        ControlCommand::Chat { chat_command } => match chat_command {
-            ChatCommand::List => {
-                let divider = "+-------------------------------------+---------------+-----------------------------------+";
-                let chats = control.list_chats().await??;
-                println!("{divider}");
-                println!("| Neighbor                            | # of Messages | Last chat                         |");
-                println!("{divider}");
-
-                for (neigh, (maybe_entry, num_msgs)) in chats {
-                    let neigh = if neigh.len() > 32 {
-                        neigh[..32].to_owned() + "..."
-                    } else {
-                        neigh
-                    };
-                    let (text, timestamp) = if let Some(entry) = maybe_entry {
-                        (entry.text, format_timestamp(entry.timestamp))
-                    } else {
-                        (
-                            "                               ".to_owned(),
-                            "               ".to_owned(),
-                        )
-                    };
-                    println!(
-                        "| {:<35} | {:<13} | {} {}",
-                        neigh, num_msgs, text, timestamp
-                    );
-                    println!("{divider}");
-                }
-            }
-            ChatCommand::Start { neighbor } => {
-                let mut displayed: HashSet<ChatEntry> = HashSet::new();
-                let control = Arc::new(control);
-                let control_clone = control.clone();
-                let neighbor_clone = neighbor.clone();
-
-                let _listen_loop = smolscale::spawn(async move {
-                    loop {
-                        let msgs = match control.get_chat(neighbor.clone()).await {
-                            Ok(Ok(msgs)) => msgs,
-                            Ok(Err(e)) => {
-                                println!("error fetching messages: {:?}", e);
-                                Timer::after(Duration::from_secs(1)).await;
-                                continue;
-                            }
-                            Err(control_err) => {
-                                println!("control protocol error: {:?}", control_err);
-                                Timer::after(Duration::from_secs(1)).await;
-                                continue;
-                            }
-                        };
-                        for msg in msgs {
-                            if !displayed.contains(&msg) {
-                                println!("{}", pretty_entry(&msg));
-                                displayed.insert(msg);
-                            }
-                        }
-                    }
-                });
-
-                loop {
-                    let _ = std::io::stdout().flush();
-                    let message = smol::unblock(|| {
-                        let mut message = String::new();
-                        std::io::stdin()
-                            .read_line(&mut message)
-                            .expect("Failed to read line");
-
-                        message.trim().to_string()
-                    })
-                    .await;
-
-                    if !message.is_empty() {
-                        let msg = message.to_string();
-                        match control_clone.send_chat(neighbor_clone.clone(), msg).await? {
-                            Ok(_) => continue,
-                            Err(e) => println!("ERROR: {e}"),
-                        }
-                    }
-                }
-            }
-            ChatCommand::Get { src } => {
-                let entries = control.get_chat(src).await??;
-                for entry in entries {
-                    println!("{}", pretty_entry(&entry));
-                }
-            }
-            ChatCommand::Send { dest, msg } => {
-                control.send_chat(dest, msg).await??;
-            }
-        },
     }
     Ok(())
 }

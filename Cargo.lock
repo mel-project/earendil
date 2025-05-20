@@ -2114,6 +2114,7 @@ dependencies = [
  "dashmap 5.5.3",
  "dirs",
  "earendil_crypt",
+ "earendil_lownet",
  "earendil_packet",
  "earendil_topology",
  "ed25519-dalek",

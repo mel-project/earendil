@@ -8,7 +8,7 @@ use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
 use futures_concurrency::future::Race;
 use futures_util::AsyncReadExt;
 use haiyuu::{Process, WeakHandle};
-use picomux::PicoMux;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{Datagram, NodeAddr, NodeIdentity, router::Router, topology::Topology};
@@ -20,8 +20,6 @@ pub struct Link {
     pub topo: Topology,
     pub router: WeakHandle<Router>,
     pub on_drop: Box<dyn FnOnce() + Send + 'static>,
-
-    pub mux: PicoMux,
 }
 
 impl Drop for Link {

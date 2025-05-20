@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, path::PathBuf};
 
-use clap::{arg, Subcommand};
+use clap::{Subcommand, arg};
 use earendil_crypt::{HavenFingerprint, RelayFingerprint};
 
 #[derive(Subcommand)]
@@ -66,12 +66,6 @@ pub enum ControlCommand {
 
     /// Dumps my own routes.
     MyRoutes,
-
-    /// Interactive chat for talking to immediate neighbors
-    Chat {
-        #[command(subcommand)]
-        chat_command: ChatCommand,
-    },
 }
 
 #[derive(Subcommand)]

@@ -301,7 +301,7 @@ where
 {
     struct NonNegativeF64Visitor;
 
-    impl<'de> serde::de::Visitor<'de> for NonNegativeF64Visitor {
+    impl serde::de::Visitor<'_> for NonNegativeF64Visitor {
         type Value = f64;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

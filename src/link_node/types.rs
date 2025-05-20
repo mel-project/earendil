@@ -3,15 +3,15 @@ use std::{collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
-use earendil_packet::{crypt::DhSecret, InnerPacket, PrivacyConfig};
+use earendil_packet::{InnerPacket, PrivacyConfig, crypt::DhSecret};
 use earendil_topology::{ExitInfo, RelayGraph};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use smol::lock::Semaphore;
 
 use crate::{
-    config::{InRouteConfig, OutRouteConfig},
     LinkStore,
+    config::{InRouteConfig, OutRouteConfig},
 };
 
 use crate::stats::StatsGatherer;
@@ -82,18 +82,4 @@ pub struct LinkConfig {
     pub db_path: PathBuf,
     pub exit_info: Option<ExitInfo>,
     pub privacy_config: PrivacyConfig,
-}
-
-#[derive(Clone)]
-pub(super) struct LinkNodeCtx {
-    pub cfg: Arc<LinkConfig>,
-    pub my_id: NeighborIdSecret,
-    pub my_onion_sk: DhSecret,
-    pub relay_graph: Arc<RwLock<RelayGraph>>,
-    pub link_table: Arc<DashMap<NeighborId, (Arc<Link>, LinkPaymentInfo)>>,
-    pub payment_systems: Arc<PaymentSystemSelector>,
-    pub store: Arc<LinkStore>,
-
-    pub stats_gatherer: Arc<StatsGatherer>,
-    pub send_task_semaphores: Arc<DashMap<NeighborId, Arc<Semaphore>>>,
 }

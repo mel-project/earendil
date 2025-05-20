@@ -2,15 +2,14 @@ use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
 use earendil_crypt::{HavenFingerprint, RelayFingerprint};
-use itertools::Itertools;
 use nanorpc::RpcTransport;
 use serde_json::json;
 
 use crate::{
+    ChatEntry, NeighborId, NeighborIdSecret,
     config::{InRouteConfig, PriceConfig},
     control_protocol::{DebtError, RelayGraphInfo},
     v2h_node::HavenLocator,
-    ChatEntry, NeighborId, NeighborIdSecret,
 };
 
 use super::NodeCtx;
@@ -155,46 +154,16 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError> {
-        let chats_summary = self
-            .ctx
-            .v2h
-            .link_node()
-            .get_chat_summary()
-            .await
-            .map_err(|e| ChatError::Db(e.to_string()))?;
-
-        let mut res = HashMap::new();
-        for (neigh, last, count) in chats_summary {
-            res.insert(neigh.to_string(), (Some(last), count));
-        }
-        // add all neighbors that are not in the chat summary
-        for neigh in self.list_neighbors().await {
-            res.entry(neigh.to_string()).or_insert((None, 0));
-        }
-        Ok(res)
+        todo!()
     }
 
     // true = outgoing, false = incoming
     async fn get_chat(&self, neighbor_prefix: String) -> Result<Vec<ChatEntry>, ChatError> {
-        let neighbor = neigh_by_prefix(self.list_neighbors().await, &neighbor_prefix)
-            .map_err(|e| ChatError::Get(e.to_string()))?;
-        self.ctx
-            .v2h
-            .link_node()
-            .get_chat_history(neighbor)
-            .await
-            .map_err(|e| ChatError::Get(e.to_string()))
+        todo!()
     }
 
     async fn send_chat(&self, dest_neighbor_prefix: String, msg: String) -> Result<(), ChatError> {
-        let neighbor = neigh_by_prefix(self.list_neighbors().await, &dest_neighbor_prefix)
-            .map_err(|e| ChatError::Send(e.to_string()))?;
-        self.ctx
-            .v2h
-            .link_node()
-            .send_chat(neighbor, msg)
-            .await
-            .map_err(|e| ChatError::Send(e.to_string()))
+        todo!()
     }
 
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
@@ -210,26 +179,11 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn get_debt_summary(&self) -> Result<HashMap<String, f64>, DebtError> {
-        self.ctx
-            .v2h
-            .link_node()
-            .get_debt_summary()
-            .await
-            .map_err(|e| {
-                tracing::debug!("get_debt_summary failed with : {e}");
-                DebtError::Get(e.to_string())
-            })
+        todo!()
     }
 
     async fn get_debt(&self, neighbor_prefix: String) -> Result<f64, DebtError> {
-        let neighbor = neigh_by_prefix(self.list_neighbors().await, &neighbor_prefix)
-            .map_err(|e| DebtError::Get(e.to_string()))?;
-        self.ctx
-            .v2h
-            .link_node()
-            .get_debt(neighbor)
-            .await
-            .map_err(|e| DebtError::Get(e.to_string()))
+        todo!()
     }
 }
 

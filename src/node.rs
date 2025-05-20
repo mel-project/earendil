@@ -322,7 +322,7 @@ async fn serve_exit(
 
                 let port: u16 = connect_to
                     .split(':')
-                    .last()
+                    .next_back()
                     .unwrap_or("")
                     .parse()
                     .unwrap_or(0);
@@ -392,7 +392,7 @@ async fn socks5_once(
     tracing::debug!(addr = debug(&addr), "socks5 received request");
 
     let mut split_domain = domain.split('.');
-    let top_level = split_domain.clone().last();
+    let top_level = split_domain.clone().next_back();
 
     if let Some(top) = top_level {
         if top == "haven" {
