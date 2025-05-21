@@ -20,6 +20,12 @@ pub struct NodeAddr {
     pub client_id: u64,
 }
 
+impl NodeAddr {
+    pub fn new(relay: RelayFingerprint, client_id: u64) -> Self {
+        NodeAddr { relay, client_id }
+    }
+}
+
 impl Display for NodeAddr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "na-{}-{}", self.relay, self.client_id)

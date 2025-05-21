@@ -114,7 +114,7 @@ impl LowNet {
     }
 
     /// Returns a clone of the current network topology.
-    pub async fn topology(&self) -> Topology {
+    pub fn topology(&self) -> Topology {
         self.topology.clone()
     }
 }

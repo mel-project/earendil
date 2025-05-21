@@ -10,17 +10,24 @@ pub mod stats;
 
 mod types;
 
+use std::{sync::Arc, u8};
+
+use anyhow::Context;
+use earendil_lownet::{Datagram, LowNet, NodeAddr, NodeIdentity};
 pub use link_store::*;
 
-use earendil_crypt::{AnonEndpoint, RelayFingerprint};
+use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{InnerPacket, Message, PrivacyConfig, RawPacket, ReplyDegarbler, Surb};
 use earendil_topology::RelayGraph;
 
 pub use payment_system::{Dummy, OnChain, PaymentSystem, PoW};
+use route_util::{forward_route_to, route_to_instructs};
 pub use types::{IncomingMsg, LinkConfig, NeighborId, NeighborIdSecret};
 
 /// An implementation of the link-level interface.
-pub struct LinkNode {}
+pub struct LinkNode {
+    lownet: Arc<LowNet>,
+}
 
 impl LinkNode {
     /// Creates a new link node.
@@ -35,12 +42,54 @@ impl LinkNode {
         src: AnonEndpoint,
         dest_relay: RelayFingerprint,
     ) -> anyhow::Result<()> {
-        todo!()
+        let tele: earendil_lownet::Topology = self.lownet.topology();
+        let datagram = {
+            let graph = tele.graph().read().unwrap();
+            let route = forward_route_to(&graph, dest_relay, self.privacy_config().max_peelers)?;
+            let instructs = route_to_instructs(&graph, &route)?;
+            let dest_dh = graph
+                .identity(dest_relay)
+                .context(format!(
+                    "couldn't get the identity of the destination fp {dest_relay}"
+                ))?
+                .onion_pk;
+
+            let raw_packet = RawPacket::new_normal(
+                &instructs,
+                &dest_dh,
+                packet,
+                RemoteId::Anon(src),
+                self.privacy_config(),
+            )?;
+            Datagram {
+                ttl: u8::MAX,
+                dest_addr: NodeAddr::new(instructs.get(0).context("no first peeler")?.next_hop, 0),
+                payload: bytemuck::bytes_of(&raw_packet).to_vec().into(),
+            }
+        };
+
+        self.lownet.send(datagram).await;
+        Ok(())
     }
 
     /// Sends a "backwards" packet, which consumes a reply block.
     pub async fn send_backwards(&self, reply_block: Surb, message: Message) -> anyhow::Result<()> {
-        todo!()
+        if let NodeIdentity::Relay(relay) = self.lownet.topology().identity() {
+            let raw_packet = RawPacket::new_reply(
+                &reply_block,
+                InnerPacket::Message(message.clone()),
+                &RemoteId::Relay(relay.public().fingerprint()),
+            )?;
+            let datagram = Datagram {
+                ttl: u8::MAX,
+                dest_addr: NodeAddr::new(reply_block.first_peeler, 0),
+                payload: bytemuck::bytes_of(&raw_packet).to_vec().into(),
+            };
+            self.lownet.send(datagram).await;
+            Ok(())
+        } else {
+            anyhow::bail!("our identity must be relay to send backwards packets")
+        }
     }
 
     /// Constructs a reply block back from the given relay.
