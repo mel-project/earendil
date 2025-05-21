@@ -63,7 +63,7 @@ impl LinkNode {
             )?;
             Datagram {
                 ttl: u8::MAX,
-                dest_addr: NodeAddr::new(instructs.get(0).context("no first peeler")?.next_hop, 0),
+                dest_addr: instructs.get(0).context("no first peeler")?.next_hop,
                 payload: bytemuck::bytes_of(&raw_packet).to_vec().into(),
             }
         };
@@ -82,7 +82,7 @@ impl LinkNode {
             )?;
             let datagram = Datagram {
                 ttl: u8::MAX,
-                dest_addr: NodeAddr::new(reply_block.first_peeler, 0),
+                dest_addr: reply_block.first_peeler,
                 payload: bytemuck::bytes_of(&raw_packet).to_vec().into(),
             };
             self.lownet.send(datagram).await;
@@ -101,7 +101,7 @@ impl LinkNode {
     }
 
     /// Sends a raw packet.
-    async fn send_raw(&self, raw: RawPacket, next_peeler: RelayFingerprint) {
+    async fn send_raw(&self, raw: RawPacket, next_peeler: NodeAddr) {
         todo!()
     }
 

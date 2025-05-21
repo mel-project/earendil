@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
+use earendil_topology::NodeAddr;
 use earendil_packet::{
     crypt::DhSecret, ForwardInstruction, InnerPacket, Message, PrivacyConfig, RawPacket, Surb,
 };
@@ -11,7 +12,7 @@ fn generate_forward_instructions(n: usize) -> Vec<(ForwardInstruction, DhSecret)
             let our_sk = DhSecret::generate();
             let this_pubkey = our_sk.public();
 
-            let next_hop = RelayFingerprint::from_bytes(&[10; 32]);
+            let next_hop = NodeAddr::new(RelayFingerprint::from_bytes(&[10; 32]), 0);
             (
                 ForwardInstruction {
                     this_pubkey,
@@ -59,7 +60,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             });
         });
 
-        let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
+        let first_peeler = NodeAddr::new(RelayFingerprint::from_bytes(&[10; 32]), 0);
 
         c.bench_function(
             &format!("{route_length}-hop ReplyBlock construction"),

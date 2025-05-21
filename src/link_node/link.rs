@@ -2,7 +2,7 @@ use std::{ops::DerefMut, sync::Arc, time::Instant};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use earendil_crypt::RelayFingerprint;
+use earendil_topology::NodeAddr;
 use futures::{
     io::{ReadHalf, WriteHalf},
     AsyncBufReadExt,
@@ -133,7 +133,7 @@ impl RpcTransport for MuxRpcTransport {
 pub enum LinkMessage {
     ToRelay {
         packet: Bytes,
-        next_peeler: RelayFingerprint,
+        next_peeler: NodeAddr,
     },
     ToClient {
         body: Bytes,

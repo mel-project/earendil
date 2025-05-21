@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use earendil_crypt::{AnonEndpoint, DhPublic, RelayFingerprint, RemoteId};
+use earendil_topology::NodeAddr;
 use rand::Rng;
 
 use serde::{Deserialize, Serialize};
@@ -14,13 +15,13 @@ use crate::{
 pub struct Surb {
     pub header: RawHeader,
     pub stream_key: [u8; 32],
-    pub first_peeler: RelayFingerprint,
+    pub first_peeler: NodeAddr,
 }
 
 impl Surb {
     pub fn new(
         route: &[ForwardInstruction],
-        first_peeler: RelayFingerprint,
+        first_peeler: NodeAddr,
         dest_opk: &DhPublic,
         my_anon_id: AnonEndpoint,
         privacy_cfg: PrivacyConfig,
