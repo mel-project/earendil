@@ -18,9 +18,9 @@ pub const RAW_BODY_SIZE: usize = 20000;
 const MAX_HOPS: usize = 10;
 
 const METADATA_BUFFER_SIZE: usize = 35;
-const FORWARD_TO_CLIENT_FLAG: u8 = 2;
+const OUR_REPLY_FLAG: u8 = 2;
 const FORWARD_TO_RELAY_FLAG: u8 = 1;
-const PACKET_IS_OURS_FLAG: u8 = 0;
+const OUR_OUTWARD_FLAG: u8 = 0;
 const RAW_HEADER_SIZE: usize = std::mem::size_of::<RawHeader>();
 const INNER_HEADER_SIZE: usize = HEADER_LAYER_SIZE * (MAX_HOPS - 1);
 const HEADER_LAYER_SIZE: usize = METADATA_BUFFER_SIZE + BOX_OVERHEAD;
@@ -252,7 +252,7 @@ impl RawPacket {
             new
         };
 
-        Ok(if metadata[0] == FORWARD_TO_CLIENT_FLAG {
+        Ok(if metadata[0] == OUR_REPLY_FLAG {
             // if the metadata starts with 2, then we need to forward to a client
             // the subsequent 8 bytes in the metadata indicate the client ID of the next guy.
             // bytes 9..17 (inclusive!) is a 64-bit reply block identifier that we will use to pair this packet with the reply block we generated, with which the other side garbled this message.
@@ -264,7 +264,6 @@ impl RawPacket {
             }
         } else if metadata[0] == FORWARD_TO_RELAY_FLAG {
             // if the metadata starts with 1, then we need to forward to a relay.
-            // the 20 remaining bytes in the metadata indicate the fingerprint of the next guy.
             let fingerprint = RelayFingerprint::from_bytes(array_ref![metadata, 1, 32]);
             let delay_bytes: [u8; 2] = match metadata[33..] {
                 [a, b] => [a, b],
@@ -278,7 +277,7 @@ impl RawPacket {
                 },
                 delay_ms: u16::from_be_bytes(delay_bytes),
             }
-        } else if metadata[0] == PACKET_IS_OURS_FLAG {
+        } else if metadata[0] == OUR_OUTWARD_FLAG {
             // otherwise, the packet is ours
             let (inner_pkt, anon_remote) = InnerPacket::decode(&peeled_body)
                 .map_err(|_| PacketPeelError::InnerPacketOpenError)?;
