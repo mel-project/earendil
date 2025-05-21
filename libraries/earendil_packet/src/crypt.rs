@@ -1,14 +1,11 @@
-use std::str::FromStr;
 
 use arrayref::array_ref;
-use base64::{Engine as _, engine::general_purpose};
 use chacha20::{
     ChaCha20,
     cipher::{KeyIvInit, StreamCipher},
 };
 use chacha20poly1305::{ChaCha20Poly1305, KeyInit, aead::Aead};
 use earendil_crypt::{DhPublic, DhSecret};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// AEAD encryption/decryption key

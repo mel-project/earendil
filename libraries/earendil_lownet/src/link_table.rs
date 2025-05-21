@@ -2,10 +2,11 @@ use std::{collections::hash_map::Entry, sync::atomic::AtomicU64};
 
 use ahash::AHashMap;
 
+use earendil_topology::NodeAddr;
 use haiyuu::Handle;
 use rand::seq::IndexedRandom;
 
-use crate::{NodeAddr, link::Link};
+use crate::link::Link;
 
 #[derive(Default)]
 pub struct LinkTable {

@@ -12,7 +12,6 @@ async_stdcode={path="../async_stdcode"}
 bytes = "1.10.1"
 dashmap = "6.1.0"
 earendil_crypt={path="../earendil_crypt"}
-earendil_packet={path="../earendil_packet"}
 earendil_topology={path="../earendil_topology"}
 futures-concurrency = "7.6.3"
 futures-util = {version="0.3.31", features=["io"]}

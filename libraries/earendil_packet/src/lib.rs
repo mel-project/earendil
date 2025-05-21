@@ -27,7 +27,7 @@ impl Default for PrivacyConfig {
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
-    use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret, RemoteId};
+    use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 
     use earendil_crypt::DhSecret;
 
@@ -54,7 +54,6 @@ mod tests {
     fn test_packet_route(
         route: &[(ForwardInstruction, DhSecret)],
     ) -> Result<(), PacketConstructError> {
-        let my_isk = RelayIdentitySecret::generate();
         let destination_sk = DhSecret::generate();
         let destination = destination_sk.public();
         let msg = Message {
@@ -73,7 +72,7 @@ mod tests {
             is_client,
             InnerPacket::Message(msg.clone()),
             &[0; 32],
-            RemoteId::Relay(my_isk.public().fingerprint()),
+            RemoteId::Anon(AnonEndpoint([0; 16])),
             PrivacyConfig::default(),
         )?;
 
@@ -197,9 +196,8 @@ mod tests {
         }
         // At the destination (alice), peel the packet
         let mut peeled_reply = if let PeeledPacket::GarbledReply {
-            rb_id: _,
+            surb_id: _,
             pkt: peeled_reply,
-            client_id: _,
         } = peeled_packet
             .peel(&alice_osk)
             .expect("Failed to peel packet")

@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
-use earendil_crypt::{AnonEndpoint, ClientId, DhPublic, DhSecret, RelayFingerprint, RemoteId};
+use earendil_crypt::{AnonEndpoint, DhPublic, DhSecret, RelayFingerprint, RemoteId};
 use rand::{Rng, RngCore};
 use rand_distr::Exp;
 use serde::{Deserialize, Serialize};
@@ -256,12 +256,10 @@ impl RawPacket {
             // if the metadata starts with 2, then we need to forward to a client
             // the subsequent 8 bytes in the metadata indicate the client ID of the next guy.
             // bytes 9..17 (inclusive!) is a 64-bit reply block identifier that we will use to pair this packet with the reply block we generated, with which the other side garbled this message.
-            let client_id: u64 = u64::from_be_bytes(*array_ref![metadata, 1, 8]);
-            let id_bts = array_ref![metadata, 9, 8];
-            let rb_id = u64::from_be_bytes(*id_bts);
+            let surb_id: u64 = u64::from_be_bytes(*array_ref![metadata, 1, 8]);
+
             PeeledPacket::GarbledReply {
-                client_id,
-                rb_id,
+                surb_id,
                 pkt: peeled_body,
             }
         } else if metadata[0] == FORWARD_TO_RELAY_FLAG {
@@ -324,8 +322,7 @@ pub enum PeeledPacket {
         pkt: InnerPacket,
     },
     GarbledReply {
-        client_id: ClientId,
-        rb_id: u64,
+        surb_id: u64,
         pkt: [u8; RAW_BODY_SIZE],
     },
 }

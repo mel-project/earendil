@@ -1,6 +1,7 @@
 use async_stdcode::{StdcodeReader, StdcodeWriter};
 use bytes::Bytes;
 use earendil_crypt::RelayIdentityPublic;
+use earendil_topology::NodeAddr;
 use futures_util::AsyncReadExt;
 use haiyuu::{Handle, Process};
 use nursery_macro::nursery;
@@ -12,7 +13,7 @@ use std::{
 };
 
 use crate::{
-    InLinkConfig, NodeAddr, NodeIdentity, ObfsConfig, auth::AddrAssignment, link::Link,
+    InLinkConfig, NodeIdentity, ObfsConfig, auth::AddrAssignment, link::Link,
     link_table::LinkTable, router::Router, topology::Topology,
 };
 

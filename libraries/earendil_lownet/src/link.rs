@@ -4,14 +4,14 @@ use anyhow::Context;
 use async_io::Timer;
 use async_stdcode::{StdcodeReader, StdcodeWriter};
 use bytes::Bytes;
-use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor};
+use earendil_topology::{AdjacencyDescriptor, IdentityDescriptor, NodeAddr};
 use futures_concurrency::future::Race;
 use futures_util::AsyncReadExt;
 use haiyuu::{Process, WeakHandle};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Datagram, NodeAddr, NodeIdentity, router::Router, topology::Topology};
+use crate::{Datagram, NodeIdentity, router::Router, topology::Topology};
 
 pub struct Link {
     pub link_pipe: Box<dyn sillad::Pipe>,

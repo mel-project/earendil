@@ -13,12 +13,12 @@ mod types;
 use std::{sync::Arc, u8};
 
 use anyhow::Context;
-use earendil_lownet::{Datagram, LowNet, NodeAddr, NodeIdentity};
+use earendil_lownet::{Datagram, LowNet, NodeIdentity};
 pub use link_store::*;
 
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{InnerPacket, Message, PrivacyConfig, RawPacket, ReplyDegarbler, Surb};
-use earendil_topology::RelayGraph;
+use earendil_topology::{NodeAddr, RelayGraph};
 
 pub use payment_system::{Dummy, OnChain, PaymentSystem, PoW};
 use route_util::{forward_route_to, route_to_instructs};

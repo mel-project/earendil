@@ -1,6 +1,7 @@
 use async_io::Timer;
 use async_stdcode::{StdcodeReader, StdcodeWriter};
 use clone_macro::clone;
+use earendil_topology::NodeAddr;
 use haiyuu::{Handle, Process};
 use std::{
     sync::{Arc, RwLock},
@@ -12,7 +13,7 @@ use picomux::{PicoMux, Stream};
 use sillad::dialer::{Dialer, DialerExt};
 
 use crate::{
-    NodeAddr, NodeIdentity, OutLinkConfig, auth::AddrAssignment, link::Link, link_table::LinkTable,
+    NodeIdentity, OutLinkConfig, auth::AddrAssignment, link::Link, link_table::LinkTable,
     router::Router, topology::Topology,
 };
 
