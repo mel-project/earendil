@@ -4,10 +4,10 @@ use std::{
 };
 
 use bytes::Bytes;
+use earendil_crypt::{DhPublic, DhSecret};
 use earendil_crypt::{
     HavenEndpoint, RelayFingerprint, RelayIdentityPublic, RelayIdentitySecret, VerifyError,
 };
-use earendil_packet::crypt::{DhPublic, DhSecret};
 use indexmap::IndexMap;
 use rand::{Rng, seq::IteratorRandom, thread_rng};
 use serde::{Deserialize, Serialize};

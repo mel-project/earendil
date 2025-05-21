@@ -1,8 +1,8 @@
 use bytes::Bytes;
 use earendil_crypt::{
-    HavenFingerprint, HavenIdentityPublic, HavenIdentitySecret, RelayFingerprint,
+    DhPublic, HavenFingerprint, HavenIdentityPublic, HavenIdentitySecret, RelayFingerprint,
 };
-use earendil_packet::crypt::DhPublic;
+
 use futures::stream::FuturesUnordered;
 use serde::{Deserialize, Serialize};
 use smol::stream::StreamExt;

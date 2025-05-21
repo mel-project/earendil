@@ -1,6 +1,7 @@
 use std::time::Instant;
 
-use earendil_packet::crypt::{box_decrypt, box_encrypt, DhSecret};
+use earendil_crypt::DhSecret;
+use earendil_packet::crypt::{box_decrypt, box_encrypt};
 
 fn main() {
     let message = vec![0; 16384];

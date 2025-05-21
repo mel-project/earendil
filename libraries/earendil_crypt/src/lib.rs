@@ -414,3 +414,78 @@ pub enum RemoteId {
     Relay(RelayFingerprint),
     Anon(AnonEndpoint),
 }
+
+/// A diffie-hellman public key, based on x25519.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DhPublic(x25519_dalek::PublicKey);
+
+impl<'de> Deserialize<'de> for DhPublic {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let inner = <[u8; 32]>::deserialize(deserializer)?;
+        Ok(Self::from_bytes(&inner))
+    }
+}
+
+impl Serialize for DhPublic {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.as_bytes().serialize(serializer)
+    }
+}
+
+impl DhPublic {
+    /// Return the bytes representation.
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        self.0.as_bytes()
+    }
+
+    /// Construct an OnionPublic from bytes.
+    pub fn from_bytes(bytes: &[u8; 32]) -> Self {
+        Self(x25519_dalek::PublicKey::from(*bytes))
+    }
+}
+
+impl FromStr for DhPublic {
+    type Err = base64::DecodeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let decoded = general_purpose::STANDARD.decode(s)?;
+        if decoded.len() == 32 {
+            let mut array = [0u8; 32];
+            array.copy_from_slice(&decoded);
+            Ok(DhPublic::from_bytes(&array))
+        } else {
+            Err(base64::DecodeError::InvalidLength)
+        }
+    }
+}
+
+/// A diffie-hellman secret key, based on x25519.
+///
+/// This is *intentionally* not serializable, and we *intentionally* never expose the underlying bytes representation. This is to ensure we only use them as in-memory ephemeral or mid-term keys.
+#[derive(Clone)]
+pub struct DhSecret(x25519_dalek::ReusableSecret);
+
+impl DhSecret {
+    /// Generates a secret key.
+    pub fn generate() -> Self {
+        Self(x25519_dalek::ReusableSecret::random_from_rng(
+            rand::thread_rng(),
+        ))
+    }
+
+    /// Returns the public key of this secret key.
+    pub fn public(&self) -> DhPublic {
+        DhPublic((&self.0).into())
+    }
+
+    /// Derive the shared secret, given somebody else's public key.
+    pub fn shared_secret(&self, theirs: &DhPublic) -> [u8; 32] {
+        self.0.diffie_hellman(&theirs.0).to_bytes()
+    }
+}

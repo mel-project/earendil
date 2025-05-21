@@ -1,12 +1,10 @@
 use anyhow::Context;
 use chrono::{DateTime, NaiveDateTime};
 use colored::{ColoredString, Colorize};
-use earendil_crypt::HavenIdentitySecret;
-use earendil_packet::crypt::DhPublic;
+use earendil_crypt::{DhPublic, HavenIdentitySecret};
+
 use nanorpc_http::client::HttpRpcTransport;
-use std::{
-    net::SocketAddr, str::FromStr,
-};
+use std::{net::SocketAddr, str::FromStr};
 
 use crate::{
     ChatEntry,

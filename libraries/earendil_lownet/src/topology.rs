@@ -5,7 +5,8 @@ use std::{
 
 use async_io::Timer;
 use async_task::Task;
-use earendil_packet::crypt::DhSecret;
+
+use earendil_crypt::DhSecret;
 use earendil_topology::{IdentityDescriptor, RelayGraph};
 
 use crate::NodeIdentity;

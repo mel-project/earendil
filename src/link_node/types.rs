@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 use bytes::Bytes;
 use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
-use earendil_packet::{InnerPacket, PrivacyConfig, crypt::DhSecret};
+use earendil_packet::{InnerPacket, PrivacyConfig};
 use earendil_topology::{ExitInfo, RelayGraph};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};

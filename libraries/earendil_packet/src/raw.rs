@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
-use earendil_crypt::{AnonEndpoint, ClientId, RelayFingerprint, RemoteId};
+use earendil_crypt::{AnonEndpoint, ClientId, DhPublic, DhSecret, RelayFingerprint, RemoteId};
 use rand::{Rng, RngCore};
 use rand_distr::Exp;
 use serde::{Deserialize, Serialize};
@@ -10,8 +10,8 @@ use serde_big_array::BigArray;
 use thiserror::Error;
 
 use crate::{
-    crypt::{box_decrypt, box_encrypt, stream_dencrypt, DhPublic, DhSecret, BOX_OVERHEAD},
     InnerPacket, PrivacyConfig, Surb,
+    crypt::{BOX_OVERHEAD, box_decrypt, box_encrypt, stream_dencrypt},
 };
 
 pub const RAW_BODY_SIZE: usize = 20000;

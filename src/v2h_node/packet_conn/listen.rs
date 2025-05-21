@@ -1,16 +1,18 @@
 use bytes::Bytes;
 
-use earendil_crypt::{AnonEndpoint, HavenIdentitySecret, RelayEndpoint, RelayFingerprint};
-use earendil_packet::crypt::{AeadKey, DhSecret};
+use earendil_crypt::{
+    AnonEndpoint, DhSecret, HavenIdentitySecret, RelayEndpoint, RelayFingerprint,
+};
+use earendil_packet::crypt::AeadKey;
 use smol::{
+    Timer,
     channel::{Receiver, Sender},
     future::FutureExt as _,
-    Timer,
 };
 use smol_timeout::TimeoutExt;
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicU64, Arc},
+    sync::{Arc, atomic::AtomicU64},
     time::Duration,
 };
 use stdcode::StdcodeSerializeExt;
@@ -18,11 +20,11 @@ use stdcode::StdcodeSerializeExt;
 use crate::{
     n2r_node::N2rAnonSocket,
     v2h_node::{
-        dht::{dht_insert, HavenLocator},
+        HAVEN_FORWARD_DOCK, V2hNodeCtx,
+        dht::{HavenLocator, dht_insert},
         global_rpc::{GlobalRpcClient, GlobalRpcTransport, RegisterHavenReq},
         packet_conn::{HAVEN_DN, HAVEN_UP},
         vrh::{H2rMessage, HavenHandshake, HavenMsg, R2hMessage},
-        V2hNodeCtx, HAVEN_FORWARD_DOCK,
     },
 };
 

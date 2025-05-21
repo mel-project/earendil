@@ -1,6 +1,6 @@
 use bytes::Bytes;
-use earendil_crypt::{AnonEndpoint, HavenEndpoint, HavenIdentityPublic};
-use earendil_packet::crypt::DhPublic;
+use earendil_crypt::{AnonEndpoint, DhPublic, HavenEndpoint, HavenIdentityPublic};
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -24,3 +24,4 @@ ed25519-consensus = "2.1.0"
 argon2 = "0.5.2"
 bytemuck = { version = "1.14.2", features = ["derive"] }
 hex = "0.4.3"
+x25519-dalek = { version = "2.0.0", features = ["reusable_secrets"] }

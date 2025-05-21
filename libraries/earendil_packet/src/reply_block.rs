@@ -1,13 +1,12 @@
 use bytes::Bytes;
-use earendil_crypt::{AnonEndpoint, ClientId, RelayFingerprint, RemoteId};
+use earendil_crypt::{AnonEndpoint, DhPublic, RelayFingerprint, RemoteId};
 use rand::Rng;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     ForwardInstruction, InnerPacket, Message, PacketConstructError, PrivacyConfig, RawBody,
-    RawHeader, RawPacket,
-    crypt::{DhPublic, stream_dencrypt},
+    RawHeader, RawPacket, crypt::stream_dencrypt,
 };
 
 /// A single-use reply block. Surbs are constructed by endpoints who wish other endpoints to talk to them via an anonymous address, and are single-use, consumed when used to construct a packet going to that anonymous address.
@@ -23,16 +22,13 @@ impl Surb {
         route: &[ForwardInstruction],
         first_peeler: RelayFingerprint,
         dest_opk: &DhPublic,
-        my_client_id: ClientId,
         my_anon_id: AnonEndpoint,
         privacy_cfg: PrivacyConfig,
     ) -> Result<(Self, (u64, ReplyDegarbler)), PacketConstructError> {
-        let rb_id: u64 = rand::random();
-        // println!("made rb with rb_id = {rb_id}");
+        let surb_id: u64 = rand::random();
         let mut metadata = [0; 32];
         // metadata field for reply blocks: 8 bytes of a big-endian encoded unsigned integer, followed by 12 bytes of 0's
-        metadata[0..8].copy_from_slice(&my_client_id.to_be_bytes());
-        metadata[8..16].copy_from_slice(&rb_id.to_be_bytes());
+        metadata[0..8].copy_from_slice(&surb_id.to_be_bytes());
 
         let (raw_packet, shared_secs) = RawPacket::new(
             route,
@@ -50,7 +46,7 @@ impl Surb {
         let header = raw_packet.header;
         let stream_key = rand::thread_rng().r#gen();
 
-        let rb_degarbler = ReplyDegarbler {
+        let degarbler = ReplyDegarbler {
             shared_secs,
             my_anon_id,
             stream_key,
@@ -61,7 +57,7 @@ impl Surb {
                 stream_key,
                 first_peeler,
             },
-            (rb_id, rb_degarbler),
+            (surb_id, degarbler),
         ))
     }
 }

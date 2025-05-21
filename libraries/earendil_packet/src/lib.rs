@@ -29,7 +29,7 @@ mod tests {
     use bytes::Bytes;
     use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret, RemoteId};
 
-    use crate::crypt::DhSecret;
+    use earendil_crypt::DhSecret;
 
     use super::*;
 
@@ -140,10 +140,10 @@ mod tests {
 
     #[test]
     fn reply_block_five_hops() {
-        use crate::reply_block::Surb;
         use crate::ForwardInstruction;
         use crate::InnerPacket;
         use crate::RawPacket;
+        use crate::reply_block::Surb;
 
         // Generate  identity secrets
         let alice_anon_id = AnonEndpoint::random();
@@ -162,7 +162,6 @@ mod tests {
             &route,
             first_peeler,
             &alice_opk,
-            0,
             alice_anon_id,
             PrivacyConfig::default(),
         )

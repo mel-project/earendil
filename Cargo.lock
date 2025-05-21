@@ -2216,6 +2216,7 @@ dependencies = [
  "serde",
  "stdcode",
  "thiserror 1.0.69",
+ "x25519-dalek 2.0.1",
 ]
 
 [[package]]

@@ -7,13 +7,15 @@ use std::{
 
 use anyhow::Context;
 use bytes::Bytes;
-use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayEndpoint, RelayFingerprint};
-use earendil_packet::crypt::{AeadKey, DhSecret};
+use earendil_crypt::{
+    DhSecret, HavenEndpoint, HavenIdentitySecret, RelayEndpoint, RelayFingerprint,
+};
+use earendil_packet::crypt::AeadKey;
 use futures::TryFutureExt;
 use smol::{
+    Task,
     channel::{Receiver, Sender},
     future::FutureExt as _,
-    Task,
 };
 use smol_timeout::TimeoutExt;
 use stdcode::StdcodeSerializeExt;
@@ -22,9 +24,9 @@ use tap::Tap as _;
 use crate::{
     n2r_node::N2rAnonSocket,
     v2h_node::{
+        HAVEN_FORWARD_DOCK,
         dht::dht_get,
         vrh::{HavenMsg, V2rMessage, VisitorHandshake},
-        HAVEN_FORWARD_DOCK,
     },
 };
 

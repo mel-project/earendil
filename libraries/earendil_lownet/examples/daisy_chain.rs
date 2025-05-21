@@ -29,7 +29,7 @@ fn main() {
         let destination = relays.last().unwrap();
 
         let dest_addr = NodeAddr {
-            relay: match destination.topology().await.identity() {
+            relay: match destination.topology().identity() {
                 NodeIdentity::Relay(rel) => rel.public().fingerprint(),
                 _ => unreachable!(),
             },
