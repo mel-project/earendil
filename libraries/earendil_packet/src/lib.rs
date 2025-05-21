@@ -28,6 +28,7 @@ impl Default for PrivacyConfig {
 mod tests {
     use bytes::Bytes;
     use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
+    use earendil_topology::NodeAddr;
 
     use earendil_crypt::DhSecret;
 
@@ -39,7 +40,7 @@ mod tests {
                 let our_sk = DhSecret::generate();
                 let this_pubkey = our_sk.public();
 
-                let next_hop = RelayFingerprint::from_bytes(&[10; 32]);
+                let next_hop = NodeAddr::new(RelayFingerprint::from_bytes(&[10; 32]), 0);
                 (
                     ForwardInstruction {
                         this_pubkey,
@@ -154,7 +155,7 @@ mod tests {
             .iter()
             .map(|(inst, _)| *inst)
             .collect();
-        let first_peeler = RelayFingerprint::from_bytes(&[10; 32]);
+        let first_peeler = NodeAddr::new(RelayFingerprint::from_bytes(&[10; 32]), 0);
 
         // Prepare reply block
         let (reply_block, (_, reply_degarbler)) = Surb::new(

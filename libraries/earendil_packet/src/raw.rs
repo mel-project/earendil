@@ -3,6 +3,7 @@ use std::hash::Hash;
 use arrayref::array_ref;
 use bytemuck::{Pod, Zeroable};
 use earendil_crypt::{AnonEndpoint, DhPublic, DhSecret, RelayFingerprint, RemoteId};
+use earendil_topology::NodeAddr;
 use rand::{Rng, RngCore};
 use rand_distr::Exp;
 use serde::{Deserialize, Serialize};
@@ -17,7 +18,7 @@ use crate::{
 pub const RAW_BODY_SIZE: usize = 20000;
 const MAX_HOPS: usize = 10;
 
-const METADATA_BUFFER_SIZE: usize = 35;
+const METADATA_BUFFER_SIZE: usize = 43;
 const OUR_REPLY_FLAG: u8 = 2;
 const FORWARD_TO_RELAY_FLAG: u8 = 1;
 const OUR_OUTWARD_FLAG: u8 = 0;
@@ -42,7 +43,7 @@ pub struct ForwardInstruction {
     /// The DH public key of this hop
     pub this_pubkey: DhPublic,
     /// The unique id of the next hop
-    pub next_hop: RelayFingerprint,
+    pub next_hop: NodeAddr,
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
@@ -142,11 +143,9 @@ impl RawPacket {
                 // this packet's dest is a relay, so metadata starts with 0
                 let mut buffer = [0; METADATA_BUFFER_SIZE];
 
-                // encode relay fingerprint
                 buffer[1..33].copy_from_slice(metadata);
-                // encode packet latency
-                buffer[33..].copy_from_slice(&delay.to_be_bytes());
-
+                buffer[41..].copy_from_slice(&delay.to_be_bytes());
+                
                 buffer
             };
 
@@ -177,9 +176,9 @@ impl RawPacket {
             ))
         } else {
             // we need to forward to a relay so metadata starts with 1
-            let mut buffer = [1; 35];
-            // encode relay fingerprint
-            buffer[1..33].copy_from_slice(route[0].next_hop.as_bytes());
+            let mut buffer = [1; METADATA_BUFFER_SIZE];
+            buffer[1..33].copy_from_slice(route[0].next_hop.relay.as_bytes());
+            buffer[33..41].copy_from_slice(&route[0].next_hop.client_id.to_be_bytes());
 
             let (next_hop, mut shared_secs) = RawPacket::new(
                 &route[1..],
@@ -191,7 +190,7 @@ impl RawPacket {
                 privacy_cfg,
             )?;
 
-            buffer[33..].copy_from_slice(&delay.to_be_bytes());
+            buffer[41..].copy_from_slice(&delay.to_be_bytes());
             let (header_outer, our_sk) = box_encrypt(&buffer, &route[0].this_pubkey);
             let shared_sec = our_sk.shared_secret(&route[0].this_pubkey);
             let onion_body = {
@@ -265,12 +264,13 @@ impl RawPacket {
         } else if metadata[0] == FORWARD_TO_RELAY_FLAG {
             // if the metadata starts with 1, then we need to forward to a relay.
             let fingerprint = RelayFingerprint::from_bytes(array_ref![metadata, 1, 32]);
-            let delay_bytes: [u8; 2] = match metadata[33..] {
+            let client_id = u64::from_be_bytes(*array_ref![metadata, 33, 8]);
+            let delay_bytes: [u8; 2] = match metadata[41..] {
                 [a, b] => [a, b],
                 _ => return Err(PacketPeelError::InnerPacketOpenError),
             };
             PeeledPacket::Relay {
-                next_peeler: fingerprint,
+                next_peeler: NodeAddr::new(fingerprint, client_id),
                 pkt: RawPacket {
                     header: bytemuck::cast(peeled_header),
                     onion_body: peeled_body,
@@ -312,7 +312,7 @@ pub struct RawHeader {
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeeledPacket {
     Relay {
-        next_peeler: RelayFingerprint,
+        next_peeler: NodeAddr,
         pkt: RawPacket,
         delay_ms: u16,
     },

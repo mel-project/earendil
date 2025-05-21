@@ -14,11 +14,13 @@ use earendil_crypt::{
 use indexmap::IndexMap;
 use rand::{Rng, seq::IteratorRandom, thread_rng};
 use serde::{Deserialize, Serialize};
+use bytemuck::{Pod, Zeroable};
 use stdcode::StdcodeSerializeExt;
 use thiserror::Error;
 
 /// Identifies a specific node in the network, which could be a relay or a client (client_id > 0)
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Pod, Zeroable)]
 pub struct NodeAddr {
     pub relay: RelayFingerprint,
     pub client_id: u64,
@@ -27,6 +29,14 @@ pub struct NodeAddr {
 impl NodeAddr {
     pub fn new(relay: RelayFingerprint, client_id: u64) -> Self {
         NodeAddr { relay, client_id }
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 40] {
+        bytemuck::cast_ref(self)
+    }
+
+    pub fn from_bytes(bytes: &[u8; 40]) -> Self {
+        *bytemuck::cast_ref(bytes)
     }
 }
 
