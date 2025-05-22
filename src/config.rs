@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt, io::Write, net::SocketAddr, path::PathBuf};
+use std::{collections::BTreeMap, io::Write, net::SocketAddr, path::PathBuf};
 
 use anyhow::Context;
 use bip39::Mnemonic;
@@ -6,7 +6,7 @@ use earendil_crypt::{HavenEndpoint, HavenIdentitySecret, RelayFingerprint, Relay
 use earendil_packet::PrivacyConfig;
 use earendil_topology::ExitConfig;
 use rand::Rng;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fs::OpenOptions;
 use tracing::instrument;
@@ -26,10 +26,7 @@ pub struct ConfigFile {
 
     /// List of all outgoing connections
     #[serde(default)]
-    pub out_routes: BTreeMap<String, OutRouteConfig>,
-
-    #[serde(default)]
-    pub payment_methods: Vec<PaymentSystemKind>,
+    pub out_links: BTreeMap<String, earendil_lownet::OutLinkConfig>,
 
     /// List of all client configs for udp forwarding
     #[serde(default)]
@@ -81,16 +78,9 @@ pub struct RelayConfig {
 
     /// List of all listeners for incoming connections
     #[serde(default)]
-    pub in_routes: BTreeMap<String, InRouteConfig>,
+    pub in_links: BTreeMap<String, earendil_lownet::InLinkConfig>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct InRouteConfig {
-    pub listen: SocketAddr,
-    pub obfs: ObfsConfig,
-    #[serde(default)]
-    pub price_config: PriceConfig,
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -99,35 +89,6 @@ pub enum ObfsConfig {
     Sosistab3(String),
 }
 
-#[serde_as]
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct OutRouteConfig {
-    pub connect: String,
-    #[serde_as(as = "serde_with::DisplayFromStr")]
-    pub fingerprint: RelayFingerprint,
-    pub obfs: ObfsConfig,
-    #[serde(default)]
-    pub price_config: PriceConfig,
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct PriceConfig {
-    #[serde(deserialize_with = "deserialize_nonneg_f64")]
-    /// price, in micromel. Must be nonnegative
-    pub inbound_price: f64,
-    /// debt limit, in micromel
-    pub inbound_debt_limit: f64,
-    /// max accepted price, in micromel
-    pub outbound_max_price: f64,
-    /// min accepted debt limit, in micromel = how much you're willing to pre-pay
-    pub outbound_min_debt_limit: f64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum AcceptPaymentMethod {
-    Dummy,
-}
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -295,77 +256,4 @@ impl Identity {
     }
 }
 
-fn deserialize_nonneg_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct NonNegativeF64Visitor;
 
-    impl serde::de::Visitor<'_> for NonNegativeF64Visitor {
-        type Value = f64;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a non-negative f64")
-        }
-
-        fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            if value >= 0.0 {
-                Ok(value)
-            } else {
-                Err(E::custom(format!(
-                    "f64 must be non-negative, got {}",
-                    value
-                )))
-            }
-        }
-
-        fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            Ok(value as f64)
-        }
-    }
-
-    deserializer.deserialize_any(NonNegativeF64Visitor)
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case")]
-pub enum PaymentSystemKind {
-    Dummy,
-    Pow,
-    OnChain(String),
-    // Astrape,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct SupportedPaymentSystems {
-    pub dummy: Option<()>,
-    pub pow: Option<()>,
-    pub on_chain: Option<OnChain>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct OnChain {
-    pub secret: String,
-}
-
-impl SupportedPaymentSystems {
-    pub fn get_available(&self) -> anyhow::Result<Vec<PaymentSystemKind>> {
-        let mut available = vec![];
-        if self.dummy.is_some() {
-            available.push(PaymentSystemKind::Dummy);
-        }
-        if self.pow.is_some() {
-            available.push(PaymentSystemKind::Pow);
-        }
-        if let Some(OnChain { secret }) = &self.on_chain {
-            available.push(PaymentSystemKind::OnChain(secret.to_string()))
-        }
-        Ok(available)
-    }
-}

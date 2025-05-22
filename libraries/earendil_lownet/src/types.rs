@@ -13,6 +13,19 @@ pub enum NodeIdentity {
     ClientBearer(u128),
 }
 
+impl NodeIdentity {
+    /// Return our node addr, if we are a relay.
+    pub fn relay_nodeaddr(&self) -> Option<NodeAddr> {
+        match self {
+            NodeIdentity::Relay(relay_identity_secret) => Some(NodeAddr::new(
+                relay_identity_secret.public().fingerprint(),
+                0,
+            )),
+            NodeIdentity::ClientBearer(_) => None,
+        }
+    }
+}
+
 /// A datagram traveling through the lownet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Datagram {

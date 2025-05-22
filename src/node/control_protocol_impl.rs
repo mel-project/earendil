@@ -5,12 +5,9 @@ use earendil_crypt::{HavenFingerprint, RelayFingerprint};
 use nanorpc::RpcTransport;
 use serde_json::json;
 
-use crate::{
-    ChatEntry, NeighborId, NeighborIdSecret,
-    config::{InRouteConfig, PriceConfig},
-    control_protocol::{DebtError, RelayGraphInfo},
-    v2h_node::HavenLocator,
-};
+use crate::{ChatEntry, v2h_node::HavenLocator};
+use earendil_topology::NodeAddr;
+use crate::control_protocol::RelayGraphInfo;
 
 use super::NodeCtx;
 use crate::control_protocol::{
@@ -54,29 +51,18 @@ impl ControlProtocol for ControlProtocolImpl {
     async fn my_routes(&self) -> serde_json::Value {
         if let Some(relay_config) = self.ctx.config.relay_config.clone() {
             let lala: BTreeMap<String, serde_json::Value> = relay_config
-                .in_routes
+                .in_links
                 .iter()
-                .map(
-                    |(
-                        k,
-                        InRouteConfig {
-                            listen,
-                            obfs,
-                            price_config,
-                        },
-                    )| {
-                        let client_price_config = PriceConfig { inbound_price: price_config.outbound_max_price, inbound_debt_limit: price_config.outbound_min_debt_limit, outbound_max_price: price_config.inbound_price, outbound_min_debt_limit: price_config.inbound_debt_limit };
-                        (
-                            k.clone(),
-                            json!({
-                                "connect": format!("<YOUR_IP>:{}", listen.port()),
-                                "fingerprint": format!("{}", relay_config.identity.actualize_relay().expect("wrong relay identity format").public().fingerprint()),
-                                "obfs": serde_json::to_value(obfs).unwrap(),
-                                "price_config": serde_json::to_value(client_price_config).unwrap(),
-                            }),
-                        )
-                    },
-                )
+                .map(|(k, cfg)| {
+                    (
+                        k.clone(),
+                        json!({
+                            "connect": format!("<YOUR_IP>:{}", cfg.listen.port()),
+                            "fingerprint": format!("{}", relay_config.identity.actualize_relay().expect("wrong relay identity format").public().fingerprint()),
+                            "obfs": serde_json::to_value(&cfg.obfs).unwrap(),
+                        }),
+                    )
+                })
                 .collect();
             serde_json::to_value(lala).unwrap()
         } else {
@@ -90,8 +76,8 @@ impl ControlProtocol for ControlProtocolImpl {
 
     async fn relay_graph_info(&self) -> RelayGraphInfo {
         let my_fingerprint = match self.ctx.v2h.link_node().my_id() {
-            NeighborIdSecret::Client(_) => None,
-            NeighborIdSecret::Relay(id) => Some(id.public().fingerprint()),
+            earendil_lownet::NodeIdentity::Relay(id) => Some(id.public().fingerprint()),
+            earendil_lownet::NodeIdentity::ClientBearer(_) => None,
         };
 
         let relay_graph = self.ctx.v2h.link_node().relay_graph();
@@ -101,7 +87,7 @@ impl ControlProtocol for ControlProtocolImpl {
             .all_adjacencies()
             .map(|adj| (adj.left, adj.right))
             .collect();
-        let neighbors: Vec<NeighborId> = self.ctx.v2h.link_node().all_neighs().clone();
+        let neighbors: Vec<NodeAddr> = self.ctx.v2h.link_node().all_neighs().clone();
 
         RelayGraphInfo {
             my_fingerprint,
@@ -149,7 +135,7 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     // ---------------- chat-related functionality -----------------
-    async fn list_neighbors(&self) -> Vec<NeighborId> {
+    async fn list_neighbors(&self) -> Vec<NodeAddr> {
         self.ctx.v2h.link_node().all_neighs()
     }
 
@@ -178,13 +164,6 @@ impl ControlProtocol for ControlProtocolImpl {
         timeseries
     }
 
-    async fn get_debt_summary(&self) -> Result<HashMap<String, f64>, DebtError> {
-        todo!()
-    }
-
-    async fn get_debt(&self, neighbor_prefix: String) -> Result<f64, DebtError> {
-        todo!()
-    }
 }
 
 fn get_node_label(fp: &RelayFingerprint) -> String {
@@ -192,13 +171,10 @@ fn get_node_label(fp: &RelayFingerprint) -> String {
     format!("{}..{}", &node[..4], &node[node.len() - 4..node.len()])
 }
 
-fn neigh_by_prefix(all_neighs: Vec<NeighborId>, prefix: &str) -> anyhow::Result<NeighborId> {
-    let valid_neighs: Vec<NeighborId> = all_neighs
+fn neigh_by_prefix(all_neighs: Vec<NodeAddr>, prefix: &str) -> anyhow::Result<NodeAddr> {
+    let valid_neighs: Vec<NodeAddr> = all_neighs
         .into_iter()
-        .filter(|id| match id {
-            NeighborId::Client(id) => id.to_string().starts_with(prefix),
-            NeighborId::Relay(id) => id.to_string().starts_with(prefix),
-        })
+        .filter(|id| id.to_string().starts_with(prefix))
         .collect();
 
     if valid_neighs.len() == 1 {

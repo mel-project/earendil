@@ -20,8 +20,10 @@ impl Process for Router {
         loop {
             let mut dg = mailbox.recv().await;
 
-            if self.table.read().unwrap().is_local_addr(dg.dest_addr) {
-                tracing::debug!(
+            if Some(dg.dest_addr) == self.topo.identity().relay_nodeaddr()
+                || self.table.read().unwrap().is_local_addr(dg.dest_addr)
+            {
+                tracing::trace!(
                     dest = display(dg.dest_addr),
                     "datagram addressed to myself!"
                 );
@@ -39,7 +41,7 @@ impl Process for Router {
             dg.ttl -= 1;
 
             if let Some(neigh) = self.table.read().unwrap().neigh_link(dg.dest_addr) {
-                tracing::debug!(dest = display(dg.dest_addr), "destination is neighbor");
+                tracing::trace!(dest = display(dg.dest_addr), "destination is neighbor");
                 let _ = neigh.send_or_drop(dg);
             } else {
                 // we need routing here. find the closest *relay* to the destination.
@@ -60,7 +62,7 @@ impl Process for Router {
                                 .unwrap_or(usize::MAX)
                         });
                 if let Some(neigh) = best_neigh {
-                    tracing::debug!(dest = display(dg.dest_addr), "routing through a neighbor");
+                    tracing::trace!(dest = display(dg.dest_addr), "routing through a neighbor");
                     let _ = table.neigh_link(neigh).unwrap().send_or_drop(dg);
                 } else {
                     tracing::warn!(dest = display(dg.dest_addr), "cannot route to destination")
