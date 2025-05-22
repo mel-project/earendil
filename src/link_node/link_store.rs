@@ -2,6 +2,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use anyhow::Context;
 use chrono::Utc;
+use earendil_topology::NodeAddr;
 use serde::{Deserialize, Serialize};
 use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 
@@ -47,7 +48,7 @@ impl LinkStore {
 
     pub async fn insert_chat_entry(
         &self,
-        neighbor: NeighborId,
+        neighbor: NodeAddr,
         chat_entry: ChatEntry,
     ) -> anyhow::Result<()> {
         sqlx::query(
@@ -62,7 +63,7 @@ impl LinkStore {
         Ok(())
     }
 
-    pub async fn get_chat_history(&self, neighbor: NeighborId) -> anyhow::Result<Vec<ChatEntry>> {
+    pub async fn get_chat_history(&self, neighbor: NodeAddr) -> anyhow::Result<Vec<ChatEntry>> {
         let res: Vec<(i64, String, bool)> =
             sqlx::query_as("SELECT  timestamp, text, is_outgoing FROM chats WHERE neighbor = $1")
                 .bind(serde_json::to_string(&neighbor)?)
@@ -78,7 +79,7 @@ impl LinkStore {
             .collect())
     }
 
-    pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NeighborId, ChatEntry, u32)>> {
+    pub async fn get_chat_summary(&self) -> anyhow::Result<Vec<(NodeAddr, ChatEntry, u32)>> {
         let res: Vec<(String, i64, String, bool, i32)> = sqlx::query_as(
             r#"
             SELECT
