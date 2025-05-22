@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use crate::{ChatEntry, v2h_node::HavenLocator};
+use crate::v2h_node::HavenLocator;
 use earendil_topology::NodeAddr;
 
 #[nanorpc_derive]
@@ -111,7 +111,6 @@ pub enum ChatError {
     #[error("database error: {0}")]
     Db(String),
 }
-
 
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum ConfigError {

@@ -6,11 +6,6 @@ use earendil_packet::{InnerPacket, PrivacyConfig};
 use earendil_topology::{ExitInfo, NodeAddr};
 use serde::{Deserialize, Serialize};
 
-
-/// Identifies a neighbor node.
-pub type NeighborId = NodeAddr;
-pub type NeighborIdSecret = RelayIdentitySecret;
-
 /// Incoming messages from the link layer that are addressed to "us".
 #[derive(Debug)]
 pub enum IncomingMsg {
@@ -25,7 +20,10 @@ pub enum IncomingMsg {
 }
 
 pub struct LinkConfig {
-    pub relay_config: Option<(RelayIdentitySecret, BTreeMap<String, earendil_lownet::InLinkConfig>)>,
+    pub relay_config: Option<(
+        RelayIdentitySecret,
+        BTreeMap<String, earendil_lownet::InLinkConfig>,
+    )>,
     pub out_links: BTreeMap<String, earendil_lownet::OutLinkConfig>,
     pub db_path: PathBuf,
     pub exit_info: Option<ExitInfo>,

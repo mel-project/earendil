@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use earendil::{config::ConfigFile, NeighborId};
+use earendil::config::ConfigFile;
 use serde::{Deserialize, Serialize};
 use tap::Tap;
 
@@ -14,7 +14,7 @@ pub struct ConfigState {
 
 pub struct Prefs {
     pub daemon_mode: DaemonMode,
-    pub chatting_with: Option<NeighborId>,
+    // pub chatting_with: Option<NeighborId>,
     pub chat_msg: String,
 }
 
@@ -22,7 +22,7 @@ impl Default for Prefs {
     fn default() -> Self {
         Self {
             daemon_mode: DaemonMode::Embedded,
-            chatting_with: None,
+            // chatting_with: None,
             chat_msg: String::new(),
         }
     }
@@ -79,7 +79,7 @@ impl ConfigState {
 
     /// Clears any session-specific data. This should be called every time the earendil daemon disconnects
     pub fn clear_session(&mut self) {
-        self.gui_prefs.chatting_with = None;
+        // self.gui_prefs.chatting_with = None;
     }
 }
 

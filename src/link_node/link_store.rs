@@ -3,9 +3,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 use anyhow::Context;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
-
-use super::types::NeighborId;
+use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 
 /// Persistent storage for chats and misc data.
 pub struct LinkStore {
@@ -19,7 +17,6 @@ pub struct ChatEntry {
     pub timestamp: i64,
     pub is_outgoing: bool,
 }
-
 
 impl LinkStore {
     pub async fn new(path: PathBuf) -> anyhow::Result<Self> {
@@ -118,7 +115,6 @@ impl LinkStore {
             .collect())
     }
 
-
     pub async fn insert_misc(&self, key: String, value: Vec<u8>) -> anyhow::Result<()> {
         sqlx::query("INSERT INTO misc (key, value) VALUES ($1, $2) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
         .bind(key)
@@ -144,5 +140,4 @@ impl LinkStore {
             Ok(value)
         }
     }
-
 }

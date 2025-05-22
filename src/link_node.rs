@@ -1,5 +1,3 @@
-mod link_store;
-
 mod route_util;
 
 mod types;
@@ -10,10 +8,10 @@ use anyhow::Context;
 use earendil_lownet::{Datagram, LowNet, NodeIdentity};
 pub use link_store::*;
 
-use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use bytes::Bytes;
+use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{InnerPacket, Message, PrivacyConfig, RawPacket, ReplyDegarbler, Surb};
-use earendil_topology::{RelayGraph, NodeAddr};
+use earendil_topology::{NodeAddr, RelayGraph};
 use route_util::{forward_route_to, route_to_instructs};
 pub use types::{IncomingMsg, LinkConfig};
 
@@ -26,7 +24,7 @@ pub struct LinkNode {
 impl LinkNode {
     /// Creates a new link node.
     pub fn new(cfg: LinkConfig) -> anyhow::Result<Self> {
-        use earendil_lownet::{InLinkConfig, OutLinkConfig, LowNetConfig};
+        use earendil_lownet::LowNetConfig;
 
         let identity = if let Some((relay_id, _)) = &cfg.relay_config {
             NodeIdentity::Relay(*relay_id)
@@ -40,11 +38,7 @@ impl LinkNode {
             .map(|(_, routes)| routes.values().cloned().collect())
             .unwrap_or_default();
 
-        let out_links = cfg
-            .out_links
-            .values()
-            .cloned()
-            .collect();
+        let out_links = cfg.out_links.values().cloned().collect();
 
         let lownet = LowNet::new(LowNetConfig {
             in_links,
@@ -143,7 +137,6 @@ impl LinkNode {
         Ok((surb, id, deg))
     }
 
-
     /// Receives an incoming message. Blocks until we have something that's for us, and not to be forwarded elsewhere.
     pub async fn recv(&self) -> IncomingMsg {
         use earendil_packet::{PeeledPacket, RAW_PACKET_SIZE};
@@ -154,10 +147,15 @@ impl LinkNode {
             }
             let raw: RawPacket = *bytemuck::from_bytes(&dg.payload);
             match raw.peel(self.lownet.topology().dh_secret()) {
-                Ok(PeeledPacket::Relay { next_peeler, pkt, delay_ms }) => {
+                Ok(PeeledPacket::Relay {
+                    next_peeler,
+                    pkt,
+                    delay_ms,
+                }) => {
                     let lownet = self.lownet.clone();
                     smolscale::spawn(async move {
-                        smol::Timer::after(core::time::Duration::from_millis(delay_ms as u64)).await;
+                        smol::Timer::after(core::time::Duration::from_millis(delay_ms as u64))
+                            .await;
                         lownet
                             .send(Datagram {
                                 ttl: dg.ttl.saturating_sub(1),
@@ -172,7 +170,10 @@ impl LinkNode {
                     return IncomingMsg::Forward { from, body: pkt };
                 }
                 Ok(PeeledPacket::GarbledReply { surb_id, pkt }) => {
-                    return IncomingMsg::Backward { rb_id: surb_id, body: Bytes::copy_from_slice(&pkt) };
+                    return IncomingMsg::Backward {
+                        rb_id: surb_id,
+                        body: Bytes::copy_from_slice(&pkt),
+                    };
                 }
                 Err(_) => continue,
             }
