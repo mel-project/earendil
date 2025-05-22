@@ -103,6 +103,7 @@ async fn handle_connection(
         topo,
         on_drop: Box::new(on_drop),
         neigh_addr,
+        mux,
     }
     .spawn_smolscale();
 

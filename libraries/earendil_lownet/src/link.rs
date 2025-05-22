@@ -9,10 +9,12 @@ use futures_concurrency::future::Race;
 use futures_util::AsyncReadExt;
 use haiyuu::{Process, WeakHandle};
 
+use picomux::PicoMux;
 use serde::{Deserialize, Serialize};
 
 use crate::{Datagram, NodeIdentity, router::Router, topology::Topology};
 
+#[allow(dead_code)]
 pub struct Link {
     pub link_pipe: Box<dyn sillad::Pipe>,
     pub gossip_pipe: Box<dyn sillad::Pipe>,
@@ -20,6 +22,9 @@ pub struct Link {
     pub topo: Topology,
     pub router: WeakHandle<Router>,
     pub on_drop: Box<dyn FnOnce() + Send + 'static>,
+
+    // Keeps the mux alive.
+    pub mux: PicoMux,
 }
 
 impl Drop for Link {
@@ -41,14 +46,14 @@ impl Process for Link {
             let (mut read, mut write) = (StdcodeReader::new(read), StdcodeWriter::new(write));
             let read_loop = async {
                 loop {
-                    let dg: Datagram = read.read().await?;
+                    let dg: Datagram = read.read().await.context("failed to read datagram")?;
                     self.router.send(dg).await?;
                 }
             };
             let write_loop = async {
                 loop {
                     let dg = mailbox.recv().await;
-                    write.write(dg).await?;
+                    write.write(dg).await.context("failed to write datagram")?;
                 }
             };
             let res: anyhow::Result<()> = (read_loop, write_loop).race().await;
@@ -117,7 +122,12 @@ impl Process for Link {
                             msg = debug(&msg),
                             "sending gossip msg"
                         );
-                        write.lock().await.write(msg).await?;
+                        write
+                            .lock()
+                            .await
+                            .write(msg)
+                            .await
+                            .context("could not write gossip msg")?;
                     } else {
                         tracing::warn!(
                             neigh_addr = display(self.neigh_addr),
@@ -130,7 +140,8 @@ impl Process for Link {
 
             let dn_loop = async {
                 loop {
-                    let msg: GossipMsg = read.read().await?;
+                    let msg: GossipMsg =
+                        read.read().await.context("could not read gossip message")?;
                     if self.neigh_addr.client_id != 0 {
                         anyhow::bail!("clients should not send any gossip messages")
                     }

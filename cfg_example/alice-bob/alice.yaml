@@ -7,6 +7,9 @@ out_links:
       none
       # sosistab3: "some-cookie-lala-doodoo"
     connect: 127.0.0.1:12345
+
+relay_config:
+  identity_seed: alice
 # socks5:
 #   listen: 127.0.0.1:23456
 # fallback:
