@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use crate::{ChatEntry, NeighborId, v2h_node::HavenLocator};
+use crate::{ChatEntry, v2h_node::HavenLocator};
+use earendil_topology::NodeAddr;
 
 #[nanorpc_derive]
 #[async_trait]
@@ -35,7 +36,7 @@ pub trait ControlProtocol {
     ) -> Result<Option<HavenLocator>, DhtError>;
 
     // ---------------- chat-related functionality -----------------
-    async fn list_neighbors(&self) -> Vec<NeighborId>;
+    async fn list_neighbors(&self) -> Vec<NodeAddr>;
 
     async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError>;
 
@@ -45,10 +46,6 @@ pub trait ControlProtocol {
     async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError>;
 
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)>;
-
-    async fn get_debt_summary(&self) -> Result<HashMap<String, f64>, DebtError>;
-
-    async fn get_debt(&self, neighbor: String) -> Result<f64, DebtError>;
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -56,7 +53,7 @@ pub struct RelayGraphInfo {
     pub my_fingerprint: Option<RelayFingerprint>,
     pub relays: Vec<RelayFingerprint>,
     pub adjacencies: Vec<(RelayFingerprint, RelayFingerprint)>,
-    pub neighbors: Vec<NeighborId>,
+    pub neighbors: Vec<NodeAddr>,
 }
 
 #[derive(Error, Serialize, Deserialize, Debug)]
@@ -115,13 +112,6 @@ pub enum ChatError {
     Db(String),
 }
 
-#[derive(Error, Serialize, Deserialize, Debug)]
-pub enum DebtError {
-    #[error("error getting debt summary")]
-    Summary,
-    #[error("error getting debt for neighbor {0}")]
-    Get(String),
-}
 
 #[derive(Error, Serialize, Deserialize, Debug)]
 pub enum ConfigError {

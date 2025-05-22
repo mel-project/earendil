@@ -826,12 +826,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23ce669cd6c8588f79e15cf450314f9638f967fc5770ff1c7c1deb0925ea7cfa"
 
 [[package]]
-name = "base32"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "022dfe9eb35f19ebbcb51e0b40a5ab759f46ad60cadf7297e0bd085afb50e076"
-
-[[package]]
 name = "base64"
 version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1233,22 +1227,6 @@ name = "cast"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
-
-[[package]]
-name = "catvec"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3c0aaeffebf589f7d5d220b51eee069692da2486dfc9250b9eb1a3e2a6dba64"
-dependencies = [
- "arbitrary",
- "arrayvec",
- "defmac",
- "env_logger 0.9.3",
- "fastrand 1.9.0",
- "honggfuzz",
- "log",
- "tap",
-]
 
 [[package]]
 name = "cc"
@@ -1772,7 +1750,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "curve25519-dalek-derive",
- "digest 0.10.7",
  "fiat-crypto",
  "rustc_version",
  "serde",
@@ -1911,12 +1888,6 @@ dependencies = [
  "once_cell",
  "parking_lot_core 0.9.10",
 ]
-
-[[package]]
-name = "defmac"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5592fca31e96d8a748d03080b58be78c5383617aa4bd89e69f30607d8769891"
 
 [[package]]
 name = "der"
@@ -2100,7 +2071,6 @@ dependencies = [
  "async-event 0.1.0",
  "async-recursion",
  "async-trait",
- "base32 0.5.1",
  "base64 0.21.7",
  "bip39",
  "blake3",
@@ -2117,7 +2087,6 @@ dependencies = [
  "earendil_lownet",
  "earendil_packet",
  "earendil_topology",
- "ed25519-dalek",
  "either",
  "env_logger 0.11.8",
  "futures",
@@ -2127,11 +2096,8 @@ dependencies = [
  "itertools 0.11.0",
  "log",
  "lru 0.12.5",
- "melpow",
  "melprot",
  "melstructs",
- "melvm",
- "melwallet",
  "moka 0.12.10",
  "moro",
  "nanorpc",
@@ -2161,7 +2127,6 @@ dependencies = [
  "tap",
  "tempfile",
  "thiserror 1.0.69",
- "tmelcrypt",
  "tracing",
  "tracing-subscriber",
  "tracing-test",
@@ -2205,7 +2170,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "arrayref",
- "base32 0.4.0",
+ "base32",
  "base64 0.21.7",
  "blake3",
  "bytemuck",
@@ -2312,16 +2277,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ed25519"
-version = "2.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
-dependencies = [
- "pkcs8",
- "signature",
-]
-
-[[package]]
 name = "ed25519-compact"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2358,20 +2313,6 @@ dependencies = [
  "serde",
  "sha2 0.9.9",
  "thiserror 1.0.69",
- "zeroize",
-]
-
-[[package]]
-name = "ed25519-dalek"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a3daa8e81a3963a60642bcc1f90a670680bd4a77535faa384e9d1c79d620871"
-dependencies = [
- "curve25519-dalek 4.1.3",
- "ed25519",
- "serde",
- "sha2 0.10.9",
- "subtle",
  "zeroize",
 ]
 
@@ -2620,9 +2561,6 @@ name = "ethnum"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0939f82868b77ef93ce3c3c3daf2b3c526b456741da5a1a4559e590965b6026b"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "event-listener"
@@ -4059,18 +3997,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "melpow"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "250a855f9831fc11af2f39f8cb0ed3241c565990244af9f32172e4683ce2828b"
-dependencies = [
- "blake3",
- "rustc-hash",
- "smallvec",
- "tmelcrypt",
-]
-
-[[package]]
 name = "melprot"
 version = "0.13.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4124,41 +4050,6 @@ dependencies = [
  "serde_with 1.14.0",
  "stdcode",
  "tap",
- "thiserror 1.0.69",
- "tmelcrypt",
-]
-
-[[package]]
-name = "melvm"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "191b0cb398311066478e969f227dc35e17d4e1de840bb5b5a7f4e39ee96d88ed"
-dependencies = [
- "bytes",
- "catvec",
- "ethnum",
- "hex",
- "log",
- "melstructs",
- "serde",
- "stdcode",
- "tap",
- "thiserror 1.0.69",
- "tmelcrypt",
-]
-
-[[package]]
-name = "melwallet"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e2e5876046d29f0fca3f6c3a2b3789452a2c52445bd45a6b426cf7af21c52d7"
-dependencies = [
- "bytes",
- "melstructs",
- "melvm",
- "serde",
- "serde_with 1.14.0",
- "stdcode",
  "thiserror 1.0.69",
  "tmelcrypt",
 ]
@@ -7117,7 +7008,7 @@ checksum = "fc7f6a14c9dc3042c5944b50665e8b25bc6f4a1d49b29016f2a4a156d8fc1bf3"
 dependencies = [
  "arbitrary",
  "arrayref",
- "base32 0.4.0",
+ "base32",
  "blake3",
  "ed25519-consensus 1.2.1",
  "hex",

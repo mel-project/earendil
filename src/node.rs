@@ -36,7 +36,6 @@ use crate::{
     n2r_node::{N2rConfig, N2rNode},
     v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, V2hConfig, V2hNode},
 };
-use crate::{Dummy, NeighborId, OnChain, PaymentSystem, PoW};
 
 /// The public interface to the whole Earendil system.
 pub struct Node {
@@ -64,24 +63,6 @@ impl Node {
             melprot::Client::autoconnect(NetID::Mainnet).await?
         });
 
-        // construct payment systems based on our config
-        let mut payment_systems: Vec<Box<dyn PaymentSystem>> = vec![];
-        for ps_kind in config.payment_methods.iter() {
-            match ps_kind {
-                crate::config::PaymentSystemKind::Dummy => {
-                    tracing::debug!("DUMMY payments supported!");
-                    payment_systems.push(Box::new(Dummy::new()));
-                }
-                crate::config::PaymentSystemKind::Pow => {
-                    tracing::debug!("PoW payments supported!");
-                    payment_systems.push(Box::new(PoW::new(mel_client.clone())));
-                }
-                crate::config::PaymentSystemKind::OnChain(secret) => {
-                    tracing::debug!("OnChain payments supported!");
-                    payment_systems.push(Box::new(OnChain::new(secret, mel_client.clone())?));
-                }
-            }
-        }
 
         let (exit_info, exit_haven_cfg) = match (&config.relay_config, &config.exit_config) {
             (Some(relay_cfg), Some(exit_cfg)) => {
@@ -105,11 +86,10 @@ impl Node {
             relay_config: config.relay_config.clone().map(
                 |RelayConfig {
                      identity,
-                     in_routes,
-                 }| (identity.actualize_relay().unwrap(), in_routes),
+                     in_links,
+                 }| (identity.actualize_relay().unwrap(), in_links),
             ),
-            out_routes: config.out_routes.clone(),
-            payment_systems,
+            out_links: config.out_links.clone(),
             db_path: config.db_path.unwrap_or_else(|| {
                 let mut data_dir = dirs::data_dir().unwrap();
                 data_dir.push("earendil-link-store.db");
@@ -229,8 +209,8 @@ impl Node {
         })
     }
 
-    pub fn identity(&self) -> NeighborId {
-        self.ctx.v2h.link_node().my_id().public()
+    pub fn identity(&self) -> earendil_lownet::NodeIdentity {
+        self.ctx.v2h.link_node().my_id()
     }
 }
 struct DummyControlProtocolTransport {

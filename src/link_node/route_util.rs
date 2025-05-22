@@ -2,7 +2,6 @@ use anyhow::Context;
 use earendil_crypt::RelayFingerprint;
 use earendil_packet::ForwardInstruction;
 use earendil_topology::{NodeAddr, RelayGraph};
-use rand::prelude::*;
 
 pub fn forward_route_to(
     graph: &RelayGraph,

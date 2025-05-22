@@ -1,12 +1,6 @@
-mod link;
-
 mod link_store;
-mod pascal;
-mod payment_system;
 
 mod route_util;
-
-pub mod stats;
 
 mod types;
 
@@ -17,22 +11,51 @@ use earendil_lownet::{Datagram, LowNet, NodeIdentity};
 pub use link_store::*;
 
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
+use bytes::Bytes;
 use earendil_packet::{InnerPacket, Message, PrivacyConfig, RawPacket, ReplyDegarbler, Surb};
-use earendil_topology::{NodeAddr, RelayGraph};
-
-pub use payment_system::{Dummy, OnChain, PaymentSystem, PoW};
+use earendil_topology::{RelayGraph, NodeAddr};
 use route_util::{forward_route_to, route_to_instructs};
-pub use types::{IncomingMsg, LinkConfig, NeighborId, NeighborIdSecret};
+pub use types::{IncomingMsg, LinkConfig};
 
 /// An implementation of the link-level interface.
 pub struct LinkNode {
     lownet: Arc<LowNet>,
+    privacy: PrivacyConfig,
 }
 
 impl LinkNode {
     /// Creates a new link node.
     pub fn new(cfg: LinkConfig) -> anyhow::Result<Self> {
-        todo!()
+        use earendil_lownet::{InLinkConfig, OutLinkConfig, LowNetConfig};
+
+        let identity = if let Some((relay_id, _)) = &cfg.relay_config {
+            NodeIdentity::Relay(*relay_id)
+        } else {
+            NodeIdentity::ClientBearer(rand::random())
+        };
+
+        let in_links = cfg
+            .relay_config
+            .as_ref()
+            .map(|(_, routes)| routes.values().cloned().collect())
+            .unwrap_or_default();
+
+        let out_links = cfg
+            .out_links
+            .values()
+            .cloned()
+            .collect();
+
+        let lownet = LowNet::new(LowNetConfig {
+            in_links,
+            out_links,
+            identity,
+        });
+
+        Ok(Self {
+            lownet: Arc::new(lownet),
+            privacy: cfg.privacy_config,
+        })
     }
 
     /// Sends a "forward" packet, which could be either a message or a batch of reply blocks.
@@ -45,7 +68,7 @@ impl LinkNode {
         let tele: earendil_lownet::Topology = self.lownet.topology();
         let datagram = {
             let graph = tele.graph().read().unwrap();
-            let route = forward_route_to(&graph, dest_relay, self.privacy_config().max_peelers)?;
+            let route = forward_route_to(&graph, dest_relay, self.privacy.max_peelers)?;
             let instructs = route_to_instructs(&graph, &route)?;
             let dest_dh = graph
                 .identity(dest_relay)
@@ -59,7 +82,7 @@ impl LinkNode {
                 &dest_dh,
                 packet,
                 RemoteId::Anon(src),
-                self.privacy_config(),
+                self.privacy,
             )?;
             Datagram {
                 ttl: u8::MAX,
@@ -97,44 +120,92 @@ impl LinkNode {
         &self,
         my_anon_id: AnonEndpoint,
     ) -> anyhow::Result<(Surb, u64, ReplyDegarbler)> {
-        todo!()
+        let topo = self.lownet.topology();
+        let graph = topo.graph().read().unwrap();
+        let my_fp = match topo.identity() {
+            NodeIdentity::Relay(relay) => relay.public().fingerprint(),
+            NodeIdentity::ClientBearer(_) => anyhow::bail!("cannot build surb as client"),
+        };
+        let route = forward_route_to(&graph, my_fp, self.privacy.max_peelers)?;
+        let instructs = route_to_instructs(&graph, &route)?;
+        let opk = topo
+            .relay_identity_descriptor()
+            .context("no relay identity")?
+            .onion_pk;
+
+        let (surb, (id, deg)) = Surb::new(
+            &instructs,
+            instructs.get(0).context("no first peeler")?.next_hop,
+            &opk,
+            my_anon_id,
+            self.privacy,
+        )?;
+        Ok((surb, id, deg))
     }
 
-    /// Sends a raw packet.
-    async fn send_raw(&self, raw: RawPacket, next_peeler: NodeAddr) {
-        todo!()
-    }
 
     /// Receives an incoming message. Blocks until we have something that's for us, and not to be forwarded elsewhere.
     pub async fn recv(&self) -> IncomingMsg {
-        todo!()
+        use earendil_packet::{PeeledPacket, RAW_PACKET_SIZE};
+        loop {
+            let dg = self.lownet.recv().await;
+            if dg.payload.len() != RAW_PACKET_SIZE {
+                continue;
+            }
+            let raw: RawPacket = *bytemuck::from_bytes(&dg.payload);
+            match raw.peel(self.lownet.topology().dh_secret()) {
+                Ok(PeeledPacket::Relay { next_peeler, pkt, delay_ms }) => {
+                    let lownet = self.lownet.clone();
+                    smolscale::spawn(async move {
+                        smol::Timer::after(core::time::Duration::from_millis(delay_ms as u64)).await;
+                        lownet
+                            .send(Datagram {
+                                ttl: dg.ttl.saturating_sub(1),
+                                dest_addr: next_peeler,
+                                payload: bytemuck::bytes_of(&pkt).to_vec().into(),
+                            })
+                            .await;
+                    })
+                    .detach();
+                }
+                Ok(PeeledPacket::Received { from, pkt }) => {
+                    return IncomingMsg::Forward { from, body: pkt };
+                }
+                Ok(PeeledPacket::GarbledReply { surb_id, pkt }) => {
+                    return IncomingMsg::Backward { rb_id: surb_id, body: Bytes::copy_from_slice(&pkt) };
+                }
+                Err(_) => continue,
+            }
+        }
     }
 
     /// Gets all the currently known relays.
     pub fn all_relays(&self) -> Vec<RelayFingerprint> {
-        todo!()
+        let topo = self.lownet.topology();
+        topo.graph().read().unwrap().all_nodes().collect()
     }
 
     /// Gets the current relay graph.
     pub fn relay_graph(&self) -> RelayGraph {
-        todo!()
+        self.lownet.topology().graph().read().unwrap().clone()
     }
 
     /// Gets my identity.
-    pub fn my_id(&self) -> NeighborIdSecret {
-        todo!()
+    pub fn my_id(&self) -> NodeIdentity {
+        self.lownet.topology().identity()
     }
 
     /// Gets all our currently connected neighbors.
-    pub fn all_neighs(&self) -> Vec<NeighborId> {
-        todo!()
+    pub fn all_neighs(&self) -> Vec<NodeAddr> {
+        Vec::new()
     }
 
     pub async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
-        todo!()
+        let _ = (key, start, end);
+        Vec::new()
     }
 
     pub fn privacy_config(&self) -> PrivacyConfig {
-        todo!()
+        self.privacy
     }
 }
