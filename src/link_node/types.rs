@@ -1,25 +1,16 @@
-use std::{collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, fmt::Display, path::PathBuf};
 
 use bytes::Bytes;
-use dashmap::DashMap;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
 use earendil_packet::{InnerPacket, PrivacyConfig};
-use earendil_topology::{ExitInfo, RelayGraph};
-use parking_lot::RwLock;
+use earendil_topology::ExitInfo;
 use serde::{Deserialize, Serialize};
-use smol::lock::Semaphore;
 
 use crate::{
-    LinkStore,
     config::{InRouteConfig, OutRouteConfig},
 };
 
-use crate::stats::StatsGatherer;
-
-use super::{
-    link::Link,
-    payment_system::{PaymentSystem, PaymentSystemSelector},
-};
+use super::payment_system::PaymentSystem;
 
 pub type ClientId = u64;
 
