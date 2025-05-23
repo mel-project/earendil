@@ -34,8 +34,20 @@ pub enum VerifyError {
 /// The public half of an "identity" on the network.
 ///
 /// Underlying representation is a Ed25519 public key.
-#[derive(Serialize, Debug, Deserialize, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
 pub struct HavenIdentityPublic([u8; 32]);
+
+impl Display for HavenIdentityPublic {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "haven-ipk-{}", hex::encode(self.0))
+    }
+}
+
+impl Debug for HavenIdentityPublic {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "haven-ipk-{}", hex::encode(self.0))
+    }
+}
 
 impl TryFrom<Vec<u8>> for HavenIdentityPublic {
     type Error = Vec<u8>;
@@ -209,8 +221,20 @@ impl FromStr for HavenEndpoint {
 /// The public half of a "relay identity" on the network.
 ///
 /// Underlying representation is a Ed25519 public key.
-#[derive(Serialize, Debug, Deserialize, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
 pub struct RelayIdentityPublic([u8; 32]);
+
+impl Display for RelayIdentityPublic {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "relay-ipk-{}", hex::encode(self.0))
+    }
+}
+
+impl Debug for RelayIdentityPublic {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "relay-ipk-{}", hex::encode(self.0))
+    }
+}
 
 impl TryFrom<Vec<u8>> for RelayIdentityPublic {
     type Error = Vec<u8>;
