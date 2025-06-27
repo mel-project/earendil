@@ -14,7 +14,6 @@ use stdcode::StdcodeSerializeExt;
 use crate::{RelKind, Stream, StreamMessage};
 
 use super::{inflight::Inflight, reorderer::Reorderer, StreamQueues};
-const MSS: usize = 19000;
 
 /// The raw internal state of a stream.
 ///
@@ -29,6 +28,8 @@ const MSS: usize = 19000;
 ///
 /// As long as the above holds, the `Stream` corresponding to the `StreamState`, which is returned from the `StreamState` constructor as well, will work properly.
 pub struct StreamState {
+    mss: usize,
+
     phase: Phase,
 
     incoming_queue: Vec<StreamMessage>,
@@ -58,6 +59,11 @@ impl Drop for StreamState {
 }
 
 impl StreamState {
+    /// Sets the MSS of the StreamState.
+    pub fn set_mss(&mut self, mss: usize) {
+        self.mss = mss;
+    }
+
     /// Creates a new StreamState, in the pre-SYN-sent state. Also returns the "user-facing" handle.
     pub fn new_pending(tick_notify: impl Fn() + Send + Sync + 'static) -> (Self, Stream) {
         Self::new_in_phase(tick_notify, Phase::Pending)
@@ -84,6 +90,7 @@ impl StreamState {
 
         static START: Lazy<Instant> = Lazy::new(Instant::now);
         let state = Self {
+            mss: 19000,
             phase,
             incoming_queue: Default::default(),
             queues,
@@ -358,7 +365,7 @@ impl StreamState {
             // okay, we don't have retransmissions. this means we get to send a "normal" packet.
             let mut queues = self.queues.lock();
             if !queues.write_stream.is_empty() {
-                let mut buffer = vec![0; MSS];
+                let mut buffer = vec![0; self.mss];
                 let n = queues.write_stream.read(&mut buffer).unwrap();
                 buffer.truncate(n);
                 let seqno = self.next_write_seqno;
