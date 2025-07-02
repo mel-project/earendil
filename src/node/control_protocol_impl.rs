@@ -86,7 +86,7 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn relay_graphviz(&self) -> String {
-        todo!()
+        "".into()
     }
 
     async fn relay_graph_info(&self) -> RelayGraphInfo {
