@@ -34,6 +34,7 @@ nursery_macro = {path="../nursery_macro"}
 async-task = "4.7.1"
 smolscale = "0.4.15"
 async-lock = "3.4.0"
+derivative = "2.2.0"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

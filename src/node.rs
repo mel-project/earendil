@@ -9,7 +9,7 @@ use control_protocol_impl::ControlProtocolImpl;
 use earendil_crypt::{HavenEndpoint, HavenFingerprint, HavenIdentitySecret, RelayFingerprint};
 use earendil_topology::{ExitConfig, ExitInfo};
 use futures::{
-    future::Shared, stream::FuturesUnordered, task::noop_waker, AsyncReadExt, TryFutureExt,
+    AsyncReadExt, TryFutureExt, future::Shared, stream::FuturesUnordered, task::noop_waker,
 };
 use melstructs::NetID;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
@@ -24,8 +24,8 @@ use smol::{
 };
 use smolscale::immortal::{Immortal, RespawnStrategy};
 use socksv5::v5::{
-    read_handshake, read_request, write_auth_method, write_request_status, SocksV5AuthMethod,
-    SocksV5Host, SocksV5RequestStatus,
+    SocksV5AuthMethod, SocksV5Host, SocksV5RequestStatus, read_handshake, read_request,
+    write_auth_method, write_request_status,
 };
 use tracing::instrument;
 
@@ -52,17 +52,6 @@ pub struct NodeCtx {
 impl Node {
     pub async fn start(config: ConfigFile) -> anyhow::Result<Self> {
         let config_clone = config.clone();
-        let mel_client = Arc::new(if let Some(bootstrap_route) = config.mel_bootstrap {
-            melprot::Client::connect_with_proxy(
-                NetID::Mainnet,
-                config.socks5.listen,
-                bootstrap_route,
-            )
-            .await?
-        } else {
-            melprot::Client::autoconnect(NetID::Mainnet).await?
-        });
-
 
         let (exit_info, exit_haven_cfg) = match (&config.relay_config, &config.exit_config) {
             (Some(relay_cfg), Some(exit_cfg)) => {
@@ -83,12 +72,12 @@ impl Node {
         };
 
         let link = LinkNode::new(LinkConfig {
-            relay_config: config.relay_config.clone().map(
-                |RelayConfig {
-                     identity,
-                     in_links,
-                 }| (identity.actualize_relay().unwrap(), in_links),
-            ),
+            relay_config: config
+                .relay_config
+                .clone()
+                .map(|RelayConfig { identity, in_links }| {
+                    (identity.actualize_relay().unwrap(), in_links)
+                }),
             out_links: config.out_links.clone(),
             db_path: config.db_path.unwrap_or_else(|| {
                 let mut data_dir = dirs::data_dir().unwrap();

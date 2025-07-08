@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use bytes::Bytes;
+use derivative::Derivative;
 use earendil_crypt::{RelayFingerprint, RelayIdentitySecret};
 use earendil_topology::NodeAddr;
 use serde::{Deserialize, Serialize};
@@ -27,10 +28,12 @@ impl NodeIdentity {
 }
 
 /// A datagram traveling through the lownet.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Derivative)]
+#[derivative(Debug)]
 pub struct Datagram {
     pub ttl: u8,
     pub dest_addr: NodeAddr,
+    #[derivative(Debug = "ignore")]
     pub payload: Bytes,
 }
 

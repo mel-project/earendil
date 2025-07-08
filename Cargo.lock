@@ -2200,6 +2200,7 @@ dependencies = [
  "bytes",
  "clone-macro",
  "dashmap 6.1.0",
+ "derivative",
  "earendil_crypt",
  "earendil_topology",
  "futures-concurrency",

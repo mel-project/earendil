@@ -47,12 +47,22 @@ impl Process for Link {
             let read_loop = async {
                 loop {
                     let dg: Datagram = read.read().await.context("failed to read datagram")?;
+                    tracing::debug!(
+                        dg = debug(&dg),
+                        neigh = debug(self.neigh_addr),
+                        "recv from neighbor"
+                    );
                     self.router.send(dg).await?;
                 }
             };
             let write_loop = async {
                 loop {
                     let dg = mailbox.recv().await;
+                    tracing::debug!(
+                        dg = debug(&dg),
+                        neigh = debug(self.neigh_addr),
+                        "send to neighbor"
+                    );
                     write.write(dg).await.context("failed to write datagram")?;
                 }
             };
@@ -117,7 +127,7 @@ impl Process for Link {
                         })
                     };
                     if let Some(msg) = msg {
-                        tracing::debug!(
+                        tracing::trace!(
                             neigh_addr = display(self.neigh_addr),
                             msg = debug(&msg),
                             "sending gossip msg"

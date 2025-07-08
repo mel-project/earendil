@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use earendil_crypt::{RelayEndpoint, RelayFingerprint};
-use futures_util::{future, FutureExt};
+use futures_util::{FutureExt, future};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
 use smol::Timer;
 
@@ -29,8 +29,6 @@ impl RpcTransport for GlobalRpcTransport {
         let endpoint = RelayEndpoint::new(self.dest_fp, GLOBAL_RPC_DOCK);
         let mut retries = 0;
         let mut timeout: Duration;
-
-        // let socket = self.skt.clone();
         loop {
             match self
                 .skt

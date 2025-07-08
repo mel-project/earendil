@@ -87,7 +87,7 @@ impl LinkNode {
             )?;
             Datagram {
                 ttl: u8::MAX,
-                dest_addr: instructs.first().context("no first peeler")?.next_hop,
+                dest_addr: *route.first().context("no first peeler")?,
                 payload: bytemuck::bytes_of(&raw_packet).to_vec().into(),
             }
         };
@@ -150,6 +150,10 @@ impl LinkNode {
         loop {
             let dg = self.lownet.recv().await;
             if dg.payload.len() != RAW_PACKET_SIZE {
+                tracing::warn!(
+                    len = debug(dg.payload.len()),
+                    "dropping packet of wrong length"
+                );
                 continue;
             }
             let raw: RawPacket = *bytemuck::from_bytes(&dg.payload);
@@ -159,6 +163,7 @@ impl LinkNode {
                     pkt,
                     delay_ms,
                 }) => {
+                    tracing::debug!(next_peeler = display(next_peeler), "go to next peeler");
                     let lownet = self.lownet.clone();
                     smolscale::spawn(async move {
                         smol::Timer::after(core::time::Duration::from_millis(delay_ms as u64))
@@ -182,7 +187,10 @@ impl LinkNode {
                         body: Bytes::copy_from_slice(&pkt),
                     };
                 }
-                Err(_) => continue,
+                Err(err) => {
+                    tracing::warn!(err = debug(err), "unpeelable packet received");
+                    continue;
+                }
             }
         }
     }
