@@ -52,6 +52,7 @@ earendil_topology = { version = "0.5", path = "libraries/earendil_topology" }
 either = "1.10.0"
 env_logger = "0.11.3"
 futures = "0.3.30"
+futures-concurrency = "7.6.3"
 futures-util = "0.3.28"
 hex = "0.4.3"
 indexmap = "1.9.3"

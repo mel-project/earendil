@@ -1998,6 +1998,7 @@ dependencies = [
  "either",
  "env_logger",
  "futures",
+ "futures-concurrency",
  "futures-util",
  "hex",
  "indexmap 1.9.3",

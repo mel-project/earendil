@@ -12,6 +12,7 @@ use futures::{
     AsyncReadExt, TryFutureExt, future::Shared, stream::FuturesUnordered, task::noop_waker,
 };
 
+use futures_concurrency::future::TryJoin;
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 use nursery_macro::nursery;
@@ -108,31 +109,23 @@ impl Node {
                 .map_err(|e| tracing::warn!("control_protocol_loop restart: {e}"))),
             );
 
-            nursery!({
-                let mut fallible_tasks = FuturesUnordered::new();
-                // for every haven, serve the haven
-                for haven_cfg in config.havens {
-                    fallible_tasks.push(spawn!(serve_haven(haven_clone.clone(), haven_cfg)))
-                }
+            let mut fallible_tasks = Vec::new();
+            // for every haven, serve the haven
+            for haven_cfg in config.havens {
+                fallible_tasks.push(serve_haven(haven_clone.clone(), haven_cfg).boxed())
+            }
 
-                if let (Some(exit_cfg), Some(exit_haven_cfg)) = (config.exit_config, exit_haven_cfg)
-                {
-                    fallible_tasks.push(spawn!(serve_exit(
-                        haven_clone.clone(),
-                        exit_cfg,
-                        exit_haven_cfg,
-                    )));
-                }
+            if let (Some(exit_cfg), Some(exit_haven_cfg)) = (config.exit_config, exit_haven_cfg) {
+                fallible_tasks
+                    .push(serve_exit(haven_clone.clone(), exit_cfg, exit_haven_cfg).boxed())
+            }
 
-                // serve socks5
-                fallible_tasks.push(spawn!(socks5_loop(haven_clone.clone(), config.socks5)));
+            // serve socks5
+            fallible_tasks.push(socks5_loop(haven_clone.clone(), config.socks5).boxed());
 
-                // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
-                while let Some(next) = fallible_tasks.next().await {
-                    next?;
-                }
-                anyhow::Ok(())
-            })
+            // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
+            fallible_tasks.try_join().await?;
+            anyhow::Ok(())
         };
         let task = smolscale::spawn(daemon_loop.map_err(Arc::new));
 
