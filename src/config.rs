@@ -41,10 +41,9 @@ pub struct ConfigFile {
     #[serde(default)]
     pub havens: Vec<HavenConfig>,
 
-    /// the haven address for our melprot::Client to bootstrap on
-    /// e.g. http://<haven_addr>.haven:<port>
-    pub mel_bootstrap: Option<String>,
-
+    // /// the haven address for our melprot::Client to bootstrap on
+    // /// e.g. http://<haven_addr>.haven:<port>
+    // pub mel_bootstrap: Option<String>,
     /// Configuration for relay nodes to host an exit.
     pub exit_config: Option<ExitConfig>,
 

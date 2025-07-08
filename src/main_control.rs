@@ -2,13 +2,12 @@ use anyhow::Context;
 use chrono::{DateTime, NaiveDateTime};
 use colored::{ColoredString, Colorize};
 
-use nanorpc_http::client::HttpRpcTransport;
 use nanorpc::RpcTransport;
-use std::net::SocketAddr;
+use nanorpc_http::client::HttpRpcTransport;
 use serde_yaml;
+use std::net::SocketAddr;
 
 use crate::ChatEntry;
-
 
 pub async fn main_control(
     method: String,
@@ -16,10 +15,8 @@ pub async fn main_control(
     json: bool,
     connect: SocketAddr,
 ) -> anyhow::Result<()> {
-    let control = HttpRpcTransport::new_with_proxy(
-        connect.to_string(),
-        nanorpc_http::client::Proxy::Direct,
-    );
+    let control =
+        HttpRpcTransport::new_with_proxy(connect.to_string(), nanorpc_http::client::Proxy::Direct);
     let args: Result<Vec<serde_json::Value>, _> =
         args.into_iter().map(|a| serde_yaml::from_str(&a)).collect();
     let args = args.context("arguments not YAML")?;
@@ -36,6 +33,7 @@ pub async fn main_control(
     }
     Ok(())
 }
+
 fn earendil_blue(string: &str) -> ColoredString {
     string
         .custom_color(colored::CustomColor {
