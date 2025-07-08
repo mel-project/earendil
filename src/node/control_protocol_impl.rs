@@ -70,47 +70,51 @@ impl ControlProtocol for ControlProtocolImpl {
             "This is a client node. Client nodes do not have in-routes.".into()
         }
     }
-
     async fn relay_graphviz(&self) -> String {
         use std::cmp::Ord;
 
-        let (my_id, my_shape) = match self.ctx.haven.transport_layer().my_id() {
-            earendil_lownet::NodeIdentity::ClientBearer(id) => {
-                (format!("{}\n[client]", id), "rect")
-            }
-            earendil_lownet::NodeIdentity::Relay(id) => (
-                format!("{}\n[relay]", get_node_label(&id.public().fingerprint())),
-                "oval",
+        // 1️⃣  Split out raw ID + pretty label + shape
+        let (my_id, my_label, my_shape) = match self.ctx.haven.transport_layer().my_id() {
+            earendil_lownet::NodeIdentity::ClientBearer(id) => (
+                id.to_string(),             //   graph-legal ID
+                format!("{id}\\n[client]"), //   visible label (escaped newline)
+                "rect",
             ),
+            earendil_lownet::NodeIdentity::Relay(id) => {
+                let fp = id.public().fingerprint();
+                (
+                    fp.to_string(),
+                    format!("{}\\n[relay]", get_node_label(&fp)),
+                    "oval",
+                )
+            }
         };
 
         let relay_graph = self.ctx.haven.transport_layer().relay_graph();
 
-        let all_relays = relay_graph.all_nodes().fold(String::new(), |acc, node| {
-            let node_label = get_node_label(&node);
-            if my_id.contains(&node_label) {
+        // 2️⃣  Other relays – skip my own by **ID**, not by label
+        let all_relays = relay_graph
+            .all_nodes()
+            .filter(|node| node.to_string() != my_id)
+            .fold(String::new(), |mut acc, node| {
+                let lbl = get_node_label(&node);
+                acc += &format!(
+                    "    \"{id}\" [label=\"{lbl}\", shape=oval, color=lightpink, style=filled];\n",
+                    id = node
+                );
                 acc
-            } else {
-                acc + &format!(
-                    "    {:?} [label={:?}, shape={}]\n",
-                    node.to_string(),
-                    node_label,
-                    "oval, color=lightpink,style=filled"
-                )
-            }
-        });
+            });
 
+        // 3️⃣  Relay-to-relay edges
         let all_relay_adjs = relay_graph
             .all_adjacencies()
             .sorted_by(|a, b| Ord::cmp(&a.left, &b.left))
-            .fold(String::new(), |acc, adj| {
-                acc + &format!(
-                    "    {:?} -- {:?};\n",
-                    adj.left.to_string(),
-                    adj.right.to_string()
-                )
+            .fold(String::new(), |mut acc, adj| {
+                acc += &format!("    \"{l}\" -- \"{r}\";\n", l = adj.left, r = adj.right);
+                acc
             });
 
+        // 4️⃣  My direct neighbours (client → relay)
         let all_my_adjs = self
             .ctx
             .haven
@@ -118,13 +122,36 @@ impl ControlProtocol for ControlProtocolImpl {
             .all_neighs()
             .iter()
             .filter(|neigh| neigh.client_id == 0)
-            .fold(String::new(), |acc, neigh| {
-                acc + &format!("    {:?} -- {:?};\n", my_id, neigh.relay.to_string())
+            .fold(String::new(), |mut acc, neigh| {
+                acc += &format!(
+                    "    \"{me}\" -- \"{peer}\";\n",
+                    me = my_id,
+                    peer = neigh.relay
+                );
+                acc
             });
 
+        // 5️⃣  Final DOT
         format!(
-            "graph G {{\n    rankdir=\"LR\"\n    # my ID\n    {:?} [shape={},color=lightblue,style=filled]\n\n    # all relays\n{}\n    # all relay connections\n{}\n    # all my connections\n{}\n}}",
-            my_id, my_shape, all_relays, all_relay_adjs, all_my_adjs
+            r#"graph G {{
+    rankdir="LR";
+
+    # me
+    "{id}" [label="{lbl}", shape={shape}, color=lightblue, style=filled];
+
+    # other relays
+{rels}
+    # relay edges
+{adj}
+    # my edges
+{my_adj}
+}}"#,
+            id = my_id,
+            lbl = my_label,
+            shape = my_shape,
+            rels = all_relays,
+            adj = all_relay_adjs,
+            my_adj = all_my_adjs
         )
     }
 
