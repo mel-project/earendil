@@ -36,14 +36,14 @@ pub trait ControlProtocol {
     ) -> Result<Option<HavenLocator>, DhtError>;
 
     // ---------------- chat-related functionality -----------------
-    async fn list_neighbors(&self) -> Vec<NodeAddr>;
+    // async fn list_neighbors(&self) -> Vec<NodeAddr>;
 
-    async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError>;
+    // async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError>;
 
-    // true = outgoing, false = incoming
-    async fn get_chat(&self, neighbor: String) -> Result<Vec<ChatEntry>, ChatError>;
+    // // true = outgoing, false = incoming
+    // async fn get_chat(&self, neighbor: String) -> Result<Vec<ChatEntry>, ChatError>;
 
-    async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError>;
+    // async fn send_chat(&self, dest: String, msg: String) -> Result<(), ChatError>;
 
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)>;
 }

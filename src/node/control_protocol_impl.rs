@@ -1,17 +1,17 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use async_trait::async_trait;
 use earendil_crypt::{HavenFingerprint, RelayFingerprint};
 use nanorpc::RpcTransport;
 use serde_json::json;
 
-use crate::{ChatEntry, v2h_node::HavenLocator};
-use earendil_topology::NodeAddr;
 use crate::control_protocol::RelayGraphInfo;
+use crate::v2h_node::HavenLocator;
+use earendil_topology::NodeAddr;
 
 use super::NodeCtx;
 use crate::control_protocol::{
-    ChatError, ConfigError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError,
+    ConfigError, ControlProtocol, DhtError, GlobalRpcArgs, GlobalRpcError,
 };
 pub struct ControlProtocolImpl {
     ctx: NodeCtx,
@@ -135,22 +135,22 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     // ---------------- chat-related functionality -----------------
-    async fn list_neighbors(&self) -> Vec<NodeAddr> {
-        self.ctx.v2h.link_node().all_neighs()
-    }
+    // async fn list_neighbors(&self) -> Vec<NodeAddr> {
+    //     self.ctx.v2h.link_node().all_neighs()
+    // }
 
-    async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError> {
-        todo!()
-    }
+    // async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError> {
+    //     todo!()
+    // }
 
-    // true = outgoing, false = incoming
-    async fn get_chat(&self, neighbor_prefix: String) -> Result<Vec<ChatEntry>, ChatError> {
-        todo!()
-    }
+    // // true = outgoing, false = incoming
+    // async fn get_chat(&self, neighbor_prefix: String) -> Result<Vec<ChatEntry>, ChatError> {
+    //     todo!()
+    // }
 
-    async fn send_chat(&self, dest_neighbor_prefix: String, msg: String) -> Result<(), ChatError> {
-        todo!()
-    }
+    // async fn send_chat(&self, dest_neighbor_prefix: String, msg: String) -> Result<(), ChatError> {
+    //     todo!()
+    // }
 
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
         let timeseries = self
@@ -162,26 +162,5 @@ impl ControlProtocol for ControlProtocolImpl {
         tracing::debug!("num stats for {key}: {}", timeseries.len());
 
         timeseries
-    }
-
-}
-
-fn get_node_label(fp: &RelayFingerprint) -> String {
-    let node = fp.to_string();
-    format!("{}..{}", &node[..4], &node[node.len() - 4..node.len()])
-}
-
-fn neigh_by_prefix(all_neighs: Vec<NodeAddr>, prefix: &str) -> anyhow::Result<NodeAddr> {
-    let valid_neighs: Vec<NodeAddr> = all_neighs
-        .into_iter()
-        .filter(|id| id.to_string().starts_with(prefix))
-        .collect();
-
-    if valid_neighs.len() == 1 {
-        Ok(valid_neighs[0])
-    } else if valid_neighs.is_empty() {
-        anyhow::bail!("No neighbors with this prefix! Double check the spelling.")
-    } else {
-        anyhow::bail!("Prefix matches multiple neighbors! Try a longer prefix.")
     }
 }
