@@ -6,17 +6,17 @@ use futures_util::{FutureExt, future};
 use nanorpc::{JrpcRequest, JrpcResponse, RpcTransport};
 use smol::Timer;
 
-use crate::n2r_node::N2rAnonSocket;
+use crate::anon_layer::AnonSocket;
 
 use super::GLOBAL_RPC_DOCK;
 
 pub struct GlobalRpcTransport {
     dest_fp: RelayFingerprint,
-    skt: N2rAnonSocket,
+    skt: AnonSocket,
 }
 
 impl GlobalRpcTransport {
-    pub fn new(dest_fp: RelayFingerprint, skt: N2rAnonSocket) -> GlobalRpcTransport {
+    pub fn new(dest_fp: RelayFingerprint, skt: AnonSocket) -> GlobalRpcTransport {
         GlobalRpcTransport { dest_fp, skt }
     }
 }

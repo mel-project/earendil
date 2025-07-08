@@ -22,9 +22,9 @@ use smolscale::immortal::{Immortal, RespawnStrategy};
 use stdcode::StdcodeSerializeExt;
 
 use crate::{
-    n2r_node::N2rNode,
-    v2h_node::vrh::{H2rMessage, R2hMessage},
-    LinkNode,
+    anon_layer::AnonLayer,
+    haven_layer::vrh::{H2rMessage, R2hMessage},
+    transport_layer::TransportLayer,
 };
 
 pub use self::packet_conn::HavenListener;
@@ -40,16 +40,16 @@ pub use dht::HavenLocator;
 
 const HAVEN_FORWARD_DOCK: u32 = 100002;
 
-pub struct V2hNode {
-    ctx: V2hNodeCtx,
+pub struct HavenLayer {
+    ctx: HavenLayerCtx,
     _rpc_server: Option<Immortal>,
     _rendezvous_forward: Option<Immortal>,
 }
 
-impl V2hNode {
-    pub fn new(n2r: N2rNode, cfg: V2hConfig) -> Self {
-        let ctx = V2hNodeCtx {
-            n2r: n2r.into(),
+impl HavenLayer {
+    pub fn new(anon: AnonLayer, cfg: HavenLayerConfig) -> Self {
+        let ctx = HavenLayerCtx {
+            anon: anon.into(),
             registered_havens: Bicache::new(1000).into(),
         };
 
@@ -114,12 +114,12 @@ impl V2hNode {
         ))
     }
 
-    pub fn link_node(&self) -> &LinkNode {
-        self.ctx.n2r.link_node()
+    pub fn transport_layer(&self) -> &TransportLayer {
+        self.ctx.anon.transport_layer()
     }
 
     pub fn grpc_transport(&self, dest: RelayFingerprint) -> GlobalRpcTransport {
-        GlobalRpcTransport::new(dest, self.ctx.n2r.bind_anon())
+        GlobalRpcTransport::new(dest, self.ctx.anon.bind_anon())
     }
 
     pub async fn dht_get(
@@ -134,8 +134,8 @@ impl V2hNode {
     }
 }
 
-async fn rendezvous_forward(ctx: V2hNodeCtx) -> anyhow::Result<()> {
-    let socket = ctx.n2r.bind_relay(HAVEN_FORWARD_DOCK);
+async fn rendezvous_forward(ctx: HavenLayerCtx) -> anyhow::Result<()> {
+    let socket = ctx.anon.bind_relay(HAVEN_FORWARD_DOCK);
 
     loop {
         if let Ok((msg, src_ep)) = socket.recv_from().await {
@@ -187,8 +187,8 @@ async fn rendezvous_forward(ctx: V2hNodeCtx) -> anyhow::Result<()> {
     }
 }
 
-async fn serve_rpc(ctx: V2hNodeCtx) -> anyhow::Result<()> {
-    let rpc_socket = ctx.n2r.bind_relay(GLOBAL_RPC_DOCK);
+async fn serve_rpc(ctx: HavenLayerCtx) -> anyhow::Result<()> {
+    let rpc_socket = ctx.anon.bind_relay(GLOBAL_RPC_DOCK);
     let service = GlobalRpcService(GlobalRpcImpl::new(ctx.clone()));
     loop {
         let (bts, from) = rpc_socket.recv_from().await?;
@@ -210,11 +210,11 @@ async fn serve_rpc(ctx: V2hNodeCtx) -> anyhow::Result<()> {
 }
 
 #[derive(Clone)]
-struct V2hNodeCtx {
-    n2r: Arc<N2rNode>,
+struct HavenLayerCtx {
+    anon: Arc<AnonLayer>,
     registered_havens: Arc<Bicache<AnonEndpoint, HavenFingerprint>>,
 }
 
-pub struct V2hConfig {
+pub struct HavenLayerConfig {
     pub is_relay: bool,
 }

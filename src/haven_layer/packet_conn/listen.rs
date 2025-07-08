@@ -18,9 +18,9 @@ use std::{
 use stdcode::StdcodeSerializeExt;
 
 use crate::{
-    n2r_node::N2rAnonSocket,
-    v2h_node::{
-        HAVEN_FORWARD_DOCK, V2hNodeCtx,
+    anon_layer::AnonSocket,
+    haven_layer::{
+        HAVEN_FORWARD_DOCK, HavenLayerCtx,
         dht::{HavenLocator, dht_insert},
         global_rpc::{GlobalRpcClient, GlobalRpcTransport, RegisterHavenReq},
         packet_conn::{HAVEN_DN, HAVEN_UP},
@@ -31,20 +31,20 @@ use crate::{
 use super::HavenPacketConn;
 
 pub async fn listen_loop(
-    ctx: V2hNodeCtx,
+    ctx: HavenLayerCtx,
     identity: HavenIdentitySecret,
     port: u16,
     rendezvous: RelayFingerprint,
     send_accepted: Sender<HavenPacketConn>,
 ) -> anyhow::Result<()> {
     loop {
-        let n2r_socket = ctx.n2r.bind_anon();
+        let anon_socket = ctx.anon.bind_anon();
         // register ourselves with rendezvous & upload info to DHT in a loop
-        let ep = n2r_socket.local_endpoint();
+        let ep = anon_socket.local_endpoint();
         let register_loop = register_haven(&ctx, identity, port, rendezvous, ep);
         // start loop that demultiplexes incoming messages
         let demultiplex_loop =
-            haven_demultiplex(identity, n2r_socket, rendezvous, send_accepted.clone());
+            haven_demultiplex(identity, anon_socket, rendezvous, send_accepted.clone());
         if let Err(err) = register_loop.race(demultiplex_loop).await {
             tracing::warn!(err = debug(err), "restarting listen");
             smol::Timer::after(Duration::from_secs(1)).await;
@@ -53,7 +53,7 @@ pub async fn listen_loop(
 }
 
 async fn register_haven(
-    ctx: &V2hNodeCtx,
+    ctx: &HavenLayerCtx,
     identity: HavenIdentitySecret,
     port: u16,
     rendezvous: RelayFingerprint,
@@ -62,7 +62,7 @@ async fn register_haven(
     let esk = DhSecret::generate();
     let epk = esk.public();
     let forward_req = RegisterHavenReq::new(anon_endpoint, identity, port);
-    let gclient = GlobalRpcClient(GlobalRpcTransport::new(rendezvous, ctx.n2r.bind_anon()));
+    let gclient = GlobalRpcClient(GlobalRpcTransport::new(rendezvous, ctx.anon.bind_anon()));
     loop {
         match gclient
             .alloc_forward(forward_req.clone())
@@ -100,16 +100,16 @@ async fn register_haven(
 #[tracing::instrument(skip_all, fields(identity=display(identity.public().fingerprint())))]
 async fn haven_demultiplex(
     identity: HavenIdentitySecret,
-    n2r_socket: N2rAnonSocket,
+    anon_socket: AnonSocket,
     rendezvous: RelayFingerprint,
     send_accepted: Sender<HavenPacketConn>,
 ) -> anyhow::Result<()> {
-    let n2r_socket = Arc::new(n2r_socket);
+    let anon_socket = Arc::new(anon_socket);
     let resupply_loop = async {
         loop {
             smol::Timer::after(Duration::from_secs(10)).await;
             tracing::trace!("resupplying reply blocks for the rendezvous");
-            n2r_socket.replenish_surbs(rendezvous).await?;
+            anon_socket.replenish_surbs(rendezvous).await?;
         }
     };
 
@@ -123,7 +123,7 @@ async fn haven_demultiplex(
                     conn_queues.retain(|_, q| q.0.receiver_count() > 0)
                 }
 
-                let (msg, _) = n2r_socket.recv_from().await?;
+                let (msg, _) = anon_socket.recv_from().await?;
                 let msg_len = msg.len();
                 let msg: Result<R2hMessage, _> = stdcode::deserialize(&msg);
                 match msg {
@@ -171,7 +171,7 @@ async fn haven_demultiplex(
                                 _task: smolscale::spawn(per_conn_loop(
                                     recv_upstream,
                                     src_visitor,
-                                    n2r_socket.clone(),
+                                    anon_socket.clone(),
                                     rendezvous,
                                 )),
                             };
@@ -188,7 +188,7 @@ async fn haven_demultiplex(
                                 sig: identity.sign(eph_sk.public().as_bytes()),
                             }),
                         };
-                        n2r_socket
+                        anon_socket
                             .send_to(
                                 response.stdcode().into(),
                                 RelayEndpoint::new(rendezvous, HAVEN_FORWARD_DOCK),
@@ -217,12 +217,12 @@ async fn haven_demultiplex(
 async fn per_conn_loop(
     recv_upstream: Receiver<Bytes>,
     dest_visitor: AnonEndpoint,
-    n2r_socket: Arc<N2rAnonSocket>,
+    anon_socket: Arc<AnonSocket>,
     rendezvous: RelayFingerprint,
 ) -> anyhow::Result<()> {
     loop {
         let to_send = recv_upstream.recv().await?;
-        n2r_socket
+        anon_socket
             .send_to(
                 H2rMessage {
                     dest_visitor,

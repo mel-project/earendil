@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use smol::stream::StreamExt;
 use stdcode::StdcodeSerializeExt;
 
-use crate::v2h_node::global_rpc::{GlobalRpcClient, GlobalRpcTransport};
+use crate::haven_layer::global_rpc::{GlobalRpcClient, GlobalRpcTransport};
 
-use super::V2hNodeCtx;
+use super::HavenLayerCtx;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HavenLocator {
@@ -59,14 +59,14 @@ impl HavenLocator {
 const DHT_REDUNDANCY: usize = 3;
 
 /// Insert a locator into the DHT.
-pub async fn dht_insert(ctx: &V2hNodeCtx, locator: HavenLocator) {
+pub async fn dht_insert(ctx: &HavenLayerCtx, locator: HavenLocator) {
     let key = locator.identity_pk.fingerprint();
     let replicas = dht_key_to_fps(ctx, &key.to_string());
     let mut gatherer = FuturesUnordered::new();
 
     for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
         let locator = locator.clone();
-        let gclient = GlobalRpcClient(GlobalRpcTransport::new(replica, ctx.n2r.bind_anon()));
+        let gclient = GlobalRpcClient(GlobalRpcTransport::new(replica, ctx.anon.bind_anon()));
         gatherer.push(async move {
             tracing::trace!("key {key} inserting into remote replica {replica}");
             anyhow::Ok(gclient.dht_insert(locator.clone()).await?)
@@ -82,7 +82,7 @@ pub async fn dht_insert(ctx: &V2hNodeCtx, locator: HavenLocator) {
 
 /// Obtain a locator from the DHT.
 pub async fn dht_get(
-    ctx: &V2hNodeCtx,
+    ctx: &HavenLayerCtx,
     fingerprint: HavenFingerprint,
 ) -> anyhow::Result<Option<HavenLocator>> {
     // TODO: DHT cache
@@ -91,10 +91,10 @@ pub async fn dht_get(
 
     let mut gatherer = FuturesUnordered::new();
     for replica in replicas.into_iter().take(DHT_REDUNDANCY) {
-        let n2r_skt = ctx.n2r.bind_anon();
-        tracing::debug!("[dht_get]: n2r_skt: {}", n2r_skt.local_endpoint());
+        let anon_skt = ctx.anon.bind_anon();
+        tracing::debug!("[dht_get]: anon_skt: {}", anon_skt.local_endpoint());
         gatherer.push(async move {
-            let gclient = GlobalRpcClient(GlobalRpcTransport::new(replica, n2r_skt));
+            let gclient = GlobalRpcClient(GlobalRpcTransport::new(replica, anon_skt));
             anyhow::Ok(gclient.dht_get(fingerprint).await?)
         })
     }
@@ -119,8 +119,8 @@ pub async fn dht_get(
     retval
 }
 
-fn dht_key_to_fps(ctx: &V2hNodeCtx, key: &str) -> Vec<RelayFingerprint> {
-    let mut all_nodes: Vec<RelayFingerprint> = ctx.n2r.link_node().all_relays();
+fn dht_key_to_fps(ctx: &HavenLayerCtx, key: &str) -> Vec<RelayFingerprint> {
+    let mut all_nodes: Vec<RelayFingerprint> = ctx.anon.transport_layer().all_relays();
     all_nodes.sort_unstable_by_key(|fp| *blake3::hash(&(key, fp).stdcode()).as_bytes());
     all_nodes
 }

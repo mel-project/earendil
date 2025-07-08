@@ -11,10 +11,10 @@ use smol::{
     Task,
 };
 
-use crate::v2h_node::stream::HeavyStream;
-use crate::v2h_node::HavenPacketConn;
+use crate::haven_layer::stream::HeavyStream;
+use crate::haven_layer::HavenPacketConn;
 
-use super::{HavenListener, V2hNodeCtx};
+use super::{HavenListener, HavenLayerCtx};
 
 /// HavenPacketConn is heavyweight, non-reliable, and does not come with timeout and keepalive functionality.
 ///
@@ -22,14 +22,14 @@ use super::{HavenListener, V2hNodeCtx};
 ///
 /// **A note on anonymity**: Different picomux streams returned by the same PooledVisitor may be linkable to each other by the haven. Different [PooledVisitor]s, however, are not linkable to each other.
 pub struct PooledVisitor {
-    ctx: V2hNodeCtx,
+    ctx: HavenLayerCtx,
     // one mux per endpoint for now
     pool: moka::future::Cache<HavenEndpoint, Arc<PicoMux>>,
 }
 
 impl PooledVisitor {
     /// Creates a new visitor pool.
-    pub(super) fn new(ctx: V2hNodeCtx) -> Self {
+    pub(super) fn new(ctx: HavenLayerCtx) -> Self {
         Self {
             ctx,
             pool: moka::future::Cache::builder()

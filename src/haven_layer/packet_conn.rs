@@ -22,8 +22,8 @@ use stdcode::StdcodeSerializeExt;
 use tap::Tap as _;
 
 use crate::{
-    n2r_node::N2rAnonSocket,
-    v2h_node::{
+    anon_layer::AnonSocket,
+    haven_layer::{
         HAVEN_FORWARD_DOCK,
         dht::dht_get,
         vrh::{HavenMsg, V2rMessage, VisitorHandshake},
@@ -32,7 +32,7 @@ use crate::{
 
 use self::listen::listen_loop;
 
-use super::V2hNodeCtx;
+use super::HavenLayerCtx;
 
 /// A low-level, best-effort visitor-haven connection.
 pub struct HavenPacketConn {
@@ -58,10 +58,10 @@ const HAVEN_DN: &[u8] = b"haven-dn";
 impl HavenPacketConn {
     /// Establish a connection to the given haven endpoint.
     pub(super) async fn connect(
-        ctx: &V2hNodeCtx,
+        ctx: &HavenLayerCtx,
         dest_haven: HavenEndpoint,
     ) -> anyhow::Result<Self> {
-        let n2r_skt = ctx.n2r.bind_anon();
+        let anon_skt = ctx.anon.bind_anon();
 
         // lookup the haven info using the dht
         let locator = match dht_get(ctx, dest_haven.fingerprint).await {
@@ -78,7 +78,7 @@ impl HavenPacketConn {
         tracing::debug!("got haven info from DHT: {:?}", locator);
 
         let rendezvous_ep = RelayEndpoint::new(locator.rendezvous_point, HAVEN_FORWARD_DOCK);
-        tracing::debug!("got n2r_skt: {}", n2r_skt.local_endpoint());
+        tracing::debug!("got anon_skt: {}", anon_skt.local_endpoint());
         // do the handshake to the other side over N2R
         let my_esk = DhSecret::generate();
         let my_hs = V2rMessage {
@@ -87,18 +87,18 @@ impl HavenPacketConn {
         };
         let mut shared_sec: Option<[u8; 32]> = None;
         for i in 0.. {
-            n2r_skt
+            anon_skt
                 .send_to(my_hs.stdcode().into(), rendezvous_ep)
                 .await?;
             tracing::debug!("sent handshake! i = {i}");
             // they sign their ephemeral public key
             if let Some(Ok((from_haven, addr))) =
-                n2r_skt.recv_from().timeout(Duration::from_secs(5)).await
+                anon_skt.recv_from().timeout(Duration::from_secs(5)).await
             {
                 tracing::debug!(
                     from_haven_len = from_haven.len(),
                     addr = debug(addr),
-                    my_endpoint = debug(n2r_skt.local_endpoint()),
+                    my_endpoint = debug(anon_skt.local_endpoint()),
                     "received from_haven"
                 );
                 let haven_msg: HavenMsg = stdcode::deserialize(&from_haven)
@@ -148,7 +148,7 @@ impl HavenPacketConn {
                 recv_upstream,
                 locator.rendezvous_point,
                 dest_haven,
-                n2r_skt,
+                anon_skt,
             )),
         })
     }
@@ -180,14 +180,14 @@ async fn visitor_loop(
     recv_upstream: Receiver<Bytes>,
     rendezvous: RelayFingerprint,
     haven: HavenEndpoint,
-    n2r_socket: N2rAnonSocket,
+    anon_socket: AnonSocket,
 ) -> anyhow::Result<()> {
     let rendezvous = RelayEndpoint::new(rendezvous, HAVEN_FORWARD_DOCK);
     // upstream messages are wrapped in V2rMessage
     let up_loop = async {
         loop {
             let to_send = recv_upstream.recv().await?;
-            n2r_socket
+            anon_socket
                 .send_to(
                     V2rMessage {
                         dest_haven: haven,
@@ -203,7 +203,7 @@ async fn visitor_loop(
     // downstream messages are straight HavenMsgs
     let dn_loop = async {
         loop {
-            let (msg, _) = n2r_socket.recv_from().await?;
+            let (msg, _) = anon_socket.recv_from().await?;
             let msg: HavenMsg = stdcode::deserialize(&msg)?;
             match msg {
                 HavenMsg::Regular(payload) => send_downstream.send(payload).await?,
@@ -223,7 +223,7 @@ pub struct HavenListener {
 impl HavenListener {
     /// Binds a new haven. The rendezvous must be specified.
     pub(super) async fn bind(
-        ctx: &V2hNodeCtx,
+        ctx: &HavenLayerCtx,
         identity: HavenIdentitySecret,
         port: u16,
         rendezvous: RelayFingerprint,

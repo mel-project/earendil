@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use crate::{ChatEntry, v2h_node::HavenLocator};
+use crate::{ChatEntry, haven_layer::HavenLocator};
 use earendil_topology::NodeAddr;
 
 #[nanorpc_derive]

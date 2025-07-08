@@ -32,9 +32,9 @@ use tracing::instrument;
 use crate::{
     config::{ConfigFile, HavenConfig, HavenHandler, RelayConfig, Socks5Config, Socks5Fallback},
     control_protocol::{ControlClient, ControlService},
-    link_node::{LinkConfig, LinkNode},
-    n2r_node::{N2rConfig, N2rNode},
-    v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, V2hConfig, V2hNode},
+    transport_layer::{LinkConfig, TransportLayer},
+    anon_layer::{AnonLayerConfig, AnonLayer},
+    haven_layer::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, HavenLayerConfig, HavenLayer},
 };
 
 /// The public interface to the whole Earendil system.
@@ -45,7 +45,7 @@ pub struct Node {
 
 #[derive(Clone)]
 pub struct NodeCtx {
-    v2h: Arc<V2hNode>,
+    haven: Arc<HavenLayer>,
     config: ConfigFile,
 }
 
@@ -71,7 +71,7 @@ impl Node {
             _ => (None, None),
         };
 
-        let link = LinkNode::new(LinkConfig {
+        let transport = TransportLayer::new(LinkConfig {
             relay_config: config
                 .relay_config
                 .clone()
@@ -88,18 +88,18 @@ impl Node {
             privacy_config: config.privacy_config,
         })?;
 
-        let n2r = N2rNode::new(link, N2rConfig {});
-        let v2h = Arc::new(V2hNode::new(
-            n2r,
-            V2hConfig {
+        let anon = AnonLayer::new(transport, AnonLayerConfig {});
+        let haven = Arc::new(HavenLayer::new(
+            anon,
+            HavenLayerConfig {
                 is_relay: config.relay_config.is_some(),
             },
         ));
 
         // start loops for handling socks5, etc, etc
-        let v2h_clone = v2h.clone();
+        let haven_clone = haven.clone();
         let ctx = NodeCtx {
-            v2h,
+            haven: haven,
             config: config_clone,
         };
 
@@ -117,20 +117,20 @@ impl Node {
                 let mut fallible_tasks = FuturesUnordered::new();
                 // for every haven, serve the haven
                 for haven_cfg in config.havens {
-                    fallible_tasks.push(spawn!(serve_haven(v2h_clone.clone(), haven_cfg)))
+                    fallible_tasks.push(spawn!(serve_haven(haven_clone.clone(), haven_cfg)))
                 }
 
                 if let (Some(exit_cfg), Some(exit_haven_cfg)) = (config.exit_config, exit_haven_cfg)
                 {
                     fallible_tasks.push(spawn!(serve_exit(
-                        v2h_clone.clone(),
+                        haven_clone.clone(),
                         exit_cfg,
                         exit_haven_cfg,
                     )));
                 }
 
                 // serve socks5
-                fallible_tasks.push(spawn!(socks5_loop(v2h_clone.clone(), config.socks5)));
+                fallible_tasks.push(spawn!(socks5_loop(haven_clone.clone(), config.socks5)));
 
                 // Join all the tasks. If any of the tasks terminate with an error, that's fatal!
                 while let Some(next) = fallible_tasks.next().await {
@@ -164,7 +164,7 @@ impl Node {
 
     /// Creates a low-level, unreliable packet connection.
     pub async fn packet_connect(&self, dest: HavenEndpoint) -> anyhow::Result<HavenPacketConn> {
-        self.ctx.v2h.packet_connect(dest).await
+        self.ctx.haven.packet_connect(dest).await
     }
 
     /// Creates a low-level, unreliable packet listener.
@@ -174,12 +174,12 @@ impl Node {
         port: u16,
         rendezvous: RelayFingerprint,
     ) -> anyhow::Result<HavenListener> {
-        self.ctx.v2h.packet_listen(identity, port, rendezvous).await
+        self.ctx.haven.packet_listen(identity, port, rendezvous).await
     }
 
     /// Creates a new pooled visitor. Under Earendil's anonymity model, each visitor should be unlinkable to any other visitor, but streams created within each visitor are linkable to the same haven each other by the haven (though not by the network).
     pub async fn pooled_visitor(&self) -> PooledVisitor {
-        self.ctx.v2h.pooled_visitor().await
+        self.ctx.haven.pooled_visitor().await
     }
 
     /// Creates a new pooled listener.
@@ -189,7 +189,7 @@ impl Node {
         port: u16,
         rendezvous: RelayFingerprint,
     ) -> anyhow::Result<PooledListener> {
-        self.ctx.v2h.pooled_listen(identity, port, rendezvous).await
+        self.ctx.haven.pooled_listen(identity, port, rendezvous).await
     }
 
     pub fn control_client(&self) -> ControlClient {
@@ -199,7 +199,7 @@ impl Node {
     }
 
     pub fn identity(&self) -> earendil_lownet::NodeIdentity {
-        self.ctx.v2h.link_node().my_id()
+        self.ctx.haven.transport_layer().my_id()
     }
 }
 struct DummyControlProtocolTransport {
@@ -224,9 +224,9 @@ async fn control_protocol_loop(ctx: NodeCtx) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn serve_haven(v2h: Arc<V2hNode>, cfg: HavenConfig) -> anyhow::Result<()> {
+async fn serve_haven(haven: Arc<HavenLayer>, cfg: HavenConfig) -> anyhow::Result<()> {
     let identity = cfg.identity.actualize_haven()?;
-    let listener = v2h
+    let listener = haven
         .pooled_listen(identity, cfg.listen_port, cfg.rendezvous)
         .await?;
     nursery!({
@@ -261,7 +261,7 @@ async fn serve_haven(v2h: Arc<V2hNode>, cfg: HavenConfig) -> anyhow::Result<()> 
 /// Serves a simple proxy exit via haven.
 /// We always choose ourselves as haven's rendezvous point.
 async fn serve_exit(
-    v2h: Arc<V2hNode>,
+    haven: Arc<HavenLayer>,
     exit_cfg: ExitConfig,
     haven_cfg: HavenConfig,
 ) -> anyhow::Result<()> {
@@ -272,7 +272,7 @@ async fn serve_exit(
         haven_idsk.public().fingerprint()
     );
 
-    let listener = v2h
+    let listener = haven
         .pooled_listen(haven_idsk, haven_cfg.listen_port, haven_cfg.rendezvous)
         .await?;
 
@@ -313,27 +313,27 @@ async fn serve_exit(
     })
 }
 
-async fn socks5_loop(v2h: Arc<V2hNode>, cfg: Socks5Config) -> anyhow::Result<()> {
+async fn socks5_loop(haven: Arc<HavenLayer>, cfg: Socks5Config) -> anyhow::Result<()> {
     let tcp_listener = TcpListener::bind(cfg.listen).await?;
     let fallback = cfg.fallback;
-    let pool = v2h.pooled_visitor().await;
+    let pool = haven.pooled_visitor().await;
 
     nursery!(loop {
         let (client_stream, _) = tcp_listener.accept().await?;
         spawn!(
-            socks5_once(client_stream, fallback.clone(), &pool, v2h.clone())
+            socks5_once(client_stream, fallback.clone(), &pool, haven.clone())
                 .map_err(|e| tracing::debug!(err = debug(e), "socks5 worker failed"))
         )
         .detach();
     })
 }
 
-#[tracing::instrument(skip(client_stream, fallback, pool, v2h))]
+#[tracing::instrument(skip(client_stream, fallback, pool, haven))]
 async fn socks5_once(
     client_stream: TcpStream,
     fallback: Socks5Fallback,
     pool: &PooledVisitor,
-    v2h: Arc<V2hNode>,
+    haven: Arc<HavenLayer>,
 ) -> anyhow::Result<()> {
     client_stream.set_nodelay(true)?;
     let _handshake = read_handshake(client_stream.clone()).await?;
@@ -389,7 +389,7 @@ async fn socks5_once(
                         .await?;
                 }
                 Socks5Fallback::SimpleProxy { exit_nodes } => {
-                    let relay_graph = v2h.link_node().relay_graph();
+                    let relay_graph = haven.transport_layer().relay_graph();
 
                     let mut rng = StdRng::from_entropy();
                     let remote_ep: HavenEndpoint = exit_nodes

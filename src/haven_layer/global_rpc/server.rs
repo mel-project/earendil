@@ -2,19 +2,19 @@ use async_trait::async_trait;
 
 use moka::sync::Cache;
 
-use crate::v2h_node::{dht::HavenLocator, V2hNodeCtx};
+use crate::haven_layer::{dht::HavenLocator, HavenLayerCtx};
 use earendil_crypt::{HavenFingerprint, VerifyError};
 
 use super::{GlobalRpcProtocol, RegisterHavenReq};
 
 pub struct GlobalRpcImpl {
-    ctx: V2hNodeCtx,
+    ctx: HavenLayerCtx,
 
     local_dht_shard: Cache<HavenFingerprint, HavenLocator>,
 }
 
 impl GlobalRpcImpl {
-    pub fn new(ctx: V2hNodeCtx) -> GlobalRpcImpl {
+    pub fn new(ctx: HavenLayerCtx) -> GlobalRpcImpl {
         GlobalRpcImpl {
             ctx,
 

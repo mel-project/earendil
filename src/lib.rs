@@ -1,16 +1,16 @@
 mod commands;
 pub mod config;
 pub mod control_protocol;
-mod link_node;
+mod transport_layer;
 mod main_control;
-mod n2r_node;
+mod anon_layer;
 mod node;
-mod v2h_node;
+mod haven_layer;
 
 // Create the public API here.
 
 pub use commands::Commands;
-pub use link_node::*; // TOOD: REMOVE. HERE FOR DEBUGGING ONLY
+pub use transport_layer::*; // TOOD: REMOVE. HERE FOR DEBUGGING ONLY
 pub use main_control::main_control;
 pub use node::Node;
-pub use v2h_node::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor};
+pub use haven_layer::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor};

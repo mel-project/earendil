@@ -6,7 +6,7 @@ use nanorpc::RpcTransport;
 use serde_json::json;
 
 use crate::control_protocol::RelayGraphInfo;
-use crate::v2h_node::HavenLocator;
+use crate::haven_layer::HavenLocator;
 use earendil_topology::NodeAddr;
 
 use super::NodeCtx;
@@ -75,19 +75,19 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn relay_graph_info(&self) -> RelayGraphInfo {
-        let my_fingerprint = match self.ctx.v2h.link_node().my_id() {
+        let my_fingerprint = match self.ctx.haven.transport_layer().my_id() {
             earendil_lownet::NodeIdentity::Relay(id) => Some(id.public().fingerprint()),
             earendil_lownet::NodeIdentity::ClientBearer(_) => None,
         };
 
-        let relay_graph = self.ctx.v2h.link_node().relay_graph();
+        let relay_graph = self.ctx.haven.transport_layer().relay_graph();
         let relays: Vec<RelayFingerprint> = relay_graph.all_nodes().collect();
 
         let adjacencies: Vec<(RelayFingerprint, RelayFingerprint)> = relay_graph
             .all_adjacencies()
             .map(|adj| (adj.left, adj.right))
             .collect();
-        let neighbors: Vec<NodeAddr> = self.ctx.v2h.link_node().all_neighs().clone();
+        let neighbors: Vec<NodeAddr> = self.ctx.haven.transport_layer().all_neighs().clone();
 
         RelayGraphInfo {
             my_fingerprint,
@@ -102,7 +102,7 @@ impl ControlProtocol for ControlProtocolImpl {
         &self,
         args: GlobalRpcArgs,
     ) -> Result<serde_json::Value, GlobalRpcError> {
-        let grpc_transport = self.ctx.v2h.grpc_transport(args.destination);
+        let grpc_transport = self.ctx.haven.grpc_transport(args.destination);
         let res = if let Some(res) = grpc_transport
             .call(&args.method, &args.args)
             .await
@@ -121,14 +121,14 @@ impl ControlProtocol for ControlProtocolImpl {
     }
 
     async fn insert_rendezvous(&self, locator: HavenLocator) {
-        self.ctx.v2h.dht_insert(locator).await
+        self.ctx.haven.dht_insert(locator).await
     }
 
     async fn get_rendezvous(
         &self,
         fingerprint: HavenFingerprint,
     ) -> Result<Option<HavenLocator>, DhtError> {
-        self.ctx.v2h.dht_get(fingerprint).await.map_err(|e| {
+        self.ctx.haven.dht_get(fingerprint).await.map_err(|e| {
             tracing::debug!("dht_get failed with : {e}");
             DhtError::DhtGetFailed(e.to_string())
         })
@@ -136,7 +136,7 @@ impl ControlProtocol for ControlProtocolImpl {
 
     // ---------------- chat-related functionality -----------------
     // async fn list_neighbors(&self) -> Vec<NodeAddr> {
-    //     self.ctx.v2h.link_node().all_neighs()
+    //     self.ctx.haven.transport_layer().all_neighs()
     // }
 
     // async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError> {
@@ -155,8 +155,8 @@ impl ControlProtocol for ControlProtocolImpl {
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
         let timeseries = self
             .ctx
-            .v2h
-            .link_node()
+            .haven
+            .transport_layer()
             .timeseries_stats(key.clone(), start, end)
             .await;
         tracing::debug!("num stats for {key}: {}", timeseries.len());

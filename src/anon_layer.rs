@@ -14,21 +14,21 @@ use parking_lot::Mutex;
 use smol::channel::{Receiver, Sender};
 use smolscale::immortal::{Immortal, RespawnStrategy};
 
-use crate::link_node::{IncomingMsg, LinkNode};
+use crate::transport_layer::{IncomingMsg, TransportLayer};
 
 use self::surb_store::SurbStore;
 
-/// An implementation of the N2R layer.
-pub struct N2rNode {
-    ctx: N2rNodeCtx,
+/// An implementation of the anonymity layer.
+pub struct AnonLayer {
+    ctx: AnonLayerCtx,
     _task: Immortal,
 }
 
-impl N2rNode {
-    pub fn new(link_node: LinkNode, cfg: N2rConfig) -> Self {
-        let ctx = N2rNodeCtx {
+impl AnonLayer {
+    pub fn new(transport: TransportLayer, cfg: AnonLayerConfig) -> Self {
+        let ctx = AnonLayerCtx {
             _cfg: cfg,
-            link_node: Arc::new(link_node),
+            transport_layer: Arc::new(transport),
             anon_queues: Arc::new(DashMap::new()),
             relay_queues: Arc::new(DashMap::new()),
             rb_store: Arc::new(Mutex::new(SurbStore::new())),
@@ -38,7 +38,7 @@ impl N2rNode {
         };
         let task = Immortal::respawn(
             RespawnStrategy::Immediate,
-            clone!([ctx], move || n2r_incoming_loop(ctx.clone())),
+            clone!([ctx], move || anon_incoming_loop(ctx.clone())),
         );
         Self {
             ctx: ctx.clone(),
@@ -46,25 +46,25 @@ impl N2rNode {
         }
     }
 
-    /// Binds a relay endpoint to the node, creating a new `N2rRelaySocket` for communication.
-    pub fn bind_relay(&self, dock: Dock) -> N2rRelaySocket {
+    /// Binds a relay endpoint to the node, creating a new `RelaySocket` for communication.
+    pub fn bind_relay(&self, dock: Dock) -> RelaySocket {
         let (sender, receiver) = smol::channel::bounded(1000);
         self.ctx.relay_queues.insert(dock, sender);
 
-        N2rRelaySocket {
+        RelaySocket {
             ctx: self.ctx.clone(),
             dock,
             queue: receiver,
         }
     }
 
-    /// Binds an anonymous endpoint to the node, creating a new `N2rAnonSocket` for communication.
-    pub fn bind_anon(&self) -> N2rAnonSocket {
+    /// Binds an anonymous endpoint to the node, creating a new `AnonSocket` for communication.
+    pub fn bind_anon(&self) -> AnonSocket {
         let my_endpoint = AnonEndpoint::random();
         let (sender, receiver) = smol::channel::bounded(1000);
         self.ctx.anon_queues.insert(my_endpoint, sender);
 
-        N2rAnonSocket {
+        AnonSocket {
             ctx: self.ctx.clone(),
             my_endpoint,
             queue: receiver,
@@ -74,32 +74,32 @@ impl N2rNode {
     }
 
     /// Gets the link layer.
-    pub fn link_node(&self) -> &LinkNode {
-        &self.ctx.link_node
+    pub fn transport_layer(&self) -> &TransportLayer {
+        &self.ctx.transport_layer
     }
 }
 
-pub struct N2rAnonSocket {
-    ctx: N2rNodeCtx,
+pub struct AnonSocket {
+    ctx: AnonLayerCtx,
     my_endpoint: AnonEndpoint,
     queue: Receiver<(Bytes, RelayEndpoint, usize)>,
 
     remote_surb_counts: DashMap<RelayFingerprint, usize>,
 }
 
-impl Drop for N2rAnonSocket {
+impl Drop for AnonSocket {
     fn drop(&mut self) {
         self.ctx.anon_queues.remove(&self.my_endpoint);
     }
 }
 
-impl N2rAnonSocket {
+impl AnonSocket {
     /// Sends a packet to a particular relay endpoint.
     pub async fn send_to(&self, body: Bytes, dest: RelayEndpoint) -> anyhow::Result<()> {
         self.auto_replenish_surbs(dest.fingerprint).await?;
 
         self.ctx
-            .link_node
+            .transport_layer
             .send_forward(
                 InnerPacket::Message(Message::new(dest.dock, body, 0)),
                 self.my_endpoint,
@@ -134,13 +134,13 @@ impl N2rAnonSocket {
         // send a batch of 10 surbs
         let surbs = (0..10)
             .map(|_| {
-                let (rb, id, degarble) = self.ctx.link_node.new_surb(self.my_endpoint)?;
+                let (rb, id, degarble) = self.ctx.transport_layer.new_surb(self.my_endpoint)?;
                 self.ctx.degarblers.insert(id, degarble);
                 anyhow::Ok(rb)
             })
             .try_collect()?;
         self.ctx
-            .link_node
+            .transport_layer
             .send_forward(InnerPacket::Surbs(surbs), self.my_endpoint, fingerprint)
             .await?;
         Ok(())
@@ -152,25 +152,25 @@ impl N2rAnonSocket {
 }
 
 #[derive(Clone)]
-struct N2rNodeCtx {
-    _cfg: N2rConfig,
-    link_node: Arc<LinkNode>,
+struct AnonLayerCtx {
+    _cfg: AnonLayerConfig,
+    transport_layer: Arc<TransportLayer>,
     anon_queues: Arc<DashMap<AnonEndpoint, Sender<(Bytes, RelayEndpoint, usize)>>>,
     relay_queues: Arc<DashMap<Dock, Sender<(Bytes, AnonEndpoint)>>>,
     rb_store: Arc<Mutex<SurbStore>>,
     degarblers: Cache<u64, ReplyDegarbler>,
 }
 
-async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
+async fn anon_incoming_loop(ctx: AnonLayerCtx) -> anyhow::Result<()> {
     loop {
-        let incoming = ctx.link_node.recv().await;
+        let incoming = ctx.transport_layer.recv().await;
         let fallible = async {
             match incoming {
                 IncomingMsg::Forward {
                     from,
                     body: InnerPacket::Message(message),
                 } => {
-                    tracing::trace!("incoming n2r: IncomingMsg::Forward from {from}");
+                    tracing::trace!("incoming anon: IncomingMsg::Forward from {from}");
                     let queue = ctx
                         .relay_queues
                         .get(&message.relay_dock)
@@ -181,7 +181,7 @@ async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
                     from,
                     body: InnerPacket::Surbs(surbs),
                 } => {
-                    tracing::trace!("incoming n2r: IncomingMsg::Forward of Surbs from {from}");
+                    tracing::trace!("incoming anon: IncomingMsg::Forward of Surbs from {from}");
                     for rb in surbs {
                         ctx.rb_store.lock().insert(from, rb);
                     }
@@ -192,7 +192,7 @@ async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
                         .remove(&rb_id)
                         .context(format!("no degarbler for rb_id = {rb_id}"))?;
                     tracing::trace!(
-                        "incoming n2r: IncomingMsg::Backward with rb_id = {rb_id} for {}",
+                        "incoming anon: IncomingMsg::Backward with rb_id = {rb_id} for {}",
                         degarbler.my_anon_id()
                     );
                     let mut body: RawBody = *bytemuck::try_from_bytes(&body)
@@ -219,19 +219,19 @@ async fn n2r_incoming_loop(ctx: N2rNodeCtx) -> anyhow::Result<()> {
     }
 }
 
-pub struct N2rRelaySocket {
-    ctx: N2rNodeCtx,
+pub struct RelaySocket {
+    ctx: AnonLayerCtx,
     dock: Dock,
     queue: Receiver<(Bytes, AnonEndpoint)>,
 }
 
-impl Drop for N2rRelaySocket {
+impl Drop for RelaySocket {
     fn drop(&mut self) {
         self.ctx.relay_queues.remove(&self.dock);
     }
 }
 
-impl N2rRelaySocket {
+impl RelaySocket {
     /// Sends a packet to a particular anonymous endpoint.
     pub async fn send_to(&self, body: Bytes, anon_endpoint: AnonEndpoint) -> anyhow::Result<()> {
         let (rb, remaining) = self
@@ -241,7 +241,7 @@ impl N2rRelaySocket {
             .pop_and_count(anon_endpoint)
             .context(format!("no surb for anon endpoint: {anon_endpoint:?}"))?;
         self.ctx
-            .link_node
+            .transport_layer
             .send_backwards(rb, Message::new(self.dock, body, remaining))
             .await?;
         Ok(())
@@ -255,4 +255,4 @@ impl N2rRelaySocket {
 }
 
 #[derive(Clone)]
-pub struct N2rConfig {}
+pub struct AnonLayerConfig {}

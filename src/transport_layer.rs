@@ -18,13 +18,13 @@ use tap::Tap;
 pub use types::{IncomingMsg, LinkConfig};
 
 /// An implementation of the link-level interface.
-pub struct LinkNode {
+pub struct TransportLayer {
     lownet: Arc<LowNet>,
     privacy: PrivacyConfig,
 }
 
-impl LinkNode {
-    /// Creates a new link node.
+impl TransportLayer {
+    /// Creates a new transport layer.
     pub fn new(cfg: LinkConfig) -> anyhow::Result<Self> {
         use earendil_lownet::LowNetConfig;
 
