@@ -1,83 +1,41 @@
 use anyhow::Context;
 use chrono::{DateTime, NaiveDateTime};
 use colored::{ColoredString, Colorize};
-use earendil_crypt::{DhPublic, HavenIdentitySecret};
 
 use nanorpc_http::client::HttpRpcTransport;
-use std::{net::SocketAddr, str::FromStr};
+use nanorpc::RpcTransport;
+use std::net::SocketAddr;
+use serde_yaml;
 
-use crate::{
-    ChatEntry,
-    commands::ControlCommand,
-    control_protocol::{ControlClient, GlobalRpcArgs},
-    v2h_node::HavenLocator,
-};
+use crate::ChatEntry;
+
 
 pub async fn main_control(
-    control_command: ControlCommand,
+    method: String,
+    args: Vec<String>,
+    json: bool,
     connect: SocketAddr,
 ) -> anyhow::Result<()> {
-    let control = ControlClient::from(HttpRpcTransport::new_with_proxy(
+    let control = HttpRpcTransport::new_with_proxy(
         connect.to_string(),
         nanorpc_http::client::Proxy::Direct,
-    ));
-    match control_command {
-        ControlCommand::GlobalRpc {
-            id,
-            dest: destination,
-            method,
-            args,
-        } => {
-            let args: Result<Vec<serde_json::Value>, _> =
-                args.into_iter().map(|a| serde_yaml::from_str(&a)).collect();
-            let args = args.context("arguments not YAML")?;
-            let res = control
-                .send_global_rpc(GlobalRpcArgs {
-                    id,
-                    destination,
-                    method,
-                    args,
-                })
-                .await??;
-            println!("{res}");
-        }
-        ControlCommand::InsertRendezvous {
-            identity_sk,
-            onion_pk,
-            rendezvous_fingerprint,
-        } => {
-            let locator = HavenLocator::new(
-                HavenIdentitySecret::from_str(&identity_sk)?,
-                DhPublic::from_str(&onion_pk)?,
-                rendezvous_fingerprint,
-            );
-            control.insert_rendezvous(locator).await?;
-        }
-        ControlCommand::GetRendezvous { key } => {
-            let locator = control.get_rendezvous(key).await??;
-            if let Some(locator) = locator {
-                println!("{locator:?}");
-            } else {
-                println!("No haven locator found for fingerprint {key}")
-            }
-        }
-        ControlCommand::RelayGraphviz => {
-            let res = control.relay_graphviz().await?;
-            println!("{res}");
-        }
-        ControlCommand::MyRoutes => {
-            let routes = control.my_routes().await?;
-            println!("{}", serde_yaml::to_string(&routes)?);
-        }
-        ControlCommand::HavensInfo => {
-            for info in control.havens_info().await?? {
-                println!("{} - {}", info.0, info.1);
-            }
-        }
+    );
+    let args: Result<Vec<serde_json::Value>, _> =
+        args.into_iter().map(|a| serde_yaml::from_str(&a)).collect();
+    let args = args.context("arguments not YAML")?;
+    let res = control.call(&method, &args).await?;
+    let res = res.ok_or_else(|| anyhow::anyhow!("method not found"))?;
+    let output = match res {
+        Ok(val) => val,
+        Err(err) => serde_json::to_value(err)?,
+    };
+    if json {
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    } else {
+        println!("{}", serde_yaml::to_string(&output)?);
     }
     Ok(())
 }
-
 fn earendil_blue(string: &str) -> ColoredString {
     string
         .custom_color(colored::CustomColor {
