@@ -33,9 +33,7 @@ use crate::{
     anon_layer::AnonLayer,
     config::{ConfigFile, HavenConfig, HavenHandler, RelayConfig, Socks5Config, Socks5Fallback},
     control_protocol::{ControlClient, ControlService},
-    haven_layer::{
-        HavenLayer, HavenLayerConfig, HavenListener, HavenPacketConn, PooledListener, PooledVisitor,
-    },
+    haven_layer::{HavenLayer, HavenListener, HavenPacketConn, PooledListener, PooledVisitor},
     transport_layer::{LinkConfig, TransportLayer},
 };
 
@@ -91,12 +89,7 @@ impl Node {
         })?;
 
         let anon = AnonLayer::new(transport);
-        let haven = Arc::new(HavenLayer::new(
-            anon,
-            HavenLayerConfig {
-                is_relay: config.relay_config.is_some(),
-            },
-        ));
+        let haven = Arc::new(HavenLayer::new(anon));
 
         // start loops for handling socks5, etc, etc
         let haven_clone = haven.clone();

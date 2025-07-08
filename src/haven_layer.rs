@@ -6,7 +6,7 @@ mod pooled;
 mod stream;
 mod vrh;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use clone_macro::clone;
@@ -47,10 +47,10 @@ pub struct HavenLayer {
 }
 
 impl HavenLayer {
-    pub fn new(anon: AnonLayer, cfg: HavenLayerConfig) -> Self {
+    pub fn new(anon: AnonLayer) -> Self {
         let ctx = HavenLayerCtx {
             anon: anon.into(),
-            registered_havens: Bicache::new(1000).into(),
+            registered_havens: Bicache::new(Duration::from_secs(1000)).into(),
         };
 
         let rpc_server = Immortal::respawn(
@@ -205,8 +205,4 @@ async fn serve_rpc(ctx: HavenLayerCtx) -> anyhow::Result<()> {
 struct HavenLayerCtx {
     anon: Arc<AnonLayer>,
     registered_havens: Arc<Bicache<AnonEndpoint, HavenFingerprint>>,
-}
-
-pub struct HavenLayerConfig {
-    pub is_relay: bool,
 }

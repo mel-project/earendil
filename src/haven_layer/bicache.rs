@@ -6,19 +6,13 @@ pub struct Bicache<K, V> {
     v_to_k: Cache<V, K>,
 }
 
-impl<
-        K: Clone + Eq + Hash + Send + Sync + 'static,
-        V: Clone + Eq + Hash + Send + Sync + 'static,
-    > Bicache<K, V>
+impl<K: Clone + Eq + Hash + Send + Sync + 'static, V: Clone + Eq + Hash + Send + Sync + 'static>
+    Bicache<K, V>
 {
-    pub fn new(ttl: u64) -> Self {
+    pub fn new(ttl: Duration) -> Self {
         Self {
-            k_to_v: CacheBuilder::default()
-                .time_to_live(Duration::from_secs(ttl))
-                .build(),
-            v_to_k: CacheBuilder::default()
-                .time_to_live(Duration::from_secs(ttl))
-                .build(),
+            k_to_v: CacheBuilder::default().time_to_live(ttl).build(),
+            v_to_k: CacheBuilder::default().time_to_live(ttl).build(),
         }
     }
 
