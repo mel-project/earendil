@@ -74,7 +74,7 @@ impl ControlProtocol for ControlProtocolImpl {
     async fn relay_graphviz(&self) -> String {
         use std::cmp::Ord;
 
-        let (my_id, my_shape) = match self.ctx.v2h.link_node().my_id() {
+        let (my_id, my_shape) = match self.ctx.haven.transport_layer().my_id() {
             earendil_lownet::NodeIdentity::ClientBearer(id) => {
                 (format!("{}\n[client]", id), "rect")
             }
@@ -84,7 +84,7 @@ impl ControlProtocol for ControlProtocolImpl {
             ),
         };
 
-        let relay_graph = self.ctx.v2h.link_node().relay_graph();
+        let relay_graph = self.ctx.haven.transport_layer().relay_graph();
 
         let all_relays = relay_graph.all_nodes().fold(String::new(), |acc, node| {
             let node_label = get_node_label(&node);
@@ -113,8 +113,8 @@ impl ControlProtocol for ControlProtocolImpl {
 
         let all_my_adjs = self
             .ctx
-            .v2h
-            .link_node()
+            .haven
+            .transport_layer()
             .all_neighs()
             .iter()
             .filter(|neigh| neigh.client_id == 0)
@@ -188,34 +188,8 @@ impl ControlProtocol for ControlProtocolImpl {
         })
     }
 
-    // ---------------- chat-related functionality -----------------
-    // async fn list_neighbors(&self) -> Vec<NodeAddr> {
-    //     self.ctx.haven.transport_layer().all_neighs()
-    // }
-
-    // async fn list_chats(&self) -> Result<HashMap<String, (Option<ChatEntry>, u32)>, ChatError> {
-    //     todo!()
-    // }
-
-    // // true = outgoing, false = incoming
-    // async fn get_chat(&self, neighbor_prefix: String) -> Result<Vec<ChatEntry>, ChatError> {
-    //     todo!()
-    // }
-
-    // async fn send_chat(&self, dest_neighbor_prefix: String, msg: String) -> Result<(), ChatError> {
-    //     todo!()
-    // }
-
     async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
-        let timeseries = self
-            .ctx
-            .haven
-            .transport_layer()
-            .timeseries_stats(key.clone(), start, end)
-            .await;
-        tracing::debug!("num stats for {key}: {}", timeseries.len());
-
-        timeseries
+        vec![]
     }
 }
 

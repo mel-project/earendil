@@ -214,11 +214,6 @@ impl TransportLayer {
         Vec::new()
     }
 
-    pub async fn timeseries_stats(&self, key: String, start: i64, end: i64) -> Vec<(i64, f64)> {
-        let _ = (key, start, end);
-        Vec::new()
-    }
-
     pub fn privacy_config(&self) -> PrivacyConfig {
         self.privacy
     }
