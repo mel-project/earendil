@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use async_trait::async_trait;
 use earendil_crypt::{AnonEndpoint, HavenFingerprint, RelayFingerprint};
 use earendil_packet::PacketConstructError;
@@ -8,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
-use crate::{ChatEntry, haven_layer::HavenLocator};
+use crate::haven_layer::HavenLocator;
 use earendil_topology::NodeAddr;
 
 #[nanorpc_derive]

@@ -1,12 +1,10 @@
 mod route_util;
 
-mod link_store;
 mod types;
 use std::{collections::BTreeMap, sync::Arc, u8};
 
 use anyhow::Context;
 use earendil_lownet::{Datagram, LowNet, NodeIdentity};
-pub use link_store::*;
 
 use bytes::Bytes;
 use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};

@@ -11,7 +11,7 @@ use earendil_topology::{ExitConfig, ExitInfo};
 use futures::{
     AsyncReadExt, TryFutureExt, future::Shared, stream::FuturesUnordered, task::noop_waker,
 };
-use melstructs::NetID;
+
 use nanorpc::{JrpcRequest, JrpcResponse, RpcService, RpcTransport};
 use nanorpc_http::server::HttpRpcServer;
 use nursery_macro::nursery;
