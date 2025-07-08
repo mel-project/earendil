@@ -81,14 +81,12 @@ pub struct RelayConfig {
     pub in_links: BTreeMap<String, earendil_lownet::InLinkConfig>,
 }
 
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum ObfsConfig {
     None,
     Sosistab3(String),
 }
-
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -189,7 +187,9 @@ impl Identity {
     pub fn actualize_relay(&self) -> anyhow::Result<RelayIdentitySecret> {
         match self {
             Identity::IdentitySeed(seed) => {
-                tracing::warn!("initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!");
+                tracing::warn!(
+                    "initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!"
+                );
                 Ok(RelayIdentitySecret::from_seed(seed))
             }
             Identity::IdentityFile(file) => {
@@ -223,7 +223,9 @@ impl Identity {
     pub fn actualize_haven(&self) -> anyhow::Result<HavenIdentitySecret> {
         match self {
             Identity::IdentitySeed(seed) => {
-                tracing::warn!("initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!");
+                tracing::warn!(
+                    "initializing an identity from a fixed seed. this exposes secrets in the config file and is not recommended in production!"
+                );
                 Ok(HavenIdentitySecret::from_seed(seed))
             }
             Identity::IdentityFile(file) => {
@@ -255,5 +257,3 @@ impl Identity {
         }
     }
 }
-
-

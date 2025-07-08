@@ -250,30 +250,6 @@ impl AsRef<[u8]> for RelayIdentityPublic {
     }
 }
 
-impl std::fmt::Display for RelayIdentityPublic {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in &self.0 {
-            write!(f, "{:02x}", byte)?;
-        }
-        Ok(())
-    }
-}
-
-impl std::fmt::Debug for RelayIdentityPublic {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
-        // Grab the compile-time type name (e.g. "my_crate::foo::RelayIdentityPublic")
-        // and keep only the last path segment so debug logs stay tidy.
-        let short_name = std::any::type_name::<Self>()
-            .rsplit("::")
-            .next()
-            .unwrap_or_default();
-
-        write!(f, "{short_name}(")?;
-        fmt::Display::fmt(self, f)?;
-        write!(f, ")")
-    }
-}
-
 impl RelayIdentityPublic {
     /// Verifies a message supposedly signed by this key.
     pub fn verify(&self, msg: &[u8], sig: &[u8]) -> Result<(), VerifyError> {
