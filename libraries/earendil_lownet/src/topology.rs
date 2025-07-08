@@ -25,6 +25,11 @@ pub struct Topology {
 
 impl Topology {
     pub fn new(identity: NodeIdentity, metadata: BTreeMap<String, Bytes>) -> Self {
+        tracing::debug!(
+            identity = debug(identity),
+            metadata = debug(&metadata),
+            "creating new topology"
+        );
         let graph = Arc::new(RwLock::new(RelayGraph::new()));
         let dh_secret = DhSecret::generate();
         let _task = smolscale::spawn({

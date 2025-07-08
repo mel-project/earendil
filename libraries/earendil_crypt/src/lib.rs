@@ -273,8 +273,14 @@ impl RelayIdentityPublic {
 /// The secret half of a "relay identity" on the network.
 ///
 /// Underlying representation is a Ed25519 "seed".
-#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq, Copy, Hash, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq, Copy, Hash)]
 pub struct RelayIdentitySecret([u8; 32]);
+
+impl Debug for RelayIdentitySecret {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("RelayIdentitySecret").finish()
+    }
+}
 
 impl FromStr for RelayIdentitySecret {
     type Err = base64::DecodeError;

@@ -136,7 +136,7 @@ impl LinkNode {
 
         let (surb, (id, deg)) = Surb::new(
             &instructs,
-            instructs.first().context("no first peeler")?.next_hop,
+            *route.first().context("no first peeler")?,
             &opk,
             my_anon_id,
             self.privacy,
@@ -163,7 +163,7 @@ impl LinkNode {
                     pkt,
                     delay_ms,
                 }) => {
-                    tracing::debug!(next_peeler = display(next_peeler), "go to next peeler");
+                    tracing::trace!(next_peeler = display(next_peeler), "go to next peeler");
                     let lownet = self.lownet.clone();
                     smolscale::spawn(async move {
                         smol::Timer::after(core::time::Duration::from_millis(delay_ms as u64))

@@ -140,7 +140,6 @@ impl RelayGraph {
                 return Ok(());
             }
         }
-
         identity.verify()?;
         let relay_fp = identity.identity_pk.fingerprint();
         let id = self.alloc_id(&relay_fp);
@@ -153,6 +152,8 @@ impl RelayGraph {
         {
             self.insert_exit(relay_fp, exit_info);
         }
+
+        tracing::debug!(identity = debug(&identity), "inserted identity");
 
         Ok(())
     }

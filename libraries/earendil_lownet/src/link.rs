@@ -47,7 +47,7 @@ impl Process for Link {
             let read_loop = async {
                 loop {
                     let dg: Datagram = read.read().await.context("failed to read datagram")?;
-                    tracing::debug!(
+                    tracing::trace!(
                         dg = debug(&dg),
                         neigh = debug(self.neigh_addr),
                         "recv from neighbor"
@@ -58,7 +58,7 @@ impl Process for Link {
             let write_loop = async {
                 loop {
                     let dg = mailbox.recv().await;
-                    tracing::debug!(
+                    tracing::trace!(
                         dg = debug(&dg),
                         neigh = debug(self.neigh_addr),
                         "send to neighbor"
