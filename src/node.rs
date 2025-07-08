@@ -30,11 +30,13 @@ use socksv5::v5::{
 use tracing::instrument;
 
 use crate::{
+    anon_layer::AnonLayer,
     config::{ConfigFile, HavenConfig, HavenHandler, RelayConfig, Socks5Config, Socks5Fallback},
     control_protocol::{ControlClient, ControlService},
+    haven_layer::{
+        HavenLayer, HavenLayerConfig, HavenListener, HavenPacketConn, PooledListener, PooledVisitor,
+    },
     transport_layer::{LinkConfig, TransportLayer},
-    anon_layer::{AnonLayerConfig, AnonLayer},
-    haven_layer::{HavenListener, HavenPacketConn, PooledListener, PooledVisitor, HavenLayerConfig, HavenLayer},
 };
 
 /// The public interface to the whole Earendil system.
@@ -88,7 +90,7 @@ impl Node {
             privacy_config: config.privacy_config,
         })?;
 
-        let anon = AnonLayer::new(transport, AnonLayerConfig {});
+        let anon = AnonLayer::new(transport);
         let haven = Arc::new(HavenLayer::new(
             anon,
             HavenLayerConfig {
@@ -174,7 +176,10 @@ impl Node {
         port: u16,
         rendezvous: RelayFingerprint,
     ) -> anyhow::Result<HavenListener> {
-        self.ctx.haven.packet_listen(identity, port, rendezvous).await
+        self.ctx
+            .haven
+            .packet_listen(identity, port, rendezvous)
+            .await
     }
 
     /// Creates a new pooled visitor. Under Earendil's anonymity model, each visitor should be unlinkable to any other visitor, but streams created within each visitor are linkable to the same haven each other by the haven (though not by the network).
@@ -189,7 +194,10 @@ impl Node {
         port: u16,
         rendezvous: RelayFingerprint,
     ) -> anyhow::Result<PooledListener> {
-        self.ctx.haven.pooled_listen(identity, port, rendezvous).await
+        self.ctx
+            .haven
+            .pooled_listen(identity, port, rendezvous)
+            .await
     }
 
     pub fn control_client(&self) -> ControlClient {

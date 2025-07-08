@@ -25,9 +25,8 @@ pub struct AnonLayer {
 }
 
 impl AnonLayer {
-    pub fn new(transport: TransportLayer, cfg: AnonLayerConfig) -> Self {
+    pub fn new(transport: TransportLayer) -> Self {
         let ctx = AnonLayerCtx {
-            _cfg: cfg,
             transport_layer: Arc::new(transport),
             anon_queues: Arc::new(DashMap::new()),
             relay_queues: Arc::new(DashMap::new()),
@@ -153,7 +152,6 @@ impl AnonSocket {
 
 #[derive(Clone)]
 struct AnonLayerCtx {
-    _cfg: AnonLayerConfig,
     transport_layer: Arc<TransportLayer>,
     anon_queues: Arc<DashMap<AnonEndpoint, Sender<(Bytes, RelayEndpoint, usize)>>>,
     relay_queues: Arc<DashMap<Dock, Sender<(Bytes, AnonEndpoint)>>>,
@@ -253,6 +251,3 @@ impl RelaySocket {
         Ok((message, source))
     }
 }
-
-#[derive(Clone)]
-pub struct AnonLayerConfig {}

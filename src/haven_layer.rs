@@ -33,7 +33,7 @@ pub use self::pooled::PooledListener;
 pub use self::pooled::PooledVisitor;
 use self::{
     bicache::Bicache,
-    global_rpc::{GlobalRpcImpl, GlobalRpcService, GLOBAL_RPC_DOCK},
+    global_rpc::{GLOBAL_RPC_DOCK, GlobalRpcImpl, GlobalRpcService},
     vrh::V2rMessage,
 };
 pub use dht::HavenLocator;
@@ -42,8 +42,8 @@ const HAVEN_FORWARD_DOCK: u32 = 100002;
 
 pub struct HavenLayer {
     ctx: HavenLayerCtx,
-    _rpc_server: Option<Immortal>,
-    _rendezvous_forward: Option<Immortal>,
+    _rpc_server: Immortal,
+    _rendezvous_forward: Immortal,
 }
 
 impl HavenLayer {
@@ -53,26 +53,18 @@ impl HavenLayer {
             registered_havens: Bicache::new(1000).into(),
         };
 
-        let rpc_server = if cfg.is_relay {
-            Some(Immortal::respawn(
-                RespawnStrategy::Immediate,
-                clone!([ctx], move || serve_rpc(ctx.clone()).inspect_err(
-                    |e| tracing::error!(err = debug(e), "GlobalRPC serving restarted")
-                )),
-            ))
-        } else {
-            None
-        };
-        let rendezvous_forward = if cfg.is_relay {
-            Some(Immortal::respawn(
-                RespawnStrategy::Immediate,
-                clone!([ctx], move || rendezvous_forward(ctx.clone()).inspect_err(
-                    |e| tracing::error!(err = debug(e), "rendezvous forwarding restarted")
-                )),
-            ))
-        } else {
-            None
-        };
+        let rpc_server = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([ctx], move || serve_rpc(ctx.clone()).inspect_err(
+                |e| tracing::error!(err = debug(e), "GlobalRPC serving restarted")
+            )),
+        );
+        let rendezvous_forward = Immortal::respawn(
+            RespawnStrategy::Immediate,
+            clone!([ctx], move || rendezvous_forward(ctx.clone()).inspect_err(
+                |e| tracing::error!(err = debug(e), "rendezvous forwarding restarted")
+            )),
+        );
         Self {
             ctx,
             _rpc_server: rpc_server,
