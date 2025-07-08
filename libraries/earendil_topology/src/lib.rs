@@ -153,7 +153,7 @@ impl RelayGraph {
             self.insert_exit(relay_fp, exit_info);
         }
 
-        tracing::debug!(identity = debug(&identity), "inserted identity");
+        tracing::trace!(identity = debug(&identity), "inserted identity");
 
         Ok(())
     }
@@ -248,7 +248,7 @@ impl RelayGraph {
     }
 
     fn insert_exit(&mut self, relay_fp: RelayFingerprint, exit_info: ExitInfo) {
-        tracing::debug!(
+        tracing::trace!(
             relay_fp = display(relay_fp),
             exit_info = debug(&exit_info),
             "inserting exit_info"
