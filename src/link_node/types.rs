@@ -1,10 +1,9 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use bytes::Bytes;
-use earendil_crypt::{AnonEndpoint, RelayFingerprint, RelayIdentitySecret};
+use earendil_crypt::{AnonEndpoint, RelayIdentitySecret};
 use earendil_packet::{InnerPacket, PrivacyConfig};
-use earendil_topology::{ExitInfo, NodeAddr};
-use serde::{Deserialize, Serialize};
+use earendil_topology::ExitInfo;
 
 /// Incoming messages from the link layer that are addressed to "us".
 #[derive(Debug)]

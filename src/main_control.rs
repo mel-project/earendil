@@ -56,7 +56,7 @@ pub async fn main_control(
         ControlCommand::GetRendezvous { key } => {
             let locator = control.get_rendezvous(key).await??;
             if let Some(locator) = locator {
-                println!("{:?}", locator);
+                println!("{locator:?}");
             } else {
                 println!("No haven locator found for fingerprint {key}")
             }

@@ -71,7 +71,7 @@ impl HavenPacketConn {
                 anyhow::bail!("Haven not found in DHT")
             }
             Err(e) => {
-                println!("Error: DHT get failed: {}", e);
+                println!("Error: DHT get failed: {e}");
                 return Err(e.context("dht_get failed"));
             }
         };

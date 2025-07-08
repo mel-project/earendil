@@ -6,6 +6,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use bytemuck::{Pod, Zeroable};
 use bytes::Bytes;
 use earendil_crypt::{DhPublic, DhSecret};
 use earendil_crypt::{
@@ -14,7 +15,6 @@ use earendil_crypt::{
 use indexmap::IndexMap;
 use rand::{Rng, seq::IteratorRandom, thread_rng};
 use serde::{Deserialize, Serialize};
-use bytemuck::{Pod, Zeroable};
 use stdcode::StdcodeSerializeExt;
 use thiserror::Error;
 
@@ -146,7 +146,11 @@ impl RelayGraph {
         let id = self.alloc_id(&relay_fp);
         self.id_to_descriptor.insert(id, identity.clone());
 
-        if let Some(exit_info) = identity.exit_info {
+        if let Some(exit_info) = identity
+            .metadata
+            .get("exit_info")
+            .and_then(|v| stdcode::deserialize(v).ok())
+        {
             self.insert_exit(relay_fp, exit_info);
         }
 
@@ -429,6 +433,83 @@ impl AdjacencyDescriptor {
     }
 }
 
+/// Builder for [`IdentityDescriptor`].
+///
+/// Typical use:
+/// ```rust
+/// let descr = IdentityDescriptorBuilder::new(&my_id_secret, &my_onion_secret)
+///     .build();
+/// ```
+pub struct IdentityDescriptorBuilder<'a> {
+    identity_secret: &'a RelayIdentitySecret,
+    onion_secret: &'a DhSecret,
+    unix_timestamp: u64,
+    metadata: BTreeMap<String, Bytes>,
+}
+
+impl<'a> IdentityDescriptorBuilder<'a> {
+    /// Start a new builder using your secrets; the public keys are derived automatically.
+    pub fn new(identity_secret: &'a RelayIdentitySecret, onion_secret: &'a DhSecret) -> Self {
+        Self {
+            identity_secret,
+            onion_secret,
+            unix_timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            metadata: BTreeMap::new(),
+        }
+    }
+
+    /// Override the timestamp if you need to back-date or pre-date the descriptor.
+    #[must_use]
+    pub fn unix_timestamp(mut self, ts: u64) -> Self {
+        self.unix_timestamp = ts;
+        self
+    }
+
+    /// Add a single key/value pair to the `metadata` map.
+    #[must_use]
+    pub fn add_metadata<K, V>(mut self, key: K, value: V) -> Self
+    where
+        K: Into<String>,
+        V: Into<Bytes>,
+    {
+        self.metadata.insert(key.into(), value.into());
+        self
+    }
+
+    /// Add a bunch fo metadata pairs.
+    #[must_use]
+    pub fn add_metadata_multi<K, V>(mut self, kvv: impl IntoIterator<Item = (K, V)>) -> Self
+    where
+        K: Into<String>,
+        V: Into<Bytes>,
+    {
+        for (k, v) in kvv {
+            self.metadata.insert(k.into(), v.into());
+        }
+        self
+    }
+
+    /// Consume the builder and return a signed `IdentityDescriptor`.
+    pub fn build(self) -> IdentityDescriptor {
+        // Assemble the unsigned descriptor first…
+        let mut descr = IdentityDescriptor {
+            identity_pk: self.identity_secret.public(),
+            onion_pk: self.onion_secret.public(),
+            sig: Bytes::new(),
+            unix_timestamp: self.unix_timestamp,
+            metadata: self.metadata,
+        };
+
+        // …then compute and fill in the signature.
+        descr.sig = self.identity_secret.sign(descr.to_sign().as_bytes());
+
+        descr
+    }
+}
+
 /// An identity descriptor, signed by the owner of an identity. Declares that the identity owns a particular onion key, as well as implicitly
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IdentityDescriptor {
@@ -439,32 +520,10 @@ pub struct IdentityDescriptor {
 
     pub unix_timestamp: u64,
 
-    pub exit_info: Option<ExitInfo>,
+    pub metadata: BTreeMap<String, Bytes>,
 }
 
 impl IdentityDescriptor {
-    /// Creates an IdentityDescriptor from our own IdentitySecret
-    pub fn new(
-        my_identity: &RelayIdentitySecret,
-        my_onion: &DhSecret,
-        exit_info: Option<ExitInfo>,
-    ) -> Self {
-        let identity_pk = my_identity.public();
-        let onion_pk = my_onion.public();
-        let mut descr = IdentityDescriptor {
-            identity_pk,
-            onion_pk,
-            sig: Bytes::new(),
-            unix_timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            exit_info,
-        };
-        descr.sig = my_identity.sign(descr.to_sign().as_bytes());
-        descr
-    }
-
     /// The value that the signatures are supposed to be computed against.
     pub fn to_sign(&self) -> blake3::Hash {
         let mut this = self.clone();

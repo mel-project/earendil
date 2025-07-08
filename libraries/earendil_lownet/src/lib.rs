@@ -7,7 +7,11 @@ mod out_link;
 mod router;
 mod topology;
 mod types;
-use std::sync::{Arc, RwLock};
+use bytes::Bytes;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, RwLock},
+};
 pub use topology::Topology;
 
 use async_channel::Receiver;
@@ -51,6 +55,7 @@ pub struct LowNetConfig {
     pub in_links: Vec<InLinkConfig>,
     pub out_links: Vec<OutLinkConfig>,
     pub identity: NodeIdentity,
+    pub metadata: BTreeMap<String, Bytes>,
 }
 
 impl LowNet {
@@ -59,7 +64,7 @@ impl LowNet {
         let table = Arc::new(RwLock::new(LinkTable::default()));
 
         let (send_incoming, recv_incoming) = async_channel::bounded(100);
-        let topo = Topology::new(cfg.identity);
+        let topo = Topology::new(cfg.identity, cfg.metadata);
         let router = Router {
             topo: topo.clone(),
             table: table.clone(),

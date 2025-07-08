@@ -2,7 +2,7 @@ mod route_util;
 
 mod link_store;
 mod types;
-use std::{sync::Arc, u8};
+use std::{collections::BTreeMap, sync::Arc, u8};
 
 use anyhow::Context;
 use earendil_lownet::{Datagram, LowNet, NodeIdentity};
@@ -13,6 +13,8 @@ use earendil_crypt::{AnonEndpoint, RelayFingerprint, RemoteId};
 use earendil_packet::{InnerPacket, Message, PrivacyConfig, RawPacket, ReplyDegarbler, Surb};
 use earendil_topology::{NodeAddr, RelayGraph};
 use route_util::{forward_route_to, route_to_instructs};
+use stdcode::StdcodeSerializeExt;
+use tap::Tap;
 pub use types::{IncomingMsg, LinkConfig};
 
 /// An implementation of the link-level interface.
@@ -44,6 +46,11 @@ impl LinkNode {
             in_links,
             out_links,
             identity,
+            metadata: BTreeMap::new().tap_mut(|bt| {
+                if let Some(val) = cfg.exit_info {
+                    bt.insert("exit_info".into(), val.stdcode().into());
+                }
+            }),
         });
 
         Ok(Self {
@@ -80,7 +87,7 @@ impl LinkNode {
             )?;
             Datagram {
                 ttl: u8::MAX,
-                dest_addr: instructs.get(0).context("no first peeler")?.next_hop,
+                dest_addr: instructs.first().context("no first peeler")?.next_hop,
                 payload: bytemuck::bytes_of(&raw_packet).to_vec().into(),
             }
         };
@@ -129,7 +136,7 @@ impl LinkNode {
 
         let (surb, (id, deg)) = Surb::new(
             &instructs,
-            instructs.get(0).context("no first peeler")?.next_hop,
+            instructs.first().context("no first peeler")?.next_hop,
             &opk,
             my_anon_id,
             self.privacy,

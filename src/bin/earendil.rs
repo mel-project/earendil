@@ -63,7 +63,7 @@ fn main() -> anyhow::Result<()> {
         } => smolscale::block_on(main_control(control_command, connect)),
         Commands::GenerateSeed => {
             let seed_phrase = gen_seed()?;
-            println!("{}", seed_phrase);
+            println!("{seed_phrase}");
             Ok(())
         }
     }

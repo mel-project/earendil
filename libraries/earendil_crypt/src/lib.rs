@@ -209,7 +209,7 @@ impl FromStr for HavenEndpoint {
 /// The public half of a "relay identity" on the network.
 ///
 /// Underlying representation is a Ed25519 public key.
-#[derive(Serialize, Debug, Deserialize, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
 pub struct RelayIdentityPublic([u8; 32]);
 
 impl TryFrom<Vec<u8>> for RelayIdentityPublic {
@@ -223,6 +223,30 @@ impl TryFrom<Vec<u8>> for RelayIdentityPublic {
 impl AsRef<[u8]> for RelayIdentityPublic {
     fn as_ref(&self) -> &[u8] {
         &self.0
+    }
+}
+
+impl std::fmt::Display for RelayIdentityPublic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for byte in &self.0 {
+            write!(f, "{:02x}", byte)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for RelayIdentityPublic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+        // Grab the compile-time type name (e.g. "my_crate::foo::RelayIdentityPublic")
+        // and keep only the last path segment so debug logs stay tidy.
+        let short_name = std::any::type_name::<Self>()
+            .rsplit("::")
+            .next()
+            .unwrap_or_default();
+
+        write!(f, "{short_name}(")?;
+        fmt::Display::fmt(self, f)?;
+        write!(f, ")")
     }
 }
 
@@ -416,7 +440,7 @@ pub enum RemoteId {
 }
 
 /// A diffie-hellman public key, based on x25519.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DhPublic(x25519_dalek::PublicKey);
 
 impl<'de> Deserialize<'de> for DhPublic {
@@ -462,6 +486,29 @@ impl FromStr for DhPublic {
         } else {
             Err(base64::DecodeError::InvalidLength)
         }
+    }
+}
+
+impl std::fmt::Display for DhPublic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // 32 bytes → 44 base-64 chars, so pre-allocate accordingly.
+        let mut b64 = String::with_capacity(44);
+        general_purpose::STANDARD.encode_string(self.as_bytes(), &mut b64);
+        f.write_str(&b64)
+    }
+}
+
+impl std::fmt::Debug for DhPublic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Use the real type name (without its module path).
+        let short_name = std::any::type_name::<Self>()
+            .rsplit("::")
+            .next()
+            .unwrap_or_default();
+
+        write!(f, "{short_name}(")?;
+        std::fmt::Display::fmt(self, f)?; // reuse the base-64 `Display`
+        write!(f, ")")
     }
 }
 

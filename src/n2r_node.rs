@@ -239,7 +239,7 @@ impl N2rRelaySocket {
             .rb_store
             .lock()
             .pop_and_count(anon_endpoint)
-            .context(format!("no surb for anon endpoint: {:?}", anon_endpoint))?;
+            .context(format!("no surb for anon endpoint: {anon_endpoint:?}"))?;
         self.ctx
             .link_node
             .send_backwards(rb, Message::new(self.dock, body, remaining))
