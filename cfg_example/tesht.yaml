@@ -13,4 +13,5 @@ havens: # havens we're hosting
     listen_port: 19999 # port where proxy server listens
     rendezvous: 2d2b5429d2c814c05c31bc67b3731817a1b09ba353f8b31b54dce7f149fa16a7
     handler:
-      type: simple_proxy # Earendil's web proxy protocol
+      type: tcp_service
+      upstream: 127.0.0.1:19999

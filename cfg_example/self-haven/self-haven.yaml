@@ -21,8 +21,8 @@ udp_forwards:
 # server config
 havens:
   - identity_file: haven.asc
+    listen_port: 10000
     rendezvous: 6dskym46q2kyqrsf7ttzjx08adgmem9r
     handler:
-      type: udp_service
-      listen_dock: 10000
+      type: tcp_service
       upstream: 127.0.0.1:10000
