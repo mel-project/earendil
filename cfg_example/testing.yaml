@@ -2,7 +2,7 @@
 
 db_path: ./testing.db
 
-out_routes:
+out_links:
   example-relay-testing:
     connect: 45.33.109.28:12346
     fingerprint: 4b7a641b77c2d6ceb8b3fecec2b2978dfe81ae045ed9a25ed78b828009c4967a

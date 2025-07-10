@@ -2,7 +2,7 @@
 
 relay_config:
   identity_seed: rob
-  in_routes:
+  in_links:
     main_udp:
       listen: 0.0.0.0:34567
       obfs:

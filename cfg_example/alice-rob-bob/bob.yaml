@@ -2,7 +2,7 @@
 
 relay_config:
   identity_seed: bob
-  in_routes:
+  in_links:
     main_udp:
       obfs:
         none
@@ -21,7 +21,7 @@ socks5:
   listen: 127.0.0.1:12121
   fallback: pass_through
 
-out_routes:
+out_links:
   rob:
     connect: 127.0.0.1:34567
     obfs:

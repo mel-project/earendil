@@ -4,7 +4,7 @@ control_listen: 127.0.0.1:22222
 
 relay_config:
   identity_seed: exit
-  in_routes:
+  in_links:
     main_udp:
       obfs: none
       listen: 0.0.0.0:12345

@@ -1,12 +1,12 @@
-identity_seed: bob
-
-in_routes:
-  main_obfs:
-    # obfuscation protocol to use, for resisting ISP-level censorship
-    obfs:
-      sosistab3: snake-before-antenna-toward-floor-stuff-frozen-power-avocado-retire-grunt-nation
-    # TCP port this in_route listens at
-    listen: 0.0.0.0:19999
+relay_config:
+  identity_seed: bob
+  in_links:
+    main_obfs:
+      # obfuscation protocol to use, for resisting ISP-level censorship
+      obfs:
+        sosistab3: snake-before-antenna-toward-floor-stuff-frozen-power-avocado-retire-grunt-nation
+      # TCP port this in_link listens at
+      listen: 0.0.0.0:19999
 
 havens: # havens we're hosting
   - identity_seed: bobrr

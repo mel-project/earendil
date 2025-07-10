@@ -1,17 +1,16 @@
 # fingerprint: fevts9m09kk50dw868ba7s2fwp38nay9
-identity_seed: ivan
-state_cache: ivan.db
+relay_config:
+  identity_seed: ivan
+  in_links:
+    main_udp:
+      obfs: none
+      listen: 0.0.0.0:8009
+
+db_path: ivan.db
 control_listen: 127.0.0.1:10009
 
-in_routes:
-  main_udp:
-    protocol: obfsudp
-    listen: 0.0.0.0:8009
-    secret: correct horse battery staple
-
-out_routes:
+out_links:
   heidi:
     fingerprint: qvdgfcxqse1rgzk9f7aeehaqmhzemqpz
-    protocol: obfsudp
+    obfs: none
     connect: 127.0.0.1:8008
-    cookie: bb27ead798b27ec3384ac2cf2f374a17c02bfce420b19e8b2c5a8f898fd6384d

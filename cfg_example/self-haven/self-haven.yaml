@@ -1,16 +1,17 @@
-identity_file: identity.asc
-state_cache: state_cache.db
+relay_config:
+  identity_file: identity.asc
+  in_links:
+    # arbitrary names, used for diagnositics and logging
+    main_udp:
+      obfs: none
+      listen: 0.0.0.0:19999
+      price_config:
+        outbound_max_price: 100
+        inbound_price: 1
+        inbound_debt_limit: 1000000000
+        outbound_min_debt_limit: 0
 
-in_routes:
-  # arbitrary names, used for diagnositics and logging
-  main_udp:
-    protocol: obfsudp
-    listen: 0.0.0.0:19999
-    secret: correct horse batteryr staple
-    link_price:
-      max_outgoing_price: 100
-      incoming_price: 1
-      incoming_debt_limit: 1000000000
+db_path: state_cache.db
 
 # client config
 udp_forwards:
