@@ -1,7 +1,7 @@
 db_path: ./client.db
 control_listen: 127.0.0.1:11111
 
-out_routes:
+out_links:
   exit:
     connect: 127.0.0.1:12345
     obfs: none

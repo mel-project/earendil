@@ -1,9 +1,9 @@
 # fingerprint: 7wrkhwar5kj3hybwaf9pe996eydzc969
-identity_seed: alice
-state_cache: alice.db
+relay_config:
+  identity_seed: alice
+  in_links:
+    main_udp:
+      obfs: none
+      listen: 0.0.0.0:8001
 
-in_routes:
-  main_udp:
-    protocol: obfsudp
-    listen: 0.0.0.0:8001
-    secret: correct horse battery staple
+db_path: alice.db

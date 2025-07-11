@@ -1,17 +1,16 @@
 # fingerprint: qvdgfcxqse1rgzk9f7aeehaqmhzemqpz
-identity_seed: heidi
-state_cache: heidi.db
+relay_config:
+  identity_seed: heidi
+  in_links:
+    main_udp:
+      obfs: none
+      listen: 0.0.0.0:8008
+
+db_path: heidi.db
 control_listen: 127.0.0.1:10008
 
-in_routes:
-  main_udp:
-    protocol: obfsudp
-    listen: 0.0.0.0:8008
-    secret: correct horse battery staple
-
-out_routes:
+out_links:
   grace:
     fingerprint: 1n0wjcemg5a8c84arrcygt3a81s7kwbv
-    protocol: obfsudp
+    obfs: none
     connect: 127.0.0.1:8007
-    cookie: bb27ead798b27ec3384ac2cf2f374a17c02bfce420b19e8b2c5a8f898fd6384d
